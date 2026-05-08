@@ -59,7 +59,7 @@ class GitHubConfig:
     token: str                          # GitHub API token (required)
     organization: str                   # Organization name (required)
     repository: str                     # Repository name (required)
-    
+
     # API defaults
     api_base_url: str = "https://api.github.com"
     graphql_url: str = "https://api.github.com/graphql"
@@ -169,7 +169,7 @@ classDiagram
         +get_discussion(discussion_id: str) Discussion
         +list_discussions(category: str) list[Discussion]
     }
-    
+
     class GitHubDiscussionAdapter {
         -graphql_client: GitHubGraphQLClient
         +create_discussion(title: str, category: str, body: str) str
@@ -177,13 +177,13 @@ classDiagram
         +get_discussion(discussion_id: str) Discussion
         +list_discussions(category: str) list[Discussion]
     }
-    
+
     class GitHubGraphQLAPI {
         +createDiscussion mutation
         +addDiscussionComment mutation
         +discussion query
     }
-    
+
     IDiscussionAdapter <|-- GitHubDiscussionAdapter: implements
     GitHubDiscussionAdapter --> GitHubGraphQLAPI: GraphQL queries
 ```
@@ -201,7 +201,7 @@ classDiagram
 ## Cross-References
 
 - **Port Interface**: [IDiscussionAdapter](../ports/output/work-coordination.md) - Specification
-- **Related Adapters**: 
+- **Related Adapters**:
   - [GitHubTicketAdapter](./github-ticket-adapter.md) - Issue management
   - [GitHub Code Review Adapter](./github-code-review-adapter.md) - PR comments
 - **Simulation**: [MockDiscussionAdapter](../../../implementations/simulation/adapters.md)

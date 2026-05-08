@@ -125,7 +125,7 @@ classDiagram
         +move_item(item_id, column_id)
         +list_columns(board_id)
     }
-    
+
     class GitHubBoardAdapter {
         -github_token: str
         -org: str
@@ -134,12 +134,12 @@ classDiagram
         +move_item(item_id, column_id)
         +list_columns(board_id)
     }
-    
+
     class GitHubAPI {
         +POST /graphql
         +GET /repos/:owner/:repo
     }
-    
+
     IBoardService <|-- GitHubBoardAdapter: implements
     GitHubBoardAdapter --> GitHubAPI: uses
 ```
@@ -153,14 +153,14 @@ classDiagram
         +create_column(board_id, name)
         +move_item(item_id, column_id)
     }
-    
+
     class MockBoardAdapter {
         -boards: dict[str, Board]
         -columns: dict[str, Column]
         +create_column(board_id, name)
         +move_item(item_id, column_id)
     }
-    
+
     IBoardService <|-- MockBoardAdapter: implements
 ```
 

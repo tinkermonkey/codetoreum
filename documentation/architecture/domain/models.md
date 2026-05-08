@@ -57,7 +57,7 @@ class WorkItemPriority(Enum):
 @dataclass
 class WorkItem:
     """Work Item aggregate root.
-    
+
     Represents a unit of work (issue, task, feature) that flows through
     the system. Maintains its own consistency boundary and emits events
     for all state changes.
@@ -65,36 +65,36 @@ class WorkItem:
     # Identity
     id: str
     project_id: str
-    
+
     # Core attributes
     title: str
     description: str
-    
+
     # State
     status: WorkItemStatus
     priority: WorkItemPriority
-    
+
     # Metadata
     labels: list[str]
     external_id: str | None  # ID in external system (GitHub issue #, etc.)
     external_url: str | None
-    
+
     # Assignment
     assigned_agent_id: str | None
     assigned_at: datetime | None
-    
+
     # Workflow tracking
     current_workflow_id: str | None
     current_stage: str | None
-    
+
     # Board column tracking (for SLA monitoring)
     current_column: str | None
     entered_column_at: datetime | None
-    
+
     # Timestamps
     created_at: datetime
     updated_at: datetime
-    
+
     # PR and discussion tracking
     pr_id: str | None = None
     discussion_id: str | None = None
@@ -138,42 +138,42 @@ class AgentCapability:
 @dataclass
 class Agent:
     """Agent aggregate root.
-    
+
     Represents an AI agent with capabilities, configuration, and constraints.
     """
     # Identity
     id: str
-    
+
     # Basic attributes
     name: str
     display_name: str
     agent_type: AgentType
-    
+
     # Capabilities and role
     capabilities: dict[str, AgentCapability]  # skill -> capability
     role_description: str
-    
+
     # Configuration (required fields first)
     model: str                 # LLM model (e.g., "claude-sonnet-4-5")
     timeout_seconds: int
     max_retries: int
-    
+
     # Constraints (environment requirements)
     requires_docker: bool
     requires_dev_container: bool
     makes_code_changes: bool
     filesystem_write_allowed: bool
-    
+
     # MCP servers
     mcp_servers: list[str]
-    
+
     # Metadata
     metadata: dict[str, Any]
-    
+
     # Timestamps (NO DEFAULTS - Required fields)
     created_at: datetime
     updated_at: datetime
-    
+
     # Configuration with defaults (must come after required fields)
     temperature: float = 0.7   # LLM temperature (0.0-2.0)
     max_tokens: int = 4096     # Maximum tokens for responses
@@ -210,7 +210,7 @@ class ExecutionStatus(Enum):
 @dataclass
 class AgentExecution:
     """Agent Execution entity.
-    
+
     Represents a single execution instance of an agent.
     Part of the Workflow aggregate but has its own identity.
     """
@@ -220,34 +220,34 @@ class AgentExecution:
     work_item_id: str
     workflow_id: str
     stage_name: str
-    
+
     # Status
     status: ExecutionStatus
-    
+
     # Execution context
     prompt: str
     model: str
     session_id: str | None
-    
+
     # Container tracking
     container_name: str | None
     container_id: str | None
-    
+
     # Results
     output: str | None
     error_message: str | None
     exit_code: int | None
-    
+
     # Metrics
     input_tokens: int
     output_tokens: int
     duration_seconds: float | None
-    
+
     # Timestamps
     initialized_at: datetime
     started_at: datetime | None
     completed_at: datetime | None
-    
+
     # Metadata
     metadata: dict[str, Any]
 ```
@@ -267,25 +267,25 @@ class WorkspaceType(Enum):
 @dataclass(frozen=True)
 class WorkspaceContext:
     """Context for agent execution workspace.
-    
+
     Immutable value object that encapsulates workspace configuration
     and routing logic. Determines how agent execution results are handled
     (branch creation, PR creation, discussion comments, etc.).
     """
     # Workspace type
     workspace_type: WorkspaceType
-    
+
     # Identifiers
     project_id: str
     work_item_id: str
-    
+
     # Issue workspace (feature branches + PRs)
     branch_name: str | None
     create_pr: bool
-    
+
     # Discussion workspace (for hybrid mode)
     discussion_id: str | None
-    
+
     # Configuration
     allow_code_changes: bool
     create_commits: bool
@@ -313,7 +313,7 @@ class WorkflowStatus(Enum):
 @dataclass
 class Workflow:
     """Workflow aggregate root.
-    
+
     Orchestrates execution of work items through pipeline stages.
     Maintains consistency boundary for workflow execution.
     """
@@ -322,23 +322,23 @@ class Workflow:
     work_item_id: str
     template_id: str
     project_id: str
-    
+
     # Status
     status: WorkflowStatus
-    
+
     # Stage tracking
     stages: list[PipelineStage]
     current_stage_index: int
     completed_stages: list[str]
-    
+
     # Execution tracking
     started_at: datetime | None
     completed_at: datetime | None
     paused_at: datetime | None
-    
+
     # Metadata
     metadata: dict[str, Any]
-    
+
     # Timestamps
     created_at: datetime
     updated_at: datetime
@@ -363,40 +363,40 @@ class StageStatus(Enum):
 @dataclass
 class PipelineStage:
     """Pipeline Stage entity.
-    
+
     Represents a stage in a workflow pipeline with dependencies and execution tracking.
     """
     # Identity
     id: str
     name: str
     workflow_id: str
-    
+
     # Configuration
     stage_type: StageType
     agent_config: dict[str, Any]
     description: str
-    
+
     # Dependencies
     dependencies: list[str]
     is_parallel: bool
-    
+
     # Review configuration (if stage_type == REVIEW)
     maker_agent_id: str | None
     reviewer_agent_id: str | None
     max_review_iterations: int
-    
+
     # Status
     status: StageStatus
-    
+
     # Execution tracking
     execution_id: str | None
     started_at: datetime | None
     completed_at: datetime | None
-    
+
     # Results
     output: str | None
     error_message: str | None
-    
+
     # Metadata
     metadata: dict[str, Any]
 ```
@@ -410,7 +410,7 @@ class ColumnType(Enum):
 @dataclass(frozen=True)
 class ColumnTemplate:
     """Template for a board column with workflow semantics.
-    
+
     Defines a column in a board, with optional agent assignment,
     SLA thresholds, and failure/escalation handling.
     """
@@ -432,7 +432,7 @@ class ColumnTemplate:
 @dataclass
 class BoardWorkflowTemplate:
     """Workflow template with column-based semantics.
-    
+
     Defines a workflow where work items progress through board columns,
     with each column optionally triggering an agent or requiring manual action.
     """
@@ -478,7 +478,7 @@ class ReviewDecision(Enum):
 @dataclass(frozen=True)
 class ReviewFeedback:
     """Value object for review feedback.
-    
+
     Immutable representation of reviewer's feedback on an iteration.
     """
     decision: ReviewDecision
@@ -490,7 +490,7 @@ class ReviewFeedback:
 @dataclass(frozen=True)
 class ReviewIteration:
     """Single iteration of maker-reviewer cycle.
-    
+
     Represents one round of work submission and review.
     Immutable value object for aggregate consistency.
     """
@@ -505,25 +505,25 @@ class ReviewIteration:
 @dataclass
 class ReviewCycle:
     """Review Cycle aggregate root.
-    
+
     Manages iterative maker-checker review process where a maker agent
     produces output and a reviewer agent evaluates it. The cycle continues
     until approval, escalation, or max iterations reached.
     """
     # Identity
     id: str
-    
+
     # Workflow context
     workflow_id: str
     stage_name: str
-    
+
     # Agents
     maker_agent_id: str
     reviewer_agent_id: str
-    
+
     # Configuration
     max_iterations: int
-    
+
     # Status (accessed via properties)
     _status: ReviewStatus
     _current_iteration: int
@@ -577,10 +577,10 @@ class PRReviewPhaseOutput:
 @dataclass(frozen=True)
 class PRReviewCycleConfig:
     """Configuration for a PR review cycle.
-    
+
     Controls phase execution, timeouts, context sources for verification,
     and column routing for different outcomes.
-    
+
     Attributes:
         max_outer_cycles: Maximum complete cycles before escalation (default 3)
         verifier_context_sources: Context sources for verification phase (default ("parent_issue",))
@@ -663,7 +663,7 @@ class ExecutionId(TypeSafeId):
 @dataclass(frozen=True)
 class ExecutionResult:
     """Immutable result of an execution.
-    
+
     Represents agent execution outcome with complete metrics and file tracking.
     All collections are immutable (tuples instead of lists). Metadata dict is
     wrapped in MappingProxyType to prevent in-place mutations.
@@ -671,42 +671,42 @@ class ExecutionResult:
     # Status
     success: bool
     exit_code: int
-    
+
     # Output
     output: str
     error_message: str | None
-    
+
     # Metrics
     input_tokens: int
     output_tokens: int
     duration_seconds: float
-    
+
     # Timestamp
     timestamp: datetime
-    
+
     # Files modified (immutable tuples)
     modified_files: tuple[str, ...] = ()
     added_files: tuple[str, ...] = ()
     deleted_files: tuple[str, ...] = ()
-    
+
     # Session continuity
     session_id: str | None = None
-    
+
     # Metadata (wrapped in MappingProxyType for deep immutability)
     metadata: dict[str, Any] = field(default_factory=dict)
-    
+
     # Factory methods
     @classmethod
-    def success_result(cls, output: str, input_tokens: int, output_tokens: int, 
+    def success_result(cls, output: str, input_tokens: int, output_tokens: int,
                       duration_seconds: float, modified_files: list[str] | None = None,
                       added_files: list[str] | None = None, deleted_files: list[str] | None = None,
                       session_id: str | None = None, metadata: dict[str, Any] | None = None) -> "ExecutionResult"
-    
+
     @classmethod
     def failure_result(cls, error_message: str, exit_code: int, output: str = "",
                       duration_seconds: float = 0.0, input_tokens: int = 0,
                       output_tokens: int = 0, metadata: dict[str, Any] | None = None) -> "ExecutionResult"
-    
+
     def get_total_tokens(self) -> int
     def has_file_changes(self) -> bool
     def get_all_affected_files(self) -> list[str]
@@ -715,7 +715,7 @@ class ExecutionResult:
 @dataclass(frozen=True)
 class ProjectConfig:
     """Immutable project configuration from projects.yaml.
-    
+
     Represents the complete configuration for a single project including
     repository details and enabled status. Frozen to ensure immutability
     in the domain layer.
@@ -728,7 +728,7 @@ class ProjectConfig:
 @dataclass(frozen=True)
 class ContainerConfig:
     """Configuration for container creation.
-    
+
     Immutable value object with tuples for commands/entrypoints and
     MappingProxyType for environment/volumes dicts to prevent mutations.
     """
@@ -762,21 +762,21 @@ class Permission(str, Enum):
     WORKFLOW_VIEW = "workflow:view"
     WORKFLOW_CANCEL = "workflow:cancel"
     WORKFLOW_RETRY = "workflow:retry"
-    
+
     # Execution permissions
     EXECUTION_VIEW = "execution:view"
     EXECUTION_CANCEL = "execution:cancel"
-    
+
     # Configuration permissions
     CONFIG_VIEW = "config:view"
     CONFIG_UPDATE = "config:update"
-    
+
     # Project permissions
     PROJECT_CREATE = "project:create"
     PROJECT_VIEW = "project:view"
     PROJECT_UPDATE = "project:update"
     PROJECT_DELETE = "project:delete"
-    
+
     # User permissions
     USER_CREATE = "user:create"
     USER_VIEW = "user:view"
@@ -801,7 +801,7 @@ class User:
 @dataclass
 class AuthContext:
     """Authentication context for a request.
-    
+
     Contains information about the authenticated user or API key.
     """
     user_id: UUID                            # Authenticated user ID
@@ -896,27 +896,27 @@ class ProjectWorkflowMappingAdded(DomainEvent):
 @dataclass
 class ProjectContext:
     """Project aggregate root.
-    
+
     Manages project-level configuration including test commands, Docker setup,
     and workflow mappings.
     """
     # Identity
     id: str
-    
+
     # Project metadata
     name: str
     repository_url: str
     default_branch: str
-    
+
     # Test configuration
     test_command: str | None
     test_framework: str | None
-    
+
     # Docker configuration
     has_dockerfile: bool
     dockerfile_path: str | None
     requires_dev_container: bool
-    
+
     # Timestamps
     created_at: datetime
     updated_at: datetime
@@ -1122,7 +1122,7 @@ erDiagram
     BOARD_WORKFLOW_TEMPLATE ||--o{ COLUMN_TEMPLATE : "defines"
     COLUMN_TEMPLATE }o--|| AGENT : "triggers"
     WORKSPACE_CONTEXT ||--o{ AGENT_EXECUTION : "configures"
-    
+
     WORK_ITEM {
         string id PK
         string project_id
@@ -1136,7 +1136,7 @@ erDiagram
         string current_workflow_id FK
         string current_stage
     }
-    
+
     AGENT {
         string id PK
         string name
@@ -1145,7 +1145,7 @@ erDiagram
         int timeout_seconds
         int max_retries
     }
-    
+
     WORKFLOW {
         string id PK
         string template_id
@@ -1155,7 +1155,7 @@ erDiagram
         datetime created_at
         datetime started_at
     }
-    
+
     PIPELINE_STAGE {
         string id PK
         string name
@@ -1164,7 +1164,7 @@ erDiagram
         int order
         int timeout_seconds
     }
-    
+
     AGENT_EXECUTION {
         string id PK
         string agent_id FK
@@ -1174,7 +1174,7 @@ erDiagram
         string output
         datetime started_at
     }
-    
+
     REVIEW_CYCLE {
         string id PK
         string workflow_id FK
@@ -1184,7 +1184,7 @@ erDiagram
         int max_iterations
         string status
     }
-    
+
     REVIEW_ITERATION {
         int iteration_number
         string maker_output
@@ -1193,7 +1193,7 @@ erDiagram
         datetime started_at
         datetime completed_at
     }
-    
+
     REVIEW_FEEDBACK {
         string decision
         string comment
@@ -1201,7 +1201,7 @@ erDiagram
         tuple suggestions
         datetime timestamp
     }
-    
+
     USER {
         uuid id PK
         string username UK
@@ -1211,7 +1211,7 @@ erDiagram
         bool is_verified
         datetime created_at
     }
-    
+
     COMMENT {
         string id PK
         string work_item_id FK
@@ -1219,14 +1219,14 @@ erDiagram
         string body
         datetime created_at
     }
-    
+
     BOARD_WORKFLOW_TEMPLATE {
         string id PK
         string board_id
         string project_id
         datetime created_at
     }
-    
+
     COLUMN_TEMPLATE {
         string name PK
         string type
@@ -1234,13 +1234,13 @@ erDiagram
         int sla_seconds
         string on_failure_column
     }
-    
+
     EXECUTION_STATUS {
         string id PK
         string status
         string description
     }
-    
+
     WORKSPACE_CONTEXT {
         string workspace_type
         string project_id
@@ -1249,7 +1249,7 @@ erDiagram
         bool create_pr
         string discussion_id
     }
-    
+
     PROJECT_CONFIG {
         string repo_url
         string branch
@@ -1282,7 +1282,7 @@ classDiagram
         +can_start()
         +is_terminal()
     }
-    
+
     class Workflow {
         -id: string
         -template_id: string
@@ -1294,7 +1294,7 @@ classDiagram
         +complete()
         +fail(error)
     }
-    
+
     class PipelineStage {
         -id: string
         -name: string
@@ -1305,7 +1305,7 @@ classDiagram
         -reviewer_agent_id: string
         -max_review_iterations: int
     }
-    
+
     class Agent {
         -id: string
         -name: string
@@ -1317,7 +1317,7 @@ classDiagram
         +update_timeout(seconds)
         +update_constraints(constraints)
     }
-    
+
     class AgentExecution {
         -id: string
         -agent_id: string
@@ -1330,7 +1330,7 @@ classDiagram
         +fail(error)
         +retry()
     }
-    
+
     class ReviewCycle {
         -id: string
         -workflow_id: string
@@ -1348,7 +1348,7 @@ classDiagram
         +needs_maker_revision()
         +get_latest_feedback()
     }
-    
+
     class ReviewIteration {
         -iteration_number: int
         -maker_output: string
@@ -1358,7 +1358,7 @@ classDiagram
         -started_at: datetime
         -completed_at: datetime | None
     }
-    
+
     class ReviewFeedback {
         -decision: ReviewDecision
         -comment: string
@@ -1366,7 +1366,7 @@ classDiagram
         -suggestions: tuple[string]
         -timestamp: datetime
     }
-    
+
     WorkItem "1" --> "0..*" Workflow: flows through
     WorkItem "1" --> "0..*" AgentExecution: triggers
     Workflow "1" --> "1..*" PipelineStage: contains
@@ -1469,7 +1469,7 @@ if agent.has_capability("implementation"):
     work_item.assigned_agent_id = agent.id
     work_item.assigned_at = datetime.now(UTC)
     work_item.status = WorkItemStatus.ASSIGNED
-    
+
     # Emit event
     event = WorkItemAssignedEvent(
         work_item_id=work_item.id,
@@ -1477,7 +1477,7 @@ if agent.has_capability("implementation"):
         agent_name=agent.name
     )
     await event_bus.publish(event)
-    
+
     # Subscribers react:
     # - ExecutionHandler: schedules agent execution
     # - NotificationHandler: notifies agent of assignment

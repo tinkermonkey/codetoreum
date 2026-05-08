@@ -19,40 +19,40 @@ These ports handle work item state management and intelligent branch strategy.
 class IWorkItemService(ABC):
     """
     Extended work item operations with event emission.
-    
+
     Combines ticket operations with event notification.
     """
-    
+
     @abstractmethod
     async def get_work_item(self, item_id: WorkItemId) -> WorkItem:
         """Retrieve work item."""
         pass
-    
+
     @abstractmethod
     async def update_work_item(self, item_id: WorkItemId, updates: dict[str, Any]) -> WorkItem:
         """Update work item properties."""
         pass
-    
+
     @abstractmethod
     async def list_work_items(self, project_id: ProjectId, filters: dict[str, Any] | None = None) -> list[WorkItem]:
         """Query work items."""
         pass
-    
+
     @abstractmethod
     async def change_status(self, item_id: WorkItemId, new_status: WorkItemStatus) -> WorkItem:
         """Change work item status."""
         pass
-    
+
     @abstractmethod
     async def assign_to_agent(self, item_id: WorkItemId, agent_id: str) -> WorkItem:
         """Assign work item to agent."""
         pass
-    
+
     @abstractmethod
     async def add_label(self, item_id: WorkItemId, label: str) -> WorkItem:
         """Add label to work item."""
         pass
-    
+
     @abstractmethod
     async def emit_work_item_event(self, event: DomainEvent) -> None:
         """Emit domain event for work item state change."""
@@ -65,10 +65,10 @@ class IWorkItemService(ABC):
 class IBranchResolutionService(ABC):
     """
     Branch resolution decision service.
-    
+
     Determines whether to create new or reuse existing branches based on issue metadata.
     """
-    
+
     @abstractmethod
     async def resolve_branch(
         self,
@@ -78,21 +78,21 @@ class IBranchResolutionService(ABC):
     ) -> BranchResolution:
         """
         Resolve branch for work item.
-        
+
         Applies resolution strategies (exact match, parent issue, sibling, fuzzy match, create new).
         """
         pass
-    
+
     @abstractmethod
     async def get_resolution_strategy(self, project_id: ProjectId) -> ResolutionStrategy:
         """Get configured branch resolution strategy."""
         pass
-    
+
     @abstractmethod
     async def validate_branch_name(self, branch_name: str) -> ValidationResult:
         """Validate branch naming conventions."""
         pass
-    
+
     @abstractmethod
     async def suggest_branches(
         self,
@@ -165,7 +165,7 @@ classDiagram
         +add_label(item_id, label) WorkItem
         +emit_work_item_event(event) None
     }
-    
+
     class IBranchResolutionService {
         <<interface>>
         +resolve_branch(project_id, issue_id, issue_metadata) BranchResolution
@@ -173,11 +173,11 @@ classDiagram
         +validate_branch_name(branch_name) ValidationResult
         +suggest_branches(project_id, issue_id, limit) list
     }
-    
+
     class IntelligentBranchResolutionAdapter {
         +compose_vcs_service: IVersionControlService
         +compose_ticket_system: ITicketSystem
     }
-    
+
     IBranchResolutionService <|-- IntelligentBranchResolutionAdapter: implements
 ```

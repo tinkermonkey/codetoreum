@@ -96,15 +96,15 @@ Ports that extend `IEventEmitter` publish domain events following this pattern:
 ```python
 class MyService(IEventEmitter, ABC):
     """Service with event emission."""
-    
+
     async def my_operation(self) -> Result:
         """Perform operation and emit event."""
         # ... business logic ...
-        
+
         # Emit event for state change
         event = MyStateChangedEvent(...)
         await self.emit("my.state.changed", event)
-        
+
         return result
 ```
 

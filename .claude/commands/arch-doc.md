@@ -182,25 +182,25 @@ Agent:
      - Events: WorkItemColumnChangedEvent, ReviewStatusChangedEvent, ...
   2. Cross-references with documentation/architecture/
   3. Generates structured report:
-     
+
      DOCUMENTATION COVERAGE REPORT
      =============================
-     
+
      ✅ Port Interfaces (12/14 documented)
         Missing: IPipelineLockService, IEventEmitter
-     
+
      ✅ Adapters (15/18 documented)
         Missing: MockEventEmitterAdapter, RealEventEmitterAdapter
-     
+
      ⚠️  Domain Events (22/22 documented, 8 missing Examples)
-     
+
      ⚠️  Template Compliance
         8 ports missing Examples section
         3 adapters missing Configuration section
-     
+
      🔍 Diagram Status
         6 diagrams present, 3 missing (event flows, adapter hierarchy)
-  
+
   4. Suggests next steps:
      "Should I generate docs for 2 missing ports?
       Should I add Examples to 8 ports?

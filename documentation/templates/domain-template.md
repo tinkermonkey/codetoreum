@@ -56,7 +56,7 @@ class WorkItem:
     labels: List[str] = field(default_factory=list)
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
-    
+
     def can_transition_to(self, new_status: WorkItemStatus) -> bool:
         """Check if transition is allowed."""
         # Business rule: can only move forward in workflow
@@ -109,7 +109,7 @@ Example enforcement:
 class ReviewCycle:
     """A code review cycle for agent-generated changes."""
     feedback: List[Feedback] = field(default_factory=list)
-    
+
     def add_feedback(self, feedback: Feedback) -> None:
         """Add or replace feedback from a reviewer."""
         # Invariant: one feedback per reviewer
@@ -117,7 +117,7 @@ class ReviewCycle:
         if existing:
             self.feedback.remove(existing)
         self.feedback.append(feedback)
-    
+
     def can_complete(self) -> bool:
         """Invariant: at least 2 reviewers must approve."""
         approvals = sum(1 for f in self.feedback if f.status == "approved")
@@ -268,7 +268,7 @@ classDiagram
         +can_transition_to(status) bool
         +assign_agent(agent_id) void
     }
-    
+
     class ReviewCycle {
         -id: string
         -work_item_id: string
@@ -276,13 +276,13 @@ classDiagram
         +add_feedback(feedback) void
         +can_complete() bool
     }
-    
+
     class Feedback {
         -reviewer_id: string
         -status: string
         -message: string
     }
-    
+
     WorkItem "1" --> "0..*" ReviewCycle: has
     ReviewCycle "1" --> "1..*" Feedback: contains
 ```

@@ -19,47 +19,47 @@ These ports abstract configuration storage and metrics collection.
 ```python
 class IConfigurationCommandPort(ABC):
     """Input port for configuration management."""
-    
+
     @abstractmethod
     async def update_project_config(self, command: UpdateProjectConfigCommand) -> ConfigurationCommandResult:
         """Update project configuration."""
         pass
-    
+
     @abstractmethod
     async def update_agent_config(self, command: UpdateAgentConfigCommand) -> ConfigurationCommandResult:
         """Update agent configuration."""
         pass
-    
+
     @abstractmethod
     async def update_pipeline_config(self, command: UpdatePipelineConfigCommand) -> ConfigurationCommandResult:
         """Update pipeline configuration."""
         pass
-    
+
     @abstractmethod
     async def add_environment_variable(self, command: AddEnvironmentVariableCommand) -> ConfigurationCommandResult:
         """Add environment variable."""
         pass
-    
+
     @abstractmethod
     async def remove_environment_variable(self, command: RemoveEnvironmentVariableCommand) -> ConfigurationCommandResult:
         """Remove environment variable."""
         pass
-    
+
     @abstractmethod
     async def mount_command(self, command: MountCommandCommand) -> ConfigurationCommandResult:
         """Mount command in configuration."""
         pass
-    
+
     @abstractmethod
     async def unmount_command(self, command: UnmountCommandCommand) -> ConfigurationCommandResult:
         """Unmount command from configuration."""
         pass
-    
+
     @abstractmethod
     async def mount_subagent(self, command: MountSubAgentCommand) -> ConfigurationCommandResult:
         """Mount subagent in configuration."""
         pass
-    
+
     @abstractmethod
     async def unmount_subagent(self, command: UnmountSubAgentCommand) -> ConfigurationCommandResult:
         """Unmount subagent from configuration."""
@@ -71,57 +71,57 @@ class IConfigurationCommandPort(ABC):
 ```python
 class IConfigurationQueryPort(ABC):
     """Input port for configuration queries."""
-    
+
     @abstractmethod
     async def get_project_config(self, project_id: str, include_secrets: bool = False) -> ProjectConfigInfo:
         """Get project configuration by ID."""
         pass
-    
+
     @abstractmethod
     async def get_project_config_by_name(self, project_name: str, include_secrets: bool = False) -> ProjectConfigInfo:
         """Get project configuration by name."""
         pass
-    
+
     @abstractmethod
     async def get_agent_config(self, project_id: str, agent_name: str) -> AgentConfigInfo:
         """Get agent configuration."""
         pass
-    
+
     @abstractmethod
     async def get_pipeline_config(self, project_id: str, pipeline_name: str) -> PipelineConfigInfo:
         """Get pipeline configuration."""
         pass
-    
+
     @abstractmethod
     async def list_projects(self, pagination: PaginationParams | None = None) -> list[ProjectConfigInfo]:
         """List all projects."""
         pass
-    
+
     @abstractmethod
     async def list_agents(self, project_id: str, pagination: PaginationParams | None = None) -> list[AgentConfigInfo]:
         """List agents in project."""
         pass
-    
+
     @abstractmethod
     async def list_pipelines(self, project_id: str, pagination: PaginationParams | None = None) -> list[PipelineConfigInfo]:
         """List pipelines in project."""
         pass
-    
+
     @abstractmethod
     async def search_configs(self, query: str, config_type: str | None = None) -> list[dict]:
         """Search configuration."""
         pass
-    
+
     @abstractmethod
     async def get_config_version_history(self, config_id: str, config_type: str) -> ConfigVersionHistoryResult:
         """Get configuration version history."""
         pass
-    
+
     @abstractmethod
     async def get_config_version(self, config_id: str, config_type: str, version: int) -> dict[str, Any]:
         """Get specific configuration version."""
         pass
-    
+
     @abstractmethod
     async def count_configs(self, config_type: str | None = None, project_id: str | None = None) -> int:
         """Count configurations matching criteria."""
@@ -133,12 +133,12 @@ class IConfigurationQueryPort(ABC):
 ```python
 class IMetricsQueryPort(ABC):
     """Input port for metrics queries."""
-    
+
     @abstractmethod
     async def get_metric(self, metric_name: str) -> MetricValue:
         """Get metric by name."""
         pass
-    
+
     @abstractmethod
     async def get_metrics_range(
         self,
@@ -149,7 +149,7 @@ class IMetricsQueryPort(ABC):
     ) -> MetricsRangeResult:
         """Get metric values over time range."""
         pass
-    
+
     @abstractmethod
     async def query_metrics(
         self,
@@ -159,17 +159,17 @@ class IMetricsQueryPort(ABC):
     ) -> MetricsQueryResult:
         """Query metrics with custom query."""
         pass
-    
+
     @abstractmethod
     async def get_system_health(self) -> SystemHealthInfo:
         """Get current system health metrics."""
         pass
-    
+
     @abstractmethod
     async def get_agent_metrics(self, agent_id: str) -> AgentMetricsInfo:
         """Get metrics for specific agent."""
         pass
-    
+
     @abstractmethod
     async def get_project_metrics(self, project_id: str) -> ProjectMetricsInfo:
         """Get metrics for specific project."""
@@ -252,7 +252,7 @@ classDiagram
         +mount_command(MountCommandCommand) ConfigurationCommandResult
         +mount_subagent(MountSubAgentCommand) ConfigurationCommandResult
     }
-    
+
     class IConfigurationQueryPort {
         <<interface>>
         +get_project_config(project_id, include_secrets) ProjectConfigInfo
@@ -262,7 +262,7 @@ classDiagram
         +search_configs(query, config_type) list
         +count_configs(config_type, project_id) int
     }
-    
+
     class IMetricsQueryPort {
         <<interface>>
         +get_metric(metric_name) MetricValue

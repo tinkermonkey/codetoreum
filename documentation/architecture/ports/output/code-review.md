@@ -19,45 +19,45 @@ These ports abstract code review systems and enable multi-platform support.
 class ICodeReviewService(ABC):
     """
     Code review lifecycle (GitHub PRs, GitLab MRs, etc.).
-    
+
     Manages review status, approvals, and comments.
     """
-    
+
     @abstractmethod
     async def get_review(self, pr_id: str, project_id: ProjectId) -> ReviewInfo:
         """Get review status and approvals."""
         pass
-    
+
     @abstractmethod
     async def request_review(self, pr_id: str, project_id: ProjectId, reviewers: list[UserId]) -> None:
         """Request review from users."""
         pass
-    
+
     @abstractmethod
     async def approve(self, pr_id: str, project_id: ProjectId) -> ReviewApproval:
         """Approve code review."""
         pass
-    
+
     @abstractmethod
     async def request_changes(self, pr_id: str, project_id: ProjectId, feedback: str) -> ReviewFeedback:
         """Request changes with feedback."""
         pass
-    
+
     @abstractmethod
     async def get_comments(self, pr_id: str, project_id: ProjectId) -> list[ReviewComment]:
         """Retrieve review comments."""
         pass
-    
+
     @abstractmethod
     async def add_comment(self, pr_id: str, project_id: ProjectId, comment: str, file_path: str | None = None, line: int | None = None) -> ReviewComment:
         """Add comment to review."""
         pass
-    
+
     @abstractmethod
     async def merge_pull_request(self, pr_id: str, project_id: ProjectId) -> MergeResult:
         """Merge approved pull request."""
         pass
-    
+
     @abstractmethod
     async def dismiss_review(self, pr_id: str, project_id: ProjectId, reviewer_id: UserId) -> None:
         """Dismiss review from reviewer."""
@@ -70,40 +70,40 @@ class ICodeReviewService(ABC):
 class IDiscussionAdapter(ABC):
     """
     Discussion thread management (GitHub discussions, issue comments, etc.).
-    
+
     Manages discussion and comment interactions.
     """
-    
+
     @abstractmethod
     async def get_discussion(self, discussion_id: str, project_id: ProjectId) -> DiscussionInfo:
         """Retrieve discussion thread."""
         pass
-    
+
     @abstractmethod
     async def post_comment(self, discussion_id: str, project_id: ProjectId, content: str) -> Comment:
         """Add comment to discussion."""
         pass
-    
+
     @abstractmethod
     async def update_comment(self, comment_id: str, discussion_id: str, project_id: ProjectId, content: str) -> Comment:
         """Edit existing comment."""
         pass
-    
+
     @abstractmethod
     async def get_comments(self, discussion_id: str, project_id: ProjectId) -> list[Comment]:
         """List thread comments."""
         pass
-    
+
     @abstractmethod
     async def react_to_comment(self, comment_id: str, project_id: ProjectId, emoji: str) -> None:
         """Add reaction/emoji to comment."""
         pass
-    
+
     @abstractmethod
     async def close_discussion(self, discussion_id: str, project_id: ProjectId, reason: str | None = None) -> None:
         """Close discussion thread."""
         pass
-    
+
     @abstractmethod
     async def reopen_discussion(self, discussion_id: str, project_id: ProjectId) -> None:
         """Reopen closed discussion."""
@@ -177,7 +177,7 @@ classDiagram
         +merge_pull_request(pr_id, project_id) MergeResult
         +dismiss_review(pr_id, project_id, reviewer_id) None
     }
-    
+
     class IDiscussionAdapter {
         <<interface>>
         +get_discussion(discussion_id, project_id) DiscussionInfo
@@ -188,15 +188,15 @@ classDiagram
         +close_discussion(discussion_id, project_id, reason) None
         +reopen_discussion(discussion_id, project_id) None
     }
-    
+
     class GitHubCodeReviewAdapter {
         +graphql_client: GraphQLClient
     }
-    
+
     class GitHubDiscussionAdapter {
         +graphql_client: GraphQLClient
     }
-    
+
     ICodeReviewService <|-- GitHubCodeReviewAdapter: implements
     IDiscussionAdapter <|-- GitHubDiscussionAdapter: implements
 ```

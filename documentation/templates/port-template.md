@@ -37,12 +37,12 @@ from typing import List, Optional
 
 class IPortName(ABC):
     """One-line description of the port's responsibility."""
-    
+
     @abstractmethod
     async def method_one(self, param: Type) -> ReturnType:
         """Method description."""
         pass
-    
+
     @abstractmethod
     async def method_two(self, param1: Type1, param2: Type2) -> ReturnType:
         """Method description."""
@@ -121,17 +121,17 @@ classDiagram
         +method_one(param: Type) ReturnType
         +method_two(param1: Type1, param2: Type2) ReturnType
     }
-    
+
     class ProductionAdapter {
         +method_one(param: Type) ReturnType
         +method_two(param1: Type1, param2: Type2) ReturnType
     }
-    
+
     class MockAdapter {
         +method_one(param: Type) ReturnType
         +method_two(param1: Type1, param2: Type2) ReturnType
     }
-    
+
     IPortName <|-- ProductionAdapter: implements
     IPortName <|-- MockAdapter: implements
 ```

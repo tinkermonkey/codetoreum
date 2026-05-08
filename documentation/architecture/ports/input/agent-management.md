@@ -84,45 +84,45 @@ class RemoveMcpServerCommand:
 class IAgentCommandPort(ABC):
     """
     Agent Command Input Port.
-    
+
     Provides write operations for agent registry management.
     """
-    
+
     @abstractmethod
     async def create_agent(self, command: CreateAgentCommand) -> Agent:
         """Create a new agent."""
         pass
-    
+
     @abstractmethod
     async def update_agent(self, command: UpdateAgentCommand) -> Agent:
         """Update an existing agent."""
         pass
-    
+
     @abstractmethod
     async def add_capability(self, command: AddAgentCapabilityCommand) -> Agent:
         """Add a capability to an agent."""
         pass
-    
+
     @abstractmethod
     async def remove_capability(self, command: RemoveAgentCapabilityCommand) -> Agent:
         """Remove a capability from an agent."""
         pass
-    
+
     @abstractmethod
     async def update_capability(self, command: UpdateAgentCapabilityCommand) -> Agent:
         """Update capability proficiency."""
         pass
-    
+
     @abstractmethod
     async def add_mcp_server(self, command: AddMcpServerCommand) -> Agent:
         """Add an MCP server to agent configuration."""
         pass
-    
+
     @abstractmethod
     async def remove_mcp_server(self, command: RemoveMcpServerCommand) -> Agent:
         """Remove an MCP server from agent configuration."""
         pass
-    
+
     @abstractmethod
     async def delete_agent(self, agent_id: str) -> AgentCommandResult:
         """Delete an agent (soft delete)."""
@@ -205,27 +205,27 @@ class AgentListResult:
 class IAgentQueryPort(ABC):
     """
     Agent Query Input Port.
-    
+
     Provides read-only access to agent registry information.
     """
-    
+
     @abstractmethod
     async def get_agent(self, agent_id: str, include_stats: bool = False) -> AgentInfo:
         """Get agent by ID."""
         pass
-    
+
     @abstractmethod
     async def get_agent_by_name(self, name: str, include_stats: bool = False) -> AgentInfo:
         """Get agent by name."""
         pass
-    
+
     @abstractmethod
     async def list_agents(
         self, filters: AgentFilters | None = None, pagination: AgentPaginationParams | None = None
     ) -> AgentListResult:
         """List agents with optional filtering and pagination."""
         pass
-    
+
     @abstractmethod
     async def list_agents_by_capability(
         self,
@@ -235,7 +235,7 @@ class IAgentQueryPort(ABC):
     ) -> AgentListResult:
         """List agents that have a specific capability."""
         pass
-    
+
     @abstractmethod
     async def count_agents(self, filters: AgentFilters | None = None) -> int:
         """Count agents matching filters."""
@@ -301,7 +301,7 @@ classDiagram
         +remove_mcp_server(RemoveMcpServerCommand) Agent
         +delete_agent(agent_id) AgentCommandResult
     }
-    
+
     class IAgentQueryPort {
         <<interface>>
         +get_agent(agent_id, include_stats) AgentInfo
@@ -310,7 +310,7 @@ classDiagram
         +list_agents_by_capability(capability, min_proficiency, pagination) AgentListResult
         +count_agents(filters) int
     }
-    
+
     class MockAgentCommandAdapter {
         -agents: dict
         -next_id: int
@@ -323,7 +323,7 @@ classDiagram
         +remove_mcp_server(RemoveMcpServerCommand) Agent
         +delete_agent(agent_id) AgentCommandResult
     }
-    
+
     class MockAgentQueryAdapter {
         -agents: dict
         +get_agent(agent_id, include_stats) AgentInfo
@@ -332,7 +332,7 @@ classDiagram
         +list_agents_by_capability(capability, min_proficiency, pagination) AgentListResult
         +count_agents(filters) int
     }
-    
+
     IAgentCommandPort <|-- MockAgentCommandAdapter: implements
     IAgentQueryPort <|-- MockAgentQueryAdapter: implements
 ```

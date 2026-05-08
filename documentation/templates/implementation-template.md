@@ -78,19 +78,19 @@ Document how adapters are instantiated and wired together:
 async def create_app() -> FastAPI:
     # Phase 1: Read configuration from environment/database
     config = await load_configuration()
-    
+
     # Phase 2: Instantiate output port adapters
     ticket_adapter = GitHubTicketAdapter(token=config.github_token)
     container_adapter = DockerContainerAdapter(host=config.docker_host)
     llm_adapter = ClaudeCodeAdapter(api_key=config.claude_api_key)
-    
+
     # Phase 3: Wire adapters through resilience decorators
     resilient_board = ResilientBoardServiceDecorator(
         GitHubBoardAdapter(token=config.github_token),
         timeout=30.0,
         retry_count=3,
     )
-    
+
     # Phase 4: Create application services
     workflow_orchestrator = WorkflowOrchestrator(
         ticket_system=ticket_adapter,
@@ -98,17 +98,17 @@ async def create_app() -> FastAPI:
         container=container_adapter,
         # ... more dependencies ...
     )
-    
+
     # Phase 5: Create event bus and wire handlers
     event_bus = EventBus()
     event_bus.subscribe(WorkflowStartedEvent, WorkflowEventHandler(workflow_orchestrator))
     event_bus.subscribe(ReviewStatusChangedEvent, ReviewEventHandler(...))
-    
+
     # Phase 6: Create FastAPI app and mount routes
     app = FastAPI()
     app.include_router(work_item_routes)
     app.include_router(workflow_routes)
-    
+
     return app
 ```
 
@@ -232,28 +232,28 @@ flowchart TB
         app["Application Services<br/>(Orchestration)"]
         ports["Port Interfaces<br/>(Contracts)"]
     end
-    
+
     subgraph "Adapters (This Implementation)"
         gh["GitHubTicketAdapter<br/>GitHubBoardAdapter"]
         docker["DockerContainerAdapter"]
         claude["ClaudeCodeAdapter"]
         redis["RedisEventStore"]
     end
-    
+
     subgraph "External Systems"
         github["GitHub<br/>API"]
         dkr["Docker<br/>Daemon"]
         llm["Claude<br/>API"]
         evt["Redis<br/>Instance"]
     end
-    
+
     domain --> app
     app --> ports
     ports --> gh
     ports --> docker
     ports --> claude
     ports --> redis
-    
+
     gh --> github
     docker --> dkr
     claude --> llm
@@ -269,21 +269,21 @@ flowchart TB
         app["Application Services<br/>(Real)"]
         ports["Port Interfaces<br/>(Contracts)"]
     end
-    
+
     subgraph "Mock Adapters"
         mock_ticket["MockTicketAdapter"]
         mock_container["FakeContainerAdapter"]
         mock_llm["MockLLMAdapter"]
         mock_event["InMemoryEventStore"]
     end
-    
+
     domain --> app
     app --> ports
     ports --> mock_ticket
     ports --> mock_container
     ports --> mock_llm
     ports --> mock_event
-    
+
     mock_ticket -.-> storage["In-Memory<br/>Storage"]
     mock_container -.-> storage
     mock_llm -.-> storage

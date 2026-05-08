@@ -73,11 +73,11 @@ class GitHubConfig:
     token: str                          # GitHub API token (required)
     organization: str                   # GitHub organization (required)
     repository: str                     # Repository name (required)
-    
+
     # Polling configuration
     polling_interval_seconds: int = 60  # 60 second default
     webhook_enabled: bool = True        # Enable webhook detection
-    
+
     # API defaults
     api_base_url: str = "https://api.github.com"
     graphql_url: str = "https://api.github.com/graphql"
@@ -203,7 +203,7 @@ classDiagram
         +request_changes(pr_id: str, feedback: str)
         +add_change_listener(pr_id: str, callback)
     }
-    
+
     class GitHubCodeReviewAdapter {
         -graphql_client: GitHubGraphQLClient
         -ticket_adapter: GitHubTicketAdapter
@@ -215,11 +215,11 @@ classDiagram
         +add_change_listener(pr_id: str, callback)
         -_detect_status_changes(pr_id: str)
     }
-    
+
     class GitHubGraphQLClient {
         +query(query: str) dict
     }
-    
+
     class CodeReviewStatus {
         <<enumeration>>
         OPEN
@@ -228,7 +228,7 @@ classDiagram
         MERGED
         CLOSED
     }
-    
+
     ICodeReviewService <|-- GitHubCodeReviewAdapter: implements
     GitHubCodeReviewAdapter --> GitHubGraphQLClient: uses
     GitHubCodeReviewAdapter --> CodeReviewStatus: returns
@@ -247,7 +247,7 @@ classDiagram
 ## Cross-References
 
 - **Port Interface**: [ICodeReviewService](../ports/output/code-review.md) - Complete specification
-- **Related Adapters**: 
+- **Related Adapters**:
   - [GitHubTicketAdapter](./github-ticket-adapter.md) - Issue management
   - [GitHub Discussion Adapter](./github-discussion-adapter.md) - Comment management
 - **Domain Events**: [Review Events](../domain/events.md#review-context)

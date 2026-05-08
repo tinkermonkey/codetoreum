@@ -44,13 +44,13 @@ The Work Item context manages the lifecycle of issues, tasks, and features flowi
 @dataclass(frozen=True)
 class WorkItemCreatedEvent(CodetoreumEvent):
     """Emitted when a work item is created.
-    
+
     Fired by: IWorkItemService.create() → application service
     Subscribers:
       - BoardHandler: Add item to board
       - MetricsHandler: Initialize metrics
       - AuditHandler: Log creation
-    
+
     Attributes:
         work_item_id: ID of newly created work item
         project_id: Project containing the work item
@@ -67,13 +67,13 @@ class WorkItemCreatedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class WorkItemUpdatedEvent(CodetoreumEvent):
     """Emitted when a work item is updated (title, description, labels, etc.)
-    
+
     Fired by: IWorkItemService.update() → application service
     Subscribers:
       - BoardHandler: Update board display
       - NotificationHandler: Notify watchers
       - AuditHandler: Log change
-    
+
     Attributes:
         work_item_id: Work item being updated
         project_id: Project containing the work item
@@ -96,38 +96,38 @@ graph TB
     subgraph "Domain Layer"
         WI["🟦 WorkItem<br/>aggregate"]
     end
-    
+
     subgraph "Events"
         WI -->|create| WI_CREATED["WorkItemCreatedEvent"]
         WI -->|update fields| WI_UPDATED["WorkItemUpdatedEvent"]
     end
-    
+
     subgraph "Event Bus"
         BUS["📢 Event Bus<br/>(pub/sub)"]
         WI_CREATED -->|emit| BUS
         WI_UPDATED -->|emit| BUS
     end
-    
+
     subgraph "Event Handlers"
         BH["📋 BoardHandler"]
         NH["📧 NotificationHandler"]
         AH["📊 AuditHandler"]
         MH["📈 MetricsHandler"]
     end
-    
+
     subgraph "External Systems"
         BOARD["GitHub Board"]
         NOTIFY["Notifications"]
         AUDIT["Audit Log"]
     end
-    
+
     BUS -->|WorkItemCreatedEvent| BH
     BUS -->|WorkItemCreatedEvent| MH
     BUS -->|WorkItemCreatedEvent| AH
     BUS -->|WorkItemUpdatedEvent| BH
     BUS -->|WorkItemUpdatedEvent| NH
     BUS -->|WorkItemUpdatedEvent| AH
-    
+
     BH -->|IBoardService| BOARD
     NH -->|INotifier| NOTIFY
     AH -->|IAudit| AUDIT
@@ -145,14 +145,14 @@ The Board context manages work item positioning on workflow boards (columns) and
 @dataclass(frozen=True)
 class WorkItemColumnChangedEvent(CodetoreumEvent):
     """Emitted when a work item moves between board columns.
-    
+
     Fired by: IWorkflowService.transition_stage() → application → domain
     Subscribers:
       - BoardHandler: Update board position via IBoardService
       - SLAMonitor: Start/stop SLA timers
       - MetricsHandler: Record column entry time
       - NotificationHandler: Notify team of progression
-    
+
     Attributes:
         work_item_id: Work item that moved
         project_id: Project containing the board
@@ -168,12 +168,12 @@ class WorkItemColumnChangedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class WorkItemPositionChangedEvent(CodetoreumEvent):
     """Emitted when a work item's position changes within a column (ordering).
-    
+
     Fired by: IBoardService.reorder_items() → external system adapter
     Subscribers:
       - BoardHandler: Update board display
       - QueueHandler: Update queue position tracking
-    
+
     Attributes:
         work_item_id: Work item that moved
         project_id: Project containing the board
@@ -190,12 +190,12 @@ class WorkItemPositionChangedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class BoardReconciledEvent(CodetoreumEvent):
     """Emitted when a board's structure is synchronized with workflow template.
-    
+
     Fired by: IBoardService.reconcile() → application service
     Subscribers:
       - MetricsHandler: Record reconciliation
       - AuditHandler: Log board changes
-    
+
     Attributes:
         project_id: Project containing the board
         board_id: Board being reconciled
@@ -212,13 +212,13 @@ class BoardReconciledEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class ColumnSLAExceededEvent(CodetoreumEvent):
     """Emitted when a work item exceeds SLA in a column.
-    
+
     Fired by: SLAMonitor task (infrastructure)
     Subscribers:
       - NotificationHandler: Alert team
       - EscalationHandler: Move to escalation column if configured
       - MetricsHandler: Record SLA breach
-    
+
     Attributes:
         work_item_id: Work item exceeding SLA
         project_id: Project containing the board
@@ -240,29 +240,29 @@ graph TB
     subgraph "Work Item Lifecycle"
         WI["🟦 Work Item<br/>transitions to stage"]
     end
-    
+
     subgraph "Emission"
         EMIT["📤 WorkItemColumnChangedEvent<br/>(work_item_id, from_col, to_col)"]
     end
-    
+
     subgraph "Event Bus"
         STORE["💾 Event Store<br/>(Redis) Persist"]
         PUB["📡 Event Bus<br/>Publish to subscribers"]
     end
-    
+
     subgraph "Event Handlers"
         H1["🔷 BoardHandler<br/>IBoardService.move_item()"]
         H2["🔷 SLAMonitor<br/>Start/stop timers"]
         H3["🔷 MetricsHandler<br/>Record transition time"]
         H4["🔷 NotificationHandler<br/>Notify team"]
     end
-    
+
     subgraph "External Effects"
         BOARD["📋 Update board<br/>in GitHub/Jira"]
         METRIC["📊 Store metric<br/>in Prometheus"]
         NOTIF["🔔 Send notification<br/>to Slack"]
     end
-    
+
     WI -->|triggers| EMIT
     EMIT -->|enters| STORE
     STORE -->|publishes| PUB
@@ -287,14 +287,14 @@ The Execution context tracks agent execution lifecycle events.
 @dataclass(frozen=True)
 class ExecutionTimedOutEvent(CodetoreumEvent):
     """Emitted when an agent execution exceeds its timeout.
-    
+
     Fired by: ExecutionService timeout monitor (infrastructure)
     Subscribers:
       - ExecutionHandler: Mark execution as TIMEOUT, release resources
       - NotificationHandler: Notify team of timeout
       - MetricsHandler: Record timeout metric
       - RepairCycleHandler: Possibly trigger repair cycle
-    
+
     Attributes:
         execution_id: Execution that timed out
         agent_id: Agent that timed out
@@ -314,14 +314,14 @@ graph TB
     subgraph "Domain Layer"
         EXEC["🟦 AgentExecution<br/>aggregate"]
     end
-    
+
     subgraph "Execution Lifecycle Events"
         EXEC -->|start| STARTED["ExecutionStartedEvent"]
         EXEC -->|complete| COMPLETED["ExecutionCompletedEvent"]
         EXEC -->|fail| FAILED["ExecutionFailedEvent"]
         EXEC -->|timeout| TIMEOUT["ExecutionTimedOutEvent"]
     end
-    
+
     subgraph "Event Bus"
         BUS["📢 Event Bus"]
         STARTED -->|emit| BUS
@@ -329,26 +329,26 @@ graph TB
         FAILED -->|emit| BUS
         TIMEOUT -->|emit| BUS
     end
-    
+
     subgraph "Event Handlers"
         EH["⚙️ ExecutionHandler"]
         NH["📧 NotificationHandler"]
         RCH["🔧 RepairCycleHandler"]
         MH["📈 MetricsHandler"]
     end
-    
+
     subgraph "External Systems"
         CONTAINER["Container Runtime"]
         NOTIFY["Notifications"]
         REPAIR["Repair Cycle"]
     end
-    
+
     BUS -->|ExecutionStartedEvent| EH
     BUS -->|ExecutionCompletedEvent| EH
     BUS -->|ExecutionFailedEvent| RCH
     BUS -->|ExecutionTimedOutEvent| NH
     BUS -->|All events| MH
-    
+
     EH -->|IContainer| CONTAINER
     NH -->|INotifier| NOTIFY
     RCH -->|Trigger| REPAIR
@@ -366,13 +366,13 @@ The Review context manages code review state and feedback.
 @dataclass(frozen=True)
 class ReviewStatusChangedEvent(CodetoreumEvent):
     """Emitted when a code review's status changes.
-    
+
     Fired by: ICodeReviewService.update_review() → adapter
     Subscribers:
       - ReviewHandler: Update review cycle state
       - NotificationHandler: Notify reviewers
       - MetricsHandler: Record review timing
-    
+
     Attributes:
         review_id: Review being updated
         work_item_id: Work item under review
@@ -387,12 +387,12 @@ class ReviewStatusChangedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class ReviewCommentAddedEvent(CodetoreumEvent):
     """Emitted when a comment is added to a code review.
-    
+
     Fired by: ICodeReviewService.add_comment() → adapter
     Subscribers:
       - ReviewHandler: Update review feedback
       - NotificationHandler: Notify other reviewers
-    
+
     Attributes:
         review_id: Review being commented on
         comment_id: New comment ID
@@ -412,32 +412,32 @@ graph TB
     subgraph "External System"
         REVIEW["🔄 Code Review<br/>(GitHub PR)"]
     end
-    
+
     subgraph "Adapter Event Emission"
         REVIEW -->|status changes| STATUS["ReviewStatusChangedEvent"]
         REVIEW -->|comment added| COMMENT["ReviewCommentAddedEvent"]
     end
-    
+
     subgraph "Event Bus"
         BUS["📢 Event Bus"]
         STATUS -->|emit| BUS
         COMMENT -->|emit| BUS
     end
-    
+
     subgraph "Event Handlers"
         RH["🔍 ReviewHandler"]
         NH["📧 NotificationHandler"]
         MH["📈 MetricsHandler"]
     end
-    
+
     subgraph "Application Layer"
         RC["ReviewCycle<br/>aggregate"]
     end
-    
+
     BUS -->|ReviewStatusChangedEvent| RH
     BUS -->|ReviewCommentAddedEvent| NH
     BUS -->|All events| MH
-    
+
     RH -->|update| RC
     NH -->|notify team| NOTIFY["Notifications"]
 ```
@@ -454,13 +454,13 @@ The Review Cycle context (domain layer) models maker-checker code review cycles 
 @dataclass(frozen=True)
 class ReviewCycleStartedEvent(CodetoreumEvent):
     """Emitted when a new review cycle begins.
-    
+
     Fired by: ReviewService.create_review_cycle() → domain
     Subscribers:
       - ReviewHandler: Initialize review state
       - NotificationHandler: Notify reviewers to start
       - MetricsHandler: Record review start time
-    
+
     Attributes:
         review_cycle_id: New review cycle ID
         work_item_id: Item under review
@@ -479,12 +479,12 @@ class ReviewCycleStartedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class ReviewCycleIterationCompletedEvent(CodetoreumEvent):
     """Emitted when a review iteration completes (feedback collected).
-    
+
     Fired by: ReviewCycle.complete_iteration() → domain
     Subscribers:
       - ReviewHandler: Check if approved/escalate if changes needed
       - NotificationHandler: Notify author of feedback
-    
+
     Attributes:
         review_cycle_id: Review cycle
         iteration_number: Which iteration completed (1, 2, etc.)
@@ -497,13 +497,13 @@ class ReviewCycleIterationCompletedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class ReviewCycleApprovedEvent(CodetoreumEvent):
     """Emitted when a review cycle is approved (sufficient positive feedback).
-    
+
     Fired by: ReviewCycle.approve() → domain
     Subscribers:
       - WorkflowHandler: Advance work item to next stage
       - NotificationHandler: Notify team of approval
       - MetricsHandler: Record review completion time
-    
+
     Attributes:
         review_cycle_id: Review cycle being approved
         work_item_id: Item that was approved
@@ -518,12 +518,12 @@ class ReviewCycleApprovedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class ReviewCycleEscalatedToHumanEvent(CodetoreumEvent):
     """Emitted when review cycle is escalated to human for decision.
-    
+
     Fired by: ReviewCycle.escalate() → domain
     Subscribers:
       - EscalationHandler: Notify human reviewer
       - MetricsHandler: Record escalation
-    
+
     Attributes:
         review_cycle_id: Review cycle being escalated
         work_item_id: Item requiring escalation
@@ -540,12 +540,12 @@ class ReviewCycleEscalatedToHumanEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class ReviewCycleMakerRevisionEvent(CodetoreumEvent):
     """Emitted when maker completes a revision.
-    
+
     Fired by: ReviewCycle.apply_revision() → domain
     Subscribers:
       - ReviewHandler: Prepare for new review iteration
       - MetricsHandler: Record revision completion
-    
+
     Attributes:
         review_cycle_id: Review cycle ID
         work_item_id: Item being revised
@@ -558,13 +558,13 @@ class ReviewCycleMakerRevisionEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class ReviewCycleHumanFeedbackReceivedEvent(CodetoreumEvent):
     """Emitted when human feedback is received on escalated cycle.
-    
+
     Fired by: ReviewService.receive_human_feedback() → application
     Subscribers:
       - ReviewHandler: Process feedback and resume cycle
       - NotificationHandler: Notify team of feedback
       - MetricsHandler: Record feedback received
-    
+
     Attributes:
         review_cycle_id: Review cycle ID
         work_item_id: Item receiving feedback
@@ -577,13 +577,13 @@ class ReviewCycleHumanFeedbackReceivedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class ReviewCycleMaxIterationsReachedEvent(CodetoreumEvent):
     """Emitted when max iterations reached without approval.
-    
+
     Fired by: ReviewCycle.check_max_iterations() → domain
     Subscribers:
       - ReviewHandler: Escalate to human decision
       - NotificationHandler: Notify team of escalation
       - MetricsHandler: Record max iterations reached
-    
+
     Attributes:
         review_cycle_id: Review cycle ID
         work_item_id: Item requiring decision
@@ -603,23 +603,23 @@ graph TB
         ITER["🟡 ReviewCycleIteration<br/>collect feedback"]
         DECISION{"Approved or<br/>Changes needed?"}
     end
-    
+
     subgraph "Event Bus"
         STORE1["💾 Persist to store"]
         PUB1["📡 Publish"]
     end
-    
+
     subgraph "Handlers - Approved Path"
         H_APP["ReviewHandler<br/>Mark as approved"]
         H_WF["WorkflowHandler<br/>Advance to next stage"]
         H_NOTIF["NotificationHandler<br/>Notify team"]
     end
-    
+
     subgraph "Handlers - Revision Path"
         H_ITER["ReviewHandler<br/>Start new iteration"]
         H_NOTIF2["NotificationHandler<br/>Request changes"]
     end
-    
+
     START -->|emit| STORE1
     STORE1 -->|publish| PUB1
     ITER -->|emit| STORE1
@@ -644,12 +644,12 @@ PR Review Cycle handles the multi-phase code review process for pull requests.
 @dataclass(frozen=True)
 class PRReviewCycleStartedEvent(CodetoreumEvent):
     """Emitted when a PR review cycle begins.
-    
+
     Fired by: PRReviewService.start_review_cycle() → application
     Subscribers:
       - PRReviewHandler: Initialize PR review state
       - MetricsHandler: Record start time
-    
+
     Attributes:
         pr_review_cycle_id: New review cycle ID
         work_item_id: Work item with PR
@@ -664,7 +664,7 @@ class PRReviewCycleStartedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class PRReviewCycleCodeReviewStartedEvent(CodetoreumEvent):
     """Emitted when code review phase starts (after auto-check phase).
-    
+
     Attributes:
         pr_review_cycle_id: Review cycle
         pr_id: Pull request
@@ -675,7 +675,7 @@ class PRReviewCycleCodeReviewStartedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class PRReviewCycleVerificationStartedEvent(CodetoreumEvent):
     """Emitted when verification phase starts (after code review).
-    
+
     Attributes:
         pr_review_cycle_id: Review cycle
         pr_id: Pull request
@@ -686,9 +686,9 @@ class PRReviewCycleVerificationStartedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class PRReviewCyclePhaseStartedEvent(CodetoreumEvent):
     """Emitted when any PR review cycle phase starts.
-    
+
     Unified event for phase initiation across all phases (code review, verification, CI check, consolidation).
-    
+
     Attributes:
         pr_id: GitHub PR identifier
         phase_name: Name of the phase starting (code_review, verification, ci_check, consolidation)
@@ -707,12 +707,12 @@ class PRReviewCyclePhaseStartedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class PRReviewCycleCICheckCompletedEvent(CodetoreumEvent):
     """Emitted when Phase 3 CI check completes.
-    
+
     Fired by: PRReviewService.complete_ci_check() → application
     Subscribers:
       - PRReviewHandler: Update review state
       - MetricsHandler: Record CI check results
-    
+
     Attributes:
         pr_id: GitHub PR identifier
         passed: Whether CI check passed
@@ -731,12 +731,12 @@ class PRReviewCycleCICheckCompletedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class PRReviewCycleConsolidationStartedEvent(CodetoreumEvent):
     """Emitted when Phase 4 consolidation starts.
-    
+
     Fired by: PRReviewService.start_consolidation() → application
     Subscribers:
       - PRReviewHandler: Initialize consolidation state
       - MetricsHandler: Record consolidation start time
-    
+
     Attributes:
         pr_id: GitHub PR identifier
         finding_count: Number of findings to consolidate
@@ -749,13 +749,13 @@ class PRReviewCycleConsolidationStartedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class PRReviewCycleIssuesFoundEvent(CodetoreumEvent):
     """Emitted when issues are found in review (cycle has problems to fix).
-    
+
     Fired by: PRReviewService.record_issues() → application
     Subscribers:
       - NotificationHandler: Notify team of issues
       - MetricsHandler: Record issue statistics
       - WorkflowHandler: Plan next cycle
-    
+
     Attributes:
         pr_id: GitHub PR identifier
         work_item_id: Work item ID being reviewed
@@ -786,13 +786,13 @@ class PRReviewCycleIssuesFoundEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class PRReviewCycleMaxCyclesReachedEvent(CodetoreumEvent):
     """Emitted when maximum review cycles reached without resolution.
-    
+
     Fired by: PRReviewService.check_max_cycles() → application
     Subscribers:
       - EscalationHandler: Escalate to human
       - NotificationHandler: Notify team
       - MetricsHandler: Record escalation
-    
+
     Attributes:
         pr_id: GitHub PR identifier
         work_item_id: Work item ID being reviewed
@@ -811,13 +811,13 @@ class PRReviewCycleMaxCyclesReachedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class PRReviewCycleEscalatedEvent(CodetoreumEvent):
     """Emitted when cycle is escalated to human reviewer.
-    
+
     Fired by: PRReviewService.escalate() → application
     Subscribers:
       - EscalationHandler: Route to human reviewer
       - NotificationHandler: Notify human reviewer
       - MetricsHandler: Record escalation
-    
+
     Attributes:
         pr_id: GitHub PR identifier
         reason: Reason for escalation (e.g., max_cycles_reached)
@@ -832,13 +832,13 @@ class PRReviewCycleEscalatedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class PRReviewCycleSubIssuesCreatedEvent(CodetoreumEvent):
     """Emitted when sub-issues are created during PR review cycle.
-    
+
     Fired by: PRReviewService.create_sub_issues() → application
     Subscribers:
       - BoardHandler: Add sub-issues to board
       - NotificationHandler: Notify team of sub-issues
       - MetricsHandler: Record sub-issue creation
-    
+
     Attributes:
         pr_id: GitHub PR identifier
         cycle_number: Iteration number (1-based)
@@ -857,12 +857,12 @@ class PRReviewCycleSubIssuesCreatedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class PRReviewCyclePhaseCompletedEvent(CodetoreumEvent):
     """Emitted when a PR review cycle phase completes.
-    
+
     Fired by: PRReviewService.complete_phase() → application
     Subscribers:
       - PRReviewHandler: Advance to next phase
       - MetricsHandler: Record phase duration
-    
+
     Attributes:
         pr_id: GitHub PR identifier
         phase_name: Name of the completed phase
@@ -881,13 +881,13 @@ class PRReviewCyclePhaseCompletedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class PRReviewCycleConsolidationCompletedEvent(CodetoreumEvent):
     """Emitted when PR review cycle consolidation phase completes.
-    
+
     Fired by: PRReviewService.complete_consolidation() → application
     Subscribers:
       - WorkflowHandler: Advance work item or escalate
       - NotificationHandler: Notify team of outcome
       - MetricsHandler: Record cycle completion
-    
+
     Attributes:
         pr_id: GitHub PR identifier
         total_findings: Total number of findings across all phases
@@ -910,12 +910,12 @@ class PRReviewCycleConsolidationCompletedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class PRReviewCycleApprovedEvent(CodetoreumEvent):
     """Emitted when PR review cycle is approved and ready to merge.
-    
+
     Fired by: PRReviewCycle.approve() → domain
     Subscribers:
       - MergeHandler: Merge PR if auto-merge enabled
       - NotificationHandler: Notify team
-    
+
     Attributes:
         pr_review_cycle_id: Review cycle
         work_item_id: Work item
@@ -936,14 +936,14 @@ graph TB
     subgraph "Domain Layer"
         PRC["🟦 PRReviewCycle<br/>aggregate"]
     end
-    
+
     subgraph "Multi-Phase Review Events"
         PRC -->|start| STARTED["PRReviewCycleStartedEvent"]
         PRC -->|phase change| PHASE["PhaseStartedEvent"]
         PRC -->|complete review| COMPLETED["PRReviewCompletedEvent"]
         PRC -->|auto-merge| MERGED["PRAutoMergedEvent"]
     end
-    
+
     subgraph "Event Bus"
         BUS["📢 Event Bus"]
         STARTED -->|emit| BUS
@@ -951,24 +951,24 @@ graph TB
         COMPLETED -->|emit| BUS
         MERGED -->|emit| BUS
     end
-    
+
     subgraph "Event Handlers"
         PRH["🔍 PRReviewHandler"]
         CIH["🔧 CICheckHandler"]
         MH["📈 MetricsHandler"]
         WFH["🔄 WorkflowHandler"]
     end
-    
+
     subgraph "External Systems"
         GITHUB["GitHub<br/>PR/Checks"]
         CI["CI Pipeline"]
     end
-    
+
     BUS -->|All PR events| PRH
     BUS -->|CI-related events| CIH
     BUS -->|All events| MH
     BUS -->|Completion events| WFH
-    
+
     PRH -->|IBoardService| GITHUB
     CIH -->|ICIPipeline| CI
 ```
@@ -985,12 +985,12 @@ Repair Cycle handles test-fix-verify cycles for failing tests.
 @dataclass(frozen=True)
 class RepairCycleStartedEvent(CodetoreumEvent):
     """Emitted when a repair cycle begins (fixing failing tests).
-    
+
     Fired by: RepairCycleService.start() → application
     Subscribers:
       - RepairHandler: Initialize repair state
       - MetricsHandler: Record start time
-    
+
     Attributes:
         repair_cycle_id: New repair cycle ID
         work_item_id: Work item with failing tests
@@ -1003,7 +1003,7 @@ class RepairCycleStartedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class RepairCycleTestExecutionStartedEvent(CodetoreumEvent):
     """Emitted when repair cycle begins test execution.
-    
+
     Attributes:
         repair_cycle_id: Repair cycle
         test_count: Number of tests to run
@@ -1014,7 +1014,7 @@ class RepairCycleTestExecutionStartedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class RepairCycleTestExecutionCompletedEvent(CodetoreumEvent):
     """Emitted when test execution phase completes.
-    
+
     Attributes:
         repair_cycle_id: Repair cycle
         passed: Number of tests that passed
@@ -1027,13 +1027,13 @@ class RepairCycleTestExecutionCompletedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class RepairCycleCompletedEvent(CodetoreumEvent):
     """Emitted when repair cycle completes (all tests passing or max retries).
-    
+
     Fired by: RepairCycle.complete() → domain
     Subscribers:
       - WorkflowHandler: Advance work item
       - NotificationHandler: Notify team
       - MetricsHandler: Record cycle metrics
-    
+
     Attributes:
         repair_cycle_id: Completed repair cycle
         work_item_id: Work item
@@ -1048,12 +1048,12 @@ class RepairCycleCompletedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class RepairCycleFixCycleStartedEvent(CodetoreumEvent):
     """Emitted when fix cycle starts after test failures (FR-3.2).
-    
+
     Fired by: RepairCycle.start_fix_cycle() → domain
     Subscribers:
       - RepairCycleHandler: Initialize fix cycle state
       - MetricsHandler: Record cycle start time
-    
+
     Attributes:
         test_type: Type of test that failed (UNIT, INTEGRATION, etc.)
         test_type_index: Position in test type sequence (starts at 1)
@@ -1126,13 +1126,13 @@ class RepairCycleResumedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class RepairCycleCheckpointFailedEvent(CodetoreumEvent):
     """Emitted when checkpoint save fails (recovery may not be possible).
-    
+
     Fired by: CheckpointService.save() → infrastructure
     Subscribers:
       - RecoveryHandler: Mark cycle unrecoverable
       - MetricsHandler: Record checkpoint failure
       - AlertHandler: Notify operators
-    
+
     Attributes:
         workflow_run_id: ID of the workflow run
         test_type: Type of test being executed (UNIT, INTEGRATION, E2E)
@@ -1151,13 +1151,13 @@ class RepairCycleCheckpointFailedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class RepairCycleMetricsBackendFailedEvent(CodetoreumEvent):
     """Emitted when metrics backend fails (critical observability degradation).
-    
+
     Fired by: MetricsAdapter (resilience decorator) → infrastructure
     Subscribers:
       - MetricsHandler: Log metrics backend failure
       - AlertHandler: Page on-call for observability
       - CircuitBreakerHandler: Open circuit breaker
-    
+
     Attributes:
         operation: Operation that failed (e.g., repair_cycle_started)
         error_type: Type of error (e.g., ConnectionError)
@@ -1244,7 +1244,7 @@ graph TB
         TE["🟦 Test Execution<br/>run tests"]
         TEC["🟦 Tests Complete<br/>some fail"]
     end
-    
+
     subgraph "Repair Cycle"
         RCS["🟡 RepairCycleStarted<br/>begin fixing tests"]
         TES["🟢 TestExecutionStarted"]
@@ -1253,17 +1253,17 @@ graph TB
         DECISION{"All tests<br/>passing?"}
         RCC["🟢 RepairCycleCompleted"]
     end
-    
+
     subgraph "Event Bus"
         STORE2["💾 Event Store"]
     end
-    
+
     subgraph "Handlers"
         REP_H["RepairHandler<br/>Update cycle state"]
         METRIC_H["MetricsHandler<br/>Record cycle time"]
         WF_H["WorkflowHandler<br/>Advance work item"]
     end
-    
+
     TE -->|fail| RCS
     RCS -->|emit| STORE2
     RCS -->|start| TES
@@ -1291,12 +1291,12 @@ The Container context tracks agent container execution.
 @dataclass(frozen=True)
 class ContainerExecutionCompletedEvent(CodetoreumEvent):
     """Emitted when a container execution completes.
-    
+
     Fired by: DockerContainerAdapter → adapter
     Subscribers:
       - ExecutionHandler: Mark execution as COMPLETED
       - WorkspaceHandler: Clean up workspace
-    
+
     Attributes:
         execution_id: Execution that completed
         container_id: Container that ran
@@ -1318,31 +1318,31 @@ graph TB
     subgraph "Container Runtime"
         CONTAINER["🐳 Container<br/>execute code"]
     end
-    
+
     subgraph "Events"
         CONTAINER -->|completion| COMPLETED["ContainerExecutionCompletedEvent"]
     end
-    
+
     subgraph "Event Bus"
         BUS["📢 Event Bus"]
         COMPLETED -->|emit| BUS
     end
-    
+
     subgraph "Event Handlers"
         EH["⚙️ ExecutionHandler"]
         WH["🗑️ WorkspaceHandler"]
         MH["📈 MetricsHandler"]
     end
-    
+
     subgraph "Application Layer"
         EXEC["ExecutionService"]
         WS["WorkspaceRouter"]
     end
-    
+
     BUS -->|ContainerExecutionCompletedEvent| EH
     BUS -->|ContainerExecutionCompletedEvent| WH
     BUS -->|ContainerExecutionCompletedEvent| MH
-    
+
     EH -->|update status| EXEC
     WH -->|cleanup| WS
 ```
@@ -1359,7 +1359,7 @@ Container Recovery handles container failure and recovery.
 @dataclass(frozen=True)
 class ContainerRecoveredEvent(CodetoreumEvent):
     """Emitted when a failed container is successfully recovered.
-    
+
     Attributes:
         execution_id: Execution being recovered
         recovery_method: How it was recovered ("restart", "rebuild", etc.)
@@ -1370,7 +1370,7 @@ class ContainerRecoveredEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class ContainerKilledEvent(CodetoreumEvent):
     """Emitted when a container is forcibly killed (recovery failed).
-    
+
     Attributes:
         execution_id: Execution that failed
         reason: Why container was killed
@@ -1381,12 +1381,12 @@ class ContainerKilledEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class ContainerRecoveryCompletedEvent(CodetoreumEvent):
     """Emitted when the full container recovery cycle completes.
-    
+
     Fired by: ContainerRecoveryService.complete_recovery() → application
     Subscribers:
       - MetricsHandler: Record recovery statistics
       - NotificationHandler: Notify team of recovery completion
-    
+
     Attributes:
         containers_recovered: Number of containers successfully recovered
         containers_killed: Number of containers killed during cleanup
@@ -1412,7 +1412,7 @@ graph TB
     subgraph "Container Failure"
         FAIL["❌ Container<br/>execution fails"]
     end
-    
+
     subgraph "Recovery Events"
         FAIL -->|recovery attempt| RECOVERY["ContainerRecoveryAttemptedEvent"]
         RECOVERY -->|retry| RETRY["ContainerRespawnedEvent"]
@@ -1420,7 +1420,7 @@ graph TB
         RESULT -->|yes| RECOVERED["ContainerRecoveredEvent"]
         RESULT -->|no| KILLED["ContainerKilledEvent"]
     end
-    
+
     subgraph "Event Bus"
         BUS["📢 Event Bus"]
         RECOVERY -->|emit| BUS
@@ -1428,17 +1428,17 @@ graph TB
         RECOVERED -->|emit| BUS
         KILLED -->|emit| BUS
     end
-    
+
     subgraph "Event Handlers"
         RCH["🔧 RecoveryHandler"]
         EH["⚙️ ExecutionHandler"]
         MH["📈 MetricsHandler"]
     end
-    
+
     BUS -->|Recovery events| RCH
     BUS -->|Completion events| EH
     BUS -->|All events| MH
-    
+
     RCH -->|IContainer| CONTAINER["Container Runtime"]
     EH -->|mark failed| EXEC["ExecutionService"]
 ```
@@ -1455,12 +1455,12 @@ The Lock context manages pipeline locks for coordinating work item progression.
 @dataclass(frozen=True)
 class LockAcquiredEvent(CodetoreumEvent):
     """Emitted when a pipeline lock is acquired.
-    
+
     Fired by: IPipelineLockService.acquire() → adapter
     Subscribers:
       - LockHandler: Update lock state
       - MetricsHandler: Track lock acquisition time
-    
+
     Attributes:
         lock_id: Lock that was acquired
         work_item_id: Work item holding lock
@@ -1473,12 +1473,12 @@ class LockAcquiredEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class LockReleasedEvent(CodetoreumEvent):
     """Emitted when a pipeline lock is released.
-    
+
     Fired by: IPipelineLockService.release() → adapter
     Subscribers:
       - LockHandler: Free next work item to acquire lock
       - QueueHandler: Dequeue next work item
-    
+
     Attributes:
         lock_id: Lock that was released
         released_by: Agent or user releasing lock
@@ -1489,7 +1489,7 @@ class LockReleasedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class StaleLockDetectedEvent(CodetoreumEvent):
     """Emitted when a lock holder stops responding.
-    
+
     Attributes:
         lock_id: Stale lock ID
         held_by: Who is holding the lock
@@ -1547,35 +1547,35 @@ graph TB
         REL["🔓 Lock<br/>released"]
         STALE["⚠️ Stale lock<br/>detected"]
     end
-    
+
     subgraph "Lock Lifecycle Events"
         ACQ -->|emit| ACQUIRED["LockAcquiredEvent"]
         REL -->|emit| RELEASED["LockReleasedEvent"]
         STALE -->|emit| STALEEV["StaleLockDetectedEvent"]
     end
-    
+
     subgraph "Event Bus"
         BUS["📢 Event Bus"]
         ACQUIRED -->|emit| BUS
         RELEASED -->|emit| BUS
         STALEEV -->|emit| BUS
     end
-    
+
     subgraph "Event Handlers"
         LH["🔐 LockHandler"]
         WFH["🔄 WorkflowHandler"]
         MH["📈 MetricsHandler"]
     end
-    
+
     subgraph "Services"
         LOCK["IPipelineLockService"]
         WF["WorkflowOrchestrator"]
     end
-    
+
     BUS -->|Lock events| LH
     BUS -->|Release events| WFH
     BUS -->|All events| MH
-    
+
     LH -->|acquire/release| LOCK
     WFH -->|proceed| WF
 ```
@@ -1592,12 +1592,12 @@ The Repository context tracks git operations.
 @dataclass(frozen=True)
 class CommitCreatedEvent(CodetoreumEvent):
     """Emitted when a commit is created.
-    
+
     Fired by: IRepositoryService.commit() → adapter
     Subscribers:
       - AuditHandler: Log commit
       - MetricsHandler: Track commits
-    
+
     Attributes:
         work_item_id: Work item being modified
         commit_id: Git commit SHA
@@ -1610,7 +1610,7 @@ class CommitCreatedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class BranchCreatedEvent(CodetoreumEvent):
     """Emitted when a branch is created.
-    
+
     Attributes:
         work_item_id: Work item with new branch
         branch_name: Name of created branch
@@ -1621,12 +1621,12 @@ class BranchCreatedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class BranchPushedEvent(CodetoreumEvent):
     """Emitted when a branch is pushed to remote.
-    
+
     Fired by: IRepositoryService.push_branch() → adapter
     Subscribers:
       - AuditHandler: Log push operation
       - MetricsHandler: Track push events
-    
+
     Attributes:
         repository_id: ID of the repository
         branch_name: Name of the pushed branch
@@ -1639,12 +1639,12 @@ class BranchPushedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class FilesStagedEvent(CodetoreumEvent):
     """Emitted when files are staged in the repository.
-    
+
     Fired by: IRepositoryService.stage_files() → adapter
     Subscribers:
       - AuditHandler: Log staging operation
       - MetricsHandler: Track staged file counts
-    
+
     Attributes:
         repository_id: ID of the repository
         file_paths: Immutable tuple of staged file paths
@@ -1664,35 +1664,35 @@ graph TB
         BRANCH["🌳 Branch<br/>created"]
         PUSH["⬆️ Push<br/>to remote"]
     end
-    
+
     subgraph "Repository Events"
         COMMIT -->|emit| COMMITEV["CommitCreatedEvent"]
         BRANCH -->|emit| BRANCHEV["BranchCreatedEvent"]
         PUSH -->|emit| PUSHEV["BranchPushedEvent"]
     end
-    
+
     subgraph "Event Bus"
         BUS["📢 Event Bus"]
         COMMITEV -->|emit| BUS
         BRANCHEV -->|emit| BUS
         PUSHEV -->|emit| BUS
     end
-    
+
     subgraph "Event Handlers"
         RH["📦 RepositoryHandler"]
         AH["📊 AuditHandler"]
         MH["📈 MetricsHandler"]
     end
-    
+
     subgraph "External Systems"
         GIT["Git Repository"]
         AUDIT["Audit Log"]
     end
-    
+
     BUS -->|All repo events| RH
     BUS -->|All repo events| AH
     BUS -->|All events| MH
-    
+
     RH -->|IRepositoryService| GIT
     AH -->|IAudit| AUDIT
 ```
@@ -1709,7 +1709,7 @@ CI Pipeline tracks continuous integration pipeline execution.
 @dataclass(frozen=True)
 class CIPipelineStatusCheckedEvent(CodetoreumEvent):
     """Emitted when CI pipeline status is checked.
-    
+
     Attributes:
         work_item_id: Work item with CI pipeline
         pipeline_id: CI pipeline ID
@@ -1722,7 +1722,7 @@ class CIPipelineStatusCheckedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class CIRunStartedEvent(CodetoreumEvent):
     """Emitted when a CI run starts.
-    
+
     Attributes:
         work_item_id: Work item
         run_id: CI run ID
@@ -1733,7 +1733,7 @@ class CIRunStartedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class CIRunCompletedEvent(CodetoreumEvent):
     """Emitted when a CI run completes.
-    
+
     Attributes:
         work_item_id: Work item
         run_id: CI run ID
@@ -1753,36 +1753,36 @@ graph TB
         START["▶️ CI run<br/>starts"]
         COMPLETE["✅ CI run<br/>completes"]
     end
-    
+
     subgraph "Pipeline Events"
         CHECK -->|emit| CHECKEV["CIPipelineStatusCheckedEvent"]
         START -->|emit| STARTEV["CIRunStartedEvent"]
         COMPLETE -->|emit| COMPLETEEV["CIRunCompletedEvent"]
     end
-    
+
     subgraph "Event Bus"
         BUS["📢 Event Bus"]
         CHECKEV -->|emit| BUS
         STARTEV -->|emit| BUS
         COMPLETEEV -->|emit| BUS
     end
-    
+
     subgraph "Event Handlers"
         CIH["🔧 CIHandler"]
         WFH["🔄 WorkflowHandler"]
         NH["📧 NotificationHandler"]
         MH["📈 MetricsHandler"]
     end
-    
+
     subgraph "External Systems"
         CI["CI/CD Platform<br/>(GitHub Actions, etc)"]
     end
-    
+
     BUS -->|Check events| CIH
     BUS -->|Completion events| WFH
     BUS -->|Failure events| NH
     BUS -->|All events| MH
-    
+
     CIH -->|ICIPipeline| CI
     WFH -->|advance workflow| WORKFLOW["WorkflowOrchestrator"]
 ```
@@ -1799,12 +1799,12 @@ Discussion tracks comments and conversational feedback loops on work items.
 @dataclass(frozen=True)
 class CommentPostedEvent(CodetoreumEvent):
     """Emitted when a comment is posted on a work item.
-    
+
     Fired by: IDiscussionAdapter.post_comment() → adapter
     Subscribers:
       - DiscussionHandler: Update discussion thread
       - NotificationHandler: Notify mentioned users
-    
+
     Attributes:
         work_item_id: Work item receiving comment
         comment_id: New comment ID
@@ -1819,11 +1819,11 @@ class CommentPostedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class CommentNeedsResponseEvent(CodetoreumEvent):
     """Emitted when a comment requires agent response.
-    
+
     Fired by: DiscussionAdapter detects comment mentioning agent
     Subscribers:
       - DiscussionHandler: Queue response task
-    
+
     Attributes:
         work_item_id: Work item with comment
         comment_id: Comment requiring response
@@ -1836,7 +1836,7 @@ class CommentNeedsResponseEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class ConversationalLoopStartedEvent(CodetoreumEvent):
     """Emitted when a multi-turn conversational loop begins.
-    
+
     Attributes:
         work_item_id: Work item
         session_id: Conversation session ID
@@ -1847,10 +1847,10 @@ class ConversationalLoopStartedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class AgentResponsePostedEvent(CodetoreumEvent):
     """Emitted when agent posts a response to a comment.
-    
+
     **Immutability**: This is an immutable event (frozen dataclass). All fields
     are read-only after construction to maintain event sourcing audit trail integrity.
-    
+
     Attributes:
         type (str): Fixed to "discussion.agent_response_posted"
         work_item_id (str): Work item ID where response was posted
@@ -1871,10 +1871,10 @@ class AgentResponsePostedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class FeedbackListeningStartedEvent(CodetoreumEvent):
     """Emitted when feedback listening session starts on a work item.
-    
+
     **Immutability**: This is an immutable event (frozen dataclass). All fields
     are read-only after construction to maintain event sourcing audit trail integrity.
-    
+
     Attributes:
         type (str): Fixed to "discussion.feedback_listening_started"
         work_item_id (str): Work item ID listening for feedback
@@ -1891,10 +1891,10 @@ class FeedbackListeningStartedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class FeedbackListeningStoppedEvent(CodetoreumEvent):
     """Emitted when feedback listening session stops.
-    
+
     **Immutability**: This is an immutable event (frozen dataclass). All fields
     are read-only after construction to maintain event sourcing audit trail integrity.
-    
+
     Attributes:
         type (str): Fixed to "discussion.feedback_listening_stopped"
         work_item_id (str): Work item ID that was listening
@@ -1921,14 +1921,14 @@ graph TB
         RESPONSE["💬 Agent<br/>responds"]
         LOOP["🔄 Multi-turn<br/>conversation"]
     end
-    
+
     subgraph "Events"
         COMMENT -->|emit| COMMENTEV["CommentPostedEvent"]
         MENTION -->|emit| NEEDSEV["CommentNeedsResponseEvent"]
         RESPONSE -->|emit| RESPONSEEV["AgentResponsePostedEvent"]
         LOOP -->|emit| LOOPEV["ConversationalLoopStartedEvent"]
     end
-    
+
     subgraph "Event Bus"
         BUS["📢 Event Bus"]
         COMMENTEV -->|emit| BUS
@@ -1936,21 +1936,21 @@ graph TB
         RESPONSEEV -->|emit| BUS
         LOOPEV -->|emit| BUS
     end
-    
+
     subgraph "Event Handlers"
         DH["💬 DiscussionHandler"]
         AEH["⚙️ AgentExecutionHandler"]
         NH["📧 NotificationHandler"]
     end
-    
+
     subgraph "External Systems"
         GITHUB["GitHub Issues/<br/>Discussion"]
     end
-    
+
     BUS -->|Comment events| DH
     BUS -->|Agent needed| AEH
     BUS -->|All events| NH
-    
+
     DH -->|IDiscussionAdapter| GITHUB
     AEH -->|schedule execution| EXEC["ExecutionService"]
 ```
@@ -1967,7 +1967,7 @@ Project context tracks project-level operations.
 @dataclass(frozen=True)
 class ProjectClonedEvent(CodetoreumEvent):
     """Emitted when a project repository is successfully cloned.
-    
+
     Attributes:
         project_id: Project being cloned
         repository_url: Cloned repo URL
@@ -1978,7 +1978,7 @@ class ProjectClonedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class ProjectEnabledEvent(CodetoreumEvent):
     """Emitted when a project is enabled for orchestration.
-    
+
     Attributes:
         project_id: Project being enabled
     """
@@ -2018,35 +2018,35 @@ graph TB
         ENABLE["✅ Project<br/>enabled"]
         CONFIG["⚙️ Configuration<br/>updated"]
     end
-    
+
     subgraph "Project Events"
         CLONE -->|emit| CLONEEV["ProjectClonedEvent"]
         ENABLE -->|emit| ENABLEEV["ProjectEnabledEvent"]
         CONFIG -->|emit| CONFIGEV["ProjectConfigurationChangedEvent"]
     end
-    
+
     subgraph "Event Bus"
         BUS["📢 Event Bus"]
         CLONEEV -->|emit| BUS
         ENABLEEV -->|emit| BUS
         CONFIGEV -->|emit| BUS
     end
-    
+
     subgraph "Event Handlers"
         PH["📦 ProjectHandler"]
         WFH["🔄 WorkflowHandler"]
         MH["📈 MetricsHandler"]
     end
-    
+
     subgraph "External Systems"
         GITHUB["GitHub"]
         CONFIG_STORE["Config Store"]
     end
-    
+
     BUS -->|Clone/Enable events| PH
     BUS -->|Enable events| WFH
     BUS -->|All events| MH
-    
+
     PH -->|IRepositoryService| GITHUB
     PH -->|IConfigStore| CONFIG_STORE
 ```
@@ -2063,7 +2063,7 @@ Queue context tracks work item queue management.
 @dataclass(frozen=True)
 class QueueItemAddedEvent(CodetoreumEvent):
     """Emitted when a work item is added to execution queue.
-    
+
     Attributes:
         work_item_id: Work item queued
         queue_position: Position in queue
@@ -2074,7 +2074,7 @@ class QueueItemAddedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class QueuePositionChangedEvent(CodetoreumEvent):
     """Emitted when a work item's queue position changes.
-    
+
     Attributes:
         queue_name: Name of the queue (typically "project_id:board_id")
         item_id: ID of the work item in queue
@@ -2091,12 +2091,12 @@ class QueuePositionChangedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class QueueItemRemovedEvent(CodetoreumEvent):
     """Emitted when a work item is removed from the queue.
-    
+
     Fired by: AgentScheduler.remove_from_queue() → application
     Subscribers:
       - QueueHandler: Update queue state
       - MetricsHandler: Track removal
-    
+
     Attributes:
         queue_name: Name of the queue (typically "project_id:board_id")
         item_id: ID of the work item removed from queue
@@ -2109,16 +2109,16 @@ class QueueItemRemovedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class WorkItemDeadLetterQueuedEvent(CodetoreumEvent):
     """Emitted when a work item is queued to the dead letter queue.
-    
+
     Fired by: QueueService.move_to_dlq() → application
     Subscribers:
       - DLQHandler: Log DLQ entry
       - NotificationHandler: Alert team
       - MetricsHandler: Track DLQ events
-    
+
     The dead letter queue (DLQ) is where work items are placed when they cannot
     be automatically progressed through the workflow due to failures.
-    
+
     Attributes:
         work_item_id: ID of the work item queued to DLQ
         board_id: ID of the board containing the work item
@@ -2144,34 +2144,34 @@ graph TB
         REORDER["🔄 Queue position<br/>changes"]
         EXECUTE["▶️ Work item<br/>executes"]
     end
-    
+
     subgraph "Queue Events"
         ADD -->|emit| ADDEV["QueueItemAddedEvent"]
         REORDER -->|emit| POSEV["QueuePositionChangedEvent"]
         EXECUTE -->|emit| REMEV["QueueItemRemovedEvent"]
     end
-    
+
     subgraph "Event Bus"
         BUS["📢 Event Bus"]
         ADDEV -->|emit| BUS
         POSEV -->|emit| BUS
         REMEV -->|emit| BUS
     end
-    
+
     subgraph "Event Handlers"
         QH["📋 QueueHandler"]
         SCH["⚙️ SchedulerHandler"]
         MH["📈 MetricsHandler"]
     end
-    
+
     subgraph "Services"
         QUEUE["AgentScheduler"]
     end
-    
+
     BUS -->|Add events| QH
     BUS -->|Position/Remove events| SCH
     BUS -->|All events| MH
-    
+
     QH -->|manage queue| QUEUE
     SCH -->|execute next| EXEC["ExecutionService"]
 ```
@@ -2188,7 +2188,7 @@ Branch context tracks branch resolution and reuse.
 @dataclass(frozen=True)
 class BranchResolutionCreatedEvent(CodetoreumEvent):
     """Emitted when a branch resolution is created.
-    
+
     Attributes:
         work_item_id: Work item
         branch_name: Branch name
@@ -2199,7 +2199,7 @@ class BranchResolutionCreatedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class BranchReusedEvent(CodetoreumEvent):
     """Emitted when an existing branch is reused for a work item.
-    
+
     Attributes:
         work_item_id: Work item
         branch_name: Reused branch name
@@ -2210,7 +2210,7 @@ class BranchReusedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class BranchResolvedEvent(CodetoreumEvent):
     """Emitted when a branch is resolved and ready for use.
-    
+
     Attributes:
         work_item_id: Work item
         branch_name: Branch name
@@ -2228,34 +2228,34 @@ graph TB
         REUSE["♻️ Reuse<br/>existing branch"]
         RESOLVE["✅ Branch<br/>resolved"]
     end
-    
+
     subgraph "Branch Events"
         CREATE -->|emit| CREATEEV["BranchResolutionCreatedEvent"]
         REUSE -->|emit| REUSEEV["BranchReusedEvent"]
         RESOLVE -->|emit| RESOLVEEV["BranchResolvedEvent"]
     end
-    
+
     subgraph "Event Bus"
         BUS["📢 Event Bus"]
         CREATEEV -->|emit| BUS
         REUSEEV -->|emit| BUS
         RESOLVEEV -->|emit| BUS
     end
-    
+
     subgraph "Event Handlers"
         BH["🌳 BranchHandler"]
         WH["🔄 WorkflowHandler"]
         MH["📈 MetricsHandler"]
     end
-    
+
     subgraph "External Systems"
         GIT["Git Repository"]
     end
-    
+
     BUS -->|All branch events| BH
     BUS -->|Resolved events| WH
     BUS -->|All events| MH
-    
+
     BH -->|IRepositoryService| GIT
     WH -->|advance workflow| WF["WorkflowOrchestrator"]
 ```
@@ -2272,7 +2272,7 @@ Storage context tracks artifact uploads and deletions.
 @dataclass(frozen=True)
 class ArtifactUploadedEvent(CodetoreumEvent):
     """Emitted when an artifact is uploaded to storage.
-    
+
     Attributes:
         artifact_id: Artifact ID
         work_item_id: Associated work item
@@ -2287,7 +2287,7 @@ class ArtifactUploadedEvent(CodetoreumEvent):
 @dataclass(frozen=True)
 class ArtifactDeletedEvent(CodetoreumEvent):
     """Emitted when an artifact is deleted.
-    
+
     Attributes:
         artifact_id: Artifact being deleted
         work_item_id: Associated work item
@@ -2304,32 +2304,32 @@ graph TB
         UPLOAD["⬆️ Artifact<br/>uploaded"]
         DELETE["🗑️ Artifact<br/>deleted"]
     end
-    
+
     subgraph "Storage Events"
         UPLOAD -->|emit| UPLOADEV["ArtifactUploadedEvent"]
         DELETE -->|emit| DELETEEV["ArtifactDeletedEvent"]
     end
-    
+
     subgraph "Event Bus"
         BUS["📢 Event Bus"]
         UPLOADEV -->|emit| BUS
         DELETEEV -->|emit| BUS
     end
-    
+
     subgraph "Event Handlers"
         SH["💾 StorageHandler"]
         MH["📈 MetricsHandler"]
         AH["📊 AuditHandler"]
     end
-    
+
     subgraph "External Systems"
         STORAGE["Object Storage<br/>(S3, GCS, etc)"]
     end
-    
+
     BUS -->|Artifact events| SH
     BUS -->|All events| MH
     BUS -->|All events| AH
-    
+
     SH -->|IStorage| STORAGE
     AH -->|log| AUDIT["Audit Log"]
 ```
@@ -2346,13 +2346,13 @@ The Adapter context provides the base event class.
 @dataclass(frozen=True)
 class CodetoreumEvent:
     """Base class for all domain events.
-    
+
     Immutable event base providing:
     - Automatic timestamp (UTC)
     - Unique event ID
     - Source system identifier
     - Serialization support
-    
+
     All domain events inherit from this class and are frozen
     to maintain immutability for event sourcing.
     """
@@ -2370,11 +2370,11 @@ graph TB
     subgraph "Event Creation"
         ALL["🟦 Domain Model<br/>state changes"]
     end
-    
+
     subgraph "Event Base Class"
         ALL -->|extend| BASE["CodetoreumEvent<br/>base class"]
     end
-    
+
     subgraph "Event Properties"
         BASE -->|add| TYPE["type<br/>(event identifier)"]
         BASE -->|add| TIMESTAMP["timestamp<br/>(UTC)"]
@@ -2382,7 +2382,7 @@ graph TB
         BASE -->|add| SOURCE["source<br/>(system)"]
         BASE -->|add| CORR["correlation_id<br/>(event linking)"]
     end
-    
+
     subgraph "Frozen/Immutable"
         TYPE -->|immutable| FROZEN["@dataclass<br/>(frozen=True)"]
         TIMESTAMP -->|immutable| FROZEN
@@ -2390,11 +2390,11 @@ graph TB
         SOURCE -->|immutable| FROZEN
         CORR -->|immutable| FROZEN
     end
-    
+
     subgraph "Event Bus"
         FROZEN -->|serialize| BUS["📢 Event Bus<br/>(pub/sub, persistence)"]
     end
-    
+
     subgraph "Event Sourcing"
         BUS -->|store| STORE["💾 Event Store<br/>(audit trail)"]
         BUS -->|publish| HANDLERS["Event Handlers"]
@@ -2492,31 +2492,31 @@ graph LR
         WI -->|create| WI_CREATED["WorkItemCreatedEvent"]
         WI -->|transition_stage| WI_STAGE["WorkItemStageUpdatedEvent"]
     end
-    
+
     subgraph "Event Bus"
         BUS["Event Bus<br/>(Redis)"]
         WI_CREATED -->|emit| BUS
         WI_STAGE -->|emit| BUS
     end
-    
+
     subgraph "Event Handlers"
         BH["📋 BoardHandler"]
         WH["🔄 WorkflowHandler"]
         EH["⚙️ ExecutionHandler"]
         MH["📊 MetricsHandler"]
     end
-    
+
     subgraph "External Systems"
         BOARD["GitHub Board"]
         EXEC["Agent Executor"]
         METRICS["Prometheus"]
     end
-    
+
     BUS -->|WorkItemCreatedEvent| BH
     BUS -->|WorkItemStageUpdatedEvent| WH
     BUS -->|WorkItemStageUpdatedEvent| EH
     BUS -->|WorkItemStageUpdatedEvent| MH
-    
+
     BH -->|IBoardService| BOARD
     EH -->|IContainer| EXEC
     MH -->|IMetrics| METRICS
@@ -2531,7 +2531,7 @@ graph TB
         FAIL["Tests fail"]
         FAIL -->|ExecutionFailedEvent| REPAIR["RepairCycleStartedEvent"]
     end
-    
+
     subgraph "Repair Cycle"
         RC["RepairCycle<br/>aggregate"]
         RC -->|test execution| TEST_START["RepairCycleTestExecutionStartedEvent"]
@@ -2542,7 +2542,7 @@ graph TB
         FIX_COMPLETE -->|retry tests| TEST_START
         DECISION -->|yes| RC_COMPLETE["RepairCycleCompletedEvent"]
     end
-    
+
     subgraph "Event Bus & Handlers"
         RC_COMPLETE -->|emit & publish| HANDLER["WorkflowHandler"]
         HANDLER -->|advance work item| NEXT_STAGE["Next workflow stage"]
@@ -2602,7 +2602,7 @@ All domain events are **frozen dataclasses** (`@dataclass(frozen=True)`):
 @dataclass(frozen=True)
 class WorkItemCreatedEvent(CodetoreumEvent):
     work_item_id: str = ""
-    
+
 # ✅ Create event
 event = WorkItemCreatedEvent(work_item_id="WI-123")
 

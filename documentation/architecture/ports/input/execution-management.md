@@ -19,17 +19,17 @@ These ports abstract the interaction with containerized agent executions.
 ```python
 class IExecutionCommandPort(ABC):
     """Input port for execution lifecycle management."""
-    
+
     @abstractmethod
     async def terminate_execution(self, command: TerminateExecutionCommand) -> ExecutionCommandResult:
         """Terminate a running execution."""
         pass
-    
+
     @abstractmethod
     async def pause_execution(self, command: PauseExecutionCommand) -> ExecutionCommandResult:
         """Pause a running execution."""
         pass
-    
+
     @abstractmethod
     async def resume_execution(self, command: ResumeExecutionCommand) -> ExecutionCommandResult:
         """Resume a paused execution."""
@@ -41,12 +41,12 @@ class IExecutionCommandPort(ABC):
 ```python
 class IExecutionQueryPort(ABC):
     """Input port for execution queries."""
-    
+
     @abstractmethod
     async def get_execution(self, execution_id: str) -> ExecutionInfo:
         """Get execution details."""
         pass
-    
+
     @abstractmethod
     async def get_execution_logs(
         self,
@@ -57,12 +57,12 @@ class IExecutionQueryPort(ABC):
     ) -> ExecutionLogsResult:
         """Get execution logs."""
         pass
-    
+
     @abstractmethod
     async def get_execution_result(self, execution_id: str) -> ExecutionResult:
         """Get execution result and output."""
         pass
-    
+
     @abstractmethod
     async def list_executions(
         self,
@@ -80,22 +80,22 @@ class IExecutionQueryPort(ABC):
 ```python
 class IOrchestrationCommandPort(ABC):
     """Input port for orchestration commands."""
-    
+
     @abstractmethod
     async def trigger_workflow(self, command: TriggerWorkflowCommand) -> OrchestrationResult:
         """Trigger a workflow."""
         pass
-    
+
     @abstractmethod
     async def enqueue_work_item(self, command: EnqueueWorkItemCommand) -> OrchestrationResult:
         """Enqueue a work item for processing."""
         pass
-    
+
     @abstractmethod
     async def dequeue_work_item(self, command: DequeueWorkItemCommand) -> OrchestrationResult:
         """Dequeue and process a work item."""
         pass
-    
+
     @abstractmethod
     async def requeue_work_item(self, command: RequeueWorkItemCommand) -> OrchestrationResult:
         """Requeue a work item."""
@@ -160,7 +160,7 @@ classDiagram
         +pause_execution(PauseExecutionCommand) ExecutionCommandResult
         +resume_execution(ResumeExecutionCommand) ExecutionCommandResult
     }
-    
+
     class IExecutionQueryPort {
         <<interface>>
         +get_execution(execution_id) ExecutionInfo
@@ -168,7 +168,7 @@ classDiagram
         +get_execution_result(execution_id) ExecutionResult
         +list_executions(work_item_id, agent_id, status, pagination) ExecutionListResult
     }
-    
+
     class IOrchestrationCommandPort {
         <<interface>>
         +trigger_workflow(TriggerWorkflowCommand) OrchestrationResult

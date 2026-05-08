@@ -97,19 +97,19 @@ if result.has_conflicts:
 class GitConfig:
     # Git executable
     git_path: str = "git"               # Path to git binary
-    
+
     # Default author (used if not specified per operation)
     default_author_name: str | None = None
     default_author_email: str | None = None
-    
+
     # Authentication
     ssh_key_path: str | None = None     # Path to SSH private key
     credential_helper: str | None = None
-    
+
     # Behavior
     default_branch: str = "main"        # Default branch name
     auto_create_remote_branch: bool = True  # Auto-create remote branches on push
-    
+
     # Timeouts
     timeout_seconds: int = 300          # 5 minute default
 ```
@@ -291,7 +291,7 @@ classDiagram
         +merge(path: str, source: str, target: str) MergeResult
         +get_commit_history(path: str, max: int) list[CommitInfo]
     }
-    
+
     class GitRepositoryAdapter {
         -config: GitConfig
         +clone(url: str, path: str) RepositoryStatus
@@ -305,7 +305,7 @@ classDiagram
         -_execute_git(args: list[str]) str
         -_sanitize_git_args(args: list[str]) list[str]
     }
-    
+
     class GitCLI {
         +clone
         +branch
@@ -315,19 +315,19 @@ classDiagram
         +merge
         +log
     }
-    
+
     class RepositoryStatus {
         path: str
         current_branch: str
         has_uncommitted_changes: bool
     }
-    
+
     class MergeResult {
         success: bool
         has_conflicts: bool
         conflicted_files: list[str]
     }
-    
+
     IRepository <|-- GitRepositoryAdapter: implements
     GitRepositoryAdapter --> GitCLI: spawns
     GitRepositoryAdapter --> RepositoryStatus: returns

@@ -20,67 +20,67 @@ These ports abstract critical cross-cutting system services.
 ```python
 class IAuthenticationPort(ABC):
     """Input port for authentication and authorization."""
-    
+
     @abstractmethod
     async def create_user(self, command: CreateUserCommand) -> User:
         """Create a new user."""
         pass
-    
+
     @abstractmethod
     async def update_user(self, command: UpdateUserCommand) -> User:
         """Update user information."""
         pass
-    
+
     @abstractmethod
     async def get_user(self, user_id: UUID) -> User:
         """Get user by ID."""
         pass
-    
+
     @abstractmethod
     async def get_user_by_username(self, username: str) -> User:
         """Get user by username."""
         pass
-    
+
     @abstractmethod
     async def delete_user(self, user_id: UUID) -> None:
         """Delete user (soft delete)."""
         pass
-    
+
     @abstractmethod
     async def login(self, command: LoginCommand) -> LoginResult:
         """Authenticate user with credentials."""
         pass
-    
+
     @abstractmethod
     async def validate_token(self, token: str) -> AuthContext:
         """Validate authentication token."""
         pass
-    
+
     @abstractmethod
     async def refresh_token(self, refresh_token: str) -> LoginResult:
         """Refresh authentication token."""
         pass
-    
+
     @abstractmethod
     async def create_api_key(self, command: CreateAPIKeyCommand) -> tuple[APIKey, str]:
         """Create API key for programmatic access."""
         pass
-    
+
     @abstractmethod
     async def validate_api_key(self, key: str) -> AuthContext:
         """Validate API key."""
         pass
-    
+
     @abstractmethod
     async def revoke_api_key(self, key_id: UUID, requesting_user_id: UUID, is_admin: bool) -> None:
         """Revoke API key."""
         pass
-    
+
     @abstractmethod
     async def list_api_keys(self, user_id: UUID) -> list[APIKey]:
         """List API keys for user."""
         pass
-    
+
     @abstractmethod
     async def check_permission(self, auth_context: AuthContext, permission: str) -> bool:
         """Check if user has permission."""
@@ -92,7 +92,7 @@ class IAuthenticationPort(ABC):
 ```python
 class IAuditQueryPort(ABC):
     """Input port for audit log queries."""
-    
+
     @abstractmethod
     async def query_audit_events(
         self,
@@ -101,17 +101,17 @@ class IAuditQueryPort(ABC):
     ) -> AuditEventListResult:
         """Query audit events with filtering."""
         pass
-    
+
     @abstractmethod
     async def get_audit_trail(self, entity_id: str, entity_type: str) -> AuditTrailResult:
         """Get complete audit trail for entity."""
         pass
-    
+
     @abstractmethod
     async def get_audit_event(self, event_id: str) -> AuditEvent:
         """Get specific audit event."""
         pass
-    
+
     @abstractmethod
     async def count_audit_events(self, filters: AuditEventFilters | None = None) -> int:
         """Count audit events matching filters."""
@@ -123,17 +123,17 @@ class IAuditQueryPort(ABC):
 ```python
 class IWorkspaceQueryPort(ABC):
     """Input port for workspace queries."""
-    
+
     @abstractmethod
     async def get_workspace(self, workspace_id: str) -> WorkspaceInfo:
         """Get workspace by ID."""
         pass
-    
+
     @abstractmethod
     async def get_workspace_by_execution(self, execution_id: str) -> WorkspaceInfo:
         """Get workspace for execution."""
         pass
-    
+
     @abstractmethod
     async def list_workspaces(
         self,
@@ -142,22 +142,22 @@ class IWorkspaceQueryPort(ABC):
     ) -> WorkspaceListResult:
         """List workspaces with filtering."""
         pass
-    
+
     @abstractmethod
     async def list_active_workspaces(self, pagination: PaginationParams | None = None) -> WorkspaceListResult:
         """List currently active workspaces."""
         pass
-    
+
     @abstractmethod
     async def get_resource_usage_summary(self, project_id: str | None = None) -> dict[str, Any]:
         """Get resource usage summary."""
         pass
-    
+
     @abstractmethod
     async def count_workspaces(self, filters: WorkspaceFilters | None = None) -> int:
         """Count workspaces matching filters."""
         pass
-    
+
     @abstractmethod
     async def get_workspace_logs(
         self,
@@ -174,7 +174,7 @@ class IWorkspaceQueryPort(ABC):
 ```python
 class IConversationalLoopService(ABC):
     """Input port for multi-turn agent dialogue management."""
-    
+
     @abstractmethod
     async def initialize_loop(
         self,
@@ -184,27 +184,27 @@ class IConversationalLoopService(ABC):
     ) -> ConversationalSessionState:
         """Initialize new conversational loop."""
         pass
-    
+
     @abstractmethod
     async def handle_comment_event(self, event: CommentNeedsResponseEvent) -> None:
         """Handle comment event in loop."""
         pass
-    
+
     @abstractmethod
     async def handle_column_change_event(self, event: WorkItemColumnChangedEvent) -> None:
         """Handle workflow column change in loop."""
         pass
-    
+
     @abstractmethod
     async def cleanup_loop(self, work_item_id: str, reason: str) -> None:
         """Clean up conversational loop."""
         pass
-    
+
     @abstractmethod
     async def load_session_state(self, work_item_id: str) -> ConversationalSessionState | None:
         """Load conversational session state."""
         pass
-    
+
     @abstractmethod
     async def save_session_state(self, state: ConversationalSessionState) -> None:
         """Save conversational session state."""
@@ -299,7 +299,7 @@ classDiagram
         +create_api_key(CreateAPIKeyCommand) tuple
         +check_permission(auth_context, permission) bool
     }
-    
+
     class IAuditQueryPort {
         <<interface>>
         +query_audit_events(filters, pagination) AuditEventListResult
@@ -307,7 +307,7 @@ classDiagram
         +get_audit_event(event_id) AuditEvent
         +count_audit_events(filters) int
     }
-    
+
     class IWorkspaceQueryPort {
         <<interface>>
         +get_workspace(workspace_id) WorkspaceInfo
@@ -316,7 +316,7 @@ classDiagram
         +list_active_workspaces(pagination) WorkspaceListResult
         +get_resource_usage_summary(project_id) dict
     }
-    
+
     class IConversationalLoopService {
         <<interface>>
         +initialize_loop(work_item_id, agent_id, initial_context) ConversationalSessionState

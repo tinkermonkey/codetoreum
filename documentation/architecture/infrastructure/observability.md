@@ -102,12 +102,12 @@ async def handle_card_movement(event):
     with tracer.start_as_current_span("handle_card_movement") as span:
         span.set_attribute("work_item_id", event.work_item_id)
         span.set_attribute("column", event.new_column)
-        
+
         # Nested spans for sub-operations
         with tracer.start_as_current_span("check_permissions"):
             # ...
             pass
-        
+
         with tracer.start_as_current_span("move_item"):
             # ...
             pass
@@ -155,7 +155,7 @@ async def record_audit_event(
     changes: dict[str, Any],
 ) -> None:
     """Record audit trail for sensitive operations."""
-    
+
     audit_entry = {
         "timestamp": datetime.now(UTC).isoformat(),
         "operation": operation,  # create, update, delete
@@ -166,7 +166,7 @@ async def record_audit_event(
         "ip_address": get_client_ip(),
         "user_agent": get_user_agent()
     }
-    
+
     # Store immutably
     await audit_store.record(audit_entry)
 ```
@@ -181,7 +181,7 @@ async def handle_failed_event(
     attempt_count: int,
 ) -> None:
     """Record persistently failed event."""
-    
+
     failed_event = FailedEvent(
         event_id=event.event_id,
         event_type=event.event_type,
@@ -194,7 +194,7 @@ async def handle_failed_event(
         timestamp=datetime.now(UTC),
         original_timestamp=event.occurred_at
     )
-    
+
     # Store for later investigation
     await dlq_store.record(failed_event)
 ```
@@ -341,7 +341,7 @@ graph TB
     subgraph "Application Layer"
         S["Service<br/>(ExecutionService)"]
     end
-    
+
     subgraph "Observability Instrumentation"
         L["Structured<br/>Logging"]
         T["Distributed<br/>Tracing"]
@@ -349,7 +349,7 @@ graph TB
         A["Audit<br/>Logging"]
         D["Dead Letter<br/>Queue"]
     end
-    
+
     subgraph "Observability Backends"
         LS["Log Store<br/>(Files/ELK)"]
         JG["Jaeger<br/>(Traces)"]
@@ -357,31 +357,31 @@ graph TB
         AS["Audit Store<br/>(Immutable DB)"]
         DS["DLQ Store<br/>(Persistent)"]
     end
-    
+
     subgraph "Operators/On-Call"
         OP["Grafana<br/>Dashboards"]
         JUI["Jaeger<br/>UI"]
         LOG["Log<br/>Search"]
     end
-    
+
     S -->|Log events| L
     S -->|Create spans| T
     S -->|Record metrics| M
     S -->|Record operations| A
     S -->|Failed events| D
-    
+
     L --> LS
     T --> JG
     M --> PM
     A --> AS
     D --> DS
-    
+
     LS --> LOG
     JG --> JUI
     PM --> OP
     AS --> LOG
     DS --> LOG
-    
+
     LOG --> OP
     OP --> OP
     JUI --> OP
@@ -450,7 +450,7 @@ User reports: "Workflow didn't complete"
    → Was configuration changed around T+5?
    → Was there a permission change?
 
-Root cause: Database credentials rotated at T+5, 
+Root cause: Database credentials rotated at T+5,
            ExecutionService lost connection
 ```
 
@@ -607,7 +607,7 @@ What changed in the workflow definition?
 - `exception` — Stack trace (if error)
 - `extra` — Additional context (event_id, user_id, etc.)
 
-**Storage**: 
+**Storage**:
 - Local files (daily rotation)
 - ELK Stack (Elasticsearch + Kibana) for production
 - CloudWatch Logs for cloud deployments
@@ -730,7 +730,7 @@ await dlq.start()
 
 **Logging**: < 1ms per log entry (async, non-blocking)
 
-**Tracing**: 
+**Tracing**:
 - Span creation: ~0.1ms
 - Trace context propagation: ~0.01ms
 - Jaeger export: Async, non-blocking

@@ -85,14 +85,14 @@ class GitHubBoardConfig:
     token: str                          # GitHub Personal Access Token or App token
     organization: str                   # GitHub organization name
     repository: str                     # Repository name
-    
+
     # Projects v2 configuration
     project_number: int                 # GitHub Projects v2 project number
-    
+
     # Polling fallback (if webhooks disabled)
     polling_interval_seconds: int = 300  # 5 minutes default
     webhook_enabled: bool = True          # Disable if webhooks unavailable
-    
+
     # API defaults
     api_base_url: str = "https://api.github.com"
     graphql_url: str = "https://api.github.com/graphql"
@@ -271,7 +271,7 @@ classDiagram
         +reconcile_board(board_id: str, expected: BoardConfig) ReconciliationResult
         +add_change_listener(board_id: str, callback)
     }
-    
+
     class GitHubBoardAdapter {
         -graphql_client: GitHubGraphQLClient
         -ticket_adapter: GitHubTicketAdapter
@@ -285,26 +285,26 @@ classDiagram
         -_detect_changes_polling(board_id: str)
         -_emit_change_event(change: WorkItemColumnChange)
     }
-    
+
     class GitHubGraphQLClient {
         +query(query: str, variables: dict) dict
         +execute_mutation(mutation: str, variables: dict) dict
     }
-    
+
     class GitHubTicketAdapter {
         +update_issue(issue_number: int, updates: dict)
     }
-    
+
     class GitHubAPI {
         +POST /graphql
     }
-    
+
     class DomainEvents {
         <<events>>
         WorkItemColumnChangedEvent
         BoardReconciledEvent
     }
-    
+
     IBoardService <|-- GitHubBoardAdapter: implements
     GitHubBoardAdapter --> GitHubGraphQLClient: uses
     GitHubBoardAdapter --> GitHubTicketAdapter: depends on
@@ -328,7 +328,7 @@ classDiagram
 ## Cross-References
 
 - **Port Interface**: [IBoardService](../ports/output/board-management.md) - Complete interface specification
-- **Related Adapters**: 
+- **Related Adapters**:
   - [GitHubTicketAdapter](./github-ticket-adapter.md) - Work item CRUD
   - [GitHub Code Review Adapter](./github-code-review-adapter.md) - PR management
 - **Domain Events**: [Board Events](../domain/events.md#board-context) - WorkItemColumnChangedEvent, BoardReconciledEvent

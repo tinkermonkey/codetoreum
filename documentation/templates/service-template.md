@@ -68,7 +68,7 @@ class WorkflowOrchestrator:
     ) -> WorkflowRun:
         """Start a new workflow execution."""
         pass
-    
+
     async def advance_stage(
         self,
         run_id: str,
@@ -76,7 +76,7 @@ class WorkflowOrchestrator:
     ) -> WorkflowRun:
         """Transition workflow to the next stage."""
         pass
-    
+
     async def complete_workflow(
         self,
         run_id: str,
@@ -135,7 +135,7 @@ sequenceDiagram
     participant WorkflowOrchestrator
     participant Domain as Workflow Domain
     participant IEventEmitter
-    
+
     Client->>WorkflowOrchestrator: start_workflow(workflow_id, item_id)
     WorkflowOrchestrator->>Domain: Create WorkflowRun instance
     Domain-->>WorkflowOrchestrator: WorkflowRun aggregate

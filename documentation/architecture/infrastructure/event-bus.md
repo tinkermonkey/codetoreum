@@ -53,7 +53,7 @@ The event bus serves as the single source of truth for all state changes in the 
 ```python
 class EventBus:
     """In-process event bus for pub/sub event handling."""
-    
+
     def __init__(
         self,
         max_retries: int = 3,
@@ -62,14 +62,14 @@ class EventBus:
         redis_stream_prefix: str = "events",
     ) -> None:
         """Initialize event bus with optional Redis persistence."""
-    
+
     # Handler Registration
     def register_handler(self, handler: EventHandler) -> None:
         """Register an event handler for subscribed event types."""
-    
+
     def unregister_handler(self, handler: EventHandler) -> None:
         """Unregister a handler from the bus."""
-    
+
     # Callback Subscription
     def subscribe(
         self,
@@ -77,25 +77,25 @@ class EventBus:
         callback: Callable[[DomainEvent], Any],
     ) -> None:
         """Subscribe to events with a callback function (async or sync)."""
-    
+
     def unsubscribe(
         self,
         event_type: str | None,
         callback: Callable[[DomainEvent], Any],
     ) -> None:
         """Unsubscribe a callback."""
-    
+
     # Event Publishing
     async def publish(self, event: DomainEvent) -> None:
         """Publish event to all handlers and callbacks."""
-    
+
     async def publish_batch(self, events: list[DomainEvent]) -> None:
         """Publish multiple events sequentially."""
-    
+
     # Statistics & Monitoring
     def get_statistics(self) -> dict[str, Any]:
         """Get bus statistics: events published, handled, persisted, errors."""
-    
+
     def reset_statistics(self) -> None:
         """Reset statistics (for testing)."""
 ```
@@ -116,18 +116,18 @@ class EventBus:
 ```python
 class EventHandler:
     """Base class for all event handlers."""
-    
+
     async def handle(self, event: DomainEvent) -> None:
         """
         Handle an event.
-        
+
         Subclasses must implement this method.
         """
-    
+
     def get_event_types(self) -> list[str]:
         """
         Return list of event types this handler subscribes to.
-        
+
         Return empty list for wildcard (all events).
         """
 ```
@@ -138,7 +138,7 @@ class EventHandler:
 @event_handler("WorkItemCreated", "WorkItemDeleted")
 class MyEventHandler(EventHandler):
     """Decorator automatically sets up get_event_types()."""
-    
+
     async def handle(self, event: DomainEvent) -> None:
         """Handle the event."""
 ```
@@ -300,7 +300,7 @@ Handler Completion Order (unpredictable):
   Handler B fails at T+200ms, retries...
   Handler D completes at T+250ms
   Handler B succeeds at T+400ms
-  
+
 All handlers complete → publish() returns
 ```
 

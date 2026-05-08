@@ -73,45 +73,45 @@ class UpdateStageCommand:
 class IWorkItemCommandPort(ABC):
     """
     Input port for work item commands.
-    
+
     Provides write operations for work item creation, updates, and management.
     """
-    
+
     @abstractmethod
     async def create_work_item(self, command: CreateWorkItemCommand) -> WorkItem:
         """Create a new work item."""
         pass
-    
+
     @abstractmethod
     async def update_work_item(self, command: UpdateWorkItemCommand) -> WorkItem:
         """Update an existing work item."""
         pass
-    
+
     @abstractmethod
     async def delete_work_item(self, work_item_id: str) -> WorkItemCommandResult:
         """Soft delete a work item."""
         pass
-    
+
     @abstractmethod
     async def assign_agent(self, command: AssignAgentCommand) -> WorkItem:
         """Assign an agent to a work item."""
         pass
-    
+
     @abstractmethod
     async def update_labels(self, command: UpdateLabelsCommand) -> WorkItem:
         """Update work item labels."""
         pass
-    
+
     @abstractmethod
     async def update_priority(self, command: UpdatePriorityCommand) -> WorkItem:
         """Update work item priority."""
         pass
-    
+
     @abstractmethod
     async def attach_workflow(self, command: AttachWorkflowCommand) -> WorkItem:
         """Attach a workflow to a work item."""
         pass
-    
+
     @abstractmethod
     async def update_stage(self, command: UpdateStageCommand) -> WorkItem:
         """Update work item stage."""
@@ -186,32 +186,32 @@ class WorkItemHistory:
 class IWorkItemQueryPort(ABC):
     """
     Input port for work item queries.
-    
+
     Provides read-only access to work item information.
     """
-    
+
     @abstractmethod
     async def get_work_item(self, work_item_id: str) -> WorkItem:
         """Retrieve a single work item by ID."""
         pass
-    
+
     @abstractmethod
     async def list_work_items(
         self, filters: WorkItemFilters | None = None, pagination: PaginationParams | None = None
     ) -> WorkItemListResult:
         """List work items with optional filtering and pagination."""
         pass
-    
+
     @abstractmethod
     async def search_work_items(self, search_params: WorkItemSearchParams) -> WorkItemListResult:
         """Search work items by title and description."""
         pass
-    
+
     @abstractmethod
     async def get_work_item_history(self, work_item_id: str, limit: int | None = None) -> WorkItemHistory:
         """Retrieve work item history including all events."""
         pass
-    
+
     @abstractmethod
     async def count_work_items(self, filters: WorkItemFilters | None = None) -> int:
         """Count work items matching filters."""
@@ -311,15 +311,15 @@ class ExecutionHistory:
 class ITaskQueryPort(ABC):
     """
     Input port for task and execution queries.
-    
+
     Provides read-only access to execution status, history, and artifacts.
     """
-    
+
     @abstractmethod
     async def get_execution_status(self, execution_id: str) -> ExecutionStatusInfo:
         """Retrieve detailed status information for a specific execution."""
         pass
-    
+
     @abstractmethod
     async def list_executions(
         self,
@@ -332,17 +332,17 @@ class ITaskQueryPort(ABC):
     ) -> ExecutionListResult:
         """List executions matching specified criteria."""
         pass
-    
+
     @abstractmethod
     async def get_artifacts(self, execution_id: str, artifact_type: str | None = None) -> ArtifactListResult:
         """Retrieve artifacts produced by an execution."""
         pass
-    
+
     @abstractmethod
     async def get_execution_history(self, execution_id: str, limit: int | None = None) -> ExecutionHistory:
         """Retrieve the event history for an execution."""
         pass
-    
+
     @abstractmethod
     async def get_workflow_executions(self, workflow_run_id: str) -> ExecutionListResult:
         """Retrieve all executions for a specific workflow run."""
@@ -421,7 +421,7 @@ classDiagram
         +attach_workflow(AttachWorkflowCommand) WorkItem
         +update_stage(UpdateStageCommand) WorkItem
     }
-    
+
     class IWorkItemQueryPort {
         <<interface>>
         +get_work_item(work_item_id) WorkItem
@@ -430,7 +430,7 @@ classDiagram
         +get_work_item_history(work_item_id, limit) WorkItemHistory
         +count_work_items(filters) int
     }
-    
+
     class ITaskQueryPort {
         <<interface>>
         +get_execution_status(execution_id) ExecutionStatusInfo
@@ -439,23 +439,23 @@ classDiagram
         +get_execution_history(execution_id, limit) ExecutionHistory
         +get_workflow_executions(workflow_run_id) ExecutionListResult
     }
-    
+
     class MockWorkItemCommandAdapter {
         +create_work_item(CreateWorkItemCommand) WorkItem
         +update_work_item(UpdateWorkItemCommand) WorkItem
         +delete_work_item(work_item_id) WorkItemCommandResult
     }
-    
+
     class MockWorkItemQueryAdapter {
         +get_work_item(work_item_id) WorkItem
         +list_work_items(filters, pagination) WorkItemListResult
     }
-    
+
     class MockTaskQueryAdapter {
         +get_execution_status(execution_id) ExecutionStatusInfo
         +list_executions(...) ExecutionListResult
     }
-    
+
     IWorkItemCommandPort <|-- MockWorkItemCommandAdapter: implements
     IWorkItemQueryPort <|-- MockWorkItemQueryAdapter: implements
     ITaskQueryPort <|-- MockTaskQueryAdapter: implements

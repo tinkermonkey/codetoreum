@@ -137,17 +137,17 @@ class DockerConfig:
     docker_host: str | None = None      # Defaults to local socket (/var/run/docker.sock)
     tls_verify: bool = False            # Skip TLS verification (default)
     cert_path: str | None = None        # TLS certificate path (if tls_verify=True)
-    
+
     # Container defaults
     default_timeout: int = 300          # 5 minutes execution timeout
     remove_on_completion: bool = True   # Auto-cleanup containers
     default_user: str | None = None     # Run as specific user (default: image default)
     default_network: str = "bridge"     # Network mode (bridge, host, none)
-    
+
     # Resource limits
     memory_limit: str | None = None     # e.g., "512m", "1g"
     cpu_limit: float | None = None      # e.g., 1.0, 0.5
-    
+
     # Logging
     log_driver: str = "json-file"       # JSON file logging
 ```
@@ -352,9 +352,9 @@ classDiagram
         +execute_command(container_id: ContainerId, cmd: str) ContainerResult
         +stop_container(container_id: ContainerId)
         +get_container_status(container_id: ContainerId) ContainerStatus
-        +mount_files(container_id: ContainerId, mount_list: list) 
+        +mount_files(container_id: ContainerId, mount_list: list)
     }
-    
+
     class DockerContainerAdapter {
         -docker_client: docker.DockerClient
         -config: DockerConfig
@@ -367,21 +367,21 @@ classDiagram
         -_get_client() docker.DockerClient
         -_create_tar_archive(files: list) bytes
     }
-    
+
     class DockerDaemon {
         +Create container
         +Execute command
         +Stream logs
         +Stop/remove container
     }
-    
+
     class ContainerResult {
         exit_code: int
         stdout: str
         stderr: str
         duration_ms: float
     }
-    
+
     IContainer <|-- DockerContainerAdapter: implements
     DockerContainerAdapter --> DockerDaemon: Docker SDK
     DockerContainerAdapter --> ContainerResult: returns

@@ -60,7 +60,7 @@ All resilient decorators follow this pattern:
 ```python
 class ResilientXXXDecorator(IXXXPort):
     """Wraps port interface with resilience patterns."""
-    
+
     def __init__(
         self,
         wrapped: IXXXPort,
@@ -71,7 +71,7 @@ class ResilientXXXDecorator(IXXXPort):
         default_timeout_seconds: float = 30.0,
     ):
         """Initialize with wrapped adapter and resilience components."""
-    
+
     async def port_method(self, ...args) -> ReturnType:
         """Any port method wrapped with resilience."""
         return await self._execute_resilient(
@@ -79,7 +79,7 @@ class ResilientXXXDecorator(IXXXPort):
             operation_name="port_method",
             rate_limit_cost=1,
         )
-    
+
     async def _execute_resilient(
         self,
         operation: Callable[[], Awaitable[T]],
@@ -99,7 +99,7 @@ class ResilientXXXDecorator(IXXXPort):
 ```python
 class IRateLimiter:
     """Rate limiting interface."""
-    
+
     async def acquire(
         self,
         cost: int = 1,
@@ -107,38 +107,38 @@ class IRateLimiter:
     ) -> bool:
         """
         Acquire capacity.
-        
+
         Returns: True if acquired, False if timeout
         """
 
 class ICircuitBreaker:
     """Circuit breaker interface."""
-    
+
     async def call(self, func: Callable) -> Any:
         """Execute function with circuit breaker protection."""
-    
+
     def get_state(self) -> str:
         """Return state: CLOSED, OPEN, or HALF_OPEN."""
-    
+
     async def reset(self) -> None:
         """Reset circuit breaker to CLOSED state."""
 
 class IRetryPolicy:
     """Retry policy interface."""
-    
+
     async def execute(
         self,
         func: Callable,
         max_retries: int = 3,
     ) -> Any:
         """Execute with retry logic."""
-    
+
     async def backoff(self, attempt: int) -> None:
         """Sleep between retries with exponential backoff."""
 
 class ITimeout:
     """Timeout interface."""
-    
+
     async def execute_with_timeout(
         self,
         coro: Awaitable[T],
@@ -152,7 +152,7 @@ class ITimeout:
 ```python
 class ResilienceFactory:
     """Factory for creating resilient decorators."""
-    
+
     def __init__(
         self,
         mode: OperationMode = OperationMode.PRODUCTION,
@@ -160,26 +160,26 @@ class ResilienceFactory:
     ):
         """
         Initialize factory.
-        
+
         Args:
             mode: PRODUCTION (real timeouts) or SIMULATION (fast tests)
             config: Configuration overrides
         """
-    
+
     def create_resilient_ticket_system(
         self,
         adapter: ITicketSystem,
         service_config: ServiceResilienceConfig | None = None,
     ) -> ResilientTicketSystemDecorator:
         """Wrap ticket system with resilience."""
-    
+
     def create_resilient_llm_provider(
         self,
         adapter: ILLMProvider,
         service_config: ServiceResilienceConfig | None = None,
     ) -> ResilientLLMProviderDecorator:
         """Wrap LLM provider with resilience."""
-    
+
     def create_resilient_board_service(
         self,
         adapter: IBoardService,
@@ -297,24 +297,24 @@ sequenceDiagram
     participant Retry
     participant Adapter
     participant External as External<br/>System
-    
+
     Service->>Decorator: call port method
     Decorator->>CircuitBreaker: get_state()
     CircuitBreaker-->>Decorator: CLOSED/OPEN/HALF_OPEN?
-    
+
     alt Circuit is OPEN
         Decorator-->>Service: CircuitBreakerOpenError
     else Circuit is CLOSED/HALF_OPEN
         Decorator->>RateLimiter: acquire(cost=1)
         RateLimiter-->>Decorator: OK or WAIT
         Decorator->>Retry: execute(adapter.method)
-        
+
         loop Retry Attempts (max_retries=3)
             Retry->>Adapter: call method
             Adapter->>External: network call
             External-->>Adapter: response
             Adapter-->>Retry: success/error
-            
+
             alt Success
                 Retry-->>Decorator: Result
             else Transient Error
@@ -324,7 +324,7 @@ sequenceDiagram
                 Retry-->>Decorator: Exception
             end
         end
-        
+
         Decorator->>CircuitBreaker: record_success/failure
         Decorator-->>Service: Result or Exception
     end

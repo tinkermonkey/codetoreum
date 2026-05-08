@@ -20,27 +20,27 @@ These ports coordinate the multi-stage pipeline execution and workflow state man
 ```python
 class IWorkflowCommandPort(ABC):
     """Input port for workflow execution control."""
-    
+
     @abstractmethod
     async def start_workflow(self, command: StartWorkflowCommand) -> WorkflowCommandResult:
         """Start a new workflow execution."""
         pass
-    
+
     @abstractmethod
     async def pause_workflow(self, command: PauseWorkflowCommand) -> WorkflowCommandResult:
         """Pause an active workflow."""
         pass
-    
+
     @abstractmethod
     async def resume_workflow(self, command: ResumeWorkflowCommand) -> WorkflowCommandResult:
         """Resume a paused workflow."""
         pass
-    
+
     @abstractmethod
     async def cancel_workflow(self, command: CancelWorkflowCommand) -> WorkflowCommandResult:
         """Cancel a workflow."""
         pass
-    
+
     @abstractmethod
     async def retry_stage(self, command: RetryStageCommand) -> WorkflowCommandResult:
         """Retry a failed workflow stage."""
@@ -52,29 +52,29 @@ class IWorkflowCommandPort(ABC):
 ```python
 class IWorkflowQueryPort(ABC):
     """Input port for workflow definition queries."""
-    
+
     @abstractmethod
     async def get_workflow(self, workflow_id: str, version: int | None = None) -> WorkflowDefinitionInfo:
         """Get workflow definition by ID."""
         pass
-    
+
     @abstractmethod
     async def list_workflows(
         self, filters: WorkflowFilters | None = None, pagination: WorkflowPaginationParams | None = None
     ) -> WorkflowListResult:
         """List workflow definitions."""
         pass
-    
+
     @abstractmethod
     async def get_workflow_versions(self, workflow_id: str, limit: int = 10) -> WorkflowVersionHistoryResult:
         """Get workflow version history."""
         pass
-    
+
     @abstractmethod
     async def validate_workflow(self, workflow_id: str, version: int | None = None) -> WorkflowValidationResult:
         """Validate workflow definition."""
         pass
-    
+
     @abstractmethod
     async def get_workflows_for_work_item_type(self, work_item_type: str) -> list[WorkflowSummaryInfo]:
         """Get workflows applicable to a work item type."""
@@ -86,27 +86,27 @@ class IWorkflowQueryPort(ABC):
 ```python
 class IWorkflowDefinitionCommandPort(ABC):
     """Input port for workflow definition management."""
-    
+
     @abstractmethod
     async def create_workflow_definition(self, command: CreateWorkflowDefinitionCommand) -> WorkflowDefinitionInfo:
         """Create a new workflow definition."""
         pass
-    
+
     @abstractmethod
     async def update_workflow_definition(self, command: UpdateWorkflowDefinitionCommand) -> WorkflowDefinitionInfo:
         """Update a workflow definition."""
         pass
-    
+
     @abstractmethod
     async def delete_workflow_definition(self, workflow_id: str) -> WorkflowDefinitionCommandResult:
         """Delete a workflow definition."""
         pass
-    
+
     @abstractmethod
     async def activate_workflow_definition(self, workflow_id: str) -> WorkflowDefinitionCommandResult:
         """Activate a workflow definition."""
         pass
-    
+
     @abstractmethod
     async def deactivate_workflow_definition(self, workflow_id: str) -> WorkflowDefinitionCommandResult:
         """Deactivate a workflow definition."""
@@ -118,12 +118,12 @@ class IWorkflowDefinitionCommandPort(ABC):
 ```python
 class IWorkflowRunQueryPort(ABC):
     """Input port for workflow run queries."""
-    
+
     @abstractmethod
     async def get_workflow_run(self, workflow_run_id: str) -> WorkflowRunInfo:
         """Get workflow run status and details."""
         pass
-    
+
     @abstractmethod
     async def list_workflow_runs(
         self,
@@ -133,12 +133,12 @@ class IWorkflowRunQueryPort(ABC):
     ) -> WorkflowRunListResult:
         """List workflow runs with filtering."""
         pass
-    
+
     @abstractmethod
     async def get_workflow_run_events(self, workflow_run_id: str) -> WorkflowRunEventResult:
         """Get events for a workflow run."""
         pass
-    
+
     @abstractmethod
     async def get_workflow_run_audit(self, workflow_run_id: str) -> WorkflowRunAuditResult:
         """Get complete audit trail for workflow run."""
@@ -220,7 +220,7 @@ classDiagram
         +cancel_workflow(CancelWorkflowCommand) WorkflowCommandResult
         +retry_stage(RetryStageCommand) WorkflowCommandResult
     }
-    
+
     class IWorkflowQueryPort {
         <<interface>>
         +get_workflow(workflow_id, version) WorkflowDefinitionInfo
@@ -229,7 +229,7 @@ classDiagram
         +validate_workflow(workflow_id, version) WorkflowValidationResult
         +get_workflows_for_work_item_type(work_item_type) list
     }
-    
+
     class IWorkflowDefinitionCommandPort {
         <<interface>>
         +create_workflow_definition(CreateWorkflowDefinitionCommand) WorkflowDefinitionInfo
@@ -238,7 +238,7 @@ classDiagram
         +activate_workflow_definition(workflow_id) WorkflowDefinitionCommandResult
         +deactivate_workflow_definition(workflow_id) WorkflowDefinitionCommandResult
     }
-    
+
     class IWorkflowRunQueryPort {
         <<interface>>
         +get_workflow_run(workflow_run_id) WorkflowRunInfo

@@ -301,7 +301,7 @@ graph TB
         style DE fill:#fff4e6
         style DS fill:#fff4e6
     end
-    
+
     subgraph AL["🟦 Application Layer"]
         direction TB
         SVC["Application Services<br/>WorkflowOrchestrator<br/>ExecutionService<br/>ReviewService<br/>MultiProjectOrchestrator"]
@@ -312,7 +312,7 @@ graph TB
         style SVC fill:#e3f2fd
         style EH fill:#e3f2fd
     end
-    
+
     subgraph IP["🟢 Input Ports<br/>(Inbound Boundaries)"]
         direction TB
         WIS["WorkItem Service<br/>WorkFlow Service<br/>Agent Service"]
@@ -323,7 +323,7 @@ graph TB
         style WIS fill:#e8f5e9
         style QRY fill:#e8f5e9
     end
-    
+
     subgraph OP["🔴 Output Ports<br/>(Outbound Dependencies)"]
         direction TB
         TS["ITicketSystem<br/>IRepository"]
@@ -342,7 +342,7 @@ graph TB
         style EV fill:#ffebee
         style OP_ALL fill:#ffebee
     end
-    
+
     subgraph AD["🟠 Adapters<br/>(Concrete Implementations)"]
         direction TB
         PRIM["Primary Adapters<br/>FastAPI REST<br/>CLI<br/>Webhook"]
@@ -356,21 +356,21 @@ graph TB
         style PROD fill:#f3e5f5
         style TEST fill:#f3e5f5
     end
-    
+
     subgraph INF["⚙️ Infrastructure<br/>(Cross-Cutting)"]
         direction TB
         INFRA["Event Bus<br/>Resilience (Circuit Breaker, Rate Limit, Retry)<br/>Observability (Logging, Metrics, Tracing)<br/>Authentication<br/>Health Checks<br/>Configuration Management"]
         style INF fill:#ffe0b2
         style INFRA fill:#ffe0b2
     end
-    
+
     AL -->|orchestrates| DL
     IP -->|delegates to| AL
     IP -->|implemented by| AD
     AL -->|depends on| OP
     OP -->|implemented by| AD
     INF -.->|supports all layers| AL
-    
+
     External["🌐 External Systems<br/>GitHub, Docker, LLM,<br/>PostgreSQL, Redis"]
     AD -->|calls| External
     External -->|webhooks| PRIM

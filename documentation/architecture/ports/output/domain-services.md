@@ -25,22 +25,22 @@ These ports encapsulate business logic for complex workflows and cross-cutting c
 ```python
 class IReviewCycleService(ABC):
     """Maker-checker review cycle orchestration."""
-    
+
     @abstractmethod
     async def start_review_cycle(self, command: StartReviewCycleCommand) -> ReviewCycleInfo:
         """Initiate review."""
         pass
-    
+
     @abstractmethod
     async def submit_feedback(self, command: SubmitFeedbackCommand) -> ReviewCycleInfo:
         """Submit review feedback."""
         pass
-    
+
     @abstractmethod
     async def get_cycle_status(self, cycle_id: str) -> ReviewCycleInfo:
         """Query review status."""
         pass
-    
+
     @abstractmethod
     async def complete_cycle(self, cycle_id: str, approved: bool, reason: str | None = None) -> None:
         """Complete review cycle."""
@@ -52,27 +52,27 @@ class IReviewCycleService(ABC):
 ```python
 class IPRReviewCycleService(ABC):
     """PR review cycle state management."""
-    
+
     @abstractmethod
     async def start_pr_review_cycle(self, pr_id: str, project_id: str) -> ReviewCycleState:
         """Initiate new PR review cycle."""
         pass
-    
+
     @abstractmethod
     async def get_cycle_state(self, pr_id: str, project_id: str) -> ReviewCycleState:
         """Retrieve current cycle state."""
         pass
-    
+
     @abstractmethod
     async def save_cycle_state(self, state: ReviewCycleState) -> None:
         """Persist cycle state."""
         pass
-    
+
     @abstractmethod
     async def remove_cycle_state(self, pr_id: str, project_id: str) -> None:
         """Remove completed cycle state."""
         pass
-    
+
     @abstractmethod
     async def load_active_cycles(self, project_id: str) -> list[ReviewCycleState]:
         """Load all in-progress cycles."""
@@ -84,27 +84,27 @@ class IPRReviewCycleService(ABC):
 ```python
 class IRepairCycleService(ABC):
     """Repair cycle orchestration for build/test failures."""
-    
+
     @abstractmethod
     async def start_repair_cycle(self, command: StartRepairCycleCommand) -> RepairCycleInfo:
         """Initiate repair."""
         pass
-    
+
     @abstractmethod
     async def submit_fix(self, command: SubmitFixCommand) -> RepairCycleInfo:
         """Submit potential fix."""
         pass
-    
+
     @abstractmethod
     async def validate_fix(self, command: ValidateFixCommand) -> ValidationResult:
         """Validate fix with tests."""
         pass
-    
+
     @abstractmethod
     async def get_cycle_status(self, cycle_id: str) -> RepairCycleInfo:
         """Query repair status."""
         pass
-    
+
     @abstractmethod
     async def complete_cycle(self, cycle_id: str, success: bool) -> None:
         """Complete repair cycle."""
@@ -116,22 +116,22 @@ class IRepairCycleService(ABC):
 ```python
 class IContainerRecoveryService(ABC):
     """Container failure recovery."""
-    
+
     @abstractmethod
     async def can_recover(self, failure: ContainerFailure) -> bool:
         """Check if failure is recoverable."""
         pass
-    
+
     @abstractmethod
     async def recover(self, failure: ContainerFailure) -> RecoveryResult:
         """Execute recovery strategy."""
         pass
-    
+
     @abstractmethod
     async def get_retry_count(self, execution_id: str) -> int:
         """Query retry attempts."""
         pass
-    
+
     @abstractmethod
     async def get_recovery_history(self, execution_id: str) -> list[RecoveryAttempt]:
         """Get recovery history."""
@@ -143,7 +143,7 @@ class IContainerRecoveryService(ABC):
 ```python
 class ICIPipelineService(ABC):
     """CI pipeline management."""
-    
+
     @abstractmethod
     async def get_pr_ci_status(
         self,
@@ -153,7 +153,7 @@ class ICIPipelineService(ABC):
     ) -> CIPipelineStatus:
         """Query CI status for pull request."""
         pass
-    
+
     @abstractmethod
     async def run_ci_checks(
         self,
@@ -163,7 +163,7 @@ class ICIPipelineService(ABC):
     ) -> CIRunResult:
         """Execute CI checks locally."""
         pass
-    
+
     @abstractmethod
     async def get_check_result(self, check_id: str) -> CICheckResult:
         """Get individual check result."""
@@ -175,17 +175,17 @@ class ICIPipelineService(ABC):
 ```python
 class IAgentExecutor(ABC):
     """Agent code execution interface."""
-    
+
     @abstractmethod
     async def execute(self, execution_request: AgentExecutionRequest) -> AgentExecutionResult:
         """Execute agent code."""
         pass
-    
+
     @abstractmethod
     async def validate_execution_context(self, context: ExecutionContext) -> ValidationResult:
         """Validate execution context."""
         pass
-    
+
     @abstractmethod
     async def get_execution_logs(self, execution_id: str) -> str:
         """Get execution logs."""
@@ -197,22 +197,22 @@ class IAgentExecutor(ABC):
 ```python
 class IAgentRepository(ABC):
     """Agent registry persistence."""
-    
+
     @abstractmethod
     async def save_agent(self, agent: Agent) -> None:
         """Persist agent."""
         pass
-    
+
     @abstractmethod
     async def get_agent(self, agent_id: str) -> Agent | None:
         """Retrieve agent."""
         pass
-    
+
     @abstractmethod
     async def list_agents(self, filters: dict[str, Any] | None = None) -> list[Agent]:
         """List agents."""
         pass
-    
+
     @abstractmethod
     async def delete_agent(self, agent_id: str) -> None:
         """Delete agent."""
@@ -224,17 +224,17 @@ class IAgentRepository(ABC):
 ```python
 class IIdentityService(ABC):
     """Bot/human user identification."""
-    
+
     @abstractmethod
     async def is_bot(self, user_id: str) -> bool:
         """Check if user is bot."""
         pass
-    
+
     @abstractmethod
     async def get_user_info(self, user_id: str) -> UserInfo:
         """Get user information."""
         pass
-    
+
     @abstractmethod
     async def is_authorized(self, user_id: str, action: str, resource: str) -> bool:
         """Check authorization."""
@@ -246,70 +246,70 @@ class IIdentityService(ABC):
 ```python
 class INotifier(ABC):
     """Interface for sending notifications across multiple channels."""
-    
+
     @abstractmethod
-    async def send(self, channel: NotificationChannel, recipient: str, subject: str, 
+    async def send(self, channel: NotificationChannel, recipient: str, subject: str,
                   message: str, priority: NotificationPriority = NotificationPriority.NORMAL,
                   metadata: dict[str, Any] | None = None) -> NotificationResult:
         """Send a notification."""
-        
+
     @abstractmethod
     async def send_rich(self, channel: NotificationChannel, recipient: str, content: RichContent,
                        priority: NotificationPriority = NotificationPriority.NORMAL) -> NotificationResult:
         """Send rich content notification (attachments, embeds, etc.)."""
-        
+
     @abstractmethod
     async def send_batch(self, notifications: list[Notification]) -> list[NotificationResult]:
         """Send multiple notifications."""
-        
+
     @abstractmethod
     async def send_template(self, channel: NotificationChannel, recipient: str, template_id: str,
-                           variables: dict[str, Any], 
+                           variables: dict[str, Any],
                            priority: NotificationPriority = NotificationPriority.NORMAL) -> NotificationResult:
         """Send notification using a template."""
-        
+
     @abstractmethod
     async def get_delivery_status(self, notification_id: str) -> DeliveryStatus:
         """Get notification delivery status."""
-        
+
     @abstractmethod
-    async def get_notification_history(self, recipient: str | None = None, 
+    async def get_notification_history(self, recipient: str | None = None,
                                       channel: NotificationChannel | None = None,
-                                      since: datetime | None = None, 
+                                      since: datetime | None = None,
                                       limit: int = 100) -> list[dict[str, Any]]:
         """Get notification history."""
-        
+
     @abstractmethod
     async def cancel_notification(self, notification_id: str) -> bool:
         """Cancel a pending notification."""
-        
+
     @abstractmethod
-    async def register_template(self, template_id: str, channel: NotificationChannel, 
+    async def register_template(self, template_id: str, channel: NotificationChannel,
                                template: str, subject_template: str | None = None,
                                metadata: dict[str, Any] | None = None) -> None:
         """Register a notification template."""
-        
+
     @abstractmethod
     async def unregister_template(self, template_id: str) -> None:
         """Unregister a notification template."""
-        
+
     @abstractmethod
     async def list_templates(self, channel: NotificationChannel | None = None) -> list[dict[str, Any]]:
         """List registered templates."""
-        
+
     @abstractmethod
     async def test_channel(self, channel: NotificationChannel, recipient: str) -> bool:
         """Test if a channel is properly configured."""
-        
+
     @abstractmethod
-    async def get_statistics(self, since: datetime | None = None, 
+    async def get_statistics(self, since: datetime | None = None,
                             channel: NotificationChannel | None = None) -> dict[str, Any]:
         """Get notification statistics."""
-        
+
     @abstractmethod
     async def configure_channel(self, channel: NotificationChannel, configuration: dict[str, Any]) -> None:
         """Configure a notification channel."""
-        
+
     @abstractmethod
     async def health_check(self) -> dict[NotificationChannel, bool]:
         """Check health of all configured channels."""
@@ -373,7 +373,7 @@ classDiagram
         +get_cycle_status(cycle_id) ReviewCycleInfo
         +complete_cycle(cycle_id, approved, reason) None
     }
-    
+
     class IRepairCycleService {
         <<interface>>
         +start_repair_cycle(StartRepairCycleCommand) RepairCycleInfo
@@ -382,7 +382,7 @@ classDiagram
         +get_cycle_status(cycle_id) RepairCycleInfo
         +complete_cycle(cycle_id, success) None
     }
-    
+
     class IContainerRecoveryService {
         <<interface>>
         +can_recover(failure) bool
@@ -390,7 +390,7 @@ classDiagram
         +get_retry_count(execution_id) int
         +get_recovery_history(execution_id) list
     }
-    
+
     class ICIPipelineService {
         <<interface>>
         +get_pr_ci_status(pr_id, project_id, timeout_seconds) CIPipelineStatus

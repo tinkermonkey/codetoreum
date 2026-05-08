@@ -108,7 +108,7 @@ sequenceDiagram
     participant AgentScheduler
     participant ReviewService
     participant IEventEmitter
-    
+
     Board->>WorkflowOrchestrator: handle_card_movement()
     WorkflowOrchestrator->>Domain: Get workflow configuration
     Domain-->>WorkflowOrchestrator: WorkflowConfig
@@ -1267,8 +1267,8 @@ async def convert_ci_run_result_to_repair_test_result(
 **1. Board Automation** (Trigger to Completion)
 
 ```
-WorkItemColumnChangedEvent 
-  → BoardEventHandler 
+WorkItemColumnChangedEvent
+  → BoardEventHandler
     → WorkflowOrchestrator.handle_card_movement()
       → AgentScheduler.schedule()
         → ExecutionService.create_execution()

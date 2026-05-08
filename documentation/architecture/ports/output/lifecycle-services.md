@@ -29,17 +29,17 @@ These ports manage long-running processes and system lifecycle.
 ```python
 class IWorkflowOrchestrator(ABC):
     """Single-project workflow execution orchestration."""
-    
+
     @abstractmethod
     async def start_workflow(self, project_id: str, work_item_id: str, pipeline_name: str) -> WorkflowRun:
         """Start workflow execution."""
         pass
-    
+
     @abstractmethod
     async def get_workflow_status(self, workflow_run_id: str) -> WorkflowStatus:
         """Get workflow status."""
         pass
-    
+
     @abstractmethod
     async def cancel_workflow(self, workflow_run_id: str, reason: str) -> None:
         """Cancel workflow."""
@@ -51,12 +51,12 @@ class IWorkflowOrchestrator(ABC):
 ```python
 class IMultiProjectOrchestrator(ABC):
     """Multi-project workflow coordination."""
-    
+
     @abstractmethod
     async def orchestrate_across_projects(self, command: MultiProjectWorkflowCommand) -> MultiProjectWorkflowResult:
         """Coordinate workflows across projects."""
         pass
-    
+
     @abstractmethod
     async def get_cross_project_status(self, workflow_id: str) -> list[ProjectWorkflowStatus]:
         """Get status across projects."""
@@ -68,22 +68,22 @@ class IMultiProjectOrchestrator(ABC):
 ```python
 class IWorkflowConfigService(ABC):
     """Workflow definition persistence."""
-    
+
     @abstractmethod
     async def save_workflow_config(self, config: WorkflowConfig) -> None:
         """Persist workflow definition."""
         pass
-    
+
     @abstractmethod
     async def get_workflow_config(self, workflow_id: str, version: int | None = None) -> WorkflowConfig:
         """Retrieve workflow definition."""
         pass
-    
+
     @abstractmethod
     async def list_workflow_configs(self, project_id: str) -> list[WorkflowConfig]:
         """List workflows for project."""
         pass
-    
+
     @abstractmethod
     async def delete_workflow_config(self, workflow_id: str) -> None:
         """Delete workflow definition."""
@@ -95,22 +95,22 @@ class IWorkflowConfigService(ABC):
 ```python
 class IConfigStore(ABC):
     """System configuration storage."""
-    
+
     @abstractmethod
     async def save_config(self, key: str, config: Any, version: int | None = None) -> None:
         """Save configuration."""
         pass
-    
+
     @abstractmethod
     async def get_config(self, key: str, version: int | None = None) -> Any:
         """Retrieve configuration."""
         pass
-    
+
     @abstractmethod
     async def delete_config(self, key: str) -> None:
         """Delete configuration."""
         pass
-    
+
     @abstractmethod
     async def list_configs(self, prefix: str | None = None) -> list[str]:
         """List configuration keys."""
@@ -122,27 +122,27 @@ class IConfigStore(ABC):
 ```python
 class IPipelineQueueService(ABC):
     """Work item queue management."""
-    
+
     @abstractmethod
     async def enqueue_work_item(self, item_id: str, priority: int = 5) -> None:
         """Add work item to queue."""
         pass
-    
+
     @abstractmethod
     async def dequeue_work_item(self) -> str | None:
         """Remove work item from queue."""
         pass
-    
+
     @abstractmethod
     async def get_queue_position(self, item_id: str) -> int | None:
         """Get work item position."""
         pass
-    
+
     @abstractmethod
     async def requeue_work_item(self, item_id: str, priority: int | None = None) -> None:
         """Requeue work item."""
         pass
-    
+
     @abstractmethod
     async def get_queue_stats(self) -> QueueStats:
         """Get queue statistics."""
@@ -154,17 +154,17 @@ class IPipelineQueueService(ABC):
 ```python
 class IRepairCycleCheckpointStore(ABC):
     """Repair cycle state persistence."""
-    
+
     @abstractmethod
     async def save_checkpoint(self, cycle_id: str, checkpoint: RepairCheckpoint) -> None:
         """Save repair cycle checkpoint."""
         pass
-    
+
     @abstractmethod
     async def load_checkpoint(self, cycle_id: str) -> RepairCheckpoint | None:
         """Load repair cycle checkpoint."""
         pass
-    
+
     @abstractmethod
     async def delete_checkpoint(self, cycle_id: str) -> None:
         """Delete checkpoint."""
@@ -176,17 +176,17 @@ class IRepairCycleCheckpointStore(ABC):
 ```python
 class IEncryptionService(ABC):
     """Credential and secret encryption."""
-    
+
     @abstractmethod
     async def encrypt(self, plaintext: str, key_id: str | None = None) -> str:
         """Encrypt secret."""
         pass
-    
+
     @abstractmethod
     async def decrypt(self, ciphertext: str) -> str:
         """Decrypt secret."""
         pass
-    
+
     @abstractmethod
     async def rotate_key(self, key_id: str) -> None:
         """Rotate encryption key."""
@@ -198,12 +198,12 @@ class IEncryptionService(ABC):
 ```python
 class IEnvironmentRepairService(ABC):
     """Environment validation and remediation."""
-    
+
     @abstractmethod
     async def validate_environment(self, project_id: str) -> EnvironmentValidationResult:
         """Validate project environment."""
         pass
-    
+
     @abstractmethod
     async def repair_environment(self, project_id: str, issues: list[str]) -> RepairResult:
         """Remediate environment issues."""
@@ -215,22 +215,22 @@ class IEnvironmentRepairService(ABC):
 ```python
 class IWorkItemBranchTracker(ABC):
     """Work item to branch mapping."""
-    
+
     @abstractmethod
     async def track_branch(self, work_item_id: str, branch_name: str) -> None:
         """Map work item to branch."""
         pass
-    
+
     @abstractmethod
     async def get_branch(self, work_item_id: str) -> str | None:
         """Get branch for work item."""
         pass
-    
+
     @abstractmethod
     async def get_work_item(self, branch_name: str) -> str | None:
         """Get work item for branch."""
         pass
-    
+
     @abstractmethod
     async def untrack_branch(self, work_item_id: str) -> None:
         """Remove branch mapping."""
@@ -242,22 +242,22 @@ class IWorkItemBranchTracker(ABC):
 ```python
 class IActiveWorkflowRunRegistry(ABC):
     """In-flight workflow tracking."""
-    
+
     @abstractmethod
     async def register_run(self, run: WorkflowRunInfo) -> None:
         """Register active workflow."""
         pass
-    
+
     @abstractmethod
     async def get_active_run(self, workflow_run_id: str) -> WorkflowRunInfo | None:
         """Get active workflow."""
         pass
-    
+
     @abstractmethod
     async def list_active_runs(self, project_id: str | None = None) -> list[WorkflowRunInfo]:
         """List active workflows."""
         pass
-    
+
     @abstractmethod
     async def unregister_run(self, workflow_run_id: str) -> None:
         """Unregister completed workflow."""
@@ -269,22 +269,22 @@ class IActiveWorkflowRunRegistry(ABC):
 ```python
 class IProjectManagerService(ABC):
     """Project lifecycle management."""
-    
+
     @abstractmethod
     async def create_project(self, command: CreateProjectCommand) -> ProjectInfo:
         """Create project."""
         pass
-    
+
     @abstractmethod
     async def get_project(self, project_id: str) -> ProjectInfo:
         """Get project info."""
         pass
-    
+
     @abstractmethod
     async def update_project(self, project_id: str, updates: dict[str, Any]) -> ProjectInfo:
         """Update project."""
         pass
-    
+
     @abstractmethod
     async def delete_project(self, project_id: str) -> None:
         """Delete project."""
@@ -296,22 +296,22 @@ class IProjectManagerService(ABC):
 ```python
 class ISystemicAnalysisService(ABC):
     """System analysis and diagnostics."""
-    
+
     @abstractmethod
     async def analyze_system_health(self) -> SystemHealthAnalysis:
         """Analyze overall system health."""
         pass
-    
+
     @abstractmethod
     async def analyze_bottlenecks(self) -> list[Bottleneck]:
         """Identify system bottlenecks."""
         pass
-    
+
     @abstractmethod
     async def get_performance_metrics(self) -> PerformanceMetrics:
         """Get system performance metrics."""
         pass
-    
+
     @abstractmethod
     async def generate_diagnostics_report(self) -> DiagnosticsReport:
         """Generate comprehensive diagnostics."""
@@ -323,41 +323,41 @@ class ISystemicAnalysisService(ABC):
 ```python
 class IAgentContainerRecoveryService(ABC):
     """Container recovery and cleanup at startup.
-    
+
     Detects and manages orphaned Docker containers from prior execution sessions,
     ensuring resources are cleaned up and interrupted work can be resumed.
     """
-    
+
     @abstractmethod
     async def recover_or_cleanup_containers(self) -> RecoveryResult:
         """Execute full recovery/cleanup cycle on startup."""
         pass
-    
+
     @abstractmethod
     async def get_running_agent_containers(self) -> list[ContainerMetadata]:
         """List running containers with Codetoreum labels."""
         pass
-    
+
     @abstractmethod
     async def assess_container(self, metadata: ContainerMetadata) -> RecoveryAssessment:
         """Assess recovery action for a single container."""
         pass
-    
+
     @abstractmethod
     async def execute_recovery_action(self, assessment: RecoveryAssessment) -> bool:
         """Execute reconnect or kill action."""
         pass
-    
+
     @abstractmethod
     async def get_running_repair_cycle_containers(self) -> list[ContainerMetadata]:
         """List running repair cycle containers using label filtering."""
         pass
-    
+
     @abstractmethod
     async def assess_repair_cycle_container(self, metadata: ContainerMetadata) -> RecoveryAssessment:
         """Assess recovery action for a repair cycle container."""
         pass
-    
+
     @abstractmethod
     async def process_orphaned_repair_results(self) -> int:
         """Process completed repair cycle results in storage."""
@@ -421,7 +421,7 @@ classDiagram
         +get_workflow_status(workflow_run_id) WorkflowStatus
         +cancel_workflow(workflow_run_id, reason) None
     }
-    
+
     class IPipelineQueueService {
         <<interface>>
         +enqueue_work_item(item_id, priority) None
@@ -430,7 +430,7 @@ classDiagram
         +requeue_work_item(item_id, priority) None
         +get_queue_stats() QueueStats
     }
-    
+
     class IConfigStore {
         <<interface>>
         +save_config(key, config, version) None
@@ -438,7 +438,7 @@ classDiagram
         +delete_config(key) None
         +list_configs(prefix) list
     }
-    
+
     class IActiveWorkflowRunRegistry {
         <<interface>>
         +register_run(run) None
@@ -446,7 +446,7 @@ classDiagram
         +list_active_runs(project_id) list
         +unregister_run(workflow_run_id) None
     }
-    
+
     class IAgentContainerRecoveryService {
         <<interface>>
         +recover_or_cleanup_containers() RecoveryResult

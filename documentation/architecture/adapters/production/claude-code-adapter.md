@@ -38,7 +38,7 @@ class ICredentialProvider:
 
 class EnvironmentCredentialProvider(ICredentialProvider):
     """Retrieves credentials from environment variables."""
-    
+
 class SecureStoreCredentialProvider(ICredentialProvider):
     """Retrieves credentials from secure key store."""
 ```
@@ -56,20 +56,20 @@ class ClaudeCodeConfig:
     api_key_credential_name: str = "ANTHROPIC_API_KEY"
     oauth_token_credential_name: str = "CLAUDE_CODE_OAUTH_TOKEN"
     credential_provider: ICredentialProvider | None = None
-    
+
     # CLI configuration
     claude_cli_path: str = "claude"              # Path to Claude CLI executable
     default_model: str = "claude-sonnet-4-5-20250929"
     permission_mode: str = "bypassPermissions"   # or "askForPermissions"
-    
+
     # Output configuration
     output_format: str = "stream-json"           # or "text"
     verbose: bool = False
-    
+
     # Execution limits
     default_timeout_seconds: int = 300           # 5 minutes
     max_context_tokens: int = 200000
-    
+
     # Features
     enable_mcp: bool = True
     enable_tools: bool = True
@@ -106,7 +106,7 @@ class ToolDefinition:
     name: str                           # Tool name (e.g., "create_issue")
     description: str                    # What this tool does
     parameters: dict                    # JSON schema for parameters
-    
+
 class Tool:
     """Actual tool execution handler."""
     async def execute(self, name: str, args: dict) -> str:
@@ -164,12 +164,12 @@ class ClaudeCodeConfig:
     api_key_credential_name: str = "ANTHROPIC_API_KEY"  # Required
     oauth_token_credential_name: str = "CLAUDE_CODE_OAUTH_TOKEN"  # Alternative
     credential_provider: ICredentialProvider | None = None
-    
+
     # CLI configuration
     claude_cli_path: str = "claude"              # Path to CLI executable (required)
     default_model: str = "claude-sonnet-4-5-20250929"
     permission_mode: str = "bypassPermissions"
-    
+
     # Features
     enable_mcp: bool = True
     enable_tools: bool = True
@@ -339,7 +339,7 @@ def llm_adapter(mocker):
         stdout='{"type": "text", "text": "Response"}',
         stderr=""
     )
-    
+
     config = ClaudeCodeConfig(
         claude_cli_path="claude",
         default_model="claude-sonnet-4-5-20250929",
@@ -376,7 +376,7 @@ classDiagram
         +get_model_info() ModelInfo
         +count_tokens(text: str) int
     }
-    
+
     class ClaudeCodeAdapter {
         -config: ClaudeCodeConfig
         -credential_provider: ICredentialProvider
@@ -393,20 +393,20 @@ classDiagram
         -_parse_stream_output(process: subprocess.Popen) AsyncIterator[StreamChunk]
         -_handle_subprocess_error(exit_code: int, stderr: str) Exception
     }
-    
+
     class ICredentialProvider {
         <<interface>>
         +get_credential(key: str) str | None
     }
-    
+
     class EnvironmentCredentialProvider {
         +get_credential(key: str) str | None
     }
-    
+
     class SecureStoreCredentialProvider {
         +get_credential(key: str) str | None
     }
-    
+
     class ExecutionContext {
         model: str | None
         conversation_id: str | None
@@ -417,7 +417,7 @@ classDiagram
         environment_variables: dict
         mcp_servers: tuple[dict, ...]
     }
-    
+
     class ExecutionResult {
         content: str
         role: str
@@ -428,12 +428,12 @@ classDiagram
         finish_reason: str
         conversation_id: str | None
     }
-    
+
     class ClaudeCodeCLI {
         +execute(args: list[str]) CompletedProcess
         +stream(args: list[str], prompt: str) AsyncIterator[str]
     }
-    
+
     ILLMProvider <|-- ClaudeCodeAdapter: implements
     ClaudeCodeAdapter --> ICredentialProvider: uses
     ClaudeCodeAdapter --> EnvironmentCredentialProvider: can use

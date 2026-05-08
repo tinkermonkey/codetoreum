@@ -83,7 +83,7 @@ The skill also activates when users mention:
    Missing: PipelineLockAcquiredEvent
    Location: src/codetoreum/domain/events/
    Suggested: Add entry to documentation/architecture/domain/events.md
-   
+
    Suggested format:
    ### PipelineLockAcquiredEvent
    Lock acquired for pipeline execution
@@ -109,7 +109,7 @@ The skill also activates when users mention:
    documentation/architecture/ports/output/board-service.md
      Missing: Examples section
      Required by: port-template.md
-   
+
    documentation/architecture/adapters/github-board-adapter.md
      Missing: Configuration section
      Required by: adapter-template.md
@@ -131,7 +131,7 @@ The skill also activates when users mention:
    documentation/architecture/infrastructure/event-sourcing.md
      Missing: Event flow diagram
      Required by: infrastructure-template.md
-   
+
    documentation/architecture/ports/
      Missing: Port interaction diagram
      Missing: Adapter hierarchy diagram
@@ -177,17 +177,17 @@ OVERALL COVERAGE: 86.5% (56/65 elements documented)
 1. Missing Port Documentation (2)
    - IPipelineLockService
    - IEventEmitter
-   
+
 2. Missing Adapter Documentation (3)
    - MockEventEmitterAdapter
    - RealEventEmitterAdapter
    - TestEventEmitterAdapter
-   
+
 3. Template Compliance Gaps (8)
    - 8 ports missing Examples section
    - 3 adapters missing Configuration section
    - 5 events missing Handlers section
-   
+
 4. Missing Diagrams (3)
    - Event flow diagram (infrastructure docs)
    - Port interaction diagram (ports reference)
@@ -198,13 +198,13 @@ OVERALL COVERAGE: 86.5% (56/65 elements documented)
 High Priority:
   1. Generate documentation for 2 missing ports
      Run: /arch-doc generate IPipelineLockService
-  
+
   2. Generate documentation for 3 missing adapters
      Run: /arch-doc generate adapters
-  
+
   3. Add Examples section to 8 ports
      Run: /arch-doc update ports --add-examples
-  
+
   4. Create 3 missing diagrams
      Run: /arch-doc diagram flow events
      Run: /arch-doc diagram hierarchy ports
@@ -344,15 +344,15 @@ FULL SYSTEM AUDIT
 
 Port Interface Coverage: 12/14 (85.7%)
   Missing: IPipelineLockService, IEventEmitter
-  
+
 Adapter Coverage: 15/18 (83.3%)
   Missing: 3 adapters
 
 Domain Event Coverage: 22/22 (100%)
-  
+
 Template Compliance: 56/64 sections (87.5%)
   Missing: 8 Examples, 3 Configuration, 5 Handlers
-  
+
 Diagram Coverage: 6/9 (66.7%)
   Missing: 3 diagrams
 

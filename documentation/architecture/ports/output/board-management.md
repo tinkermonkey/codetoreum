@@ -27,33 +27,33 @@ class IBoardService(IEventEmitter, IMonitoredService, ABC):
     3. Reconciling board state with expected configuration
     4. Reacting to work item movement via events
     """
-    
+
     # Query Operations
     async def get_board(self, project_id: str, board_id: str) -> ProjectBoard:
         """Retrieve board configuration and structure."""
-        
+
     async def get_columns(self, board_id: str) -> list[BoardColumn]:
         """Get all columns for a board."""
-        
+
     async def get_items_in_column(self, board_id: str, column_name: str) -> list[WorkItemPosition]:
         """Get all work items in a specific column ordered by position."""
-        
+
     async def get_item_position(self, work_item_id: str) -> WorkItemPosition:
         """Get current column position of a work item."""
-    
+
     # Command Operations
     async def move_item_to_column(self, work_item_id: str, target_column: str, moved_by: MovedByType) -> ColumnMovementResult:
         """Move work item to target column."""
-        
+
     async def add_item_to_column(self, work_item_id: str, target_column: str, moved_by: MovedByType) -> ColumnMovementResult:
         """Add newly created work item to initial column."""
-        
+
     async def reconcile_board(self, board_id: str, config: BoardConfig) -> ReconciliationResult:
         """Reconcile board structure with expected configuration."""
-        
+
     async def get_all_boards(self) -> list[ProjectBoard]:
         """Get all boards across all projects."""
-        
+
     async def get_board_items(self, project_id: str, board_id: str) -> list[WorkItemPosition]:
         """Get all work items on a board with their column positions and entry times."""
 ```
@@ -64,30 +64,30 @@ class IBoardService(IEventEmitter, IMonitoredService, ABC):
 class IPipelineLockService(ABC):
     """
     Distributed locking for workflow coordination.
-    
+
     Prevents concurrent pipeline execution.
     """
-    
+
     @abstractmethod
     async def acquire_lock(self, project_id: str, resource_id: str, ttl_seconds: int = 300) -> LockToken:
         """Acquire execution lock."""
         pass
-    
+
     @abstractmethod
     async def release_lock(self, lock_token: LockToken) -> None:
         """Release execution lock."""
         pass
-    
+
     @abstractmethod
     async def is_locked(self, project_id: str, resource_id: str) -> bool:
         """Check lock status."""
         pass
-    
+
     @abstractmethod
     async def renew_lock(self, lock_token: LockToken, ttl_seconds: int = 300) -> LockToken:
         """Renew lock lease."""
         pass
-    
+
     @abstractmethod
     async def wait_for_lock(self, project_id: str, resource_id: str, timeout_seconds: int = 60) -> LockToken:
         """Block until lock acquired."""
@@ -160,7 +160,7 @@ classDiagram
         +reconcile_board(board_id, config) ReconciliationResult
         +get_all_boards() list[ProjectBoard]
     }
-    
+
     class IPipelineLockService {
         <<interface>>
         +acquire_lock(project_id, resource_id, ttl_seconds) LockToken
@@ -169,19 +169,19 @@ classDiagram
         +renew_lock(lock_token, ttl_seconds) LockToken
         +wait_for_lock(project_id, resource_id, timeout_seconds) LockToken
     }
-    
+
     class GitHubBoardAdapter {
         +graphql_client: GraphQLClient
     }
-    
+
     class InMemoryPipelineLockService {
         +locks: dict
     }
-    
+
     class InMemoryQueueLockService {
         +queue_locks: dict
     }
-    
+
     IBoardService <|-- GitHubBoardAdapter: implements
     IPipelineLockService <|-- InMemoryPipelineLockService: implements
     IPipelineLockService <|-- InMemoryQueueLockService: implements

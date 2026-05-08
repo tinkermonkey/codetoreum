@@ -88,19 +88,19 @@ Tracks GitHub API rate limits (5,000 requests/hour for personal tokens):
 class GitHubConfig:
     # Authentication
     token: str                          # Personal Access Token or GitHub App token
-    
+
     # Repository
     organization: str                   # GitHub organization name
     repository: str                     # Repository name
-    
+
     # API configuration
     api_base_url: str = "https://api.github.com"
     api_version: str = "2022-11-28"
     timeout_seconds: int = 30
-    
+
     # GraphQL configuration
     graphql_url: str = "https://api.github.com/graphql"
-    
+
     # Caching
     cache_ttl_seconds: int = 300       # 5 minutes
     cache_max_entries: int = 1000      # Max cache size before LRU eviction
@@ -283,7 +283,7 @@ classDiagram
         +add_labels(work_item_id: str, labels: list[str])
         +remove_labels(work_item_id: str, labels: list[str])
     }
-    
+
     class GitHubTicketAdapter {
         -http_client: httpx.AsyncClient
         -graphql_client: GitHubGraphQLClient
@@ -303,7 +303,7 @@ classDiagram
         -_translate_issue_to_work_item(issue: dict) WorkItem
         -_translate_work_item_to_issue(item: WorkItem) dict
     }
-    
+
     class GitHubAPI {
         +GET /repos/:owner/:repo/issues/:number
         +POST /repos/:owner/:repo/issues
@@ -311,11 +311,11 @@ classDiagram
         +POST /repos/:owner/:repo/issues/:number/comments
         +GET /repos/:owner/:repo/issues/:number/comments
     }
-    
+
     class GitHubGraphQLAPI {
         +query(query: str) dict
     }
-    
+
     ITicketSystem <|-- GitHubTicketAdapter: implements
     GitHubTicketAdapter --> GitHubAPI: REST API calls
     GitHubTicketAdapter --> GitHubGraphQLAPI: GraphQL queries
