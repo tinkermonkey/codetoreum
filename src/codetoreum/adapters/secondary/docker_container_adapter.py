@@ -72,19 +72,15 @@ class DockerContainerAdapter(IContainer):
     It implements all IContainer interface methods for Docker operations.
     """
 
-    def __init__(self, config: DockerConfig, event_emitter=None, event_bus=None):
+    def __init__(self, config: DockerConfig):
         """
         Initialize Docker adapter.
 
         Args:
             config: Docker configuration
-            event_emitter: Optional event emitter for domain events (ignored in this adapter)
-            event_bus: Optional event bus for publishing events (ignored in this adapter)
         """
         self.config = config
         self._docker_client = None
-        self._event_emitter = event_emitter
-        self._event_bus = event_bus
 
     def _get_client(self):
         """Get or create Docker client."""
@@ -220,7 +216,7 @@ class DockerContainerAdapter(IContainer):
             "volumes": docker_volumes,
             "environment": environment,
             "detach": True,
-            "remove": False,  # We manually remove after getting exit code to avoid race conditions
+            "remove": self.config.remove_on_completion,
             "network": self.config.default_network,
             "user": self.config.default_user,
         }
@@ -289,24 +285,10 @@ class DockerContainerAdapter(IContainer):
                             stream_callback(decoded_line)
 
                     # When streaming completes, container has finished
-                    # Get final state before we remove it
+                    # Get final state before it's auto-removed
                     container.reload()
                     exit_code = container.attrs["State"]["ExitCode"]
                     container_id = ContainerId(container.id)
-
-                    # Remove container if configured to do so
-                    if self.config.remove_on_completion:
-                        try:
-                            container.remove(force=False)
-                        except Exception as remove_error:
-                            logger.warning(
-                                f"Failed to remove container after successful execution: {remove_error}",
-                                exc_info=True,
-                                extra={
-                                    "error_id": "ERR_CONTAINER_REMOVAL_FAILED",
-                                    "container_id": container.short_id,
-                                },
-                            )
 
                 except Exception as e:
                     # If we get here due to timeout, re-raise it

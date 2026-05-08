@@ -71,15 +71,12 @@ class TestAdapterCredentialValidation:
     """Test credential validation for production adapters."""
 
     @pytest.mark.asyncio
-    async def test_real_adapter_without_credentials_fails_fast(self, monkeypatch: Any) -> None:
+    async def test_real_adapter_without_credentials_fails_fast(self) -> None:
         """Verify real adapter configured without required credentials raises error at setup.
 
         This test ensures credentials are validated at bootstrap time, not runtime,
         enabling fail-fast behavior and preventing partial application startup.
         """
-        # Unset GITHUB_ORG to simulate missing credentials
-        monkeypatch.delenv("GITHUB_ORG", raising=False)
-
         config = SimulationConfig.create_fast_config("cred_test")
         # Override one adapter slot to use GitHub (requires GITHUB_TOKEN)
         config = dataclasses.replace(
@@ -104,16 +101,12 @@ class TestAdapterCredentialValidation:
         ), "Error should mention missing credentials"
 
     @pytest.mark.asyncio
-    async def test_multiple_missing_credentials_aggregated_in_error(self, monkeypatch: Any) -> None:
+    async def test_multiple_missing_credentials_aggregated_in_error(self) -> None:
         """Verify multiple missing credentials are aggregated into one error.
 
         This test ensures that if multiple adapters are misconfigured,
         all missing credentials are reported together for efficient remediation.
         """
-        # Unset multiple credentials to simulate missing credentials
-        monkeypatch.delenv("GITHUB_ORG", raising=False)
-        monkeypatch.delenv("GITHUB_REPO", raising=False)
-
         config = SimulationConfig.create_fast_config("multi_cred_test")
         # Override multiple adapters to use production implementations
         config = dataclasses.replace(
@@ -347,16 +340,13 @@ class TestAdapterConfigurationErrors:
 
     @pytest.mark.asyncio
     async def test_credential_error_includes_slot_implementation_and_missing_var(
-        self, monkeypatch: Any
+        self,
     ) -> None:
         """Verify error message format includes slot, implementation, and missing var.
 
         This test ensures error messages are diagnostic, containing all information
         needed to remediate the configuration error.
         """
-        # Unset GITHUB_ORG to simulate missing credentials
-        monkeypatch.delenv("GITHUB_ORG", raising=False)
-
         config = SimulationConfig.create_fast_config("diagnostic_error_test")
         config = dataclasses.replace(
             config,

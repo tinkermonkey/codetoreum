@@ -166,10 +166,8 @@ async def test_production_repair_cycle_accepts_systemic_analysis_service(
     from unittest.mock import MagicMock
 
     llm_provider = MagicMock()
-    event_emitter = MagicMock()
     adapter = ProductionRepairCycleAdapter(
         llm_factory=lambda: llm_provider,
-        event_emitter=event_emitter,
         systemic_analysis_service=mock_systemic_analysis,
     )
 
@@ -188,10 +186,8 @@ async def test_systemic_analysis_service_property_setter(
     from unittest.mock import MagicMock
 
     llm_provider = MagicMock()
-    event_emitter = MagicMock()
     repair_adapter = ProductionRepairCycleAdapter(
         llm_factory=lambda: llm_provider,
-        event_emitter=event_emitter,
     )
 
     # Initially None

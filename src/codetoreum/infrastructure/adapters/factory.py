@@ -177,18 +177,6 @@ except ImportError:
     )
     ProductionEnvironmentRepairAdapter = None  # type: ignore
 
-try:
-    from codetoreum.adapters.secondary.redis_event_emitter import (
-        RedisEventEmitter,
-    )
-except ImportError:
-    logger.warning(
-        "Optional adapter RedisEventEmitter not available, skipping registration",
-        exc_info=True,
-        extra={"adapter": "RedisEventEmitter"},
-    )
-    RedisEventEmitter = None  # type: ignore
-
 from codetoreum.infrastructure.adapters.registries import (
     ActiveWorkflowRunRegistryRegistry,
     AgentExecutorRegistry,
@@ -366,7 +354,6 @@ class AdapterFactory:
                 env_vars=("GITHUB_TOKEN", "GITHUB_ORG"),
                 description="GitHub personal access token with repo scope",
             ),
-            factory=self._create_github_ticket_adapter,
             set_as_default=True,
         )
         self._ticket_system_registry.register(
@@ -392,7 +379,6 @@ class AdapterFactory:
                 env_vars=("CLAUDE_CODE_TOKEN",),
                 description="Claude Code authentication token",
             ),
-            factory=self._create_claude_code_adapter,
             set_as_default=True,
         )
         self._llm_provider_registry.register(
@@ -418,7 +404,6 @@ class AdapterFactory:
                 env_vars=("DOCKER_HOST",),
                 description="Docker daemon connection string",
             ),
-            factory=self._create_docker_container_adapter,
             set_as_default=True,
         )
         self._container_registry.register(
@@ -444,7 +429,6 @@ class AdapterFactory:
                 env_vars=("GIT_USER", "GIT_EMAIL"),
                 description="Git user credentials for commits",
             ),
-            factory=self._create_git_repository_adapter,
             set_as_default=True,
         )
         self._repository_registry.register(
@@ -472,19 +456,6 @@ class AdapterFactory:
             ),
             set_as_default=True,
         )
-        if ElasticsearchEventStore:
-            self._event_store_registry.register(
-                name="elasticsearch",
-                adapter_type=ElasticsearchEventStore,
-                description="Elasticsearch event store for production",
-                version="1.0.0",
-                tags=["production", "elasticsearch"],
-                config_schema=AdapterCredentialRequirement(
-                    env_vars=("ELASTICSEARCH_URL",),
-                    description="Elasticsearch cluster URL for event persistence",
-                ),
-                factory=self._create_elasticsearch_event_store,
-            )
 
         # Storage Adapters
         self._storage_registry.register(
@@ -523,7 +494,6 @@ class AdapterFactory:
                 env_vars=("GITHUB_TOKEN", "GITHUB_ORG"),
                 description="GitHub personal access token with repo scope",
             ),
-            factory=self._create_github_board_adapter,
         )
 
         # Code Review Service Adapters
@@ -537,7 +507,6 @@ class AdapterFactory:
                 env_vars=("GITHUB_TOKEN", "GITHUB_ORG"),
                 description="GitHub personal access token with repo scope",
             ),
-            factory=self._create_github_code_review_adapter,
             set_as_default=True,
         )
         self._code_review_registry.register(
@@ -576,7 +545,6 @@ class AdapterFactory:
                     env_vars=("GITHUB_TOKEN", "GITHUB_ORG"),
                     description="GitHub personal access token with repo scope",
                 ),
-                factory=self._create_github_discussion_adapter,
             )
 
         # Version Control Service Adapters
@@ -694,7 +662,6 @@ class AdapterFactory:
                     env_vars=("ELASTICSEARCH_URL",),
                     description="Elasticsearch cluster URL",
                 ),
-                factory=self._create_elasticsearch_config_storage,
             )
 
         # Repair Cycle Adapters
@@ -768,7 +735,6 @@ class AdapterFactory:
                 description="Docker container recovery adapter",
                 version="1.0.0",
                 tags=["production", "docker"],
-                factory=self._create_docker_container_recovery_adapter,
             )
 
         # Encryption Service Adapters
@@ -865,19 +831,6 @@ class AdapterFactory:
                 description="Simulation-only adapter, no credentials required",
             ),
         )
-
-        if RedisEventEmitter:
-            self._event_emitter_registry.register(
-                name="redis",
-                adapter_type=RedisEventEmitter,
-                description="Redis-backed event emitter for distributed event emission",
-                version="1.0.0",
-                tags=["production", "distributed", "redis"],
-                config_schema=AdapterCredentialRequirement(
-                    env_vars=("REDIS_URL",),
-                    description="Requires Redis connection URL",
-                ),
-            )
 
         # Identity Service Adapters
         self._identity_service_registry.register(
@@ -1044,7 +997,6 @@ class AdapterFactory:
                 env_vars=("GITHUB_TOKEN", "GITHUB_ORG"),
                 description="GitHub personal access token with repo scope",
             ),
-            factory=self._create_github_ci_pipeline_adapter,
         )
 
     # Registry access methods
@@ -1503,372 +1455,6 @@ class AdapterFactory:
             REPOSITORY_RESILIENCE_CONFIG,
             resilience_config,
             self._resilience_factory.create_resilient_repository,
-        )
-
-    # =========================================================================
-    # Production Adapter Factory Functions (handle dependencies)
-    # =========================================================================
-
-    def _create_elasticsearch_event_store(self, **kwargs) -> ElasticsearchEventStore:
-        """Factory function for Elasticsearch event store.
-
-        Creates an AsyncElasticsearch client from environment configuration
-        and wires it to the event store adapter.
-
-        Args:
-            **kwargs: Additional arguments (passed through)
-
-        Returns:
-            Configured ElasticsearchEventStore instance
-        """
-        import os
-        from elasticsearch import AsyncElasticsearch
-
-        # Get Elasticsearch URL from environment
-        es_url = os.environ.get("ELASTICSEARCH_URL", "http://localhost:9200")
-
-        # Create Elasticsearch client
-        es_client = AsyncElasticsearch([es_url])
-
-        # Create and return event store
-        return ElasticsearchEventStore(es_client=es_client)
-
-    def _create_elasticsearch_config_storage(self, **kwargs) -> ElasticsearchConfigStorage:
-        """Factory function for Elasticsearch configuration storage.
-
-        Creates an AsyncElasticsearch client from environment configuration
-        and wires it to the config storage adapter.
-
-        Args:
-            **kwargs: Additional arguments (passed through)
-
-        Returns:
-            Configured ElasticsearchConfigStorage instance
-        """
-        import os
-        from elasticsearch import AsyncElasticsearch
-
-        # Get Elasticsearch URL from environment
-        es_url = os.environ.get("ELASTICSEARCH_URL", "http://localhost:9200")
-
-        # Create Elasticsearch client
-        es_client = AsyncElasticsearch([es_url])
-
-        # Create and return config storage
-        return ElasticsearchConfigStorage(es_client=es_client)
-
-    def _create_github_ticket_adapter(self, **kwargs) -> GitHubTicketAdapter:
-        """Factory function for GitHub ticket adapter.
-
-        Creates GitHubConfig from environment and returns a configured adapter.
-
-        Args:
-            **kwargs: Additional arguments (passed through)
-
-        Returns:
-            Configured GitHubTicketAdapter instance
-        """
-        import os
-        from codetoreum.adapters.secondary.github_ticket_adapter import GitHubConfig
-
-        # Create GitHub configuration from environment
-        github_config = GitHubConfig(
-            token=os.environ.get("GITHUB_TOKEN", ""),
-            organization=os.environ.get("GITHUB_ORG", ""),
-            repository=os.environ.get("GITHUB_REPO", ""),
-        )
-
-        # Create and return ticket adapter
-        return GitHubTicketAdapter(github_config)
-
-    def _create_github_board_adapter(self, event_emitter=None, **kwargs) -> GitHubBoardAdapter:
-        """Factory function for GitHub board adapter.
-
-        Creates the necessary dependencies (GitHubTicketAdapter, GitHubGraphQLClient)
-        and wires them together with the board adapter.
-
-        Args:
-            event_emitter: Optional event emitter for domain events
-            **kwargs: Additional arguments (passed through)
-
-        Returns:
-            Configured GitHubBoardAdapter instance
-        """
-        import os
-        from codetoreum.adapters.secondary.github_ticket_adapter import GitHubConfig
-        from codetoreum.infrastructure.http.github_graphql_client import (
-            GitHubGraphQLClient,
-            GitHubGraphQLConfig,
-        )
-
-        # Create GitHub configuration from environment
-        github_config = GitHubConfig(
-            token=os.environ.get("GITHUB_TOKEN", ""),
-            organization=os.environ.get("GITHUB_ORG", ""),
-            repository=os.environ.get("GITHUB_REPO", ""),
-        )
-
-        # Create GraphQL config and client
-        graphql_config = GitHubGraphQLConfig(
-            token=os.environ.get("GITHUB_TOKEN", ""),
-        )
-        graphql_client = GitHubGraphQLClient(graphql_config)
-
-        # Create ticket adapter
-        ticket_adapter = GitHubTicketAdapter(github_config)
-
-        # Create and return board adapter
-        return GitHubBoardAdapter(
-            ticket_adapter=ticket_adapter,
-            graphql_client=graphql_client,
-            webhook_enabled=True,
-            event_emitter=event_emitter,
-        )
-
-    def _create_github_ci_pipeline_adapter(self, event_emitter=None, **kwargs) -> GitHubCIPipelineAdapter:
-        """Factory function for GitHub CI pipeline adapter.
-
-        Creates the necessary dependencies (GitHubTicketAdapter, GitHubGraphQLClient)
-        and wires them together with the CI pipeline adapter.
-
-        Args:
-            event_emitter: Optional event emitter for domain events
-            **kwargs: Additional arguments (passed through)
-
-        Returns:
-            Configured GitHubCIPipelineAdapter instance
-        """
-        import os
-        from codetoreum.adapters.secondary.github_ticket_adapter import GitHubConfig
-        from codetoreum.infrastructure.http.github_graphql_client import (
-            GitHubGraphQLClient,
-            GitHubGraphQLConfig,
-        )
-
-        # Create GitHub configuration from environment
-        github_config = GitHubConfig(
-            token=os.environ.get("GITHUB_TOKEN", ""),
-            organization=os.environ.get("GITHUB_ORG", ""),
-            repository=os.environ.get("GITHUB_REPO", ""),
-        )
-
-        # Create GraphQL config and client
-        graphql_config = GitHubGraphQLConfig(
-            token=os.environ.get("GITHUB_TOKEN", ""),
-        )
-        graphql_client = GitHubGraphQLClient(graphql_config)
-
-        # Create ticket adapter
-        ticket_adapter = GitHubTicketAdapter(github_config)
-
-        # Create and return CI pipeline adapter
-        return GitHubCIPipelineAdapter(
-            ticket_adapter=ticket_adapter,
-            graphql_client=graphql_client,
-            event_emitter=event_emitter,
-        )
-
-    def _create_docker_container_adapter(self, event_emitter=None, event_bus=None, **kwargs) -> DockerContainerAdapter:
-        """Factory function for Docker container adapter.
-
-        Creates a DockerConfig from environment variables and wires it to the adapter.
-
-        Args:
-            event_emitter: Optional event emitter for domain events
-            event_bus: Optional event bus for publishing events
-            **kwargs: Additional arguments (passed through)
-
-        Returns:
-            Configured DockerContainerAdapter instance
-        """
-        import os
-        from codetoreum.adapters.secondary.docker_container_adapter import DockerConfig
-
-        # Create Docker configuration from environment
-        docker_config = DockerConfig(
-            docker_host=os.environ.get("DOCKER_HOST"),
-            tls_verify=os.environ.get("DOCKER_TLS_VERIFY", "false").lower() == "true",
-            cert_path=os.environ.get("DOCKER_CERT_PATH"),
-        )
-
-        # Create and return container adapter
-        return DockerContainerAdapter(
-            config=docker_config,
-            event_emitter=event_emitter,
-            event_bus=event_bus,
-        )
-
-    def _create_claude_code_adapter(self, **kwargs) -> ClaudeCodeAdapter:
-        """Factory function for Claude Code adapter.
-
-        Creates a ClaudeCodeConfig from environment variables and wires it to the adapter.
-
-        Args:
-            **kwargs: Additional arguments (passed through)
-
-        Returns:
-            Configured ClaudeCodeAdapter instance
-        """
-        import os
-        from codetoreum.adapters.secondary.claude_code_adapter import ClaudeCodeConfig
-
-        # Create Claude Code configuration from environment
-        claude_config = ClaudeCodeConfig(
-            api_key_credential_name="ANTHROPIC_API_KEY",
-            oauth_token_credential_name="CLAUDE_CODE_OAUTH_TOKEN",
-            claude_cli_path=os.environ.get("CLAUDE_CLI_PATH", "claude"),
-            default_model=os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-5-20250929"),
-            output_format=os.environ.get("CLAUDE_OUTPUT_FORMAT", "stream-json"),
-            verbose=os.environ.get("CLAUDE_VERBOSE", "false").lower() == "true",
-        )
-
-        # Create and return adapter
-        return ClaudeCodeAdapter(config=claude_config)
-
-    def _create_github_discussion_adapter(self, identity_service=None, time_source=None, **kwargs) -> Any:
-        """Factory function for GitHub discussion adapter.
-
-        Creates a GitHubDiscussionConfig from environment variables and wires it to the adapter.
-
-        Args:
-            identity_service: Identity service for bot identification
-            time_source: Optional time source for testing (ignored)
-            **kwargs: Additional arguments (passed through)
-
-        Returns:
-            Configured GitHubDiscussionAdapter instance
-        """
-        import os
-        from codetoreum.adapters.secondary.github_discussion_adapter import (
-            GitHubDiscussionAdapter,
-            GitHubDiscussionConfig,
-        )
-
-        # Create GitHub discussion configuration from environment
-        github_config = GitHubDiscussionConfig(
-            token=os.environ.get("GITHUB_TOKEN", ""),
-            organization=os.environ.get("GITHUB_ORG", ""),
-            repository=os.environ.get("GITHUB_REPO", ""),
-        )
-
-        # Create and return discussion adapter
-        return GitHubDiscussionAdapter(
-            config=github_config,
-            identity_service=identity_service,
-            time_source=time_source,
-        )
-
-    def _create_git_repository_adapter(self, event_emitter=None, time_source=None, **kwargs) -> GitRepositoryAdapter:
-        """Factory function for Git repository adapter.
-
-        Creates a GitConfig from environment variables and wires it to the adapter.
-
-        Args:
-            event_emitter: Optional event emitter for domain events
-            time_source: Optional time source for testing (ignored)
-            **kwargs: Additional arguments (passed through)
-
-        Returns:
-            Configured GitRepositoryAdapter instance
-        """
-        import os
-        from codetoreum.adapters.secondary.git_repository_adapter import GitConfig
-
-        # Create Git configuration from environment
-        git_config = GitConfig(
-            default_author_email=os.environ.get("GIT_EMAIL", "agent@codetoreum.local"),
-            default_author_name=os.environ.get("GIT_USER", "Codetoreum Agent"),
-        )
-
-        # Create and return repository adapter
-        return GitRepositoryAdapter(
-            config=git_config,
-            event_emitter=event_emitter,
-            time_source=time_source,
-        )
-
-    def _create_github_code_review_adapter(self, event_emitter=None, **kwargs) -> Any:
-        """Factory function for GitHub code review adapter.
-
-        Creates the necessary dependencies (GitHubTicketAdapter, GitHubGraphQLClient)
-        and wires them together with the code review adapter.
-
-        Args:
-            event_emitter: Optional event emitter for domain events (unused)
-            **kwargs: Additional arguments (passed through)
-
-        Returns:
-            Configured GitHubCodeReviewAdapter instance
-        """
-        import os
-        from codetoreum.adapters.secondary.github_code_review_adapter import GitHubCodeReviewAdapter
-        from codetoreum.adapters.secondary.github_ticket_adapter import GitHubConfig, GitHubTicketAdapter
-        from codetoreum.infrastructure.http.github_graphql_client import (
-            GitHubGraphQLClient,
-            GitHubGraphQLConfig,
-        )
-
-        # Create GitHub configuration from environment
-        github_config = GitHubConfig(
-            token=os.environ.get("GITHUB_TOKEN", ""),
-            organization=os.environ.get("GITHUB_ORG", ""),
-            repository=os.environ.get("GITHUB_REPO", ""),
-        )
-
-        # Create GraphQL config and client
-        graphql_config = GitHubGraphQLConfig(
-            token=os.environ.get("GITHUB_TOKEN", ""),
-        )
-        graphql_client = GitHubGraphQLClient(graphql_config)
-
-        # Create ticket adapter
-        ticket_adapter = GitHubTicketAdapter(github_config)
-
-        # Create and return code review adapter
-        return GitHubCodeReviewAdapter(
-            ticket_adapter=ticket_adapter,
-            graphql_client=graphql_client,
-        )
-
-    def _create_docker_container_recovery_adapter(self, time_source=None, **kwargs) -> Any:
-        """Factory function for Docker container recovery adapter.
-
-        Creates the necessary dependencies and wires them together.
-
-        Args:
-            time_source: Optional time source for testing (ignored)
-            **kwargs: Additional arguments including:
-                - checkpoint_store: Optional checkpoint store
-                - tracking_storage: Optional tracking storage
-
-        Returns:
-            Configured DockerContainerRecoveryAdapter instance
-        """
-        from codetoreum.adapters.secondary.docker_container_recovery_adapter import (
-            DockerContainerRecoveryAdapter,
-        )
-        from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
-
-        # Use provided storage or create in-memory fallback
-        tracking_storage = kwargs.get("tracking_storage") or InMemoryStorageAdapter()
-
-        # Create a simple execution tracker
-        class SimpleExecutionTracker:
-            async def load_state(self, project: str, work_item_id: str) -> dict:
-                return {}
-
-            async def mark_execution_failed(self, project: str, work_item_id: str, agent: str, reason: str) -> None:
-                pass
-
-        execution_tracker = kwargs.get("execution_tracker") or SimpleExecutionTracker()
-        checkpoint_store = kwargs.get("checkpoint_store")
-
-        # Create and return container recovery adapter
-        return DockerContainerRecoveryAdapter(
-            execution_tracker=execution_tracker,
-            tracking_storage=tracking_storage,
-            checkpoint_store=checkpoint_store,
-            time_source=time_source,
         )
 
     def _create_adapter(

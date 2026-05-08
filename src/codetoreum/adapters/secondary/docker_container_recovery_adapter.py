@@ -139,7 +139,6 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
         docker_runner: IDockerRunner | None = None,
         checkpoint_store: IRepairCycleCheckpointStore | None = None,
         container_timeout_hours: int = 2,
-        time_source=None,
     ):
         """
         Initialize DockerContainerRecoveryAdapter.
@@ -150,7 +149,6 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
             docker_runner: Docker runner for reconnectToContainer() calls
             checkpoint_store: Checkpoint store for repair cycle validation
             container_timeout_hours: Hours before a container is considered orphaned
-            time_source: Optional time source for testing (ignored)
         """
         self.execution_tracker = execution_tracker
         self.tracking_storage = tracking_storage

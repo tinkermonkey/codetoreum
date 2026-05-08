@@ -67,17 +67,12 @@ class IWorkflowConfigService(ABC):
         exists for that board it is replaced in full — there is no partial
         update; callers must supply the complete template.
 
-        Implements optimistic concurrency control to prevent concurrent modifications
-        from silently overwriting each other.
-
         Args:
             template: Fully-populated BoardWorkflowTemplate.  Both
                 template.board_id and template.project_id must be non-empty.
 
         Raises:
             ValidationError: If template.board_id or template.project_id is empty.
-            ConcurrencyConflictError: If the template was modified by another process
-                after the last read (optimistic concurrency control failure).
             ExternalServiceError: On backing-store communication failure.
         """
 

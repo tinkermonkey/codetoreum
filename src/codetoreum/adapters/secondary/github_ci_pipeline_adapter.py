@@ -69,18 +69,15 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
         self,
         ticket_adapter: GitHubTicketAdapter,
         graphql_client: GitHubGraphQLClient,
-        event_emitter=None,
     ):
         """Initialize GitHub CI pipeline adapter.
 
         Args:
             ticket_adapter: GitHub ticket adapter for PR metadata and linking
             graphql_client: GitHub GraphQL client for check run queries
-            event_emitter: Optional event emitter for domain events (ignored in this adapter)
         """
         self._ticket_adapter = ticket_adapter
         self._graphql = graphql_client
-        self._event_emitter = event_emitter
 
         # Monitoring state per project
         self._monitoring: dict[str, MonitoringStatus] = {}

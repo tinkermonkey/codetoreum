@@ -10,22 +10,16 @@ import os
 import pytest
 
 from codetoreum.adapters.secondary import ClaudeCodeAdapter, ClaudeCodeConfig
-from codetoreum.ports.exceptions import LLMProviderError, StreamingError
+from codetoreum.ports.exceptions import LLMProviderError
 from codetoreum.ports.output.llm_provider import ExecutionContext
 
 
 @pytest.fixture
 def claude_config():
     """Create Claude Code configuration from environment."""
-    api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
-    oauth_token = os.getenv("CLAUDE_CODE_OAUTH_TOKEN", "").strip()
-
-    # For execution tests, we need the actual API key, not just oauth token
-    # Skip if neither credential is available or if only oauth token is available
+    api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
-        # Check if this is a test environment where only oauth token might be available
-        # In such cases, skip the test since the Claude CLI needs the API key for actual execution
-        pytest.skip("ANTHROPIC_API_KEY environment variable not set or empty")
+        pytest.skip("ANTHROPIC_API_KEY environment variable not set")
 
     return ClaudeCodeConfig(
         default_model="claude-sonnet-4-5-20250929",
@@ -72,9 +66,8 @@ async def test_simple_execution(claude_adapter):
         assert result.prompt_tokens > 0
 
     except LLMProviderError as e:
-        error_msg = str(e)
-        if "not found" in error_msg or "missing credentials" in error_msg:
-            pytest.skip(f"Claude execution skipped: {error_msg}")
+        if "not found" in str(e):
+            pytest.skip("Claude CLI not installed")
         raise
 
 
@@ -101,9 +94,8 @@ async def test_streaming_execution(claude_adapter):
         assert any(chunk.is_final for chunk in chunks_received)
 
     except LLMProviderError as e:
-        error_msg = str(e)
-        if "not found" in error_msg or "missing credentials" in error_msg:
-            pytest.skip(f"Claude execution skipped: {error_msg}")
+        if "not found" in str(e):
+            pytest.skip("Claude CLI not installed")
         raise
 
 
@@ -123,10 +115,9 @@ async def test_stream_completion(claude_adapter):
         # Final chunk should be marked
         assert chunks[-1].is_final
 
-    except (LLMProviderError, StreamingError) as e:
-        error_msg = str(e)
-        if "not found" in error_msg or "missing credentials" in error_msg:
-            pytest.skip(f"Claude execution skipped: {error_msg}")
+    except LLMProviderError as e:
+        if "not found" in str(e):
+            pytest.skip("Claude CLI not installed")
         raise
 
 
@@ -134,37 +125,30 @@ async def test_stream_completion(claude_adapter):
 @pytest.mark.asyncio
 async def test_conversation_management(claude_adapter):
     """Test conversation creation and continuation."""
-    try:
-        # Create conversation
-        conversation_id = await claude_adapter.create_conversation(
-            system_prompt="You are a helpful assistant.",
-        )
+    # Create conversation
+    conversation_id = await claude_adapter.create_conversation(
+        system_prompt="You are a helpful assistant.",
+    )
 
-        assert conversation_id is not None
+    assert conversation_id is not None
 
-        # Continue conversation
-        result1 = await claude_adapter.continue_conversation(
-            conversation_id,
-            "My name is Alice.",
-        )
+    # Continue conversation
+    result1 = await claude_adapter.continue_conversation(
+        conversation_id,
+        "My name is Alice.",
+    )
 
-        assert result1 is not None
+    assert result1 is not None
 
-        # Continue again
-        result2 = await claude_adapter.continue_conversation(
-            conversation_id,
-            "What is my name?",
-        )
+    # Continue again
+    result2 = await claude_adapter.continue_conversation(
+        conversation_id,
+        "What is my name?",
+    )
 
-        assert result2 is not None
-        # Claude should remember the name
-        assert "alice" in result2.content.lower()
-
-    except LLMProviderError as e:
-        error_msg = str(e)
-        if "not found" in error_msg or "missing credentials" in error_msg:
-            pytest.skip(f"Claude execution skipped: {error_msg}")
-        raise
+    assert result2 is not None
+    # Claude should remember the name
+    assert "alice" in result2.content.lower()
 
 
 @pytest.mark.integration

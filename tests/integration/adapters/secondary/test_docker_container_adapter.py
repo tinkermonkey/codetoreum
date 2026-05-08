@@ -123,21 +123,6 @@ async def test_run_with_volume_mount(docker_adapter):
         test_file = test_dir / "test.txt"
         test_file.write_text("Hello from host")
 
-        # First check if Docker can actually mount this path by testing with a simple command
-        # Some Docker setups (e.g., Docker snap) have restricted filesystem access
-        check_result = await docker_adapter.run(
-            image="alpine:latest",
-            command=["ls", "-la", "/data"],
-            volumes={str(test_dir): "/data:ro"},
-            environment={},
-            timeout=10,
-        )
-
-        # If Docker cannot access the mounted volume, skip this test
-        # This can happen with Docker snap which has restricted filesystem access
-        if "test.txt" not in check_result.stdout:
-            pytest.skip("Docker cannot access host filesystem for volume mounts (may be Docker snap with restrictions)")
-
         result = await docker_adapter.run(
             image="alpine:latest",
             command=["cat", "/data/test.txt"],

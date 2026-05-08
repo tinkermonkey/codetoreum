@@ -58,18 +58,14 @@ class GitRepositoryAdapter(IRepository):
     It provides a clean interface for cloning, branching, committing, and pushing.
     """
 
-    def __init__(self, config: GitConfig, event_emitter=None, time_source=None):
+    def __init__(self, config: GitConfig):
         """
         Initialize Git adapter.
 
         Args:
             config: Git configuration
-            event_emitter: Optional event emitter for domain events (ignored in this adapter)
-            time_source: Optional callable for getting current time (ignored in this adapter)
         """
         self.config = config
-        self._event_emitter = event_emitter
-        self._time_source = time_source
 
     def _sanitize_git_args(self, args: list[str]) -> list[str]:
         """

@@ -120,11 +120,9 @@ def _make_adapter(
     llm.execute.return_value = ExecutionResult(content=llm_response)
 
     llm_factory = _make_async_factory(llm)
-    event_emitter = CapturingEventEmitter()
     return (
         ProductionRepairCycleAdapter(
             llm_factory=llm_factory,
-            event_emitter=event_emitter,
             config=RepairCycleConfig(),
             environment_repair_service=environment_repair_service,
         ),

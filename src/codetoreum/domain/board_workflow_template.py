@@ -6,10 +6,9 @@ where board position (not labels) determines workflow state and agent triggers.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from types import MappingProxyType
 
 from codetoreum.domain.pr_review_cycle_types import PRReviewCycleConfig
 from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig, RepairTestType
@@ -20,119 +19,6 @@ class ColumnType(Enum):
 
     MANUAL = "manual"
     AUTOMATED = "automated"
-
-
-class PermissionMode(Enum):
-    """Vendor-neutral permission modes for agent execution.
-
-    This enum represents permission modes in a vendor-agnostic way.
-    Adapters translate these to vendor-specific values at the boundary
-    (e.g., BYPASS → vendor-specific permission bypass string).
-    """
-
-    BYPASS = "bypass"
-    ASK = "ask"
-
-
-@dataclass(frozen=True)
-class StageAgentConfig:
-    """Stage-specific agent configuration for pipeline execution.
-
-    Specifies agent parameters that override defaults for a specific
-    pipeline stage (column). This enables different agents to use different models,
-    permission modes, tool configurations, etc. Values are vendor-neutral;
-    adapters translate them to vendor-specific values at system boundaries.
-
-    Attributes:
-        model: Agent model to use for this stage (e.g., "claude-opus-4-6")
-        timeout_seconds: Execution timeout in seconds
-        permission_mode: Permission mode for agent execution (PermissionMode enum)
-        output_format: Output format from agent ("stream-json" or "text")
-        enable_mcp: Whether to enable MCP (Model Context Protocol) for this stage
-        enable_tools: Whether to allow tool usage in this stage
-        max_context_tokens: Maximum context tokens for this stage
-        verbose: Enable verbose logging for this stage
-        prompt_template: Optional custom prompt template for this stage
-        tool_permissions: Optional dict of tool-specific permissions/restrictions
-        metadata: Additional stage-specific configuration (immutable dict)
-    """
-
-    model: str | None = None  # None means use default from agent config
-    timeout_seconds: int | None = None  # None means use default
-    permission_mode: PermissionMode | None = None  # Vendor-neutral permission mode
-    output_format: str | None = None  # e.g., "stream-json"
-    enable_mcp: bool | None = None
-    enable_tools: bool | None = None
-    max_context_tokens: int | None = None
-    verbose: bool | None = None
-    prompt_template: str | None = None
-    tool_permissions: dict | MappingProxyType = field(
-        default_factory=lambda: MappingProxyType({})
-    )
-    metadata: dict | MappingProxyType = field(
-        default_factory=lambda: MappingProxyType({})
-    )
-
-    def __post_init__(self) -> None:
-        """Validate stage agent configuration."""
-        # Coerce dict to MappingProxyType for tool_permissions
-        if isinstance(self.tool_permissions, dict):
-            object.__setattr__(self, "tool_permissions", MappingProxyType(self.tool_permissions))
-
-        # Coerce dict to MappingProxyType for metadata
-        if isinstance(self.metadata, dict):
-            object.__setattr__(self, "metadata", MappingProxyType(self.metadata))
-
-        # Validate timeout if provided
-        if self.timeout_seconds is not None:
-            if isinstance(self.timeout_seconds, bool) or not isinstance(self.timeout_seconds, int):
-                msg = "timeout_seconds must be a positive integer or None"
-                raise ValueError(msg)
-            if self.timeout_seconds <= 0:
-                msg = f"timeout_seconds must be positive, got {self.timeout_seconds}"
-                raise ValueError(msg)
-
-        # Validate model if provided
-        if self.model is not None and (not isinstance(self.model, str) or not self.model):
-            msg = "model must be a non-empty string or None"
-            raise ValueError(msg)
-
-        # Validate permission_mode if provided
-        if self.permission_mode is not None:
-            if not isinstance(self.permission_mode, PermissionMode):
-                msg = f"permission_mode must be a PermissionMode enum value or None, got {type(self.permission_mode).__name__}"
-                raise ValueError(msg)
-
-        # Validate output_format if provided
-        if self.output_format is not None:
-            valid_formats = {"stream-json", "text"}
-            if self.output_format not in valid_formats:
-                msg = f"output_format must be one of {valid_formats}, got {self.output_format!r}"
-                raise ValueError(msg)
-
-        # Validate max_context_tokens if provided
-        if self.max_context_tokens is not None:
-            if isinstance(self.max_context_tokens, bool) or not isinstance(self.max_context_tokens, int):
-                msg = "max_context_tokens must be a positive integer or None"
-                raise ValueError(msg)
-            if self.max_context_tokens <= 0:
-                msg = f"max_context_tokens must be positive, got {self.max_context_tokens}"
-                raise ValueError(msg)
-
-        # Validate boolean fields if provided
-        for bool_field in ("enable_mcp", "enable_tools", "verbose"):
-            val = getattr(self, bool_field)
-            if val is not None and not isinstance(val, bool):
-                msg = f"{bool_field} must be a boolean or None"
-                raise ValueError(msg)
-
-        if not isinstance(self.tool_permissions, MappingProxyType):
-            msg = "tool_permissions must be a dict or MappingProxyType"
-            raise ValueError(msg)
-
-        if not isinstance(self.metadata, MappingProxyType):
-            msg = "metadata must be a dict or MappingProxyType"
-            raise ValueError(msg)
 
 
 @dataclass(frozen=True)
@@ -168,10 +54,6 @@ class ColumnTemplate:
         pr_review_cycle_config: Optional configuration for PR review cycle on this column.
                                When set, triggers PR review cycle instead of agent execution.
                                Mutually exclusive with repair_cycle_agents.
-        stage_agent_config: Optional stage-specific agent configuration for pipeline execution on this column.
-                           Specifies model, timeout, permissions, and other parameters that
-                           override defaults for this specific stage.
-                           None means use default agent configuration.
         execution_type: Execution mode for the agent on this column. One of "task_queue"
                        (default, standard container execution) or "conversational"
                        (multi-turn dialogue via IDiscussionAdapter).
@@ -190,7 +72,6 @@ class ColumnTemplate:
     repair_cycle_agents: RepairCycleAgentConfig | None = None
     repair_cycle_test_types: tuple[RepairTestType, ...] | None = None
     pr_review_cycle_config: PRReviewCycleConfig | None = None
-    stage_agent_config: StageAgentConfig | None = None
     execution_type: str = "task_queue"
 
     def __post_init__(self) -> None:

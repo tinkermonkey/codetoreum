@@ -134,7 +134,7 @@ def _make_adapter(
         llm_response_factory: Optional callable(prompt: str) -> ExecutionResult that generates context-aware responses.
                              Takes precedence over llm_response.
         circuit_breaker: Optional circuit breaker mock
-        event_emitter: Optional event emitter mock (defaults to MagicMock if not provided)
+        event_emitter: Optional event emitter mock
     """
     llm = AsyncMock()
 
@@ -149,15 +149,10 @@ def _make_adapter(
     llm_factory = _make_async_factory(llm)
 
     config = RepairCycleConfig(max_json_parse_retries=1, json_parse_retry_delay_ms=0)
-
-    # Provide default event_emitter if not provided
-    if event_emitter is None:
-        event_emitter = MagicMock()
-
     adapter = ProductionRepairCycleAdapter(
         llm_factory=llm_factory,
-        event_emitter=event_emitter,
         config=config,
+        event_emitter=event_emitter,
         circuit_breaker=circuit_breaker,
     )
     return adapter, llm
@@ -1440,7 +1435,6 @@ class TestAgentConfigRouting:
         config = RepairCycleConfig(max_json_parse_retries=1, json_parse_retry_delay_ms=0)
         adapter = ProductionRepairCycleAdapter(
             llm_factory=tracking_factory,
-            event_emitter=MagicMock(),
             config=config,
         )
         adapter._resolved_agents = resolved_agents
@@ -1518,7 +1512,6 @@ class TestAgentConfigRouting:
         config = RepairCycleConfig(max_json_parse_retries=1, json_parse_retry_delay_ms=0)
         adapter = ProductionRepairCycleAdapter(
             llm_factory=tracking_factory,
-            event_emitter=MagicMock(),
             config=config,
         )
 
@@ -1618,7 +1611,6 @@ class TestEnvironmentRebuildAndVerifyReturnValueHandling:
 
         adapter = ProductionRepairCycleAdapter(
             llm_factory=self._make_llm_factory_with_mock(mock_llm),
-            event_emitter=MagicMock(),
             config=RepairCycleConfig(),
         )
 
@@ -1667,7 +1659,6 @@ class TestEnvironmentRebuildAndVerifyReturnValueHandling:
 
         adapter = ProductionRepairCycleAdapter(
             llm_factory=self._make_llm_factory_with_mock(mock_llm),
-            event_emitter=MagicMock(),
             config=RepairCycleConfig(),
         )
 
@@ -1718,7 +1709,6 @@ class TestEnvironmentRebuildAndVerifyReturnValueHandling:
 
         adapter = ProductionRepairCycleAdapter(
             llm_factory=self._make_llm_factory_with_mock(mock_llm),
-            event_emitter=MagicMock(),
             config=RepairCycleConfig(),
         )
 
@@ -1784,7 +1774,6 @@ class TestTimeoutHandling:
         factory = await self._make_factory_with_slow_llm(delay_seconds=1.0)
         adapter = ProductionRepairCycleAdapter(
             llm_factory=factory,
-            event_emitter=MagicMock(),
             config=RepairCycleConfig(),
         )
 
@@ -1807,7 +1796,6 @@ class TestTimeoutHandling:
         factory = await self._make_factory_with_slow_llm(delay_seconds=1.0)
         adapter = ProductionRepairCycleAdapter(
             llm_factory=factory,
-            event_emitter=MagicMock(),
             config=RepairCycleConfig(),
         )
 
@@ -1838,7 +1826,6 @@ class TestTimeoutHandling:
         factory = await self._make_factory_with_slow_llm(delay_seconds=1.0)
         adapter = ProductionRepairCycleAdapter(
             llm_factory=factory,
-            event_emitter=MagicMock(),
             config=RepairCycleConfig(),
         )
 
@@ -1879,7 +1866,6 @@ class TestTimeoutHandling:
         factory = await self._make_factory_with_slow_llm(delay_seconds=0.5)
         adapter = ProductionRepairCycleAdapter(
             llm_factory=factory,
-            event_emitter=MagicMock(),
             config=RepairCycleConfig(),
         )
 

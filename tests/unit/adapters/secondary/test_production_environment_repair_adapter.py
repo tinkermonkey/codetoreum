@@ -103,17 +103,13 @@ def _make_adapter(
     event_emitter=None,
 ):
     """Create a ProductionEnvironmentRepairAdapter with the given LLM and config."""
-    from unittest.mock import MagicMock
-
     if repair_config is None:
         repair_config = EnvironmentRepairConfig()
-    if event_emitter is None:
-        event_emitter = MagicMock()
     llm_factory = _make_async_factory(llm)
     return ProductionEnvironmentRepairAdapter(
         llm_factory=llm_factory,
-        event_emitter=event_emitter,
         repair_config=repair_config,
+        event_emitter=event_emitter,
     )
 
 
@@ -545,7 +541,6 @@ async def test_rebuild_with_specialized_agent(mock_llm, repair_config, test_conf
 
     adapter = ProductionEnvironmentRepairAdapter(
         llm_factory=tracking_factory,
-        event_emitter=MagicMock(),
         repair_config=repair_config,
     )
 
@@ -586,7 +581,6 @@ async def test_verify_with_specialized_agent(mock_llm, repair_config, test_confi
 
     adapter = ProductionEnvironmentRepairAdapter(
         llm_factory=tracking_factory,
-        event_emitter=MagicMock(),
         repair_config=repair_config,
     )
 

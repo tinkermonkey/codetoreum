@@ -222,24 +222,9 @@ async def test_update_project_config_versioning(config_storage, sample_project_c
     # Wait for indexing
     await wait_for_elasticsearch_indexing(es_client)
 
-    # Update config by creating a new one with updated tech_stacks
-    updated_tech_stacks = dict(sample_project_config.tech_stacks)
-    updated_tech_stacks["typescript"] = "5.0"
-    updated_config = ProjectConfig(
-        id=sample_project_config.id,
-        name=sample_project_config.name,
-        github_org=sample_project_config.github_org,
-        github_repo=sample_project_config.github_repo,
-        tech_stacks=updated_tech_stacks,
-        pipelines=sample_project_config.pipelines,
-        testing=sample_project_config.testing,
-        environment_variables=sample_project_config.environment_variables,
-        mounted_commands=sample_project_config.mounted_commands,
-        mounted_subagents=sample_project_config.mounted_subagents,
-        version=sample_project_config.version,
-        metadata=sample_project_config.metadata,
-    )
-    await config_storage.save_project_config(updated_config)
+    # Update config
+    sample_project_config.tech_stacks["typescript"] = "5.0"
+    await config_storage.save_project_config(sample_project_config)
 
     # Wait for indexing
     await wait_for_elasticsearch_indexing(es_client)
@@ -385,20 +370,8 @@ async def test_list_agents(config_storage, sample_agent_config):
 async def test_search_configs(config_storage, sample_project_config):
     """Test searching configurations."""
     # Save a project with unique name
-    unique_name = f"Unique Project Name {uuid4().hex[:8]}"
-    project = ProjectConfig(
-        id=sample_project_config.id,
-        name=unique_name,
-        github_org=sample_project_config.github_org,
-        github_repo=sample_project_config.github_repo,
-        tech_stacks=sample_project_config.tech_stacks,
-        pipelines=sample_project_config.pipelines,
-        testing=sample_project_config.testing,
-        environment_variables=sample_project_config.environment_variables,
-        mounted_commands=sample_project_config.mounted_commands,
-        mounted_subagents=sample_project_config.mounted_subagents,
-        metadata=sample_project_config.metadata,
-    )
+    project = sample_project_config
+    project.name = f"Unique Project Name {uuid4().hex[:8]}"
     await config_storage.save_project_config(project)
 
     # Wait for indexing
@@ -416,28 +389,13 @@ async def test_search_configs(config_storage, sample_project_config):
 async def test_config_version_history(config_storage, sample_project_config):
     """Test configuration version history tracking."""
     # Save initial version
-    current_config = sample_project_config
-    await config_storage.save_project_config(current_config)
+    await config_storage.save_project_config(sample_project_config)
     await wait_for_elasticsearch_indexing(es_client)
 
     # Update config multiple times
     for i in range(3):
-        updated_tech_stacks = dict(current_config.tech_stacks)
-        updated_tech_stacks[f"tool{i}"] = f"v{i}"
-        current_config = ProjectConfig(
-            id=current_config.id,
-            name=current_config.name,
-            github_org=current_config.github_org,
-            github_repo=current_config.github_repo,
-            tech_stacks=updated_tech_stacks,
-            pipelines=current_config.pipelines,
-            testing=current_config.testing,
-            environment_variables=current_config.environment_variables,
-            mounted_commands=current_config.mounted_commands,
-            mounted_subagents=current_config.mounted_subagents,
-            metadata=current_config.metadata,
-        )
-        await config_storage.save_project_config(current_config)
+        sample_project_config.tech_stacks[f"tool{i}"] = f"v{i}"
+        await config_storage.save_project_config(sample_project_config)
         await wait_for_elasticsearch_indexing(es_client)
 
     # Get version history
@@ -456,23 +414,9 @@ async def test_get_specific_config_version(config_storage, sample_project_config
     await config_storage.save_project_config(sample_project_config)
     await wait_for_elasticsearch_indexing(es_client)
 
-    # Update config by creating a new one with updated tech_stacks
-    updated_tech_stacks = dict(sample_project_config.tech_stacks)
-    updated_tech_stacks["new_tool"] = "1.0"
-    updated_config = ProjectConfig(
-        id=sample_project_config.id,
-        name=sample_project_config.name,
-        github_org=sample_project_config.github_org,
-        github_repo=sample_project_config.github_repo,
-        tech_stacks=updated_tech_stacks,
-        pipelines=sample_project_config.pipelines,
-        testing=sample_project_config.testing,
-        environment_variables=sample_project_config.environment_variables,
-        mounted_commands=sample_project_config.mounted_commands,
-        mounted_subagents=sample_project_config.mounted_subagents,
-        metadata=sample_project_config.metadata,
-    )
-    await config_storage.save_project_config(updated_config)
+    # Update config
+    sample_project_config.tech_stacks["new_tool"] = "1.0"
+    await config_storage.save_project_config(sample_project_config)
     await wait_for_elasticsearch_indexing(es_client)
 
     # Get version 1
@@ -552,25 +496,8 @@ async def test_concurrent_updates_increment_versions(config_storage, sample_proj
     # Perform multiple updates
     async def update_config(field_name: str):
         config = await config_storage.get_project_config(sample_project_config.id)
-        updated_tech_stacks = dict(config.tech_stacks)
-        updated_tech_stacks[field_name] = "1.0"
-        new_config = ProjectConfig(
-            id=config.id,
-            name=config.name,
-            github_org=config.github_org,
-            github_repo=config.github_repo,
-            tech_stacks=updated_tech_stacks,
-            pipelines=config.pipelines,
-            testing=config.testing,
-            environment_variables=config.environment_variables,
-            mounted_commands=config.mounted_commands,
-            mounted_subagents=config.mounted_subagents,
-            created_at=config.created_at,
-            updated_at=config.updated_at,
-            version=config.version,
-            metadata=config.metadata,
-        )
-        await config_storage.save_project_config(new_config)
+        config.tech_stacks[field_name] = "1.0"
+        await config_storage.save_project_config(config)
 
     # Run updates sequentially (concurrent updates would need optimistic locking)
     await update_config("tool1")
