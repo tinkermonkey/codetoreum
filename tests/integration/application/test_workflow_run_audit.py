@@ -22,6 +22,7 @@ from codetoreum.domain.events import (
     WorkflowCreatedEvent,
     WorkflowStageAdvancedEvent,
     WorkflowStartedEvent,
+    now_iso,
 )
 from codetoreum.domain.work_item import WorkItemPriority
 from codetoreum.ports.exceptions import ResourceNotFoundError
@@ -72,47 +73,48 @@ async def workflow_with_stages(event_store, ticket_system):
     # Create comprehensive event sequence
     events = [
         WorkflowCreatedEvent(
-            aggregate_id=workflow_id,
-            payload={
-                "work_item_id": work_item_id,
-                "template_id": "template-1",
-                "project_id": "project-1",
-                "stage_count": 3,
-            },
+            type="workflow.created",
+            timestamp=now_iso(),
+            source="domain",
+            workflow_id=workflow_id,
+            work_item_id=work_item_id,
+            pipeline_id="template-1",
+            stage_name="implementation",
         ),
         WorkflowStartedEvent(
-            aggregate_id=workflow_id,
-            payload={
-                "started_at": datetime.now(UTC).isoformat(),
-                "work_item_id": work_item_id,
-                "first_stage": "implementation",
-            },
+            type="workflow.started",
+            timestamp=now_iso(),
+            source="domain",
+            workflow_id=workflow_id,
+            work_item_id=work_item_id,
+            stage_name="implementation",
         ),
         WorkflowStageAdvancedEvent(
-            aggregate_id=workflow_id,
-            payload={
-                "from_stage": "implementation",
-                "to_stage": "review",
-                "stage_index": 1,
-                "advanced_at": datetime.now(UTC).isoformat(),
-            },
+            type="workflow.stage_advanced",
+            timestamp=now_iso(),
+            source="domain",
+            workflow_id=workflow_id,
+            work_item_id=work_item_id,
+            from_stage="implementation",
+            to_stage="review",
         ),
         WorkflowStageAdvancedEvent(
-            aggregate_id=workflow_id,
-            payload={
-                "from_stage": "review",
-                "to_stage": "merge",
-                "stage_index": 2,
-                "advanced_at": datetime.now(UTC).isoformat(),
-            },
+            type="workflow.stage_advanced",
+            timestamp=now_iso(),
+            source="domain",
+            workflow_id=workflow_id,
+            work_item_id=work_item_id,
+            from_stage="review",
+            to_stage="merge",
         ),
         WorkflowCompletedEvent(
-            aggregate_id=workflow_id,
-            payload={
-                "completed_at": datetime.now(UTC).isoformat(),
-                "work_item_id": work_item_id,
-                "duration_seconds": 300.0,
-            },
+            type="workflow.completed",
+            timestamp=now_iso(),
+            source="domain",
+            workflow_id=workflow_id,
+            work_item_id=work_item_id,
+            final_stage="merge",
+            completed_at=now_iso(),
         ),
     ]
 
@@ -148,21 +150,21 @@ async def workflow_with_many_events(event_store, ticket_system):
     # Create many events
     events = [
         WorkflowCreatedEvent(
-            aggregate_id=workflow_id,
-            payload={
-                "work_item_id": work_item_id,
-                "template_id": "template-1",
-                "project_id": "project-1",
-                "stage_count": 1,
-            },
+            type="workflow.created",
+            timestamp=now_iso(),
+            source="domain",
+            workflow_id=workflow_id,
+            work_item_id=work_item_id,
+            pipeline_id="template-1",
+            stage_name="stage-0",
         ),
         WorkflowStartedEvent(
-            aggregate_id=workflow_id,
-            payload={
-                "started_at": datetime.now(UTC).isoformat(),
-                "work_item_id": work_item_id,
-                "first_stage": "stage-1",
-            },
+            type="workflow.started",
+            timestamp=now_iso(),
+            source="domain",
+            workflow_id=workflow_id,
+            work_item_id=work_item_id,
+            stage_name="stage-0",
         ),
     ]
 
@@ -171,25 +173,26 @@ async def workflow_with_many_events(event_store, ticket_system):
     for i in range(146):
         events.append(
             WorkflowStageAdvancedEvent(
-                aggregate_id=workflow_id,
-                payload={
-                    "from_stage": f"stage-{i}",
-                    "to_stage": f"stage-{i + 1}",
-                    "stage_index": 0,
-                    "advanced_at": datetime.now(UTC).isoformat(),
-                },
+                type="workflow.stage_advanced",
+                timestamp=now_iso(),
+                source="domain",
+                workflow_id=workflow_id,
+                work_item_id=work_item_id,
+                from_stage=f"stage-{i}",
+                to_stage=f"stage-{i + 1}",
             )
         )
 
     # Complete workflow
     events.append(
         WorkflowCompletedEvent(
-            aggregate_id=workflow_id,
-            payload={
-                "completed_at": datetime.now(UTC).isoformat(),
-                "work_item_id": work_item_id,
-                "duration_seconds": 500.0,
-            },
+            type="workflow.completed",
+            timestamp=now_iso(),
+            source="domain",
+            workflow_id=workflow_id,
+            work_item_id=work_item_id,
+            final_stage=f"stage-146",
+            completed_at=now_iso(),
         )
     )
 
@@ -556,14 +559,22 @@ async def test_audit_stage_with_no_events(event_store, ticket_system):
     # Create workflow events
     events = [
         WorkflowCreatedEvent(
-            aggregate_id=workflow_id,
-            payload={
-                "work_item_id": work_item_id,
-                "template_id": "test-template",
-                "project_id": project_id,
-            },
+            type="workflow.created",
+            timestamp=now_iso(),
+            source="domain",
+            workflow_id=workflow_id,
+            work_item_id=work_item_id,
+            pipeline_id="test-template",
+            stage_name="stage-1",
         ),
-        WorkflowStartedEvent(aggregate_id=workflow_id, payload={}),
+        WorkflowStartedEvent(
+            type="workflow.started",
+            timestamp=now_iso(),
+            source="domain",
+            workflow_id=workflow_id,
+            work_item_id=work_item_id,
+            stage_name="stage-1",
+        ),
     ]
     await event_store.append(workflow_id, events)
 
