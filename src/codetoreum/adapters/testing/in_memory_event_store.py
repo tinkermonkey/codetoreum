@@ -76,11 +76,12 @@ class InMemoryEventStore(IEventStore):
         """
         Infer the aggregate type from an event.
 
-        Checks for specific event fields to determine the aggregate type:
+        Priority order for identifying the aggregate root:
         - If has workflow_id -> "Workflow"
-        - If has work_item_id (without workflow_id) -> "WorkItem"
         - If has execution_id -> "AgentExecution"
         - If has review_cycle_id -> "ReviewCycle"
+        - If has work_item_id -> "WorkItem"
+        - If has repair_cycle_id -> "RepairCycle"
         - Otherwise infer from class name by removing "Event" suffix
 
         Args:
@@ -89,15 +90,15 @@ class InMemoryEventStore(IEventStore):
         Returns:
             Inferred aggregate type
         """
-        if hasattr(event, "workflow_id") and getattr(event, "workflow_id", None):
+        if getattr(event, "workflow_id", None):
             return "Workflow"
-        if hasattr(event, "execution_id") and getattr(event, "execution_id", None):
+        if getattr(event, "execution_id", None):
             return "AgentExecution"
-        if hasattr(event, "review_cycle_id") and getattr(event, "review_cycle_id", None):
+        if getattr(event, "review_cycle_id", None):
             return "ReviewCycle"
-        if hasattr(event, "work_item_id") and getattr(event, "work_item_id", None):
+        if getattr(event, "work_item_id", None):
             return "WorkItem"
-        if hasattr(event, "repair_cycle_id") and getattr(event, "repair_cycle_id", None):
+        if getattr(event, "repair_cycle_id", None):
             return "RepairCycle"
 
         # Fallback: infer from class name
@@ -521,14 +522,10 @@ class InMemoryEventStore(IEventStore):
         """
         with self._lock:
             if aggregate_type:
-                # Filter by aggregate type
+                # Filter by aggregate type using canonical inference logic
                 stream_ids = []
                 for stream_id, events in self._streams.items():
-                    if (
-                        events
-                        and getattr(events[0], "aggregate_type", type(events[0]).__name__.replace("Event", ""))
-                        == aggregate_type
-                    ):
+                    if events and self._infer_aggregate_type(events[0]) == aggregate_type:
                         stream_ids.append(stream_id)
                 return stream_ids
 

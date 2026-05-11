@@ -897,10 +897,10 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
             aggregate_type = "AgentExecution"
         elif getattr(event, "review_cycle_id", None):
             aggregate_type = "ReviewCycle"
-        elif getattr(event, "repair_cycle_id", None):
-            aggregate_type = "RepairCycle"
         elif getattr(event, "work_item_id", None):
             aggregate_type = "WorkItem"
+        elif getattr(event, "repair_cycle_id", None):
+            aggregate_type = "RepairCycle"
         else:
             aggregate_type = type(event).__name__.replace("Event", "")
 
