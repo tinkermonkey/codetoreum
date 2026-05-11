@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import pytest
 
-from codetoreum.domain.events import WorkItemColumnChanged
+from codetoreum.domain.events import WorkItemColumnChangedEvent
 from codetoreum.infrastructure.simulation.bootstrap import (
     SimulationAdapters,
     SimulationApplicationBootstrap,
@@ -77,7 +77,7 @@ async def test_repair_cycle_handler_extracts_agents_from_column_template(
     adapters.repair_cycle.execute = capture_execute  # type: ignore
 
     # Publish a WorkItemColumnChanged event for an item entering Testing column
-    event = WorkItemColumnChanged(
+    event = WorkItemColumnChangedEvent(
         aggregate_id="work-item-1",
         payload={
             "work_item_id": "work-item-1",

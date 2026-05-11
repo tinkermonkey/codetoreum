@@ -13,10 +13,10 @@ from codetoreum.application.pipeline_manager import (
     PipelineStatus,
 )
 from codetoreum.domain.events import (
-    PipelineCompleted,
-    PipelineFailed,
-    PipelineStageCompleted,
-    PipelineStageStarted,
+    PipelineCompletedEvent,
+    PipelineFailedEvent,
+    PipelineStageCompletedEvent,
+    PipelineStageStartedEvent,
 )
 from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.pipeline_stage import StageStatus, StageType

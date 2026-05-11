@@ -17,8 +17,8 @@ from codetoreum.domain.events import CodetoreumEvent, now_iso
 
 
 @dataclass(frozen=True)
-class TestEvent(CodetoreumEvent):
-    """Test event for message broker testing."""
+class SampleEvent(CodetoreumEvent):
+    """Sample event for message broker testing."""
 
     detail: str = ""
 
@@ -27,7 +27,7 @@ def create_test_event(event_type: str = "TestEvent", payload: dict | None = None
     """Helper to create test domain events."""
     if payload is None:
         payload = {"test": "data"}
-    return TestEvent(
+    return SampleEvent(
         type="test.event",
         timestamp=now_iso(),
         source="test",

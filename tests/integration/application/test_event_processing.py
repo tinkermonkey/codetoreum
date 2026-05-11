@@ -19,18 +19,18 @@ from codetoreum.application.execution_service import ExecutionService
 from codetoreum.application.review_service import ReviewService
 from codetoreum.application.workflow_orchestrator import WorkflowOrchestrator
 from codetoreum.domain.events import (
-    ExecutionCompleted,
-    ExecutionFailed,
-    ExecutionInitialized,
-    ExecutionStarted,
-    ExecutionTimeout,
-    ReviewCycleApproved,
-    ReviewCycleCreated,
-    ReviewCycleEscalated,
-    ReviewCycleRejected,
-    ReviewFeedbackSubmitted,
-    ReviewIterationStarted,
-    WorkItemCreated,
+    ExecutionCompletedEvent,
+    ExecutionFailedEvent,
+    ExecutionInitializedEvent,
+    ExecutionStartedEvent,
+    ExecutionTimedOutEventEvent,
+    ReviewCycleApprovedEvent,
+    ReviewCycleCreatedEvent,
+    ReviewCycleEscalatedToHumanEvent,
+    ReviewCycleRejectedEvent,
+    ReviewCycleFeedbackSubmittedEvent,
+    ReviewCycleIterationStartedEvent,
+    WorkItemCreatedEvent,
 )
 from codetoreum.domain.review_cycle import ReviewDecision
 from codetoreum.domain.work_item import WorkItemPriority
@@ -278,7 +278,7 @@ class TestExecutionEventHandling:
 
     async def test_execution_initialized_event(self, event_registry):
         """Test handling ExecutionInitialized event."""
-        event = ExecutionInitialized(
+        event = ExecutionInitializedEvent(
             aggregate_id="exec-123",
             payload={
                 "agent_id": "agent-456",
@@ -301,7 +301,7 @@ class TestExecutionEventHandling:
     async def test_execution_started_event(self, event_registry):
         """Test handling ExecutionStarted event."""
         # First initialize
-        init_event = ExecutionInitialized(
+        init_event = ExecutionInitializedEvent(
             aggregate_id="exec-123",
             payload={
                 "agent_id": "agent-456",
@@ -314,7 +314,7 @@ class TestExecutionEventHandling:
         await event_registry.event_bus.publish(init_event)
 
         # Then start
-        start_event = ExecutionStarted(
+        start_event = ExecutionStartedEvent(
             aggregate_id="exec-123",
             payload={
                 "started_at": datetime.now(UTC).isoformat(),
@@ -330,9 +330,9 @@ class TestExecutionEventHandling:
         assert "exec-123" in execution_handler.get_active_executions()
 
     async def test_execution_completed_event(self, event_registry):
-        """Test handling ExecutionCompleted event."""
+        """Test handling ExecutionCompletedEvent event."""
         # Initialize and start
-        init_event = ExecutionInitialized(
+        init_event = ExecutionInitializedEvent(
             aggregate_id="exec-123",
             payload={
                 "agent_id": "agent-456",
@@ -344,7 +344,7 @@ class TestExecutionEventHandling:
         )
         await event_registry.event_bus.publish(init_event)
 
-        start_event = ExecutionStarted(
+        start_event = ExecutionStartedEvent(
             aggregate_id="exec-123",
             payload={
                 "started_at": datetime.now(UTC).isoformat(),
@@ -354,7 +354,7 @@ class TestExecutionEventHandling:
         await event_registry.event_bus.publish(start_event)
 
         # Complete
-        complete_event = ExecutionCompleted(
+        complete_event = ExecutionCompletedEvent(
             aggregate_id="exec-123",
             payload={
                 "completed_at": datetime.now(UTC).isoformat(),
@@ -377,7 +377,7 @@ class TestExecutionEventHandling:
     async def test_execution_failed_event(self, event_registry):
         """Test handling ExecutionFailed event."""
         # Initialize and start
-        init_event = ExecutionInitialized(
+        init_event = ExecutionInitializedEvent(
             aggregate_id="exec-123",
             payload={
                 "agent_id": "agent-456",
@@ -389,7 +389,7 @@ class TestExecutionEventHandling:
         )
         await event_registry.event_bus.publish(init_event)
 
-        start_event = ExecutionStarted(
+        start_event = ExecutionStartedEvent(
             aggregate_id="exec-123",
             payload={
                 "started_at": datetime.now(UTC).isoformat(),
@@ -399,7 +399,7 @@ class TestExecutionEventHandling:
         await event_registry.event_bus.publish(start_event)
 
         # Fail
-        fail_event = ExecutionFailed(
+        fail_event = ExecutionFailedEvent(
             aggregate_id="exec-123",
             payload={
                 "failed_at": datetime.now(UTC).isoformat(),
@@ -418,9 +418,9 @@ class TestExecutionEventHandling:
         assert metrics["failure_rate"] == 100.0
 
     async def test_execution_timeout_event(self, event_registry):
-        """Test handling ExecutionTimeout event."""
+        """Test handling ExecutionTimedOutEventEvent event."""
         # Initialize and start
-        init_event = ExecutionInitialized(
+        init_event = ExecutionInitializedEvent(
             aggregate_id="exec-123",
             payload={
                 "agent_id": "agent-456",
@@ -432,7 +432,7 @@ class TestExecutionEventHandling:
         )
         await event_registry.event_bus.publish(init_event)
 
-        start_event = ExecutionStarted(
+        start_event = ExecutionStartedEvent(
             aggregate_id="exec-123",
             payload={
                 "started_at": datetime.now(UTC).isoformat(),
@@ -442,7 +442,7 @@ class TestExecutionEventHandling:
         await event_registry.event_bus.publish(start_event)
 
         # Timeout
-        timeout_event = ExecutionTimeout(
+        timeout_event = ExecutionTimedOutEventEvent(
             aggregate_id="exec-123",
             payload={
                 "timeout_at": datetime.now(UTC).isoformat(),
@@ -465,7 +465,7 @@ class TestReviewEventHandling:
 
     async def test_review_cycle_created_event(self, event_registry):
         """Test handling ReviewCycleCreated event."""
-        event = ReviewCycleCreated(
+        event = ReviewCycleCreatedEvent(
             aggregate_id="review-123",
             payload={
                 "workflow_id": "workflow-001",
@@ -488,7 +488,7 @@ class TestReviewEventHandling:
     async def test_review_iteration_started_event(self, event_registry):
         """Test handling ReviewIterationStarted event."""
         # Create review first
-        create_event = ReviewCycleCreated(
+        create_event = ReviewCycleCreatedEvent(
             aggregate_id="review-123",
             payload={
                 "workflow_id": "workflow-001",
@@ -501,7 +501,7 @@ class TestReviewEventHandling:
         await event_registry.event_bus.publish(create_event)
 
         # Start iteration
-        iteration_event = ReviewIterationStarted(
+        iteration_event = ReviewCycleIterationStartedEvent(
             aggregate_id="review-123",
             payload={
                 "iteration_number": 1,
@@ -518,7 +518,7 @@ class TestReviewEventHandling:
     async def test_review_cycle_approved_event(self, event_registry):
         """Test handling ReviewCycleApproved event."""
         # Create review
-        create_event = ReviewCycleCreated(
+        create_event = ReviewCycleCreatedEvent(
             aggregate_id="review-123",
             payload={
                 "workflow_id": "workflow-001",
@@ -531,7 +531,7 @@ class TestReviewEventHandling:
         await event_registry.event_bus.publish(create_event)
 
         # Approve
-        approve_event = ReviewCycleApproved(
+        approve_event = ReviewCycleApprovedEvent(
             aggregate_id="review-123",
             payload={
                 "total_iterations": 2,
@@ -551,7 +551,7 @@ class TestReviewEventHandling:
     async def test_review_cycle_rejected_event(self, event_registry):
         """Test handling ReviewCycleRejected event."""
         # Create review
-        create_event = ReviewCycleCreated(
+        create_event = ReviewCycleCreatedEvent(
             aggregate_id="review-123",
             payload={
                 "workflow_id": "workflow-001",
@@ -564,7 +564,7 @@ class TestReviewEventHandling:
         await event_registry.event_bus.publish(create_event)
 
         # Reject (max iterations reached)
-        reject_event = ReviewCycleRejected(
+        reject_event = ReviewCycleRejectedEvent(
             aggregate_id="review-123",
             payload={
                 "rejected_at": datetime.now(UTC).isoformat(),
@@ -584,7 +584,7 @@ class TestReviewEventHandling:
     async def test_review_cycle_escalated_event(self, event_registry):
         """Test handling ReviewCycleEscalated event."""
         # Create review
-        create_event = ReviewCycleCreated(
+        create_event = ReviewCycleCreatedEvent(
             aggregate_id="review-123",
             payload={
                 "workflow_id": "workflow-001",
@@ -597,7 +597,7 @@ class TestReviewEventHandling:
         await event_registry.event_bus.publish(create_event)
 
         # Escalate
-        escalate_event = ReviewCycleEscalated(
+        escalate_event = ReviewCycleEscalatedToHumanEvent(
             aggregate_id="review-123",
             payload={
                 "reason": "Reviewer requested human review",
@@ -621,7 +621,7 @@ class TestEndToEndEventFlow:
     async def test_full_execution_cycle(self, event_registry):
         """Test complete execution lifecycle event flow."""
         # Work item created
-        work_item_event = WorkItemCreated(
+        work_item_event = WorkItemCreatedEvent(
             aggregate_id="work-123",
             payload={
                 "title": "Test work item",
@@ -636,7 +636,7 @@ class TestEndToEndEventFlow:
         await event_registry.event_bus.publish(work_item_event)
 
         # Execution initialized
-        init_event = ExecutionInitialized(
+        init_event = ExecutionInitializedEvent(
             aggregate_id="exec-123",
             payload={
                 "agent_id": "agent-456",
@@ -649,7 +649,7 @@ class TestEndToEndEventFlow:
         await event_registry.event_bus.publish(init_event)
 
         # Execution started
-        start_event = ExecutionStarted(
+        start_event = ExecutionStartedEvent(
             aggregate_id="exec-123",
             payload={
                 "started_at": datetime.now(UTC).isoformat(),
@@ -659,7 +659,7 @@ class TestEndToEndEventFlow:
         await event_registry.event_bus.publish(start_event)
 
         # Execution completed
-        complete_event = ExecutionCompleted(
+        complete_event = ExecutionCompletedEvent(
             aggregate_id="exec-123",
             payload={
                 "completed_at": datetime.now(UTC).isoformat(),
@@ -683,7 +683,7 @@ class TestEndToEndEventFlow:
     async def test_full_review_cycle_approved(self, event_registry):
         """Test complete review cycle ending in approval."""
         # Review created
-        create_event = ReviewCycleCreated(
+        create_event = ReviewCycleCreatedEvent(
             aggregate_id="review-123",
             payload={
                 "workflow_id": "workflow-001",
@@ -696,7 +696,7 @@ class TestEndToEndEventFlow:
         await event_registry.event_bus.publish(create_event)
 
         # First iteration
-        iteration_event = ReviewIterationStarted(
+        iteration_event = ReviewCycleIterationStartedEvent(
             aggregate_id="review-123",
             payload={
                 "iteration_number": 1,
@@ -720,7 +720,7 @@ class TestEndToEndEventFlow:
         await event_registry.event_bus.publish(feedback_event)
 
         # Approved
-        approve_event = ReviewCycleApproved(
+        approve_event = ReviewCycleApprovedEvent(
             aggregate_id="review-123",
             payload={
                 "total_iterations": 1,
@@ -742,7 +742,7 @@ class TestEndToEndEventFlow:
     async def test_full_review_cycle_with_revisions(self, event_registry):
         """Test review cycle with multiple iterations."""
         # Review created
-        create_event = ReviewCycleCreated(
+        create_event = ReviewCycleCreatedEvent(
             aggregate_id="review-123",
             payload={
                 "workflow_id": "workflow-001",
@@ -755,7 +755,7 @@ class TestEndToEndEventFlow:
         await event_registry.event_bus.publish(create_event)
 
         # Iteration 1 - rejected
-        iteration_1 = ReviewIterationStarted(
+        iteration_1 = ReviewCycleIterationStartedEvent(
             aggregate_id="review-123",
             payload={
                 "iteration_number": 1,
@@ -778,7 +778,7 @@ class TestEndToEndEventFlow:
         await event_registry.event_bus.publish(feedback_1)
 
         # Iteration 2 - approved
-        iteration_2 = ReviewIterationStarted(
+        iteration_2 = ReviewCycleIterationStartedEvent(
             aggregate_id="review-123",
             payload={
                 "iteration_number": 2,
@@ -800,7 +800,7 @@ class TestEndToEndEventFlow:
         )
         await event_registry.event_bus.publish(feedback_2)
 
-        approve_event = ReviewCycleApproved(
+        approve_event = ReviewCycleApprovedEvent(
             aggregate_id="review-123",
             payload={
                 "total_iterations": 2,
@@ -822,7 +822,7 @@ class TestEndToEndEventFlow:
         """Test that event bus tracks statistics correctly."""
         # Publish multiple events
         events = [
-            WorkItemCreated(
+            WorkItemCreatedEvent(
                 aggregate_id="work-1",
                 payload={
                     "title": "Test 1",
@@ -834,7 +834,7 @@ class TestEndToEndEventFlow:
                     "external_url": "https://github.com/test/repo/issues/1",
                 },
             ),
-            ExecutionInitialized(
+            ExecutionInitializedEvent(
                 aggregate_id="exec-1",
                 payload={
                     "agent_id": "agent-1",
@@ -844,7 +844,7 @@ class TestEndToEndEventFlow:
                     "model": "claude-3-5-sonnet-20241022",
                 },
             ),
-            ReviewCycleCreated(
+            ReviewCycleCreatedEvent(
                 aggregate_id="review-1",
                 payload={
                     "workflow_id": "wf-1",
@@ -889,7 +889,7 @@ class TestEventHandlerErrorHandling:
         handler = FailingHandler()
         event_bus.register_handler(handler)
 
-        event = WorkItemCreated(
+        event = WorkItemCreatedEvent(
             aggregate_id="work-1",
             payload={
                 "title": "Test",
@@ -929,7 +929,7 @@ class TestEventHandlerErrorHandling:
         handler = AlwaysFailingHandler()
         event_bus.register_handler(handler)
 
-        event = WorkItemCreated(
+        event = WorkItemCreatedEvent(
             aggregate_id="work-1",
             payload={
                 "title": "Test",

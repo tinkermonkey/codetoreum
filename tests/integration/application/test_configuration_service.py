@@ -16,12 +16,12 @@ from codetoreum.adapters.testing.in_memory_config_store import InMemoryConfigSto
 from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
 from codetoreum.application.configuration_service import ConfigurationService
 from codetoreum.domain.events import (
-    AgentConfigUpdated,
-    CommandMounted,
-    EnvironmentVariableChanged,
-    PipelineConfigUpdated,
-    ProjectConfigUpdated,
-    SubAgentMounted,
+    AgentConfigUpdatedEvent,
+    CommandMountedEvent,
+    EnvironmentVariableChangedEvent,
+    PipelineConfigUpdatedEvent,
+    ProjectConfigUpdatedEvent,
+    SubAgentMountedEvent,
 )
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.ports.input.config_command import (
@@ -139,7 +139,7 @@ class TestProjectConfigUpdate:
         # Verify event emitted
         events = await event_store.get_events(sample_project.id)
         assert len(events) == 1
-        assert isinstance(events[0], ProjectConfigUpdated)
+        assert isinstance(events[0], ProjectConfigUpdatedEvent)
         assert events[0].payload["version"] == 2
         assert events[0].payload["updated_by"] == "user-1"
 
@@ -206,7 +206,7 @@ class TestAgentConfigUpdate:
         # Verify event emitted
         events = await event_store.get_events(f"{sample_project.id}:test-agent")
         assert len(events) == 1
-        assert isinstance(events[0], AgentConfigUpdated)
+        assert isinstance(events[0], AgentConfigUpdatedEvent)
 
     @pytest.mark.asyncio
     async def test_update_agent_config_creates_if_not_exists(self, config_service, sample_project, config_store):
@@ -266,7 +266,7 @@ class TestPipelineConfigUpdate:
         # Verify event emitted
         events = await event_store.get_events(f"{sample_project.id}:test-pipeline")
         assert len(events) == 1
-        assert isinstance(events[0], PipelineConfigUpdated)
+        assert isinstance(events[0], PipelineConfigUpdatedEvent)
 
 
 class TestEnvironmentVariables:
@@ -297,7 +297,7 @@ class TestEnvironmentVariables:
         # Verify event emitted
         events = await event_store.get_events(sample_project.id)
         assert len(events) == 1
-        assert isinstance(events[0], EnvironmentVariableChanged)
+        assert isinstance(events[0], EnvironmentVariableChangedEvent)
         assert events[0].payload["action"] == "added"
 
     @pytest.mark.asyncio
@@ -421,7 +421,7 @@ class TestCommandMounting:
         # Verify event emitted
         events = await event_store.get_events(sample_project.id)
         assert len(events) == 1
-        assert isinstance(events[0], CommandMounted)
+        assert isinstance(events[0], CommandMountedEvent)
 
     @pytest.mark.asyncio
     async def test_mount_command_file_not_found(self, config_service, sample_project):
@@ -525,7 +525,7 @@ class TestSubAgentMounting:
         # Verify event emitted
         events = await event_store.get_events(sample_project.id)
         assert len(events) == 1
-        assert isinstance(events[0], SubAgentMounted)
+        assert isinstance(events[0], SubAgentMountedEvent)
 
     @pytest.mark.asyncio
     async def test_mount_subagent_validation_error(self, config_service, sample_project):

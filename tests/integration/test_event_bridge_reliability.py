@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from codetoreum.domain.events import BoardReconciled, WorkItemColumnChanged
+from codetoreum.domain.events import BoardReconciledEvent, WorkItemColumnChangedEvent
 from codetoreum.infrastructure.dead_letter_queue import DeadLetterQueue, FailureReason
 from codetoreum.infrastructure.event_bus import EventBus, EventBusError
 
@@ -36,7 +36,7 @@ class TestEventBridgeErrorHandling:
         event_bus.publish = AsyncMock(side_effect=Exception("Network error"))
 
         # Create domain event
-        domain_event = WorkItemColumnChanged(
+        domain_event = WorkItemColumnChangedEvent(
             aggregate_id="work-item-1",
             payload={
                 "work_item_id": "work-item-1",
@@ -155,7 +155,7 @@ class TestEventBridgeErrorHandling:
     async def test_board_reconciled_event_publishing_failure_is_queued(self, event_bus, dead_letter_queue):
         """Test that BoardReconciled event publishing failures are captured."""
         # Create board reconciled event
-        domain_event = BoardReconciled(
+        domain_event = BoardReconciledEvent(
             aggregate_id="board-1",
             payload={
                 "board_id": "board-1",

@@ -13,10 +13,10 @@ import pytest
 from codetoreum.adapters.testing import InMemoryEventStore, InMemoryTicketAdapter
 from codetoreum.application.workflow_run_query_service import WorkflowRunQueryService
 from codetoreum.domain.events import (
-    WorkflowCompleted,
-    WorkflowCreated,
-    WorkflowFailed,
-    WorkflowStarted,
+    WorkflowCompletedEvent,
+    WorkflowCreatedEvent,
+    WorkflowFailedEvent,
+    WorkflowStartedEvent,
 )
 from codetoreum.domain.work_item import WorkItemPriority
 from codetoreum.ports.exceptions import ResourceNotFoundError
@@ -59,7 +59,7 @@ async def sample_workflow_events(event_store):
 
     # Create workflow events
     events = [
-        WorkflowCreated(
+        WorkflowCreatedEvent(
             aggregate_id=workflow_id,
             payload={
                 "work_item_id": work_item_id,
@@ -68,7 +68,7 @@ async def sample_workflow_events(event_store):
                 "stage_count": 3,
             },
         ),
-        WorkflowStarted(
+        WorkflowStartedEvent(
             aggregate_id=workflow_id,
             payload={
                 "started_at": datetime.now(UTC).isoformat(),
@@ -76,7 +76,7 @@ async def sample_workflow_events(event_store):
                 "first_stage": "stage-1",
             },
         ),
-        WorkflowCompleted(
+        WorkflowCompletedEvent(
             aggregate_id=workflow_id,
             payload={
                 "completed_at": datetime.now(UTC).isoformat(),
@@ -107,7 +107,7 @@ async def multiple_workflows(event_store):
         project_id = "project-1" if i < 3 else "project-2"
 
         events = [
-            WorkflowCreated(
+            WorkflowCreatedEvent(
                 aggregate_id=workflow_id,
                 payload={
                     "work_item_id": work_item_id,
@@ -116,7 +116,7 @@ async def multiple_workflows(event_store):
                     "stage_count": 2,
                 },
             ),
-            WorkflowStarted(
+            WorkflowStartedEvent(
                 aggregate_id=workflow_id,
                 payload={
                     "started_at": datetime.now(UTC).isoformat(),
@@ -129,7 +129,7 @@ async def multiple_workflows(event_store):
         # Complete some workflows, fail others
         if i < 2:
             events.append(
-                WorkflowCompleted(
+                WorkflowCompletedEvent(
                     aggregate_id=workflow_id,
                     payload={
                         "completed_at": datetime.now(UTC).isoformat(),
@@ -140,7 +140,7 @@ async def multiple_workflows(event_store):
             )
         elif i == 2:
             events.append(
-                WorkflowFailed(
+                WorkflowFailedEvent(
                     aggregate_id=workflow_id,
                     payload={
                         "failed_at": datetime.now(UTC).isoformat(),
