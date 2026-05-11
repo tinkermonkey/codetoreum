@@ -5,7 +5,7 @@ testing.coveragerequirement.domain-layer-100-coverage:
   type: coveragerequirement
   layer_id: testing
   name: Domain Layer 100% Coverage
-  description: All domain model classes (95+), domain events (165 classes), and
+  description: All domain model classes (95+), domain events (151 CodetoreumEvent subclasses), and
     domain services must achieve 100% code coverage; no external dependencies
     allowed in domain layer
   attributes:

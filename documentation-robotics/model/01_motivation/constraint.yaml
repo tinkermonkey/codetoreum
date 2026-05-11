@@ -68,7 +68,7 @@ motivation.constraint.domain-events-must-be-immutable:
     provenance: extracted
     locations:
       - file: src/codetoreum/domain/events/
-        symbol: DomainEvent
+        symbol: CodetoreumEvent
   metadata:
     created_at: 2026-05-08T20:44:43.357Z
     updated_at: 2026-05-08T20:44:43.357Z

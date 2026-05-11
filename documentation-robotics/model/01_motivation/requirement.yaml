@@ -72,7 +72,7 @@ motivation.requirement.complete-audit-trail-for-all-state-changes:
     provenance: extracted
     locations:
       - file: src/codetoreum/domain/events/
-        symbol: DomainEvent
+        symbol: CodetoreumEvent
   metadata:
     created_at: 2026-05-08T20:44:27.644Z
     updated_at: 2026-05-08T20:44:27.644Z

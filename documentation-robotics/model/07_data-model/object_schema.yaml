@@ -1183,7 +1183,7 @@ data-model.objectschema.board-events:
     old_position, new_position), BoardReconciledEvent (columns_added,
     columns_removed, items_moved), ColumnSLAExceededEvent (column_name,
     elapsed_seconds, sla_threshold_seconds, entered_at). All extend
-    BaseDomainEvent with event_id and occurred_at."
+    CodetoreumEvent with event_id and occurred_at."
   attributes:
     type: object
     properties:
@@ -1230,7 +1230,7 @@ data-model.objectschema.branch-events:
     (project_id, issue_id, action, branch_name, confidence, reason,
     parent_issue_id, resolution_strategy), BranchReusedEvent (same fields for
     branch reuse decisions), BranchResolutionCreatedEvent (branch creation
-    confirmation). All frozen dataclasses extending BaseDomainEvent."
+    confirmation). All frozen dataclasses extending CodetoreumEvent."
   attributes:
     type: object
     properties:
