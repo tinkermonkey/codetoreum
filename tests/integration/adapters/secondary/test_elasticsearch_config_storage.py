@@ -4,6 +4,8 @@ These tests use testcontainers to spin up a real Elasticsearch instance.
 """
 
 import asyncio
+import dataclasses
+from types import MappingProxyType
 from uuid import uuid4
 
 import pytest
@@ -222,9 +224,14 @@ async def test_update_project_config_versioning(config_storage, sample_project_c
     # Wait for indexing
     await wait_for_elasticsearch_indexing(es_client)
 
-    # Update config
-    sample_project_config.tech_stacks["typescript"] = "5.0"
-    await config_storage.save_project_config(sample_project_config)
+    # Update config with new tech_stacks
+    updated_tech_stacks = dict(sample_project_config.tech_stacks)
+    updated_tech_stacks["typescript"] = "5.0"
+    updated_config = dataclasses.replace(
+        sample_project_config,
+        tech_stacks=MappingProxyType(updated_tech_stacks),
+    )
+    await config_storage.save_project_config(updated_config)
 
     # Wait for indexing
     await wait_for_elasticsearch_indexing(es_client)
@@ -369,9 +376,9 @@ async def test_list_agents(config_storage, sample_agent_config):
 @pytest.mark.asyncio
 async def test_search_configs(config_storage, sample_project_config):
     """Test searching configurations."""
-    # Save a project with unique name
-    project = sample_project_config
-    project.name = f"Unique Project Name {uuid4().hex[:8]}"
+    # Create a project with unique name
+    unique_name = f"Unique Project Name {uuid4().hex[:8]}"
+    project = dataclasses.replace(sample_project_config, name=unique_name)
     await config_storage.save_project_config(project)
 
     # Wait for indexing
@@ -393,9 +400,15 @@ async def test_config_version_history(config_storage, sample_project_config):
     await wait_for_elasticsearch_indexing(es_client)
 
     # Update config multiple times
+    current_config = sample_project_config
     for i in range(3):
-        sample_project_config.tech_stacks[f"tool{i}"] = f"v{i}"
-        await config_storage.save_project_config(sample_project_config)
+        updated_tech_stacks = dict(current_config.tech_stacks)
+        updated_tech_stacks[f"tool{i}"] = f"v{i}"
+        current_config = dataclasses.replace(
+            current_config,
+            tech_stacks=MappingProxyType(updated_tech_stacks),
+        )
+        await config_storage.save_project_config(current_config)
         await wait_for_elasticsearch_indexing(es_client)
 
     # Get version history
@@ -415,8 +428,13 @@ async def test_get_specific_config_version(config_storage, sample_project_config
     await wait_for_elasticsearch_indexing(es_client)
 
     # Update config
-    sample_project_config.tech_stacks["new_tool"] = "1.0"
-    await config_storage.save_project_config(sample_project_config)
+    updated_tech_stacks = dict(sample_project_config.tech_stacks)
+    updated_tech_stacks["new_tool"] = "1.0"
+    updated_config = dataclasses.replace(
+        sample_project_config,
+        tech_stacks=MappingProxyType(updated_tech_stacks),
+    )
+    await config_storage.save_project_config(updated_config)
     await wait_for_elasticsearch_indexing(es_client)
 
     # Get version 1
@@ -496,8 +514,13 @@ async def test_concurrent_updates_increment_versions(config_storage, sample_proj
     # Perform multiple updates
     async def update_config(field_name: str):
         config = await config_storage.get_project_config(sample_project_config.id)
-        config.tech_stacks[field_name] = "1.0"
-        await config_storage.save_project_config(config)
+        updated_tech_stacks = dict(config.tech_stacks)
+        updated_tech_stacks[field_name] = "1.0"
+        updated_config = dataclasses.replace(
+            config,
+            tech_stacks=MappingProxyType(updated_tech_stacks),
+        )
+        await config_storage.save_project_config(updated_config)
 
     # Run updates sequentially (concurrent updates would need optimistic locking)
     await update_config("tool1")

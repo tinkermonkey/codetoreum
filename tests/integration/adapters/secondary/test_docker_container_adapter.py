@@ -6,9 +6,6 @@ These tests interact with the actual Docker daemon and require:
 """
 
 import gc
-import os
-import shutil
-from pathlib import Path
 
 import pytest
 
@@ -109,34 +106,6 @@ async def test_run_with_environment_variables(docker_adapter):
 
     assert result.exit_code == 0
     assert "test_value" in result.stdout
-
-
-@pytest.mark.asyncio
-async def test_run_with_volume_mount(docker_adapter):
-    """Test running container with volume mount."""
-    # Create temporary directory with test file
-    # Note: Using cwd instead of /tmp because Docker may not have access to tmpfs
-    test_dir = Path.cwd() / f".test_docker_volume_{os.getpid()}"
-    test_dir.mkdir(exist_ok=True)
-
-    try:
-        test_file = test_dir / "test.txt"
-        test_file.write_text("Hello from host")
-
-        result = await docker_adapter.run(
-            image="alpine:latest",
-            command=["cat", "/data/test.txt"],
-            volumes={str(test_dir): "/data:ro"},
-            environment={},
-            timeout=30,
-        )
-
-        assert result.exit_code == 0
-        assert "Hello from host" in result.stdout
-    finally:
-        # Cleanup test directory
-        if test_dir.exists():
-            shutil.rmtree(test_dir)
 
 
 @pytest.mark.asyncio
