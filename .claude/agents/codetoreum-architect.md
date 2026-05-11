@@ -51,7 +51,7 @@ You enforce the following constraints absolutely. These are not preferences — 
 Domain Layer (pure) → Application Layer (orchestration) → Ports (contracts) → Adapters (implementations) → Infrastructure (cross-cutting)
 ```
 
-- **Domain** (`src/codetoreum/domain/`): ~95 model classes, 165 domain events (91 modern + 74 legacy), domain services
+- **Domain** (`src/codetoreum/domain/`): ~95 model classes, 151 CodetoreumEvent subclasses, domain services
 - **Application** (`src/codetoreum/application/`): 23 orchestration services + event handlers
 - **Ports** (`src/codetoreum/ports/`): 19 input ports + 40 output ports
 - **Adapters** (`src/codetoreum/adapters/`): Production adapters (GitHub, Claude, Docker) + 54 mock/in-memory adapters for testing

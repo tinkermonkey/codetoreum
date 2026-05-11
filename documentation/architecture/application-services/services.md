@@ -829,7 +829,7 @@ async def search_work_items(
 async def get_work_item_history(
     self,
     work_item_id: str,
-) -> list[DomainEvent]:
+) -> list[CodetoreumEvent]:
     """Retrieve event history."""
 
 async def count_work_items(
@@ -1127,7 +1127,7 @@ async def search_workflow_runs(
 ```python
 async def validate(
     self,
-    events: list[DomainEvent],
+    events: list[CodetoreumEvent],
     pattern: str,
 ) -> ValidationResult:
     """Check event sequence against pattern."""
@@ -1137,14 +1137,14 @@ def _parse_pattern(self, pattern: str) -> list[PatternElement]:
 
 def _matches_pattern_element(
     self,
-    event: DomainEvent,
+    event: CodetoreumEvent,
     element: PatternElement,
 ) -> bool:
     """Validate element against pattern."""
 
 async def create_audit_validation_result(
     self,
-    events: list[DomainEvent],
+    events: list[CodetoreumEvent],
     validation: ValidationResult,
 ) -> AuditRecord:
     """Generate audit trail of validation."""

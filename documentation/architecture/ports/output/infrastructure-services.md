@@ -26,12 +26,12 @@ class IEventEmitter(ABC):
     """Event publication interface."""
 
     @abstractmethod
-    async def emit(self, event_type: str, event: DomainEvent) -> None:
+    async def emit(self, event_type: str, event: CodetoreumEvent) -> None:
         """Publish domain event."""
         pass
 
     @abstractmethod
-    async def emit_batch(self, events: list[DomainEvent]) -> None:
+    async def emit_batch(self, events: list[CodetoreumEvent]) -> None:
         """Publish multiple events atomically."""
         pass
 ```
@@ -47,19 +47,19 @@ class IEventStore(ABC):
     """
 
     @abstractmethod
-    async def append(self, stream_id: str, events: list[DomainEvent], expected_version: int | None = None) -> None:
+    async def append(self, stream_id: str, events: list[CodetoreumEvent], expected_version: int | None = None) -> None:
         """Append events to a stream with optimistic concurrency control."""
 
     @abstractmethod
-    async def get_events(self, stream_id: str, from_version: int = 0, to_version: int | None = None) -> list[DomainEvent]:
+    async def get_events(self, stream_id: str, from_version: int = 0, to_version: int | None = None) -> list[CodetoreumEvent]:
         """Get events from a stream by version range."""
 
     @abstractmethod
-    async def get_events_since(self, since: datetime, stream_id: str | None = None) -> list[DomainEvent]:
+    async def get_events_since(self, since: datetime, stream_id: str | None = None) -> list[CodetoreumEvent]:
         """Get events since a timestamp."""
 
     @abstractmethod
-    async def stream_events(self, stream_id: str | None = None, from_version: int = 0) -> AsyncIterator[DomainEvent]:
+    async def stream_events(self, stream_id: str | None = None, from_version: int = 0) -> AsyncIterator[CodetoreumEvent]:
         """Stream events in real-time."""
 
     @abstractmethod
@@ -87,15 +87,15 @@ class IEventStore(ABC):
         """Get all stream IDs, optionally filtered by aggregate type."""
 
     @abstractmethod
-    async def get_events_by_type(self, event_type: str, since: datetime | None = None, limit: int = 1000) -> list[DomainEvent]:
+    async def get_events_by_type(self, event_type: str, since: datetime | None = None, limit: int = 1000) -> list[CodetoreumEvent]:
         """Get events by event type."""
 
     @abstractmethod
-    async def get_events_by_correlation_id(self, correlation_id: str) -> list[DomainEvent]:
+    async def get_events_by_correlation_id(self, correlation_id: str) -> list[CodetoreumEvent]:
         """Get all events with a specific correlation ID."""
 
     @abstractmethod
-    async def replay_events(self, stream_id: str, from_version: int = 0, to_version: int | None = None) -> AsyncIterator[DomainEvent]:
+    async def replay_events(self, stream_id: str, from_version: int = 0, to_version: int | None = None) -> AsyncIterator[CodetoreumEvent]:
         """Replay events from a stream for debugging/recovery."""
 
     @abstractmethod
@@ -223,7 +223,7 @@ class IFailedEventStore(ABC):
     """Dead letter queue for failed events."""
 
     @abstractmethod
-    async def store_failed_event(self, event: DomainEvent, error: str, context: dict[str, Any]) -> None:
+    async def store_failed_event(self, event: CodetoreumEvent, error: str, context: dict[str, Any]) -> None:
         """Store failed event."""
         pass
 
@@ -272,18 +272,18 @@ class ITracer(ABC):
 | Method | Parameters | Return Type | Description |
 |---|---|---|---|
 | `append()` | `stream_id, events, expected_version` | `None` | Append events to stream with optimistic concurrency |
-| `get_events()` | `stream_id, from_version, to_version` | `list[DomainEvent]` | Get events by version range |
-| `get_events_since()` | `since, stream_id` | `list[DomainEvent]` | Get events since timestamp |
-| `stream_events()` | `stream_id, from_version` | `AsyncIterator[DomainEvent]` | Stream events in real-time |
+| `get_events()` | `stream_id, from_version, to_version` | `list[CodetoreumEvent]` | Get events by version range |
+| `get_events_since()` | `since, stream_id` | `list[CodetoreumEvent]` | Get events since timestamp |
+| `stream_events()` | `stream_id, from_version` | `AsyncIterator[CodetoreumEvent]` | Stream events in real-time |
 | `get_stream_version()` | `stream_id` | `int` | Get current version of stream |
 | `stream_exists()` | `stream_id` | `bool` | Check if stream exists |
 | `save_snapshot()` | `stream_id, version, snapshot` | `None` | Save snapshot for faster replay |
 | `get_latest_snapshot()` | `stream_id` | `dict[str, Any] \| None` | Get most recent snapshot |
 | `delete_stream()` | `stream_id` | `None` | Delete an event stream |
 | `get_all_stream_ids()` | `aggregate_type` | `list[str]` | Get all stream IDs optionally filtered by type |
-| `get_events_by_type()` | `event_type, since, limit` | `list[DomainEvent]` | Get events by event type |
-| `get_events_by_correlation_id()` | `correlation_id` | `list[DomainEvent]` | Get events with specific correlation ID |
-| `replay_events()` | `stream_id, from_version, to_version` | `AsyncIterator[DomainEvent]` | Replay events for debugging/recovery |
+| `get_events_by_type()` | `event_type, since, limit` | `list[CodetoreumEvent]` | Get events by event type |
+| `get_events_by_correlation_id()` | `correlation_id` | `list[CodetoreumEvent]` | Get events with specific correlation ID |
+| `replay_events()` | `stream_id, from_version, to_version` | `AsyncIterator[CodetoreumEvent]` | Replay events for debugging/recovery |
 | `get_statistics()` | none | `dict[str, Any]` | Get event store statistics |
 
 ### Method Summary Table
