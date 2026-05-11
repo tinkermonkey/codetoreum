@@ -484,21 +484,24 @@ def create_config() -> SimulationConfig:
 ### Step 2: Define Scenario Logic
 
 ```python
+from codetoreum.domain.events import WorkflowStartedEvent, now_iso
+
 async def run_scenario(runner: SimulationRunner) -> None:
     # Simulate events
-    event = DomainEvent(
-        aggregate_id="ITEM-1",
-        aggregate_type="WorkItem",
-        payload={"status": "started"}
+    event = WorkflowStartedEvent(
+        type="workflow.started",
+        timestamp=now_iso(),
+        source="test",
+        workflow_id="workflow-1",
+        work_item_id="ITEM-1",
     )
-    event.event_type = "WorkflowStarted"
     runner.capture_event(event)
 
     # Advance time
     await runner.advance_time(timedelta(minutes=5))
 
     # Make assertions
-    runner.assert_event_occurred("WorkflowStarted")
+    runner.assert_event_occurred("WorkflowStartedEvent")
 ```
 
 ### Step 3: Create Test

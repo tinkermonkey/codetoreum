@@ -15,7 +15,12 @@ from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
 
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events import (
+    WorkItemColumnChangedEvent,
+    WorkflowStartedEvent,
+    WorkflowCompletedEvent,
+    now_iso,
+)
 from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 from codetoreum.ports.input.audit_query import AuditEventFilters
@@ -50,55 +55,43 @@ async def _create_test_causal_chain(event_store):
     base_time = datetime(2026, 3, 20, 10, 0, 0, tzinfo=UTC)
 
     # Root event: WorkItemColumnChanged (no causation)
-    root_event = DomainEvent(
-        aggregate_id="WI-001",
-        aggregate_type="WorkItem",
-        payload={
-            "work_item_id": "WI-001",
-            "from_column": "TODO",
-            "to_column": "IN_PROGRESS",
-        },
-        user_id="system",
-        correlation_id=uuid4(),
-        causation_id=None,  # Root has no causation
-        event_id=uuid4(),
-        occurred_at=base_time,
+    correlation_id = str(uuid4())
+    root_event = WorkItemColumnChangedEvent(
+        type="workitem.column_changed",
+        timestamp=base_time.isoformat(),
+        source="test",
+        correlation_id=correlation_id,
+        work_item_id="WI-001",
+        project_id="test-project",
+        board_id="test-board",
+        from_column="TODO",
+        to_column="IN_PROGRESS",
+        moved_by="system",
     )
     await event_store.append("WI-001", [root_event])
     root_event_id = root_event.event_id
 
     # Middle event: WorkflowStarted (caused by root)
-    middle_event = DomainEvent(
-        aggregate_id="WF-001",
-        aggregate_type="Workflow",
-        payload={
-            "workflow_id": "WF-001",
-            "work_item_id": "WI-001",
-            "status": "started",
-        },
-        user_id="system",
-        correlation_id=root_event.correlation_id,
-        causation_id=root_event_id,  # Caused by root event
-        event_id=uuid4(),
-        occurred_at=base_time + timedelta(seconds=10),
+    middle_event = WorkflowStartedEvent(
+        type="workflow.started",
+        timestamp=(base_time + timedelta(seconds=10)).isoformat(),
+        source="test",
+        correlation_id=correlation_id,
+        workflow_id="WF-001",
+        work_item_id="WI-001",
     )
     await event_store.append("WF-001", [middle_event])
     middle_event_id = middle_event.event_id
 
     # Leaf event: WorkflowCompleted (caused by middle)
-    leaf_event = DomainEvent(
-        aggregate_id="WF-001",
-        aggregate_type="Workflow",
-        payload={
-            "workflow_id": "WF-001",
-            "work_item_id": "WI-001",
-            "status": "completed",
-        },
-        user_id="system",
-        correlation_id=root_event.correlation_id,
-        causation_id=middle_event_id,  # Caused by middle event
-        event_id=uuid4(),
-        occurred_at=base_time + timedelta(seconds=30),
+    leaf_event = WorkflowCompletedEvent(
+        type="workflow.completed",
+        timestamp=(base_time + timedelta(seconds=30)).isoformat(),
+        source="test",
+        correlation_id=correlation_id,
+        workflow_id="WF-001",
+        work_item_id="WI-001",
+        completion_status="success",
     )
     await event_store.append("WF-001", [leaf_event])
     leaf_event_id = leaf_event.event_id
@@ -219,7 +212,7 @@ async def test_causal_chain_truncation(bootstrap, client):
     prev_causation_id = None
 
     for i in range(105):
-        event = DomainEvent(
+        event = WorkItemColumnChangedEvent(
             aggregate_id=f"WI-{i}",
             aggregate_type="WorkItem",
             payload={

@@ -20,7 +20,7 @@ from uuid import uuid4
 import pytest
 from starlette.testclient import TestClient
 
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events import WorkItemColumnChangedEvent, now_iso
 from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 from codetoreum.ports.output.board_service import MovedByType
@@ -350,39 +350,35 @@ class TestObservabilityIntegration:
         base_time = datetime(2026, 3, 20, 10, 0, 0, tzinfo=UTC)
 
         # Create root event: WorkItemColumnChanged (no causation)
-        root_event = DomainEvent(
-            aggregate_id="WI-ROOT",
-            aggregate_type="WorkItem",
-            payload={
-                "work_item_id": "WI-ROOT",
-                "from_column": "TODO",
-                "to_column": "IN_PROGRESS",
-            },
-            user_id="system",
-            correlation_id=uuid4(),
-            causation_id=None,  # Root has no causation
-            event_id=uuid4(),
-            occurred_at=base_time,
+        root_event = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp=base_time.isoformat(),
+            source="test",
+            correlation_id=str(uuid4()),
+            work_item_id="WI-ROOT",
+            project_id="test-project",
+            board_id="test-board",
+            from_column="TODO",
+            to_column="IN_PROGRESS",
+            moved_by="system",
         )
         await event_store.append("WI-ROOT", [root_event])
         root_event_id = root_event.event_id
 
-        # Create dependent event: caused by root event via causation_id
-        dependent_event = DomainEvent(
-            aggregate_id="WF-DEP",
-            aggregate_type="Workflow",
-            payload={
-                "workflow_id": "WF-DEP",
-                "work_item_id": "WI-ROOT",
-                "status": "started",
-            },
-            user_id="system",
-            correlation_id=root_event.correlation_id,
-            causation_id=root_event_id,  # Link to root via causation
-            event_id=uuid4(),
-            occurred_at=base_time + timedelta(seconds=10),
+        # Create dependent event: correlated with root event
+        dependent_event = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp=(base_time + timedelta(seconds=10)).isoformat(),
+            source="test",
+            correlation_id=root_event.correlation_id,  # Link to root via correlation
+            work_item_id="WI-DEP",
+            project_id="test-project",
+            board_id="test-board",
+            from_column="IN_PROGRESS",
+            to_column="DONE",
+            moved_by="system",
         )
-        await event_store.append("WF-DEP", [dependent_event])
+        await event_store.append("WI-DEP", [dependent_event])
         dependent_event_id = dependent_event.event_id
 
         client = TestClient(app)

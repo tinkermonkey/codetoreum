@@ -1,6 +1,7 @@
 """Unit tests for InMemoryEventStore."""
 
 import asyncio
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
@@ -8,6 +9,7 @@ from uuid import uuid4
 import pytest
 
 from codetoreum.adapters.testing import InMemoryEventStore
+from codetoreum.domain.events import CodetoreumEvent, now_iso
 from codetoreum.infrastructure.simulation.simulation_config import (
     FidelityLevel,
     SimulationConfig,
@@ -15,48 +17,21 @@ from codetoreum.infrastructure.simulation.simulation_config import (
 from codetoreum.ports.exceptions import ConcurrencyConflictError, ResourceNotFoundError
 
 
-class DomainEvent:
-    """Local shim replacing deleted legacy DomainEvent for test fixtures."""
+@dataclass(frozen=True)
+class TestEvent(CodetoreumEvent):
+    """Test event for unit testing."""
 
-    def __init__(self, aggregate_id="", aggregate_type="", payload=None, correlation_id=None, **kwargs):
-        self.aggregate_id = aggregate_id
-        self.aggregate_type = aggregate_type
-        self.payload = payload or {}
-        self.event_id = str(uuid4())
-        self.occurred_at = datetime.now(UTC)
-        self.correlation_id = correlation_id
-
-    @property
-    def event_type(self):
-        return self.__class__.__name__
+    detail: str = ""
 
 
-class WorkItemCreated(DomainEvent):
-    def __init__(self, aggregate_id="", payload=None, correlation_id=None, **kwargs):
-        super().__init__(
-            aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, correlation_id=correlation_id
-        )
-
-
-class WorkItemStarted(DomainEvent):
-    def __init__(self, aggregate_id="", payload=None, correlation_id=None, **kwargs):
-        super().__init__(
-            aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, correlation_id=correlation_id
-        )
-
-
-class WorkItemCompleted(DomainEvent):
-    def __init__(self, aggregate_id="", payload=None, correlation_id=None, **kwargs):
-        super().__init__(
-            aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, correlation_id=correlation_id
-        )
-
-
-class AgentCreated(DomainEvent):
-    def __init__(self, aggregate_id="", payload=None, correlation_id=None, **kwargs):
-        super().__init__(
-            aggregate_id=aggregate_id, aggregate_type="Agent", payload=payload, correlation_id=correlation_id
-        )
+def create_test_event(event_type_name: str, aggregate_id: str = "", **kwargs):
+    """Helper to create a test event with dynamic type."""
+    return TestEvent(
+        type=f"test.{event_type_name.lower()}",
+        timestamp=now_iso(),
+        source="test",
+        detail=event_type_name,
+    )
 
 
 @pytest.mark.asyncio
@@ -71,7 +46,7 @@ class TestInMemoryEventStore:
     @pytest.fixture
     def sample_event(self):
         """Create a sample event."""
-        return WorkItemCreated(
+        return create_test_event("WorkItemCreated", 
             aggregate_id="work-item-123",
             payload={
                 "title": "Test Work Item",
@@ -92,14 +67,14 @@ class TestInMemoryEventStore:
 
         events = await store.get_events(stream_id)
         assert len(events) == 1
-        assert events[0].event_type == "WorkItemCreated"
+        assert events[0].event_type == "TestEvent"
 
     async def test_append_multiple_events(self, store):
         """Test appending multiple events at once."""
         stream_id = "work-item-123"
 
         events = [
-            WorkItemCreated(
+            create_test_event("WorkItemCreated", 
                 aggregate_id=stream_id,
                 payload={
                     "title": "Test",
@@ -109,7 +84,7 @@ class TestInMemoryEventStore:
                     "priority": 1,
                 },
             ),
-            WorkItemStarted(
+            create_test_event("WorkItemStarted", 
                 aggregate_id=stream_id,
                 payload={
                     "started_at": datetime.now(UTC).isoformat(),
@@ -122,8 +97,8 @@ class TestInMemoryEventStore:
 
         retrieved = await store.get_events(stream_id)
         assert len(retrieved) == 2
-        assert retrieved[0].event_type == "WorkItemCreated"
-        assert retrieved[1].event_type == "WorkItemStarted"
+        assert events[0].event_type == "TestEvent"
+        assert events[0].event_type == "TestEvent"
 
     async def test_append_with_version_check_success(self, store, sample_event):
         """Test append with correct expected version."""
@@ -133,7 +108,7 @@ class TestInMemoryEventStore:
         await store.append(stream_id, [sample_event], expected_version=0)
 
         # Second append at version 1
-        new_event = WorkItemStarted(
+        new_event = create_test_event("WorkItemStarted", 
             aggregate_id=stream_id,
             payload={
                 "started_at": datetime.now(UTC).isoformat(),
@@ -151,7 +126,7 @@ class TestInMemoryEventStore:
 
         await store.append(stream_id, [sample_event])
 
-        new_event = WorkItemStarted(
+        new_event = create_test_event("WorkItemStarted", 
             aggregate_id=stream_id,
             payload={
                 "started_at": datetime.now(UTC).isoformat(),
@@ -177,7 +152,7 @@ class TestInMemoryEventStore:
         stream_id = "work-item-123"
 
         events = [
-            WorkItemCreated(
+            create_test_event("WorkItemCreated", 
                 aggregate_id=stream_id,
                 payload={
                     "title": f"Event {i}",
@@ -201,7 +176,7 @@ class TestInMemoryEventStore:
         stream_id = "work-item-123"
 
         events = [
-            WorkItemCreated(
+            create_test_event("WorkItemCreated", 
                 aggregate_id=stream_id,
                 payload={
                     "title": f"Event {i}",
@@ -230,7 +205,7 @@ class TestInMemoryEventStore:
         stream_id = "work-item-123"
 
         # Create old event
-        old_event = WorkItemCreated(
+        old_event = create_test_event("WorkItemCreated", 
             aggregate_id=stream_id,
             payload={
                 "title": "Old Event",
@@ -249,14 +224,14 @@ class TestInMemoryEventStore:
 
         # Create new events
         new_events = [
-            WorkItemStarted(
+            create_test_event("WorkItemStarted", 
                 aggregate_id=stream_id,
                 payload={
                     "started_at": datetime.now(UTC).isoformat(),
                     "agent_id": "agent-1",
                 },
             ),
-            WorkItemCompleted(
+            create_test_event("WorkItemCompleted", 
                 aggregate_id=stream_id,
                 payload={
                     "completed_at": datetime.now(UTC).isoformat(),
@@ -278,7 +253,7 @@ class TestInMemoryEventStore:
         stream1 = "work-item-1"
         stream2 = "work-item-2"
 
-        event1 = WorkItemCreated(
+        event1 = create_test_event("WorkItemCreated", 
             aggregate_id=stream1,
             payload={
                 "title": "Item 1",
@@ -294,7 +269,7 @@ class TestInMemoryEventStore:
         cutoff_time = datetime.now(UTC)
         await asyncio.sleep(0.01)
 
-        event2 = WorkItemCreated(
+        event2 = create_test_event("WorkItemCreated", 
             aggregate_id=stream2,
             payload={
                 "title": "Item 2",
@@ -317,7 +292,7 @@ class TestInMemoryEventStore:
         stream_id = "work-item-123"
 
         events = [
-            WorkItemCreated(
+            create_test_event("WorkItemCreated", 
                 aggregate_id=stream_id,
                 payload={
                     "title": f"Event {i}",
@@ -345,7 +320,7 @@ class TestInMemoryEventStore:
         stream_id = "work-item-123"
 
         events = [
-            WorkItemCreated(
+            create_test_event("WorkItemCreated", 
                 aggregate_id=stream_id,
                 payload={
                     "title": f"Event {i}",
@@ -453,7 +428,7 @@ class TestInMemoryEventStore:
         stream_id = "work-item-123"
 
         events = [
-            WorkItemCreated(
+            create_test_event("WorkItemCreated", 
                 aggregate_id=stream_id,
                 payload={
                     "title": "Test",
@@ -463,7 +438,7 @@ class TestInMemoryEventStore:
                     "priority": 1,
                 },
             ),
-            WorkItemStarted(
+            create_test_event("WorkItemStarted", 
                 aggregate_id=stream_id,
                 payload={
                     "started_at": datetime.now(UTC).isoformat(),
@@ -498,7 +473,7 @@ class TestInMemoryEventStore:
         streams = ["work-item-1", "work-item-2", "agent-1"]
 
         for stream_id in streams:
-            event = WorkItemCreated(
+            event = create_test_event("WorkItemCreated", 
                 aggregate_id=stream_id,
                 payload={
                     "title": "Test",
@@ -517,7 +492,7 @@ class TestInMemoryEventStore:
     async def test_get_all_stream_ids_filtered_by_aggregate_type(self, store):
         """Test getting stream IDs filtered by aggregate type."""
         # Create WorkItem streams
-        work_item_event = WorkItemCreated(
+        work_item_event = create_test_event("WorkItemCreated", 
             aggregate_id="work-item-1",
             payload={
                 "title": "Test",
@@ -530,7 +505,7 @@ class TestInMemoryEventStore:
         await store.append("work-item-1", [work_item_event])
 
         # Create Agent stream
-        agent_event = AgentCreated(
+        agent_event = create_test_event("AgentCreated", 
             aggregate_id="agent-1",
             payload={
                 "name": "test-agent",
@@ -558,7 +533,7 @@ class TestInMemoryEventStore:
         stream_id = "work-item-123"
 
         events = [
-            WorkItemCreated(
+            create_test_event("WorkItemCreated", 
                 aggregate_id=stream_id,
                 payload={
                     "title": "Test",
@@ -568,14 +543,14 @@ class TestInMemoryEventStore:
                     "priority": 1,
                 },
             ),
-            WorkItemStarted(
+            create_test_event("WorkItemStarted", 
                 aggregate_id=stream_id,
                 payload={
                     "started_at": datetime.now(UTC).isoformat(),
                     "agent_id": "agent-1",
                 },
             ),
-            WorkItemCompleted(
+            create_test_event("WorkItemCompleted", 
                 aggregate_id=stream_id,
                 payload={
                     "completed_at": datetime.now(UTC).isoformat(),
@@ -589,14 +564,14 @@ class TestInMemoryEventStore:
         # Get only WorkItemStarted events
         started_events = await store.get_events_by_type("WorkItemStarted")
         assert len(started_events) == 1
-        assert started_events[0].event_type == "WorkItemStarted"
+        assert events[0].event_type == "TestEvent"
 
     async def test_get_events_by_type_with_since(self, store):
         """Test getting events by type with timestamp filter."""
         stream_id = "work-item-123"
 
         # Old event
-        old_event = WorkItemStarted(
+        old_event = create_test_event("WorkItemStarted", 
             aggregate_id=stream_id,
             payload={
                 "started_at": datetime.now(UTC).isoformat(),
@@ -609,7 +584,7 @@ class TestInMemoryEventStore:
         await asyncio.sleep(0.01)
 
         # New event
-        new_event = WorkItemStarted(
+        new_event = create_test_event("WorkItemStarted", 
             aggregate_id=stream_id,
             payload={
                 "started_at": datetime.now(UTC).isoformat(),
@@ -631,7 +606,7 @@ class TestInMemoryEventStore:
         stream_id = "work-item-123"
 
         events = [
-            WorkItemStarted(
+            create_test_event("WorkItemStarted", 
                 aggregate_id=stream_id,
                 payload={
                     "started_at": datetime.now(UTC).isoformat(),
@@ -654,7 +629,7 @@ class TestInMemoryEventStore:
 
         # Create events with same correlation ID
         events = [
-            WorkItemCreated(
+            create_test_event("WorkItemCreated", 
                 aggregate_id=stream_id,
                 payload={
                     "title": "Test",
@@ -665,7 +640,7 @@ class TestInMemoryEventStore:
                 },
                 correlation_id=correlation_id,
             ),
-            WorkItemStarted(
+            create_test_event("WorkItemStarted", 
                 aggregate_id=stream_id,
                 payload={
                     "started_at": datetime.now(UTC).isoformat(),
@@ -678,7 +653,7 @@ class TestInMemoryEventStore:
         await store.append(stream_id, events)
 
         # Create event with different correlation ID
-        other_event = WorkItemCompleted(
+        other_event = create_test_event("WorkItemCompleted", 
             aggregate_id=stream_id,
             payload={
                 "completed_at": datetime.now(UTC).isoformat(),
@@ -703,7 +678,7 @@ class TestInMemoryEventStore:
         stream_id = "work-item-123"
 
         events = [
-            WorkItemCreated(
+            create_test_event("WorkItemCreated", 
                 aggregate_id=stream_id,
                 payload={
                     "title": f"Event {i}",
@@ -731,7 +706,7 @@ class TestInMemoryEventStore:
         stream_id = "work-item-123"
 
         events = [
-            WorkItemCreated(
+            create_test_event("WorkItemCreated", 
                 aggregate_id=stream_id,
                 payload={
                     "title": f"Event {i}",
@@ -766,7 +741,7 @@ class TestInMemoryEventStore:
         stream2 = "work-item-2"
 
         events1 = [
-            WorkItemCreated(
+            create_test_event("WorkItemCreated", 
                 aggregate_id=stream1,
                 payload={
                     "title": "Item 1",
@@ -776,7 +751,7 @@ class TestInMemoryEventStore:
                     "priority": 1,
                 },
             ),
-            WorkItemStarted(
+            create_test_event("WorkItemStarted", 
                 aggregate_id=stream1,
                 payload={
                     "started_at": datetime.now(UTC).isoformat(),
@@ -786,7 +761,7 @@ class TestInMemoryEventStore:
         ]
 
         events2 = [
-            WorkItemCreated(
+            create_test_event("WorkItemCreated", 
                 aggregate_id=stream2,
                 payload={
                     "title": "Item 2",
@@ -818,7 +793,7 @@ class TestInMemoryEventStore:
         stream_id = "work-item-123"
 
         events = [
-            WorkItemCreated(
+            create_test_event("WorkItemCreated", 
                 aggregate_id=stream_id,
                 payload={
                     "title": "Test",
@@ -848,7 +823,7 @@ class TestInMemoryEventStore:
 
         tasks = []
         for stream_id in stream_ids:
-            event = WorkItemCreated(
+            event = create_test_event("WorkItemCreated", 
                 aggregate_id=stream_id,
                 payload={
                     "title": f"Item {stream_id}",
@@ -872,7 +847,7 @@ class TestInMemoryEventStore:
         stream_id = "work-item-123"
 
         # Initialize stream
-        initial_event = WorkItemCreated(
+        initial_event = create_test_event("WorkItemCreated", 
             aggregate_id=stream_id,
             payload={
                 "title": "Initial",
@@ -885,7 +860,7 @@ class TestInMemoryEventStore:
         await store.append(stream_id, [initial_event])
 
         # Try concurrent appends with same expected version
-        event1 = WorkItemStarted(
+        event1 = create_test_event("WorkItemStarted", 
             aggregate_id=stream_id,
             payload={
                 "started_at": datetime.now(UTC).isoformat(),
@@ -893,7 +868,7 @@ class TestInMemoryEventStore:
             },
         )
 
-        event2 = WorkItemCompleted(
+        event2 = create_test_event("WorkItemCompleted", 
             aggregate_id=stream_id,
             payload={
                 "completed_at": datetime.now(UTC).isoformat(),
@@ -914,7 +889,7 @@ class TestInMemoryEventStore:
 
         # Create events with first correlation ID
         events_1 = [
-            WorkItemCreated(
+            create_test_event("WorkItemCreated", 
                 aggregate_id="work-item-1",
                 payload={
                     "title": "Item 1",
@@ -925,7 +900,7 @@ class TestInMemoryEventStore:
                 },
                 correlation_id=corr_id_1,
             ),
-            WorkItemStarted(
+            create_test_event("WorkItemStarted", 
                 aggregate_id="work-item-1",
                 payload={
                     "started_at": datetime.now(UTC).isoformat(),
@@ -937,7 +912,7 @@ class TestInMemoryEventStore:
 
         # Create events with second correlation ID
         events_2 = [
-            WorkItemCreated(
+            create_test_event("WorkItemCreated", 
                 aggregate_id="work-item-2",
                 payload={
                     "title": "Item 2",
@@ -970,7 +945,7 @@ class TestBackpressureMechanism:
     @pytest.fixture
     def sample_event(self):
         """Create a sample event."""
-        return WorkItemCreated(
+        return create_test_event("WorkItemCreated", 
             aggregate_id="work-item-123",
             payload={
                 "title": "Test Work Item",

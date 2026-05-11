@@ -5,7 +5,7 @@ This test file was removed because it attempted to test multi-project orchestrat
 functionality through the SimulationRunner framework, which is not compatible with
 the test design:
 
-1. SimulationRunner.capture_event() expects DomainEvent instances, but the test
+1. SimulationRunner.capture_event() expects CodetoreumEvent instances, but the test
    attempted to capture CodetoreumEvent subclasses (ProjectClonedEvent,
    OrchestrationCycleCompletedEvent).
 
@@ -20,7 +20,7 @@ The multi-project orchestration feature itself is properly tested via:
 - Integration tests that directly use MultiProjectOrchestrator with appropriate
   adapters and event handlers
 
-SimulationRunner is designed for testing domain workflows with generic DomainEvent
+SimulationRunner is designed for testing domain workflows with CodetoreumEvent
 instances. For adapter-specific event testing, use direct unit/integration tests
 instead.
 """

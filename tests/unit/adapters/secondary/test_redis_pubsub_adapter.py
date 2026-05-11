@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from dataclasses import dataclass
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -11,19 +12,14 @@ from codetoreum.adapters.secondary.redis_pubsub_adapter import (
     RedisPubSubAdapter,
     RedisPubSubError,
 )
+from codetoreum.domain.events import CodetoreumEvent, now_iso
 
 
-class DomainEvent:
-    def __init__(self, aggregate_id="", aggregate_type="", payload=None, **kwargs):
-        self.aggregate_id = aggregate_id
-        self.aggregate_type = aggregate_type
-        self.payload = payload or {}
-        self.event_id = str(uuid4())
-        self.correlation_id = None
+@dataclass(frozen=True)
+class TestEvent(CodetoreumEvent):
+    """Test event for Redis pub/sub testing."""
 
-    @property
-    def event_type(self):
-        return self.__class__.__name__
+    detail: str = ""
 
 
 @pytest.fixture
@@ -99,7 +95,7 @@ async def test_publish_event(adapter, mock_redis, mock_pubsub):
     mock_redis.pubsub.return_value = mock_pubsub
 
     # Create test event
-    event = DomainEvent(
+    event = TestEvent(
         aggregate_id="test-123",
         aggregate_type="Test",
     )
@@ -334,7 +330,7 @@ async def test_get_stats(adapter, mock_redis, mock_pubsub):
     mock_redis.pubsub.return_value = mock_pubsub
 
     # Publish some messages
-    event = DomainEvent(
+    event = TestEvent(
         aggregate_id="test-123",
         aggregate_type="Test",
     )
@@ -396,7 +392,7 @@ async def test_publish_error_handling(adapter, mock_redis, mock_pubsub):
     mock_redis.publish.side_effect = Exception("Redis connection error")
 
     # Create event
-    event = DomainEvent(
+    event = TestEvent(
         aggregate_id="test-123",
         aggregate_type="Test",
     )

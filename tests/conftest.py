@@ -4,6 +4,7 @@ import asyncio
 import os
 import time
 from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
+from dataclasses import dataclass
 
 import docker
 import pytest
@@ -16,13 +17,57 @@ os.environ.setdefault("OTEL_ENABLED", "false")
 os.environ.setdefault("OTEL_TRACES_ENABLED", "false")
 
 from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdapter
+from codetoreum.domain.events import CodetoreumEvent
 from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
+from codetoreum.domain.events import now_iso
 from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
 from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
 from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.simulation import SimulationConfig
 from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
+
+
+# ============================================================================
+# TestEvent Fixture for Adapter Tests
+# ============================================================================
+
+
+@dataclass(frozen=True)
+class TestEvent(CodetoreumEvent):
+    """Minimal compliant event for adapter contract testing.
+
+    This frozen dataclass fixture provides a lightweight CodetoreumEvent
+    subclass for use in adapter unit tests that need a simple event instance
+    without the domain-specific fields of production events.
+
+    Attributes:
+        detail: Optional detail string for test-specific information.
+    """
+
+    detail: str = ""
+
+
+@pytest.fixture
+def test_event() -> TestEvent:
+    """Create a test event instance for adapter testing.
+
+    Returns:
+        TestEvent instance with default values.
+
+    Example:
+        >>> @pytest.mark.asyncio
+        >>> async def test_event_store(test_event):
+        ...     await event_store.append("stream-1", [test_event])
+        ...     events = await event_store.retrieve("stream-1")
+        ...     assert len(events) == 1
+    """
+    return TestEvent(
+        type="test.event",
+        timestamp=now_iso(),
+        source="test",
+        detail="test event",
+    )
 
 
 def is_docker_available() -> bool:

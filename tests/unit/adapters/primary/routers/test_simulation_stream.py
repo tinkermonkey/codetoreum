@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
@@ -13,24 +14,15 @@ from codetoreum.adapters.primary.routers.simulation_stream import (
     format_keepalive_comment,
     format_sse_frame,
 )
+from codetoreum.domain.events import CodetoreumEvent, now_iso
 from codetoreum.infrastructure.event_bus import EventBus
 
 
-class DomainEvent:
-    def __init__(self, aggregate_id="", aggregate_type="", payload=None, **kwargs):
-        self.aggregate_id = aggregate_id
-        self.aggregate_type = aggregate_type
-        self.payload = payload or {}
-        self.event_id = str(uuid4())
-        self.occurred_at = datetime.now(UTC)
-        self.correlation_id = None
-        # Expose payload keys as direct attributes to match modern CodetoreumEvent interface
-        for key, val in self.payload.items():
-            setattr(self, key, val)
+@dataclass(frozen=True)
+class TestEvent(CodetoreumEvent):
+    """Test event for SSE stream testing."""
 
-    @property
-    def event_type(self):
-        return self.__class__.__name__
+    detail: str = ""
 
 
 from codetoreum.infrastructure.simulation.simulation_engine import SimulationEngine
@@ -107,7 +99,7 @@ class TestEventFiltering:
     @pytest.fixture
     def work_item_event(self):
         """Create a sample work item event."""
-        return DomainEvent(
+        return TestEvent(
             aggregate_id="WI-123",
             aggregate_type="WorkItem",
             payload={
@@ -120,7 +112,7 @@ class TestEventFiltering:
     @pytest.fixture
     def workflow_event(self):
         """Create a sample workflow event."""
-        return DomainEvent(
+        return TestEvent(
             aggregate_id="workflow-1",
             aggregate_type="Workflow",
             payload={"workflow_id": "workflow-1", "status": "started"},
@@ -135,7 +127,7 @@ class TestEventFiltering:
         assert (
             event_matches_filters(
                 work_item_event,
-                ["DomainEvent", "WorkItemColumnChangedEvent"],
+                ["TestEvent", "WorkItemColumnChangedEvent"],
                 None,
             )
             is True
@@ -165,7 +157,7 @@ class TestEventFiltering:
         assert (
             event_matches_filters(
                 work_item_event,
-                ["DomainEvent"],
+                ["TestEvent"],
                 "WI-123",
             )
             is True
@@ -187,7 +179,7 @@ class TestEventFiltering:
         assert (
             event_matches_filters(
                 work_item_event,
-                ["DomainEvent"],
+                ["TestEvent"],
                 "WI-999",
             )
             is False
@@ -200,7 +192,7 @@ class TestEventFiltering:
 
     def test_event_matches_filters_with_none_work_item_in_payload(self):
         """Test filtering when work_item_id is None in payload."""
-        event = DomainEvent(
+        event = TestEvent(
             aggregate_id="agg-1",
             aggregate_type="Aggregate",
             payload={"work_item_id": None},
@@ -311,8 +303,8 @@ class TestEventBusSubscription:
         event_bus.subscribe(None, callback)
 
         # Publish different event types
-        event1 = DomainEvent("agg-1", "Type1")
-        event2 = DomainEvent("agg-2", "Type2")
+        event1 = TestEvent("agg-1", "Type1")
+        event2 = TestEvent("agg-2", "Type2")
 
         await event_bus.publish(event1)
         await event_bus.publish(event2)
@@ -330,14 +322,14 @@ class TestEventBusSubscription:
 
         event_bus.subscribe(None, callback)
 
-        event1 = DomainEvent("agg-1", "Type1")
+        event1 = TestEvent("agg-1", "Type1")
         await event_bus.publish(event1)
         assert len(received_events) == 1
 
         # Unsubscribe
         event_bus.unsubscribe(None, callback)
 
-        event2 = DomainEvent("agg-2", "Type2")
+        event2 = TestEvent("agg-2", "Type2")
         await event_bus.publish(event2)
 
         # Should still be 1 (unsubscribed)
@@ -357,7 +349,7 @@ class TestEventBusSubscription:
         event_bus.subscribe(None, callback1)
         event_bus.subscribe(None, callback2)
 
-        event = DomainEvent("agg-1", "Type1")
+        event = TestEvent("agg-1", "Type1")
         await event_bus.publish(event)
 
         assert len(received1) == 1
@@ -373,7 +365,7 @@ class TestEventBusSubscription:
 
         event_bus.subscribe(None, callback)
 
-        event = DomainEvent(
+        event = TestEvent(
             "WI-123",
             "WorkItem",
             payload={"work_item_id": "WI-123", "column": "In Progress"},

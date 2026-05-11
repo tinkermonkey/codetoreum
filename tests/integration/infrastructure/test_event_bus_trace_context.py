@@ -6,6 +6,7 @@ Tests the complete flow of:
 3. Trace context carried through event chains
 """
 
+from dataclasses import dataclass, field
 from unittest.mock import patch
 
 import pytest
@@ -18,7 +19,7 @@ try:
 except ImportError:
     OTEL_AVAILABLE = False
 
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events import CodetoreumEvent, now_iso
 from codetoreum.infrastructure.event_bus import EventBus, EventHandler
 from codetoreum.infrastructure.observability.event_bus_instrumentation import (
     InstrumentedEventBus,
@@ -29,18 +30,27 @@ from codetoreum.infrastructure.observability.trace_context_propagation import (
 )
 
 
+# Test event class for tracing tests
+@dataclass(frozen=True)
+class _TestEvent(CodetoreumEvent):
+    """Test event for tracing and routing tests."""
+
+    detail: str = ""
+    metadata: dict = field(default_factory=dict)
+
+
 class SimpleEventHandler(EventHandler):
     """Simple handler that tracks handle calls."""
 
     def __init__(self):
         self.handled_events = []
 
-    async def handle(self, event: DomainEvent) -> None:
+    async def handle(self, event: CodetoreumEvent) -> None:
         """Track event handling."""
         self.handled_events.append(event)
 
     def get_event_types(self):
-        return ["DomainEvent"]  # Matches the class name of DomainEvent
+        return ["_TestEvent"]  # Matches the class name of TestEvent
 
 
 class TestEventBusTraceContextIntegration:
@@ -50,10 +60,10 @@ class TestEventBusTraceContextIntegration:
     async def test_publish_injects_trace_context(self):
         """Test that publishing injects trace context into event."""
         event_bus = EventBus()
-        event = DomainEvent(
-            aggregate_id="test-123",
-            aggregate_type="TestAggregate",
-            payload={"key": "value"},
+        event = _TestEvent(
+            type="test.event",
+            timestamp=now_iso(),
+            source="test",
         )
 
         # Mock the injector to verify it's called
@@ -77,9 +87,10 @@ class TestEventBusTraceContextIntegration:
         )
 
         # Create event with trace context in metadata
-        event = DomainEvent(
-            aggregate_id="test-123",
-            aggregate_type="TestAggregate",
+        event = _TestEvent(
+            type="test.event",
+            timestamp=now_iso(),
+            source="test",
             metadata={"traceparent": trace_data.to_traceparent()},
         )
 
@@ -98,13 +109,13 @@ class TestEventBusTraceContextIntegration:
         extracted_trace_data = []
 
         class TraceContextCapturingHandler(EventHandler):
-            async def handle(self, event: DomainEvent) -> None:
+            async def handle(self, event: CodetoreumEvent) -> None:
                 # Extract trace context
                 trace_data = TraceContextPropagator.extract_trace_context(event)
                 extracted_trace_data.append(trace_data)
 
             def get_event_types(self):
-                return ["DomainEvent"]
+                return ["_TestEvent"]
 
         handler = TraceContextCapturingHandler()
         event_bus.register_handler(handler)
@@ -117,9 +128,10 @@ class TestEventBusTraceContextIntegration:
             trace_flags="01",
         )
 
-        event = DomainEvent(
-            aggregate_id="test-123",
-            aggregate_type="TestAggregate",
+        event = _TestEvent(
+            type="test.event",
+            timestamp=now_iso(),
+            source="test",
             metadata={"traceparent": trace_data.to_traceparent()},
         )
 
@@ -141,12 +153,12 @@ class TestEventBusTraceContextIntegration:
             def __init__(self, handler_id):
                 self.handler_id = handler_id
 
-            async def handle(self, event: DomainEvent) -> None:
+            async def handle(self, event: CodetoreumEvent) -> None:
                 trace_data = TraceContextPropagator.extract_trace_context(event)
                 extracted_contexts.append((self.handler_id, trace_data))
 
             def get_event_types(self):
-                return ["DomainEvent"]
+                return ["_TestEvent"]
 
         # Register multiple handlers
         for i in range(3):
@@ -161,9 +173,10 @@ class TestEventBusTraceContextIntegration:
             trace_flags="01",
         )
 
-        event = DomainEvent(
-            aggregate_id="test-123",
-            aggregate_type="TestAggregate",
+        event = _TestEvent(
+            type="test.event",
+            timestamp=now_iso(),
+            source="test",
             metadata={"traceparent": trace_data.to_traceparent()},
         )
 
@@ -182,11 +195,11 @@ class TestEventBusTraceContextIntegration:
         event_bus = EventBus()
         extracted_trace_data = []
 
-        async def trace_capturing_callback(event: DomainEvent) -> None:
+        async def trace_capturing_callback(event: CodetoreumEvent) -> None:
             trace_data = TraceContextPropagator.extract_trace_context(event)
             extracted_trace_data.append(trace_data)
 
-        event_bus.subscribe("DomainEvent", trace_capturing_callback)
+        event_bus.subscribe("_TestEvent", trace_capturing_callback)
 
         # Create trace context data
         trace_data = TraceContextData(
@@ -196,9 +209,10 @@ class TestEventBusTraceContextIntegration:
             trace_flags="01",
         )
 
-        event = DomainEvent(
-            aggregate_id="test-123",
-            aggregate_type="TestAggregate",
+        event = _TestEvent(
+            type="test.event",
+            timestamp=now_iso(),
+            source="test",
             metadata={"traceparent": trace_data.to_traceparent()},
         )
 
@@ -217,7 +231,7 @@ class TestEventBusTraceContextIntegration:
         extracted_traces = []
 
         class RetryableHandler(EventHandler):
-            async def handle(self, event: DomainEvent) -> None:
+            async def handle(self, event: CodetoreumEvent) -> None:
                 attempt_count.append(1)
                 trace_data = TraceContextPropagator.extract_trace_context(event)
                 extracted_traces.append(trace_data)
@@ -226,7 +240,7 @@ class TestEventBusTraceContextIntegration:
                     raise Exception("Temporary failure")
 
             def get_event_types(self):
-                return ["DomainEvent"]
+                return ["_TestEvent"]
 
         handler = RetryableHandler()
         event_bus.register_handler(handler)
@@ -239,9 +253,10 @@ class TestEventBusTraceContextIntegration:
             trace_flags="01",
         )
 
-        event = DomainEvent(
-            aggregate_id="test-123",
-            aggregate_type="TestAggregate",
+        event = _TestEvent(
+            type="test.event",
+            timestamp=now_iso(),
+            source="test",
             metadata={"traceparent": trace_data.to_traceparent()},
         )
 
@@ -263,7 +278,7 @@ class TestEventBusTraceContextIntegration:
         extracted_contexts = []
 
         class WildcardHandler(EventHandler):
-            async def handle(self, event: DomainEvent) -> None:
+            async def handle(self, event: CodetoreumEvent) -> None:
                 trace_data = TraceContextPropagator.extract_trace_context(event)
                 extracted_contexts.append(trace_data)
 
@@ -281,9 +296,10 @@ class TestEventBusTraceContextIntegration:
             trace_flags="01",
         )
 
-        event = DomainEvent(
-            aggregate_id="test-123",
-            aggregate_type="TestAggregate",
+        event = _TestEvent(
+            type="test.event",
+            timestamp=now_iso(),
+            source="test",
             metadata={"traceparent": trace_data.to_traceparent()},
         )
 
@@ -302,7 +318,7 @@ class TestEventBusTraceContextIntegration:
 
         events = []
         for i in range(3):
-            event = DomainEvent(
+            event = _TestEvent(
                 aggregate_id=f"test-{i}",
                 aggregate_type="TestAggregate",
                 payload={"index": i},
@@ -340,9 +356,10 @@ class TestEventBusTraceContextIntegration:
             trace_flags="01",
         )
 
-        event = DomainEvent(
-            aggregate_id="test-consumer-span",
-            aggregate_type="TestAggregate",
+        event = _TestEvent(
+            type="test.event",
+            timestamp=now_iso(),
+            source="test",
             metadata={"traceparent": trace_data.to_traceparent()},
         )
 
@@ -378,9 +395,10 @@ class TestEventBusTraceContextIntegration:
         handler = SimpleEventHandler()
         instrumented_bus.register_handler(handler)
 
-        event = DomainEvent(
-            aggregate_id="test-handler-class",
-            aggregate_type="TestAggregate",
+        event = _TestEvent(
+            type="test.event",
+            timestamp=now_iso(),
+            source="test",
         )
 
         # Publish event through instrumented bus - handler wrapper will create CONSUMER span
@@ -407,9 +425,10 @@ class TestEventBusTraceContextIntegration:
         handler = SimpleEventHandler()
         instrumented_bus.register_handler(handler)
 
-        event = DomainEvent(
-            aggregate_id="test-span-kind",
-            aggregate_type="TestAggregate",
+        event = _TestEvent(
+            type="test.event",
+            timestamp=now_iso(),
+            source="test",
         )
 
         # Publish event through instrumented bus
@@ -445,9 +464,10 @@ class TestEventBusTraceContextIntegration:
         )
 
         # Create event with trace context metadata
-        event = DomainEvent(
-            aggregate_id="test-span-relationship",
-            aggregate_type="TestAggregate",
+        event = _TestEvent(
+            type="test.event",
+            timestamp=now_iso(),
+            source="test",
             metadata={"traceparent": trace_data.to_traceparent()},
         )
 

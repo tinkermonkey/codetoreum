@@ -250,9 +250,8 @@ class TestEventTypeProperty:
         """Test that event_type works with EventBus subscription routing.
 
         The EventBus expects events to have an event_type property that
-        returns the class name for subscription matching. This ensures
-        compatibility between CodetoreumEvent (vendor-agnostic) and
-        legacy DomainEvent hierarchies.
+        returns the class name for subscription matching. CodetoreumEvent
+        provides this via the event_type property.
         """
         event = CodetoreumEvent(
             type="workitem.column_changed",
