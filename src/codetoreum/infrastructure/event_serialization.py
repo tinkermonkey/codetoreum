@@ -57,7 +57,7 @@ class EventSerializer:
 
         raise ValueError(
             f"Cannot register {event_type_name}: not a CodetoreumEvent subclass. "
-            "Legacy DomainEvent classes are no longer supported."
+            "Only CodetoreumEvent subclasses can be registered."
         )
 
     @classmethod
@@ -65,11 +65,10 @@ class EventSerializer:
         """
         Serialize event to JSON string.
 
-        Handles both CodetoreumEvent (legacy) and CodetoreumEvent (modern) instances.
-        For CodetoreumEvent instances, delegates to event.to_dict().
+        Serializes CodetoreumEvent instances using their to_dict() method.
 
         Args:
-            event: Domain event to serialize (CodetoreumEvent or CodetoreumEvent)
+            event: Domain event to serialize (CodetoreumEvent subclass)
 
         Returns:
             JSON string representation
@@ -90,7 +89,7 @@ class EventSerializer:
 
             raise EventSerializationError(
                 f"serialize() requires CodetoreumEvent, got {type(event).__name__}. "
-                "Legacy DomainEvent objects are no longer supported."
+                "Only CodetoreumEvent instances can be serialized."
             )
 
         except EventSerializationError:
