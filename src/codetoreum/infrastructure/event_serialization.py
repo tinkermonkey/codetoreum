@@ -238,6 +238,38 @@ class _EventJSONDecoder(json.JSONDecoder):
         return obj
 
 
+def infer_aggregate_id_and_type(event: CodetoreumEvent) -> tuple[Any, str]:
+    """
+    Infer aggregate_id and aggregate_type from an event.
+
+    Priority order for identifying the aggregate root:
+    - If has workflow_id -> (workflow_id, "Workflow")
+    - If has execution_id -> (execution_id, "AgentExecution")
+    - If has review_cycle_id -> (review_cycle_id, "ReviewCycle")
+    - If has work_item_id -> (work_item_id, "WorkItem")
+    - If has repair_cycle_id -> (repair_cycle_id, "RepairCycle")
+    - Otherwise -> (event_id, class_name without "Event" suffix)
+
+    Args:
+        event: Domain event
+
+    Returns:
+        Tuple of (aggregate_id, aggregate_type)
+    """
+    if getattr(event, "workflow_id", None):
+        return getattr(event, "workflow_id"), "Workflow"
+    if getattr(event, "execution_id", None):
+        return getattr(event, "execution_id"), "AgentExecution"
+    if getattr(event, "review_cycle_id", None):
+        return getattr(event, "review_cycle_id"), "ReviewCycle"
+    if getattr(event, "work_item_id", None):
+        return getattr(event, "work_item_id"), "WorkItem"
+    if getattr(event, "repair_cycle_id", None):
+        return getattr(event, "repair_cycle_id"), "RepairCycle"
+
+    return event.event_id, type(event).__name__.replace("Event", "")
+
+
 def auto_register_event_types() -> None:
     """
     Auto-register all known event types from domain.events module.

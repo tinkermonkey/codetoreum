@@ -9,7 +9,7 @@ from redis import asyncio as aioredis
 from codetoreum.config import DEFAULT_REDIS_STREAM_MAX_LENGTH
 from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.infrastructure.error_ids import ErrorRegistry
-from codetoreum.infrastructure.event_serialization import EventSerializer
+from codetoreum.infrastructure.event_serialization import EventSerializer, infer_aggregate_id_and_type
 
 logger = logging.getLogger(__name__)
 
@@ -115,19 +115,17 @@ class RedisEventBuffer:
             # Serialize event
             event_json = EventSerializer.serialize(event)
 
+            # Infer aggregate_id and aggregate_type
+            aggregate_id, aggregate_type = infer_aggregate_id_and_type(event)
+
             # Add to stream with MAXLEN to prevent unbounded growth
             message_id = await self.redis.xadd(
                 name=self.stream_name,
                 fields={
                     "event_id": str(event.event_id),
                     "event_type": event.event_type,
-                    "aggregate_id": str(
-                        getattr(event, "work_item_id", None)
-                        or getattr(event, "workflow_id", None)
-                        or getattr(event, "execution_id", None)
-                        or event.event_id
-                    ),
-                    "aggregate_type": getattr(event, "aggregate_type", type(event).__name__.replace("Event", "")),
+                    "aggregate_id": str(aggregate_id),
+                    "aggregate_type": aggregate_type,
                     "timestamp": event.timestamp,
                     "payload": event_json,
                 },
@@ -172,20 +170,16 @@ class RedisEventBuffer:
                 for event in events:
                     event_json = EventSerializer.serialize(event)
 
+                    # Infer aggregate_id and aggregate_type
+                    aggregate_id, aggregate_type = infer_aggregate_id_and_type(event)
+
                     pipe.xadd(
                         name=self.stream_name,
                         fields={
                             "event_id": str(event.event_id),
                             "event_type": event.event_type,
-                            "aggregate_id": str(
-                                getattr(event, "work_item_id", None)
-                                or getattr(event, "workflow_id", None)
-                                or getattr(event, "execution_id", None)
-                                or event.event_id
-                            ),
-                            "aggregate_type": getattr(
-                                event, "aggregate_type", type(event).__name__.replace("Event", "")
-                            ),
+                            "aggregate_id": str(aggregate_id),
+                            "aggregate_type": aggregate_type,
                             "timestamp": event.timestamp,
                             "payload": event_json,
                         },
