@@ -78,7 +78,6 @@ class EventSerializer:
         """
         try:
             if isinstance(event, CodetoreumEvent):
-                # Modern CodetoreumEvent: use its to_dict() method
                 data = {
                     "schema_version": cls.SCHEMA_VERSION,
                     "event_class": "CodetoreumEvent",
