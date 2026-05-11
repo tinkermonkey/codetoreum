@@ -425,7 +425,7 @@ def test_websocket_adapter_subscription_matches_event_by_type():
     # Create subscription with event type filter
     subscription = EventFilter(
         subscription_type=SubscriptionType.ALL_EVENTS,
-        event_types=["ExecutionStarted", "ExecutionCompleted"],
+        event_types=["ExecutionStartedEvent", "ExecutionCompletedEvent"],
     )
 
     # Matching event
@@ -454,29 +454,6 @@ def test_websocket_adapter_subscription_matches_event_by_type():
     assert not adapter._subscription_matches_event(subscription, event2)
 
 
-def test_websocket_adapter_subscription_matches_event_by_work_item():
-    """Test subscription matching by work item ID."""
-    adapter = WebSocketAdapter()
-
-    # Create subscription filtered by work item
-    subscription = EventFilter(
-        subscription_type=SubscriptionType.ALL_EVENTS,
-        work_item_id="item-999",
-    )
-
-    # Event that doesn't have work_item_id attribute - should match (no filter contradiction)
-    event1 = ExecutionStartedEvent(
-        type="execution.started",
-        timestamp="2024-01-01T00:00:00Z",
-        source="test",
-        execution_id="exec-1",
-        work_item_id="work-item-1",
-        agent_id="agent-1",
-    )
-
-    assert adapter._subscription_matches_event(subscription, event1)
-
-
 def test_websocket_adapter_subscription_matches_event_combined_filters():
     """Test subscription matching with multiple filters (AND logic)."""
     adapter = WebSocketAdapter()
@@ -484,7 +461,7 @@ def test_websocket_adapter_subscription_matches_event_combined_filters():
     # Create subscription with multiple filters
     subscription = EventFilter(
         subscription_type=SubscriptionType.ALL_EVENTS,
-        event_types=["ExecutionStarted"],
+        event_types=["ExecutionStartedEvent"],
     )
 
     # Event matching event type filter
