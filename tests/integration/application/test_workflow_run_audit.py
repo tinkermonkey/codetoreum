@@ -191,7 +191,7 @@ async def workflow_with_many_events(event_store, ticket_system):
             source="domain",
             workflow_id=workflow_id,
             work_item_id=work_item_id,
-            final_stage=f"stage-146",
+            final_stage="stage-146",
             completed_at=now_iso(),
         )
     )

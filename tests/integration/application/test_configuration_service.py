@@ -72,12 +72,12 @@ async def event_bus(event_store):
 
         async def handle(self, event):
             # Extract aggregate ID from event based on event type
-            if hasattr(event, 'project_id'):
+            if hasattr(event, "project_id"):
                 aggregate_id = event.project_id
-            elif hasattr(event, 'agent_id'):
+            elif hasattr(event, "agent_id"):
                 # agent_id is already formatted as "proj-id:agent-name"
                 aggregate_id = event.agent_id
-            elif hasattr(event, 'pipeline_id'):
+            elif hasattr(event, "pipeline_id"):
                 # pipeline_id is already formatted as "proj-id:pipeline-name"
                 aggregate_id = event.pipeline_id
             else:

@@ -27,9 +27,9 @@ from codetoreum.domain.events import (
     ReviewCycleApprovedEvent,
     ReviewCycleCreatedEvent,
     ReviewCycleEscalatedToHumanEvent,
-    ReviewCycleRejectedEvent,
     ReviewCycleFeedbackSubmittedEvent,
     ReviewCycleIterationStartedEvent,
+    ReviewCycleRejectedEvent,
     WorkItemCreatedEvent,
     now_iso,
 )
