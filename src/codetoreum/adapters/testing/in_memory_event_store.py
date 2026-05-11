@@ -71,6 +71,38 @@ class InMemoryEventStore(IEventStore):
         self._config = config
         self._clock = clock
 
+    @staticmethod
+    def _infer_aggregate_type(event: CodetoreumEvent) -> str:
+        """
+        Infer the aggregate type from an event.
+
+        Checks for specific event fields to determine the aggregate type:
+        - If has workflow_id -> "Workflow"
+        - If has work_item_id (without workflow_id) -> "WorkItem"
+        - If has execution_id -> "AgentExecution"
+        - If has review_cycle_id -> "ReviewCycle"
+        - Otherwise infer from class name by removing "Event" suffix
+
+        Args:
+            event: Domain event
+
+        Returns:
+            Inferred aggregate type
+        """
+        if hasattr(event, "workflow_id") and getattr(event, "workflow_id", None):
+            return "Workflow"
+        if hasattr(event, "execution_id") and getattr(event, "execution_id", None):
+            return "AgentExecution"
+        if hasattr(event, "review_cycle_id") and getattr(event, "review_cycle_id", None):
+            return "ReviewCycle"
+        if hasattr(event, "work_item_id") and getattr(event, "work_item_id", None):
+            return "WorkItem"
+        if hasattr(event, "repair_cycle_id") and getattr(event, "repair_cycle_id", None):
+            return "RepairCycle"
+
+        # Fallback: infer from class name
+        return type(event).__name__.replace("Event", "")
+
     async def append(
         self,
         stream_id: str,
@@ -759,10 +791,8 @@ class InMemoryEventStore(IEventStore):
                     continue
 
                 # Check if stream matches aggregate type
-                if (
-                    getattr(events[0], "aggregate_type", type(events[0]).__name__.replace("Event", ""))
-                    != aggregate_type
-                ):
+                inferred_type = self._infer_aggregate_type(events[0])
+                if inferred_type != aggregate_type:
                     continue
 
                 # Get latest event for this stream

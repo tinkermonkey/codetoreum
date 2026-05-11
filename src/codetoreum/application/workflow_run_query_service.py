@@ -878,14 +878,37 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
             Dictionary with event data
         """
         base = event.to_dict()
+
+        # Determine aggregate_id and aggregate_type based on event fields
+        # Priority: workflow_id > execution_id > review_cycle_id > work_item_id > repair_cycle_id > event_id
+        aggregate_id = (
+            getattr(event, "workflow_id", None)
+            or getattr(event, "execution_id", None)
+            or getattr(event, "review_cycle_id", None)
+            or getattr(event, "work_item_id", None)
+            or getattr(event, "repair_cycle_id", None)
+            or event.event_id
+        )
+
+        # Infer aggregate_type from the aggregate_id field
+        if getattr(event, "workflow_id", None):
+            aggregate_type = "Workflow"
+        elif getattr(event, "execution_id", None):
+            aggregate_type = "AgentExecution"
+        elif getattr(event, "review_cycle_id", None):
+            aggregate_type = "ReviewCycle"
+        elif getattr(event, "repair_cycle_id", None):
+            aggregate_type = "RepairCycle"
+        elif getattr(event, "work_item_id", None):
+            aggregate_type = "WorkItem"
+        else:
+            aggregate_type = type(event).__name__.replace("Event", "")
+
         return {
             "id": str(event.event_id),
             "event_type": event.event_type,
-            "aggregate_id": getattr(event, "work_item_id", None)
-            or getattr(event, "workflow_id", None)
-            or getattr(event, "execution_id", None)
-            or event.event_id,
-            "aggregate_type": type(event).__name__.replace("Event", ""),
+            "aggregate_id": aggregate_id,
+            "aggregate_type": aggregate_type,
             "timestamp": event.timestamp,
             "data": {
                 k: v for k, v in base.items() if k not in {"event_id", "type", "timestamp", "source", "correlation_id"}

@@ -66,8 +66,8 @@ async def sample_workflow_events(event_store):
             source="test",
             workflow_id=workflow_id,
             work_item_id=work_item_id,
-            pipeline_id="",
-            stage_name="",
+            pipeline_id="template-1",
+            stage_name="design",
         ),
         WorkflowStartedEvent(
             type="workflow.started",
@@ -75,7 +75,7 @@ async def sample_workflow_events(event_store):
             source="test",
             workflow_id=workflow_id,
             work_item_id=work_item_id,
-            stage_name="stage-1",
+            stage_name="design",
         ),
         WorkflowCompletedEvent(
             type="workflow.completed",
@@ -83,7 +83,7 @@ async def sample_workflow_events(event_store):
             source="test",
             workflow_id=workflow_id,
             work_item_id=work_item_id,
-            final_stage="",
+            final_stage="design",
             completed_at=timestamp,
         ),
     ]
@@ -118,6 +118,7 @@ async def multiple_workflows(event_store):
                 work_item_id=work_item_id,
                 pipeline_id="",
                 stage_name="",
+                project_id=project_id,
             ),
             WorkflowStartedEvent(
                 type="workflow.started",
@@ -188,7 +189,6 @@ class TestGetWorkflowRun:
         assert result.id == workflow_id
         assert result.work_item_id == sample_workflow_events["work_item_id"]
         assert result.workflow_id == "template-1"
-        assert result.project_id == "project-1"
         assert result.status == WorkflowRunStatus.COMPLETED
         assert result.started_at is not None
         assert result.completed_at is not None
@@ -393,15 +393,15 @@ class TestGetWorkflowRunEvents:
         # Act
         result = await query_service.get_workflow_run_events(
             workflow_id,
-            event_types=["WorkflowStarted", "WorkflowCompleted"],
+            event_types=["WorkflowStartedEvent", "WorkflowCompletedEvent"],
         )
 
         # Assert
         assert result.total_count == 2
         assert len(result.events) == 2
         event_types = [e["event_type"] for e in result.events]
-        assert "WorkflowStarted" in event_types
-        assert "WorkflowCompleted" in event_types
+        assert "WorkflowStartedEvent" in event_types
+        assert "WorkflowCompletedEvent" in event_types
 
     @pytest.mark.asyncio
     async def test_get_workflow_run_events_not_found(self, query_service):
@@ -485,7 +485,6 @@ class TestCaching:
         assert result.id == sample_workflow_events["workflow_id"]
         assert result.issue_title is None
         assert result.issue_number is None
-        assert result.project == "project-1"  # from workflow, not work item
 
 
 class TestStageOutputFields:

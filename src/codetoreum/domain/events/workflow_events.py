@@ -21,12 +21,14 @@ class WorkflowCreatedEvent(CodetoreumEvent):
         work_item_id: Work item this workflow processes
         pipeline_id: Pipeline template/config identifier
         stage_name: Initial stage name
+        project_id: Project containing the work item
     """
 
     workflow_id: str = ""
     work_item_id: str = ""
     pipeline_id: str = ""
     stage_name: str = ""
+    project_id: str = ""
 
     def __post_init__(self) -> None:
         super().__post_init__()
@@ -43,6 +45,7 @@ class WorkflowCreatedEvent(CodetoreumEvent):
                 "work_item_id": self.work_item_id,
                 "pipeline_id": self.pipeline_id,
                 "stage_name": self.stage_name,
+                "project_id": self.project_id,
             }
         )
         return data
@@ -59,6 +62,7 @@ class WorkflowCreatedEvent(CodetoreumEvent):
             work_item_id=data["work_item_id"],
             pipeline_id=data.get("pipeline_id", ""),
             stage_name=data.get("stage_name", ""),
+            project_id=data.get("project_id", ""),
         )
 
 
