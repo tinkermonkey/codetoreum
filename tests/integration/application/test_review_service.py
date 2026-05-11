@@ -123,7 +123,7 @@ async def test_create_review_cycle(review_service, maker_agent, reviewer_agent, 
 
     # Verify events were persisted
     assert event_store.get_total_event_count() == 1
-    assert event_store.get_all_events_list()[0].aggregate_type == "ReviewCycle"
+    assert event_store.get_all_events_list()[0].event_type == "ReviewCycleCreatedEvent"
 
 
 @pytest.mark.asyncio

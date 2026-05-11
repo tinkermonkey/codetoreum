@@ -56,33 +56,35 @@ async def sample_workflow_events(event_store):
     """Fixture creating sample workflow events in event store."""
     workflow_id = str(uuid4())
     work_item_id = "work-item-1"
+    timestamp = datetime.now(UTC).isoformat()
 
     # Create workflow events
     events = [
         WorkflowCreatedEvent(
-            aggregate_id=workflow_id,
-            payload={
-                "work_item_id": work_item_id,
-                "template_id": "template-1",
-                "project_id": "project-1",
-                "stage_count": 3,
-            },
+            type="workflow.created",
+            timestamp=timestamp,
+            source="test",
+            workflow_id=workflow_id,
+            work_item_id=work_item_id,
+            pipeline_id="",
+            stage_name="",
         ),
         WorkflowStartedEvent(
-            aggregate_id=workflow_id,
-            payload={
-                "started_at": datetime.now(UTC).isoformat(),
-                "work_item_id": work_item_id,
-                "first_stage": "stage-1",
-            },
+            type="workflow.started",
+            timestamp=timestamp,
+            source="test",
+            workflow_id=workflow_id,
+            work_item_id=work_item_id,
+            stage_name="stage-1",
         ),
         WorkflowCompletedEvent(
-            aggregate_id=workflow_id,
-            payload={
-                "completed_at": datetime.now(UTC).isoformat(),
-                "work_item_id": work_item_id,
-                "duration_seconds": 120.5,
-            },
+            type="workflow.completed",
+            timestamp=timestamp,
+            source="test",
+            workflow_id=workflow_id,
+            work_item_id=work_item_id,
+            final_stage="",
+            completed_at=timestamp,
         ),
     ]
 
@@ -105,24 +107,25 @@ async def multiple_workflows(event_store):
         workflow_id = str(uuid4())
         work_item_id = f"work-item-{i}"
         project_id = "project-1" if i < 3 else "project-2"
+        timestamp = datetime.now(UTC).isoformat()
 
         events = [
             WorkflowCreatedEvent(
-                aggregate_id=workflow_id,
-                payload={
-                    "work_item_id": work_item_id,
-                    "template_id": "template-1",
-                    "project_id": project_id,
-                    "stage_count": 2,
-                },
+                type="workflow.created",
+                timestamp=timestamp,
+                source="test",
+                workflow_id=workflow_id,
+                work_item_id=work_item_id,
+                pipeline_id="",
+                stage_name="",
             ),
             WorkflowStartedEvent(
-                aggregate_id=workflow_id,
-                payload={
-                    "started_at": datetime.now(UTC).isoformat(),
-                    "work_item_id": work_item_id,
-                    "first_stage": "stage-1",
-                },
+                type="workflow.started",
+                timestamp=timestamp,
+                source="test",
+                workflow_id=workflow_id,
+                work_item_id=work_item_id,
+                stage_name="stage-1",
             ),
         ]
 
@@ -130,24 +133,26 @@ async def multiple_workflows(event_store):
         if i < 2:
             events.append(
                 WorkflowCompletedEvent(
-                    aggregate_id=workflow_id,
-                    payload={
-                        "completed_at": datetime.now(UTC).isoformat(),
-                        "work_item_id": work_item_id,
-                        "duration_seconds": 100.0 + i * 10,
-                    },
+                    type="workflow.completed",
+                    timestamp=timestamp,
+                    source="test",
+                    workflow_id=workflow_id,
+                    work_item_id=work_item_id,
+                    final_stage="",
+                    completed_at=timestamp,
                 )
             )
         elif i == 2:
             events.append(
                 WorkflowFailedEvent(
-                    aggregate_id=workflow_id,
-                    payload={
-                        "failed_at": datetime.now(UTC).isoformat(),
-                        "reason": "Agent execution failed",
-                        "failed_stage": "stage-2",
-                        "completed_stages": ["stage-1"],
-                    },
+                    type="workflow.failed",
+                    timestamp=timestamp,
+                    source="test",
+                    workflow_id=workflow_id,
+                    work_item_id=work_item_id,
+                    failed_stage="stage-2",
+                    reason="Agent execution failed",
+                    failed_at=timestamp,
                 )
             )
 

@@ -148,15 +148,15 @@ async def test_execute_simple_pipeline(pipeline_manager, simple_workflow, mock_e
     assert len(events) > 0
 
     # Check stage started events
-    started_events = [e for e in events if isinstance(e, PipelineStageStarted)]
+    started_events = [e for e in events if isinstance(e, PipelineStageStartedEvent)]
     assert len(started_events) == 3
 
     # Check stage completed events
-    completed_events = [e for e in events if isinstance(e, PipelineStageCompleted)]
+    completed_events = [e for e in events if isinstance(e, PipelineStageCompletedEvent)]
     assert len(completed_events) == 3
 
     # Check pipeline completed event
-    pipeline_completed = [e for e in events if isinstance(e, PipelineCompleted)]
+    pipeline_completed = [e for e in events if isinstance(e, PipelineCompletedEvent)]
     assert len(pipeline_completed) == 1
 
 
@@ -202,8 +202,8 @@ async def test_execute_stage_successful(pipeline_manager, simple_workflow, mock_
 
     # Assert events
     events = mock_event_store.get_all_events_list()
-    stage_started = [e for e in events if isinstance(e, PipelineStageStarted)]
-    stage_completed = [e for e in events if isinstance(e, PipelineStageCompleted)]
+    stage_started = [e for e in events if isinstance(e, PipelineStageStartedEvent)]
+    stage_completed = [e for e in events if isinstance(e, PipelineStageCompletedEvent)]
     assert len(stage_started) == 1
     assert len(stage_completed) == 1
 
@@ -348,11 +348,10 @@ async def test_pipeline_failure_emits_event(pipeline_manager, simple_workflow, m
 
     # Check failure event was emitted
     events = mock_event_store.get_all_events_list()
-    failed_events = [e for e in events if isinstance(e, PipelineFailed)]
+    failed_events = [e for e in events if isinstance(e, PipelineFailedEvent)]
     assert len(failed_events) == 1
-    assert failed_events[0].payload["error"] == "Test error"
-    assert failed_events[0].payload["completed_stages"] == ["stage1"]
-    assert failed_events[0].payload["failed_stages"] == ["stage2"]
+    assert failed_events[0].error == "Test error"
+    assert failed_events[0].completed_stages == ("stage1",)
 
 
 # ============================================================================
