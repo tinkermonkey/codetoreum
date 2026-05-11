@@ -280,10 +280,10 @@ All domain event classes must be immutable frozen dataclasses. No field may be m
 
 #### Attributes
 
-| Name           | Value                                                                                                                                |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| constraintType | technical                                                                                                                            |
-| documentation  | Enforced via @dataclass(frozen=True) on all 165 event classes in domain/events/. Serialization support is provided without mutation. |
+| Name           | Value                                                                                                                                             |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| constraintType | technical                                                                                                                                         |
+| documentation  | Enforced via @dataclass(frozen=True) on all 151 CodetoreumEvent subclasses in domain/events/. Serialization support is provided without mutation. |
 
 #### Relationships
 
@@ -303,10 +303,10 @@ The domain layer (src/codetoreum/domain/) must have zero external library or ser
 
 #### Attributes
 
-| Name           | Value                                                                                                                                                                         |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| constraintType | technical                                                                                                                                                                     |
-| documentation  | Enforced by architecture review. ~95 domain model classes and 165 event classes must remain dependency-free. External interactions only via port interfaces in ports/output/. |
+| Name           | Value                                                                                                                                                                                      |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| constraintType | technical                                                                                                                                                                                  |
+| documentation  | Enforced by architecture review. ~95 domain model classes and 151 CodetoreumEvent subclasses must remain dependency-free. External interactions only via port interfaces in ports/output/. |
 
 #### Relationships
 
@@ -586,15 +586,15 @@ All external system interactions through abstract port interfaces to avoid vendo
 
 **Type**: `requirement`
 
-Every state change in the system must be captured as an immutable domain event persisted to the event store (Redis-backed InMemoryEventStore in simulation). The system must support event replay for debugging. 165 total domain event classes cover the full state lifecycle.
+Every state change in the system must be captured as an immutable domain event persisted to the event store (Redis-backed InMemoryEventStore in simulation). The system must support event replay for debugging. 151 CodetoreumEvent subclasses cover the full state lifecycle.
 
 #### Attributes
 
-| Name            | Value                                                                                                                                                           |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| documentation   | Realized by 165 domain events (91 modern + 74 legacy) in domain/events/, Redis-backed event store, and IEventStore output port. Supports full replay and audit. |
-| priority        | critical                                                                                                                                                        |
-| requirementType | non-functional                                                                                                                                                  |
+| Name            | Value                                                                                                                                                |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| documentation   | Realized by 151 CodetoreumEvent subclasses in domain/events/, Redis-backed event store, and IEventStore output port. Supports full replay and audit. |
+| priority        | critical                                                                                                                                             |
+| requirementType | non-functional                                                                                                                                       |
 
 #### Relationships
 
@@ -657,4 +657,4 @@ The system must not couple to any single LLM provider. All LLM interactions must
 
 ---
 
-Generated: 2026-05-09T09:28:54.064Z | Model Version: 0.1.0
+Generated: 2026-05-11T22:23:25.353Z | Model Version: 0.1.0

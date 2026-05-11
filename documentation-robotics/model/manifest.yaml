@@ -3,7 +3,7 @@ schema: documentation-robotics-v1
 cli_version: 0.1.3
 spec_version: 0.8.4
 created: 2026-05-08T10:23:47.104Z
-updated: 2026-05-09T09:28:54.063Z
+updated: 2026-05-11T22:23:06.945Z
 project:
   name: codetoreum
   description: Adaptable code orchestration
@@ -121,7 +121,3 @@ layers:
       testcasesketch: 28
       testcoveragemodel: 15
       testcoveragetarget: 42
-changeset_history:
-  - name: data-model-value-objects
-    committed_at: 2026-05-09T09:28:54.062Z
-    action: committed

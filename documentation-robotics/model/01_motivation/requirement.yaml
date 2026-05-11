@@ -60,14 +60,14 @@ motivation.requirement.complete-audit-trail-for-all-state-changes:
   name: Complete Audit Trail for All State Changes
   description: Every state change in the system must be captured as an immutable
     domain event persisted to the event store (Redis-backed InMemoryEventStore
-    in simulation). The system must support event replay for debugging. 165
-    total domain event classes cover the full state lifecycle.
+    in simulation). The system must support event replay for debugging. 151
+    CodetoreumEvent subclasses cover the full state lifecycle.
   attributes:
     requirementType: non-functional
     priority: critical
-    documentation: Realized by 165 domain events (91 modern + 74 legacy) in
-      domain/events/, Redis-backed event store, and IEventStore output port.
-      Supports full replay and audit.
+    documentation: Realized by 151 CodetoreumEvent subclasses in domain/events/,
+      Redis-backed event store, and IEventStore output port. Supports full
+      replay and audit.
   source_reference:
     provenance: extracted
     locations:
