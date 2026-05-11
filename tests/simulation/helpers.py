@@ -11,7 +11,7 @@ from codetoreum.infrastructure.simulation import SimulationRunner
 
 
 @dataclass(frozen=True)
-class TestEvent(CodetoreumEvent):
+class SimTestEvent(CodetoreumEvent):
     """Test event for simulation testing."""
 
     detail: str = ""

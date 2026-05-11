@@ -213,17 +213,16 @@ async def test_causal_chain_truncation(bootstrap, client):
 
     for i in range(105):
         event = WorkItemColumnChangedEvent(
-            aggregate_id=f"WI-{i}",
-            aggregate_type="WorkItem",
-            payload={
-                "work_item_id": f"WI-{i}",
-                "stage": f"stage-{i}",
-            },
-            user_id="system",
-            correlation_id=uuid4(),
-            causation_id=prev_causation_id,
-            event_id=uuid4(),
-            occurred_at=base_time + timedelta(seconds=i),
+            type="workitem.column_changed",
+            timestamp=(base_time + timedelta(seconds=i)).isoformat(),
+            source="test",
+            work_item_id=f"WI-{i}",
+            project_id="test-project",
+            board_id="test-board",
+            from_column=f"stage-{i-1}" if i > 0 else None,
+            to_column=f"stage-{i}",
+            moved_by="system",
+            correlation_id=str(uuid4()),
         )
         await event_store.append(f"WI-{i}", [event])
 

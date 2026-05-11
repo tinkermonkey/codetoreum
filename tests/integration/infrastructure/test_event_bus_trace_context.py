@@ -319,9 +319,10 @@ class TestEventBusTraceContextIntegration:
         events = []
         for i in range(3):
             event = _TestEvent(
-                aggregate_id=f"test-{i}",
-                aggregate_type="TestAggregate",
-                payload={"index": i},
+                type="test.aggregate",
+                timestamp=now_iso(),
+                source="test",
+                detail=f"index={i}",
             )
             events.append(event)
 
@@ -407,7 +408,7 @@ class TestEventBusTraceContextIntegration:
         # Verify event was handled
         assert len(handler.handled_events) == 1
         handled_event = handler.handled_events[0]
-        assert handled_event.aggregate_id == "test-handler-class"
+        assert handled_event.type == "test.event"
 
         # Verify the wrapped handler was called correctly
         # (The CONSUMER span is created by InstrumentedEventBus internally)
@@ -437,7 +438,7 @@ class TestEventBusTraceContextIntegration:
         # Verify event was handled (which means handler wrapper was called)
         assert len(handler.handled_events) == 1
         handled_event = handler.handled_events[0]
-        assert handled_event.aggregate_id == "test-span-kind"
+        assert handled_event.type == "test.event"
 
         # The CONSUMER span is created internally by InstrumentedEventBus
         # with the correct SpanKind.CONSUMER

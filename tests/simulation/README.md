@@ -524,7 +524,7 @@ async def test_my_scenario():
 The `helpers.py` module provides convenient assertion functions:
 
 ```python
-from helpers import AssertionHelpers, ScenarioHelpers
+from helpers import AssertionHelpers
 
 # Assert workflow completed
 AssertionHelpers.assert_workflow_completed(
@@ -546,14 +546,11 @@ AssertionHelpers.assert_execution_sequence(
     ["EventA", "EventB", "EventC"]
 )
 
-# Simulate workflow with helpers
-await ScenarioHelpers.simulate_workflow_execution(
+# Assert time elapsed
+AssertionHelpers.assert_time_elapsed(
     runner,
-    work_item_id="ISSUE-123",
-    stages=[
-        {"agent_id": "agent-1", "duration_minutes": 5},
-        {"agent_id": "agent-2", "duration_minutes": 3},
-    ]
+    min_seconds=5.0,
+    max_seconds=10.0
 )
 ```
 

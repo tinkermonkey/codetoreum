@@ -16,7 +16,7 @@ from codetoreum.domain.events import CodetoreumEvent, now_iso
 
 
 @dataclass(frozen=True)
-class TestEvent(CodetoreumEvent):
+class PubSubTestEvent(CodetoreumEvent):
     """Test event for Redis pub/sub testing."""
 
     detail: str = ""
@@ -95,9 +95,11 @@ async def test_publish_event(adapter, mock_redis, mock_pubsub):
     mock_redis.pubsub.return_value = mock_pubsub
 
     # Create test event
-    event = TestEvent(
-        aggregate_id="test-123",
-        aggregate_type="Test",
+    event = PubSubTestEvent(
+        type="test.event",
+        timestamp=now_iso(),
+        source="test",
+        detail="test-123",
     )
 
     # Publish event
@@ -111,7 +113,7 @@ async def test_publish_event(adapter, mock_redis, mock_pubsub):
     # Verify message structure
     message = json.loads(call_args[0][1])
     assert message["type"] == "event"
-    assert message["event_type"] == "DomainEvent"
+    assert message["event_type"] == "PubSubTestEvent"
     assert "event_id" in message["event"]
 
     # Verify stats
@@ -330,9 +332,11 @@ async def test_get_stats(adapter, mock_redis, mock_pubsub):
     mock_redis.pubsub.return_value = mock_pubsub
 
     # Publish some messages
-    event = TestEvent(
-        aggregate_id="test-123",
-        aggregate_type="Test",
+    event = PubSubTestEvent(
+        type="test.event",
+        timestamp=now_iso(),
+        source="test",
+        detail="test-123",
     )
 
     await adapter.publish_event(event)
@@ -392,9 +396,11 @@ async def test_publish_error_handling(adapter, mock_redis, mock_pubsub):
     mock_redis.publish.side_effect = Exception("Redis connection error")
 
     # Create event
-    event = TestEvent(
-        aggregate_id="test-123",
-        aggregate_type="Test",
+    event = PubSubTestEvent(
+        type="test.event",
+        timestamp=now_iso(),
+        source="test",
+        detail="test-123",
     )
 
     # Publish should raise error
