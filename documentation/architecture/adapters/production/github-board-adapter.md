@@ -299,7 +299,7 @@ classDiagram
         +POST /graphql
     }
 
-    class DomainEvents {
+    class CodetoreumEvents {
         <<events>>
         WorkItemColumnChangedEvent
         BoardReconciledEvent
@@ -309,7 +309,7 @@ classDiagram
     GitHubBoardAdapter --> GitHubGraphQLClient: uses
     GitHubBoardAdapter --> GitHubTicketAdapter: depends on
     GitHubGraphQLClient --> GitHubAPI: GraphQL queries
-    GitHubBoardAdapter --> DomainEvents: emits
+    GitHubBoardAdapter --> CodetoreumEvents: emits
 ```
 
 ## Production vs. Mock Comparison

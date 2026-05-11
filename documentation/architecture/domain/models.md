@@ -877,24 +877,27 @@ The Project Context provides project-level configuration and state management.
 class ProjectContextCreatedEvent(CodetoreumEvent):
     """Emitted when project context is created."""
     project_id: str = ""
+    name: str = ""
 
 @dataclass(frozen=True)
 class ProjectTestConfigUpdatedEvent(CodetoreumEvent):
     """Emitted when test configuration is updated."""
     project_id: str = ""
-    config: dict[str, Any] = field(default_factory=dict)
+    test_command: str = ""
+    test_timeout: int = 0
 
 @dataclass(frozen=True)
 class ProjectDockerConfigUpdatedEvent(CodetoreumEvent):
     """Emitted when Docker configuration is updated."""
     project_id: str = ""
-    config: dict[str, Any] = field(default_factory=dict)
+    image: str = ""
 
 @dataclass(frozen=True)
 class ProjectWorkflowMappingAddedEvent(CodetoreumEvent):
     """Emitted when workflow mapping is added."""
     project_id: str = ""
-    mapping: dict[str, Any] = field(default_factory=dict)
+    column_name: str = ""
+    workflow_stage: str = ""
 
 @dataclass
 class ProjectContext:
