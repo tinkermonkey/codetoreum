@@ -188,7 +188,13 @@ class ElasticsearchConfigStorage(IConfigStore):
                 "github_org": {"type": "keyword"},
                 "github_repo": {"type": "keyword"},
                 "tech_stacks": {"type": "object", "enabled": True},
-                "pipelines": {"type": "nested"},
+                "pipelines": {
+                    "type": "nested",
+                    "properties": {
+                        "name": {"type": "keyword"},
+                        "stages": {"type": "keyword"},
+                    },
+                },
                 "testing": {"type": "object", "enabled": True},
                 "environment_variables": {"type": "object", "enabled": True},
                 "mounted_commands": {"type": "object", "enabled": True},
@@ -235,7 +241,13 @@ class ElasticsearchConfigStorage(IConfigStore):
                     "analyzer": "config_analyzer",
                     "fields": {"keyword": {"type": "keyword"}},
                 },
-                "stages": {"type": "nested"},
+                "stages": {
+                    "type": "nested",
+                    "properties": {
+                        "name": {"type": "keyword"},
+                        "agent": {"type": "keyword"},
+                    },
+                },
                 "triggers": {"type": "keyword"},
                 "version": {"type": "integer"},
                 "created_at": {"type": "date"},
@@ -255,7 +267,13 @@ class ElasticsearchConfigStorage(IConfigStore):
                     "fields": {"keyword": {"type": "keyword"}},
                 },
                 "description": {"type": "text", "analyzer": "config_analyzer"},
-                "stages": {"type": "nested"},
+                "stages": {
+                    "type": "nested",
+                    "properties": {
+                        "name": {"type": "keyword"},
+                        "agent": {"type": "keyword"},
+                    },
+                },
                 "version": {"type": "integer"},
                 "created_at": {"type": "date"},
                 "updated_at": {"type": "date"},
