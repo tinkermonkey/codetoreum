@@ -173,7 +173,6 @@ class ScenarioHelpers:
     catalog (e.g., WorkflowStartedEvent, ExecutionCompletedEvent) if needed.
     """
 
-    pass
 
 
 def print_event_timeline(runner: SimulationRunner) -> None:

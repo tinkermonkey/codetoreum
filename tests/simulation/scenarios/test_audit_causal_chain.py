@@ -16,9 +16,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from codetoreum.domain.events import (
-    WorkItemColumnChangedEvent,
-    WorkflowStartedEvent,
     WorkflowCompletedEvent,
+    WorkflowStartedEvent,
+    WorkItemColumnChangedEvent,
     now_iso,
 )
 from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap

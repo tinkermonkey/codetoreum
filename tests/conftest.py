@@ -17,16 +17,14 @@ os.environ.setdefault("OTEL_ENABLED", "false")
 os.environ.setdefault("OTEL_TRACES_ENABLED", "false")
 
 from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdapter
-from codetoreum.domain.events import CodetoreumEvent
 from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
-from codetoreum.domain.events import now_iso
 from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
 from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
 from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
+from codetoreum.domain.events import CodetoreumEvent, now_iso
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.simulation import SimulationConfig
 from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
-
 
 # ============================================================================
 # TestEvent Fixture for Adapter Tests
