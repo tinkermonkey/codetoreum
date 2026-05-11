@@ -929,8 +929,11 @@ class ElasticsearchEventStore(IEventStore):
                         "correlation_id": {"type": "keyword"},
                         "causation_id": {"type": "keyword"},
                         "user_id": {"type": "keyword"},
-                        "data": {"type": "object", "enabled": True},
+                        "data": {"type": "object", "enabled": True, "dynamic": False},
                         "metadata": {
+                            "type": "object",
+                            "enabled": True,
+                            "dynamic": False,
                             "properties": {
                                 "trace_id": {"type": "keyword"},
                                 "span_id": {"type": "keyword"},

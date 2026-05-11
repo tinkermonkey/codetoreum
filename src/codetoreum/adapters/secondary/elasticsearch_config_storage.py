@@ -187,22 +187,24 @@ class ElasticsearchConfigStorage(IConfigStore):
                 },
                 "github_org": {"type": "keyword"},
                 "github_repo": {"type": "keyword"},
-                "tech_stacks": {"type": "object", "enabled": True},
+                "tech_stacks": {"type": "object", "enabled": True, "dynamic": False},
                 "pipelines": {
                     "type": "nested",
+                    "enabled": True,
+                    "dynamic": False,
                     "properties": {
                         "name": {"type": "keyword"},
                         "stages": {"type": "keyword"},
                     },
                 },
-                "testing": {"type": "object", "enabled": True},
-                "environment_variables": {"type": "object", "enabled": True},
-                "mounted_commands": {"type": "object", "enabled": True},
-                "mounted_subagents": {"type": "object", "enabled": True},
+                "testing": {"type": "object", "enabled": True, "dynamic": False},
+                "environment_variables": {"type": "object", "enabled": True, "dynamic": False},
+                "mounted_commands": {"type": "object", "enabled": True, "dynamic": False},
+                "mounted_subagents": {"type": "object", "enabled": True, "dynamic": False},
                 "created_at": {"type": "date"},
                 "updated_at": {"type": "date"},
                 "version": {"type": "integer"},
-                "metadata": {"type": "object", "enabled": True},
+                "metadata": {"type": "object", "enabled": True, "dynamic": False},
             }
         }
 
@@ -222,11 +224,11 @@ class ElasticsearchConfigStorage(IConfigStore):
                 "makes_code_changes": {"type": "boolean"},
                 "mcp_servers": {"type": "keyword"},
                 "capabilities": {"type": "keyword"},
-                "constraints": {"type": "object", "enabled": True},
+                "constraints": {"type": "object", "enabled": True, "dynamic": False},
                 "version": {"type": "integer"},
                 "created_at": {"type": "date"},
                 "updated_at": {"type": "date"},
-                "metadata": {"type": "object", "enabled": True},
+                "metadata": {"type": "object", "enabled": True, "dynamic": False},
             }
         }
 
@@ -243,6 +245,8 @@ class ElasticsearchConfigStorage(IConfigStore):
                 },
                 "stages": {
                     "type": "nested",
+                    "enabled": True,
+                    "dynamic": False,
                     "properties": {
                         "name": {"type": "keyword"},
                         "agent": {"type": "keyword"},
@@ -252,7 +256,7 @@ class ElasticsearchConfigStorage(IConfigStore):
                 "version": {"type": "integer"},
                 "created_at": {"type": "date"},
                 "updated_at": {"type": "date"},
-                "metadata": {"type": "object", "enabled": True},
+                "metadata": {"type": "object", "enabled": True, "dynamic": False},
             }
         }
 
@@ -269,6 +273,8 @@ class ElasticsearchConfigStorage(IConfigStore):
                 "description": {"type": "text", "analyzer": "config_analyzer"},
                 "stages": {
                     "type": "nested",
+                    "enabled": True,
+                    "dynamic": False,
                     "properties": {
                         "name": {"type": "keyword"},
                         "agent": {"type": "keyword"},
@@ -277,7 +283,7 @@ class ElasticsearchConfigStorage(IConfigStore):
                 "version": {"type": "integer"},
                 "created_at": {"type": "date"},
                 "updated_at": {"type": "date"},
-                "metadata": {"type": "object", "enabled": True},
+                "metadata": {"type": "object", "enabled": True, "dynamic": False},
             }
         }
 
@@ -291,9 +297,9 @@ class ElasticsearchConfigStorage(IConfigStore):
                 "changed_at": {"type": "date"},
                 "changed_by": {"type": "keyword"},
                 "change_type": {"type": "keyword"},
-                "changes": {"type": "object", "enabled": True},
+                "changes": {"type": "object", "enabled": True, "dynamic": False},
                 "reason": {"type": "text"},
-                "snapshot": {"type": "object", "enabled": True},
+                "snapshot": {"type": "object", "enabled": True, "dynamic": False},
             }
         }
 
