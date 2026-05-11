@@ -144,14 +144,11 @@ class IWorkspaceQueryPort(ABC):
         """
         Get workspace information by ID.
 
-        Args:
-            workspace_id: Workspace ID
+        Args: workspace_id: Workspace ID
 
-        Returns:
-            Workspace information
+        Returns: Workspace information
 
-        Raises:
-            WorkspaceNotFoundError: If workspace doesn't exist
+        Raises: WorkspaceNotFoundError: If workspace doesn't exist
         """
 
     @abstractmethod
@@ -159,14 +156,11 @@ class IWorkspaceQueryPort(ABC):
         """
         Get workspace information by execution ID.
 
-        Args:
-            execution_id: Execution ID
+        Args: execution_id: Execution ID
 
-        Returns:
-            Workspace information
+        Returns: Workspace information
 
-        Raises:
-            WorkspaceNotFoundError: If workspace doesn't exist
+        Raises: WorkspaceNotFoundError: If workspace doesn't exist
         """
 
     @abstractmethod
@@ -176,12 +170,10 @@ class IWorkspaceQueryPort(ABC):
         """
         List workspaces with optional filtering.
 
-        Args:
-            filters: Optional filters
+        Args: filters: Optional filters
             pagination: Optional pagination
 
-        Returns:
-            List of workspaces with aggregate stats
+        Returns: List of workspaces with aggregate stats
         """
 
     @abstractmethod
@@ -189,11 +181,9 @@ class IWorkspaceQueryPort(ABC):
         """
         List all active workspaces (running or initializing).
 
-        Args:
-            pagination: Optional pagination
+        Args: pagination: Optional pagination
 
-        Returns:
-            List of active workspaces with resource usage
+        Returns: List of active workspaces with resource usage
         """
 
     @abstractmethod
@@ -201,11 +191,9 @@ class IWorkspaceQueryPort(ABC):
         """
         Get aggregate resource usage across workspaces.
 
-        Args:
-            project_id: Optional filter by project
+        Args: project_id: Optional filter by project
 
-        Returns:
-            Dict with total CPU, memory, disk usage and container counts
+        Returns: Dict with total CPU, memory, disk usage and container counts
         """
 
     @abstractmethod
@@ -213,11 +201,9 @@ class IWorkspaceQueryPort(ABC):
         """
         Count workspaces matching filters.
 
-        Args:
-            filters: Optional filters
+        Args: filters: Optional filters
 
-        Returns:
-            Count of matching workspaces
+        Returns: Count of matching workspaces
         """
 
     @abstractmethod
@@ -227,14 +213,11 @@ class IWorkspaceQueryPort(ABC):
         """
         Get workspace container logs.
 
-        Args:
-            workspace_id: Workspace ID
+        Args: workspace_id: Workspace ID
             tail: Optional number of lines from end
             since: Optional timestamp to filter from
 
-        Returns:
-            List of log lines
+        Returns: List of log lines
 
-        Raises:
-            WorkspaceNotFoundError: If workspace doesn't exist
+        Raises: WorkspaceNotFoundError: If workspace doesn't exist
         """

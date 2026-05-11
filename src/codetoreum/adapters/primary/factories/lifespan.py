@@ -21,11 +21,9 @@ def create_lifespan(app: FastAPI):
     application, including printing authentication information if an auth
     manager is configured.
 
-    Args:
-        app: The FastAPI application instance
+    Args: app: The FastAPI application instance
 
-    Returns:
-        Async context manager for application lifespan
+    Returns: Async context manager for application lifespan
     """
 
     @asynccontextmanager

@@ -4,8 +4,7 @@ Default Configuration Values
 All default values for Codetoreum configuration.
 Centralizing these values eliminates magic numbers and makes the codebase more maintainable.
 
-Usage:
-    from codetoreum.config import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
+Usage: from codetoreum.config import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 
     limit: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE)
 """

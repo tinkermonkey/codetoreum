@@ -118,9 +118,7 @@ class AuditLogger:
     - Provides query capabilities for audit trail review
     - Implements retention policies for compliance
 
-    Example usage:
-
-        audit_logger = AuditLogger(logger, audit_store)
+    Example usage: audit_logger = AuditLogger(logger, audit_store)
 
         # Log successful operation
         audit_logger.log_event(
@@ -152,8 +150,7 @@ class AuditLogger:
         """
         Initialize audit logger.
 
-        Args:
-            logger: Standard logger for immediate audit log output
+        Args: logger: Standard logger for immediate audit log output
             audit_store: Optional persistent storage for audit events
         """
         self.logger = logger or get_logger("codetoreum.audit")
@@ -173,14 +170,12 @@ class AuditLogger:
         """
         Log an audit event.
 
-        This method:
-        1. Creates a structured audit event
+        This method: 1. Creates a structured audit event
         2. Logs it via standard logging (with sensitive data scrubbing)
         3. Stores it in the audit database (if configured)
         4. Returns the event for further processing if needed
 
-        Args:
-            event_type: Type of event (from AuditEventType enum)
+        Args: event_type: Type of event (from AuditEventType enum)
             resource_type: Type of resource (e.g., "agent", "workflow", "config")
             resource_id: ID of the resource
             action: Action performed (e.g., "create", "update", "delete")
@@ -189,8 +184,7 @@ class AuditLogger:
             success: Whether the action succeeded
             error_message: Error message if action failed
 
-        Returns:
-            The created AuditEvent instance
+        Returns: The created AuditEvent instance
         """
         # Get correlation ID from current context
         correlation_id = get_correlation_id()
@@ -418,8 +412,7 @@ def get_audit_logger() -> AuditLogger:
     This should be initialized during application startup with
     the appropriate audit store.
 
-    Returns:
-        Global AuditLogger instance
+    Returns: Global AuditLogger instance
     """
     global _audit_logger
     if _audit_logger is None:
@@ -434,8 +427,7 @@ def set_audit_logger(audit_logger: AuditLogger) -> None:
 
     This should be called during application startup.
 
-    Args:
-        audit_logger: Configured AuditLogger instance
+    Args: audit_logger: Configured AuditLogger instance
     """
     global _audit_logger
     _audit_logger = audit_logger

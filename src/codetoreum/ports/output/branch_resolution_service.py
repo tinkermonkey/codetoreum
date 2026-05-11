@@ -25,8 +25,7 @@ class IBranchResolutionService(IEventEmitter, ABC):
     for a work item. This service makes strategic decisions about branch
     creation and reuse, emitting events to track resolution decisions.
 
-    The service is used by the orchestrator to:
-    1. Analyze work item metadata (issue title, description, relationships)
+    The service is used by the orchestrator to: 1. Analyze work item metadata (issue title, description, relationships)
     2. Query existing branches for matches
     3. Decide whether to create new or reuse existing branch
     4. Return resolution decision with confidence and reasoning
@@ -57,8 +56,7 @@ class IBranchResolutionService(IEventEmitter, ABC):
         # Resolution includes action and confidence
         if resolution.action == "reuse":
             print(f"Reuse existing: {resolution.branch_name}")
-        else:
-            print(f"Create new: {resolution.branch_name}")
+        else: print(f"Create new: {resolution.branch_name}")
     """
 
     @abstractmethod
@@ -74,24 +72,20 @@ class IBranchResolutionService(IEventEmitter, ABC):
         Analyzes issue metadata and determines which branch to use, whether
         to create a new branch or reuse an existing one.
 
-        Args:
-            project_id: Project identifier
+        Args: project_id: Project identifier
             issue_id: Issue/work item identifier
             issue_metadata: Immutable mapping of issue details (title,
                            description, labels, relationships, etc.)
                            The mapping must not be modified during resolution.
             repo_path: Local repository path (required for querying branches)
 
-        Returns:
-            BranchResolution: Resolution decision including action (create/reuse),
+        Returns: BranchResolution: Resolution decision including action (create/reuse),
                              branch name, confidence level, and reasoning
 
-        Raises:
-            ExternalServiceError: If ticket system, version control, or other
+        Raises: ExternalServiceError: If ticket system, version control, or other
                                 external service communication fails
 
-        Events:
-            Emits events as documented in class docstring: BranchResolvedEvent
+        Events: Emits events as documented in class docstring: BranchResolvedEvent
             (always), plus BranchReusedEvent or BranchResolutionCreatedEvent
             depending on the resolution action (reuse vs. create)
         """

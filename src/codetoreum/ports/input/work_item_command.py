@@ -102,14 +102,11 @@ class IWorkItemCommandPort(ABC):
         """
         Creates a new work item.
 
-        Args:
-            command: Command with work item creation parameters
+        Args: command: Command with work item creation parameters
 
-        Returns:
-            Created work item
+        Returns: Created work item
 
-        Raises:
-            ValidationError: If command parameters invalid
+        Raises: ValidationError: If command parameters invalid
             ProjectNotFoundError: If project doesn't exist
         """
 
@@ -118,14 +115,11 @@ class IWorkItemCommandPort(ABC):
         """
         Updates an existing work item.
 
-        Args:
-            command: Command with update parameters
+        Args: command: Command with update parameters
 
-        Returns:
-            Updated work item
+        Returns: Updated work item
 
-        Raises:
-            WorkItemNotFoundError: If work item doesn't exist
+        Raises: WorkItemNotFoundError: If work item doesn't exist
             ValidationError: If command parameters invalid
         """
 
@@ -134,14 +128,11 @@ class IWorkItemCommandPort(ABC):
         """
         Soft deletes a work item.
 
-        Args:
-            work_item_id: Work item ID
+        Args: work_item_id: Work item ID
 
-        Returns:
-            Result containing success status and message
+        Returns: Result containing success status and message
 
-        Raises:
-            WorkItemNotFoundError: If work item doesn't exist
+        Raises: WorkItemNotFoundError: If work item doesn't exist
         """
 
     @abstractmethod
@@ -149,14 +140,11 @@ class IWorkItemCommandPort(ABC):
         """
         Assigns an agent to a work item.
 
-        Args:
-            command: Command with assignment parameters
+        Args: command: Command with assignment parameters
 
-        Returns:
-            Updated work item
+        Returns: Updated work item
 
-        Raises:
-            WorkItemNotFoundError: If work item doesn't exist
+        Raises: WorkItemNotFoundError: If work item doesn't exist
             AgentNotFoundError: If agent doesn't exist
         """
 
@@ -165,14 +153,11 @@ class IWorkItemCommandPort(ABC):
         """
         Updates work item labels.
 
-        Args:
-            command: Command with label updates
+        Args: command: Command with label updates
 
-        Returns:
-            Updated work item
+        Returns: Updated work item
 
-        Raises:
-            WorkItemNotFoundError: If work item doesn't exist
+        Raises: WorkItemNotFoundError: If work item doesn't exist
         """
 
     @abstractmethod
@@ -180,14 +165,11 @@ class IWorkItemCommandPort(ABC):
         """
         Updates work item priority.
 
-        Args:
-            command: Command with priority update
+        Args: command: Command with priority update
 
-        Returns:
-            Updated work item
+        Returns: Updated work item
 
-        Raises:
-            WorkItemNotFoundError: If work item doesn't exist
+        Raises: WorkItemNotFoundError: If work item doesn't exist
         """
 
     @abstractmethod
@@ -195,14 +177,11 @@ class IWorkItemCommandPort(ABC):
         """
         Attaches a workflow to a work item.
 
-        Args:
-            command: Command with workflow attachment parameters
+        Args: command: Command with workflow attachment parameters
 
-        Returns:
-            Updated work item
+        Returns: Updated work item
 
-        Raises:
-            WorkItemNotFoundError: If work item doesn't exist
+        Raises: WorkItemNotFoundError: If work item doesn't exist
             WorkflowNotFoundError: If workflow doesn't exist
         """
 
@@ -211,12 +190,9 @@ class IWorkItemCommandPort(ABC):
         """
         Updates work item stage.
 
-        Args:
-            command: Command with stage update
+        Args: command: Command with stage update
 
-        Returns:
-            Updated work item
+        Returns: Updated work item
 
-        Raises:
-            WorkItemNotFoundError: If work item doesn't exist
+        Raises: WorkItemNotFoundError: If work item doesn't exist
         """

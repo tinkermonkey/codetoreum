@@ -1504,3 +1504,116 @@ data-model.objectschema.review-events:
     created_at: 2026-05-08T12:18:01.315Z
     updated_at: 2026-05-08T12:18:01.315Z
     version: 1
+data-model.objectschema.repair-test-result:
+  id: 19e4cb4d-34b6-4ee8-80ae-04e27c7eb6f2
+  path: data-model.objectschema.repair-test-result
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: RepairTestResult
+  description: Immutable aggregated result of a single repair test execution
+    (UNIT/INTEGRATION/CI/E2E). Carries test_type, iteration number,
+    passed/failed/warnings counts, a tuple of RepairTestFailure objects, a tuple
+    of RepairTestWarning objects, raw output string, and timestamp. Input to
+    systemic analysis and repair cycle aggregation.
+  attributes:
+    type: object
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/repair_cycle_types.py
+        symbol: RepairTestResult
+  metadata:
+    created_at: 2026-05-09T09:28:05.690Z
+    updated_at: 2026-05-09T09:28:05.690Z
+    version: 1
+data-model.objectschema.cycle-result:
+  id: b9543481-395e-48eb-8b6f-b4552fc62ddf
+  path: data-model.objectschema.cycle-result
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: CycleResult
+  description: Immutable result of a single repair iteration cycle (test + fix
+    attempt). Captures the RepairTestResult before fixing, whether a fix was
+    attempted, repair agent output, and the RepairTestResult after fixing.
+    Enables per-iteration analysis of repair effectiveness.
+  attributes:
+    type: object
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/repair_cycle_types.py
+        symbol: CycleResult
+  metadata:
+    created_at: 2026-05-09T09:28:06.099Z
+    updated_at: 2026-05-09T09:28:06.099Z
+    version: 1
+data-model.objectschema.repair-cycle-stage-config:
+  id: 9b1cdbb4-e2ae-4f75-ab11-c7f1dfc2fb65
+  path: data-model.objectschema.repair-cycle-stage-config
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: RepairCycleStageConfig
+  description: Immutable configuration for a single repair cycle stage
+    (UNIT/INTEGRATION/CI/E2E). Declares max_iterations, whether to review
+    warnings, timeout_seconds, and circuit breaker thresholds. Controls
+    per-stage repair behavior without coupling stage logic to orchestration
+    policy.
+  attributes:
+    type: object
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/repair_cycle_types.py
+        symbol: RepairCycleStageConfig
+  metadata:
+    created_at: 2026-05-09T09:28:13.089Z
+    updated_at: 2026-05-09T09:28:13.089Z
+    version: 1
+data-model.objectschema.systemic-analysis-result:
+  id: 121d2e45-f78f-4b1e-a7ed-1fda0daf2035
+  path: data-model.objectschema.systemic-analysis-result
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: SystemicAnalysisResult
+  description: Immutable result of systemic failure analysis across multiple
+    RepairTestResult inputs. Carries FailureClassification
+    (CODE_DEFECT/ENVIRONMENT_ISSUE/TRANSIENT/DEPENDENCY/CONFIGURATION),
+    recommended fix strategy, confidence score, and affected file list. Used to
+    dispatch repair to the correct handler path.
+  attributes:
+    type: object
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/repair_cycle_types.py
+        symbol: SystemicAnalysisResult
+  metadata:
+    created_at: 2026-05-09T09:28:13.471Z
+    updated_at: 2026-05-09T09:28:13.471Z
+    version: 1
+data-model.objectschema.verification-result:
+  id: 87dc8a90-46ba-4e27-8322-808154dcb8a5
+  path: data-model.objectschema.verification-result
+  spec_node_id: data-model.objectschema
+  type: objectschema
+  layer_id: data-model
+  name: VerificationResult
+  description: Immutable result of a post-fix verification run. Captures whether
+    the fix was verified successfully, the RepairTestResult from the
+    verification run, and any remaining failures. Used to decide whether the
+    repair cycle should continue or terminate.
+  attributes:
+    type: object
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/repair_cycle_types.py
+        symbol: RepairTestResult
+  metadata:
+    created_at: 2026-05-09T09:28:17.338Z
+    updated_at: 2026-05-09T09:28:17.338Z
+    version: 1

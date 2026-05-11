@@ -4,13 +4,13 @@ import logging
 
 from codetoreum.application.execution_service import ExecutionService
 from codetoreum.domain.events import (
-    DomainEvent,
-    ExecutionCompleted,
-    ExecutionFailed,
-    ExecutionInitialized,
-    ExecutionStarted,
-    ExecutionTimeout,
+    ExecutionCompletedEvent,
+    ExecutionFailedEvent,
+    ExecutionInitializedEvent,
+    ExecutionStartedEvent,
+    ExecutionTimedOutEvent,
 )
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.event_bus import EventHandler, event_handler
 
@@ -18,30 +18,29 @@ logger = logging.getLogger(__name__)
 
 
 @event_handler(
-    "ExecutionInitialized",
-    "ExecutionStarted",
-    "ExecutionCompleted",
-    "ExecutionFailed",
-    "ExecutionTimeout",
+    "ExecutionInitializedEvent",
+    "ExecutionStartedEvent",
+    "ExecutionCompletedEvent",
+    "ExecutionFailedEvent",
+    "ExecutionTimedOutEvent",
 )
 class ExecutionEventHandler(EventHandler):
     """
     Event handler for agent execution lifecycle events.
 
     Handles events for:
-    - ExecutionInitialized: Log execution creation
-    - ExecutionStarted: Track active executions
-    - ExecutionCompleted: Update metrics, trigger next steps
-    - ExecutionFailed: Handle failures, track errors
-    - ExecutionTimeout: Handle timeout scenarios
+    - ExecutionInitializedEvent: Log execution creation
+    - ExecutionStartedEvent: Track active executions
+    - ExecutionCompletedEvent: Update metrics, trigger next steps
+    - ExecutionFailedEvent: Handle failures, track errors
+    - ExecutionTimedOutEvent: Handle timeout scenarios
     """
 
     def __init__(self, execution_service: ExecutionService):
         """
         Initialize handler.
 
-        Args:
-            execution_service: Execution service
+        Args: execution_service: Execution service
         """
         self.execution_service = execution_service
 
@@ -57,61 +56,54 @@ class ExecutionEventHandler(EventHandler):
         # Track active executions by ID
         self._active_executions: dict[str, str] = {}  # execution_id -> work_item_id
 
-    async def handle(self, event: DomainEvent) -> None:
+    async def handle(self, event: CodetoreumEvent) -> None:
         """
         Handle execution-related events.
 
-        Args:
-            event: Domain event to handle
+        Args: event: Domain event to handle
 
-        Raises:
-            Exception: If handling fails
+        Raises: Exception: If handling fails
         """
-        if isinstance(event, ExecutionInitialized):
+        if isinstance(event, ExecutionInitializedEvent):
             await self._handle_execution_initialized(event)
-        elif isinstance(event, ExecutionStarted):
+        elif isinstance(event, ExecutionStartedEvent):
             await self._handle_execution_started(event)
-        elif isinstance(event, ExecutionCompleted):
+        elif isinstance(event, ExecutionCompletedEvent):
             await self._handle_execution_completed(event)
-        elif isinstance(event, ExecutionFailed):
+        elif isinstance(event, ExecutionFailedEvent):
             await self._handle_execution_failed(event)
-        elif isinstance(event, ExecutionTimeout):
+        elif isinstance(event, ExecutionTimedOutEvent):
             await self._handle_execution_timeout(event)
         else:
             logger.warning(f"ExecutionEventHandler received unexpected event type: {event.event_type}")
 
-    async def _handle_execution_initialized(self, event: ExecutionInitialized) -> None:
+    async def _handle_execution_initialized(self, event: ExecutionInitializedEvent) -> None:
         """
         Handle execution initialization.
 
-        Args:
-            event: ExecutionInitialized event
+        Args: event: ExecutionInitializedEvent event
         """
         self._metrics["total_executions"] += 1
 
         logger.info(
-            f"Execution initialized: {event.aggregate_id} "
-            f"(agent: {event.payload.get('agent_id')}, work_item: {event.payload.get('work_item_id')}, "
-            f"workflow: {event.payload.get('workflow_id')}, stage: {event.payload.get('stage_name')})"
+            f"Execution initialized: {event.execution_id} "
+            f"(agent: {event.agent_id}, work_item: {event.work_item_id})"
         )
 
         logger.debug(
             f"Total executions: {self._metrics['total_executions']}, Active: {self._metrics['active_executions']}"
         )
 
-    async def _handle_execution_started(self, event: ExecutionStarted) -> None:
+    async def _handle_execution_started(self, event: ExecutionStartedEvent) -> None:
         """
         Handle execution start - track active executions.
 
-        Args:
-            event: ExecutionStarted event
+        Args: event: ExecutionStartedEvent event
         """
         self._metrics["active_executions"] += 1
-        self._active_executions[event.aggregate_id] = event.aggregate_id  # Track by execution ID
+        self._active_executions[event.execution_id] = event.execution_id
 
-        logger.info(
-            f"Execution started: {event.aggregate_id} (container: {event.payload.get('container_name') or 'none'})"
-        )
+        logger.info(f"Execution started: {event.execution_id}")
 
         logger.debug(
             f"Active executions: {self._metrics['active_executions']}, Total: {self._metrics['total_executions']}"
@@ -123,23 +115,18 @@ class ExecutionEventHandler(EventHandler):
         # 3. Stream logs to subscribers
         # 4. Update execution dashboard
 
-    async def _handle_execution_completed(self, event: ExecutionCompleted) -> None:
+    async def _handle_execution_completed(self, event: ExecutionCompletedEvent) -> None:
         """
         Handle execution completion - update metrics, trigger next steps.
 
-        Args:
-            event: ExecutionCompleted event
+        Args: event: ExecutionCompletedEvent event
         """
         self._metrics["completed_executions"] += 1
         self._metrics["active_executions"] -= 1
-        self._active_executions.pop(event.aggregate_id, None)
+        self._active_executions.pop(event.execution_id, None)
 
-        input_tokens = event.payload.get("input_tokens", 0)
-        output_tokens = event.payload.get("output_tokens", 0)
         logger.info(
-            f"Execution completed: {event.aggregate_id} "
-            f"(tokens: input={input_tokens}, output={output_tokens}, "
-            f"total={input_tokens + output_tokens})"
+            f"Execution completed: {event.execution_id} " f"(work_item: {event.work_item_id}, agent: {event.agent_id})"
         )
 
         logger.debug(
@@ -154,25 +141,20 @@ class ExecutionEventHandler(EventHandler):
         # 4. Trigger workflow progression (handled by WorkflowEventHandler)
         # 5. Send completion notifications
 
-    async def _handle_execution_failed(self, event: ExecutionFailed) -> None:
+    async def _handle_execution_failed(self, event: ExecutionFailedEvent) -> None:
         """
         Handle execution failure - track errors, trigger retry or escalation.
 
-        Args:
-            event: ExecutionFailed event
+        Args: event: ExecutionFailedEvent event
         """
         self._metrics["failed_executions"] += 1
         self._metrics["active_executions"] -= 1
-        self._active_executions.pop(event.aggregate_id, None)
+        self._active_executions.pop(event.execution_id, None)
 
         logger.error(
-            f"Execution failed: {event.aggregate_id}, error: {event.payload.get('error_message')}",
+            f"Execution failed: {event.execution_id}, error: {event.error}",
             extra={"error_id": "ERR_EXECUTION_FAILED"},
         )
-
-        exit_code = event.payload.get("exit_code")
-        if exit_code:
-            logger.error(f"Exit code: {exit_code}", extra={"error_id": ErrorRegistry.ERR_EXECUTION_ERROR})
 
         logger.warning(
             f"Failure rate: {self._metrics['failed_executions']}/{self._metrics['total_executions']} "
@@ -187,20 +169,19 @@ class ExecutionEventHandler(EventHandler):
         # 5. Send failure notifications
         # 6. Store failure diagnostics
 
-    async def _handle_execution_timeout(self, event: ExecutionTimeout) -> None:
+    async def _handle_execution_timeout(self, event: ExecutionTimedOutEvent) -> None:
         """
         Handle execution timeout.
 
-        Args:
-            event: ExecutionTimeout event
+        Args: event: ExecutionTimedOutEvent event
         """
         self._metrics["timed_out_executions"] += 1
         self._metrics["failed_executions"] += 1
         self._metrics["active_executions"] -= 1
-        self._active_executions.pop(event.aggregate_id, None)
+        self._active_executions.pop(event.execution_id, None)
 
         logger.error(
-            f"Execution timed out: {event.aggregate_id}",
+            f"Execution timed out: {event.execution_id}",
             extra={"error_id": ErrorRegistry.ERR_EXECUTION_TIMEOUT},
         )
 
@@ -239,8 +220,7 @@ class ExecutionEventHandler(EventHandler):
         """
         Get execution metrics.
 
-        Returns:
-            Dictionary of execution metrics
+        Returns: Dictionary of execution metrics
         """
         return {
             **self._metrics,
@@ -253,7 +233,6 @@ class ExecutionEventHandler(EventHandler):
         """
         Get currently active executions.
 
-        Returns:
-            Dictionary mapping execution_id to work_item_id
+        Returns: Dictionary mapping execution_id to work_item_id
         """
         return dict(self._active_executions)

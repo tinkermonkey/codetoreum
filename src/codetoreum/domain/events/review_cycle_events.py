@@ -156,9 +156,6 @@ class ReviewCycleIterationCompletedEvent(CodetoreumEvent):
     def __post_init__(self) -> None:
         """Validate event after initialization."""
         super().__post_init__()
-        if not self.work_item_id:
-            msg = "work_item_id is required"
-            raise ValueError(msg)
         if not self.review_cycle_id:
             msg = "review_cycle_id is required"
             raise ValueError(msg)
@@ -192,8 +189,7 @@ class ReviewCycleIterationCompletedEvent(CodetoreumEvent):
         """Deserialize from dictionary.
 
         Raises:
-            KeyError: If required fields (review_cycle_id, work_item_id,
-                     iteration, status) are missing.
+            KeyError: If required fields (review_cycle_id, iteration, status) are missing.
         """
         return cls(
             type=data.get("type", "review_cycle.iteration_completed"),
@@ -202,7 +198,7 @@ class ReviewCycleIterationCompletedEvent(CodetoreumEvent):
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
             review_cycle_id=data["review_cycle_id"],
-            work_item_id=data["work_item_id"],
+            work_item_id=data.get("work_item_id", ""),
             iteration=data["iteration"],
             status=data["status"],
             blocking_count=data.get("blocking_count", 0),
@@ -321,14 +317,8 @@ class ReviewCycleEscalatedToHumanEvent(CodetoreumEvent):
     def __post_init__(self) -> None:
         """Validate event after initialization."""
         super().__post_init__()
-        if not self.work_item_id:
-            msg = "work_item_id is required"
-            raise ValueError(msg)
         if not self.review_cycle_id:
             msg = "review_cycle_id is required"
-            raise ValueError(msg)
-        if self.iteration <= 0:
-            msg = "iteration must be greater than 0"
             raise ValueError(msg)
         valid_reasons = {"BLOCKED", "MAX_ITERATIONS"}
         if self.escalation_reason not in valid_reasons:
@@ -554,9 +544,6 @@ class ReviewCycleApprovedEvent(CodetoreumEvent):
     def __post_init__(self) -> None:
         """Validate event after initialization."""
         super().__post_init__()
-        if not self.work_item_id:
-            msg = "work_item_id is required"
-            raise ValueError(msg)
         if not self.review_cycle_id:
             msg = "review_cycle_id is required"
             raise ValueError(msg)
@@ -591,6 +578,278 @@ class ReviewCycleApprovedEvent(CodetoreumEvent):
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
             review_cycle_id=data["review_cycle_id"],
-            work_item_id=data["work_item_id"],
+            work_item_id=data.get("work_item_id", ""),
             total_iterations=data["total_iterations"],
+        )
+
+
+@dataclass(frozen=True)
+class ReviewCycleCreatedEvent(CodetoreumEvent):
+    """Emitted when a review cycle is created.
+
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity.
+
+    Attributes:
+        type (str): Fixed to "review_cycle.created"
+        review_cycle_id (str): Unique identifier for this review cycle
+        workflow_id (str): ID of the workflow this cycle belongs to
+        stage_name (str): Name of the workflow stage
+        maker_agent_id (str): ID of the maker agent
+        reviewer_agent_id (str): ID of the reviewer agent
+        max_iterations (int): Maximum iterations before escalation
+        source (str): Always "review_service"
+    """
+
+    review_cycle_id: str = ""
+    workflow_id: str = ""
+    stage_name: str = ""
+    maker_agent_id: str = ""
+    reviewer_agent_id: str = ""
+    max_iterations: int = 0
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
+        if not self.review_cycle_id:
+            msg = "review_cycle_id is required"
+            raise ValueError(msg)
+        if not self.workflow_id:
+            msg = "workflow_id is required"
+            raise ValueError(msg)
+        if not self.stage_name:
+            msg = "stage_name is required"
+            raise ValueError(msg)
+        if not self.maker_agent_id:
+            msg = "maker_agent_id is required"
+            raise ValueError(msg)
+        if not self.reviewer_agent_id:
+            msg = "reviewer_agent_id is required"
+            raise ValueError(msg)
+        if self.max_iterations <= 0:
+            msg = "max_iterations must be greater than 0"
+            raise ValueError(msg)
+
+    def to_dict(self) -> dict:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update(
+            {
+                "review_cycle_id": self.review_cycle_id,
+                "workflow_id": self.workflow_id,
+                "stage_name": self.stage_name,
+                "maker_agent_id": self.maker_agent_id,
+                "reviewer_agent_id": self.reviewer_agent_id,
+                "max_iterations": self.max_iterations,
+            }
+        )
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "ReviewCycleCreatedEvent":
+        """Deserialize from dictionary."""
+        return cls(
+            type=data.get("type", "review_cycle.created"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", "review_service"),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            review_cycle_id=data["review_cycle_id"],
+            workflow_id=data["workflow_id"],
+            stage_name=data["stage_name"],
+            maker_agent_id=data["maker_agent_id"],
+            reviewer_agent_id=data["reviewer_agent_id"],
+            max_iterations=data["max_iterations"],
+        )
+
+
+@dataclass(frozen=True)
+class ReviewCycleIterationStartedEvent(CodetoreumEvent):
+    """Emitted when a new review iteration begins.
+
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity.
+
+    Attributes:
+        type (str): Fixed to "review_cycle.iteration_started"
+        review_cycle_id (str): ID of the review cycle
+        iteration_number (int): The iteration number (1-indexed)
+        maker_execution_id (str): Execution ID of the maker's run
+        source (str): Always "review_service"
+    """
+
+    review_cycle_id: str = ""
+    iteration_number: int = 0
+    maker_execution_id: str = ""
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
+        if not self.review_cycle_id:
+            msg = "review_cycle_id is required"
+            raise ValueError(msg)
+        if self.iteration_number <= 0:
+            msg = "iteration_number must be greater than 0"
+            raise ValueError(msg)
+        if not self.maker_execution_id:
+            msg = "maker_execution_id is required"
+            raise ValueError(msg)
+
+    def to_dict(self) -> dict:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update(
+            {
+                "review_cycle_id": self.review_cycle_id,
+                "iteration_number": self.iteration_number,
+                "maker_execution_id": self.maker_execution_id,
+            }
+        )
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "ReviewCycleIterationStartedEvent":
+        """Deserialize from dictionary."""
+        return cls(
+            type=data.get("type", "review_cycle.iteration_started"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", "review_service"),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            review_cycle_id=data["review_cycle_id"],
+            iteration_number=data["iteration_number"],
+            maker_execution_id=data["maker_execution_id"],
+        )
+
+
+@dataclass(frozen=True)
+class ReviewCycleFeedbackSubmittedEvent(CodetoreumEvent):
+    """Emitted when reviewer provides feedback on an iteration.
+
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity.
+
+    Attributes:
+        type (str): Fixed to "review_cycle.feedback_submitted"
+        review_cycle_id (str): ID of the review cycle
+        iteration_number (int): The iteration number (1-indexed)
+        decision (str): Reviewer decision ("approve", "request_changes", "escalate")
+        reviewer_execution_id (str): Execution ID of the reviewer's run
+        issues_count (int): Number of issues found
+        source (str): Always "review_service"
+    """
+
+    review_cycle_id: str = ""
+    iteration_number: int = 0
+    decision: str = ""
+    reviewer_execution_id: str = ""
+    issues_count: int = 0
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
+        if not self.review_cycle_id:
+            msg = "review_cycle_id is required"
+            raise ValueError(msg)
+        if self.iteration_number <= 0:
+            msg = "iteration_number must be greater than 0"
+            raise ValueError(msg)
+        if not self.decision:
+            msg = "decision is required"
+            raise ValueError(msg)
+        if not self.reviewer_execution_id:
+            msg = "reviewer_execution_id is required"
+            raise ValueError(msg)
+
+    def to_dict(self) -> dict:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update(
+            {
+                "review_cycle_id": self.review_cycle_id,
+                "iteration_number": self.iteration_number,
+                "decision": self.decision,
+                "reviewer_execution_id": self.reviewer_execution_id,
+                "issues_count": self.issues_count,
+            }
+        )
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "ReviewCycleFeedbackSubmittedEvent":
+        """Deserialize from dictionary."""
+        return cls(
+            type=data.get("type", "review_cycle.feedback_submitted"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", "review_service"),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            review_cycle_id=data["review_cycle_id"],
+            iteration_number=data["iteration_number"],
+            decision=data["decision"],
+            reviewer_execution_id=data["reviewer_execution_id"],
+            issues_count=data.get("issues_count", 0),
+        )
+
+
+@dataclass(frozen=True)
+class ReviewCycleRejectedEvent(CodetoreumEvent):
+    """Emitted when a review cycle is rejected (max iterations reached).
+
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity.
+
+    Attributes:
+        type (str): Fixed to "review_cycle.rejected"
+        review_cycle_id (str): ID of the review cycle
+        final_iteration (int): The final iteration number
+        rejection_reason (str): Reason for rejection
+        source (str): Always "review_service"
+    """
+
+    review_cycle_id: str = ""
+    final_iteration: int = 0
+    rejection_reason: str = ""
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
+        if not self.review_cycle_id:
+            msg = "review_cycle_id is required"
+            raise ValueError(msg)
+        if self.final_iteration <= 0:
+            msg = "final_iteration must be greater than 0"
+            raise ValueError(msg)
+        if not self.rejection_reason:
+            msg = "rejection_reason is required"
+            raise ValueError(msg)
+
+    def to_dict(self) -> dict:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update(
+            {
+                "review_cycle_id": self.review_cycle_id,
+                "final_iteration": self.final_iteration,
+                "rejection_reason": self.rejection_reason,
+            }
+        )
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "ReviewCycleRejectedEvent":
+        """Deserialize from dictionary."""
+        return cls(
+            type=data.get("type", "review_cycle.rejected"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", "review_service"),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            review_cycle_id=data["review_cycle_id"],
+            final_iteration=data["final_iteration"],
+            rejection_reason=data["rejection_reason"],
         )

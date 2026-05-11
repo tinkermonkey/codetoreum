@@ -129,14 +129,11 @@ class ITaskQueryPort(ABC):
         """
         Retrieves detailed status information for a specific execution.
 
-        Args:
-            execution_id: Unique identifier for the execution
+        Args: execution_id: Unique identifier for the execution
 
-        Returns:
-            Detailed status information
+        Returns: Detailed status information
 
-        Raises:
-            ExecutionNotFoundError: If execution doesn't exist
+        Raises: ExecutionNotFoundError: If execution doesn't exist
         """
 
     @abstractmethod
@@ -152,19 +149,16 @@ class ITaskQueryPort(ABC):
         """
         Lists executions matching the specified criteria.
 
-        Args:
-            workflow_run_id: Filter by workflow run
+        Args: workflow_run_id: Filter by workflow run
             work_item_id: Filter by work item
             project_name: Filter by project
             status: Filter by execution status
             page: Page number (1-indexed)
             page_size: Number of items per page
 
-        Returns:
-            Paginated list of executions
+        Returns: Paginated list of executions
 
-        Raises:
-            ValidationError: If parameters are invalid
+        Raises: ValidationError: If parameters are invalid
         """
 
     @abstractmethod
@@ -172,15 +166,12 @@ class ITaskQueryPort(ABC):
         """
         Retrieves artifacts produced by an execution.
 
-        Args:
-            execution_id: Unique identifier for the execution
+        Args: execution_id: Unique identifier for the execution
             artifact_type: Optional filter by artifact type
 
-        Returns:
-            List of artifact information
+        Returns: List of artifact information
 
-        Raises:
-            ExecutionNotFoundError: If execution doesn't exist
+        Raises: ExecutionNotFoundError: If execution doesn't exist
         """
 
     @abstractmethod
@@ -188,15 +179,12 @@ class ITaskQueryPort(ABC):
         """
         Retrieves the event history for an execution.
 
-        Args:
-            execution_id: Unique identifier for the execution
+        Args: execution_id: Unique identifier for the execution
             limit: Optional limit on number of entries to return
 
-        Returns:
-            Execution history with all events
+        Returns: Execution history with all events
 
-        Raises:
-            ExecutionNotFoundError: If execution doesn't exist
+        Raises: ExecutionNotFoundError: If execution doesn't exist
         """
 
     @abstractmethod
@@ -204,12 +192,9 @@ class ITaskQueryPort(ABC):
         """
         Retrieves all executions for a specific workflow run.
 
-        Args:
-            workflow_run_id: Unique identifier for the workflow run
+        Args: workflow_run_id: Unique identifier for the workflow run
 
-        Returns:
-            List of all executions in the workflow
+        Returns: List of all executions in the workflow
 
-        Raises:
-            WorkflowNotFoundError: If workflow run doesn't exist
+        Raises: WorkflowNotFoundError: If workflow run doesn't exist
         """

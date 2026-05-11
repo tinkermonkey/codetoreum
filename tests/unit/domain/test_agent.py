@@ -5,17 +5,19 @@ import pytest
 from codetoreum.domain import (
     Agent,
     AgentCapability,
-    AgentCapabilityAdded,
-    AgentCapabilityRemoved,
-    AgentCapabilityUpdated,
-    AgentConstraintsUpdated,
-    AgentCreated,
-    AgentMcpServerAdded,
-    AgentMcpServerRemoved,
-    AgentModelUpdated,
-    AgentTimeoutUpdated,
     AgentType,
     DomainError,
+)
+from codetoreum.domain.events.agent_events import (
+    AgentCapabilityAddedEvent,
+    AgentCapabilityRemovedEvent,
+    AgentCapabilityUpdatedEvent,
+    AgentConstraintsUpdatedEvent,
+    AgentCreatedEvent,
+    AgentMcpServerAddedEvent,
+    AgentMcpServerRemovedEvent,
+    AgentModelUpdatedEvent,
+    AgentTimeoutUpdatedEvent,
 )
 
 
@@ -128,8 +130,8 @@ class TestAgentCreation:
 
         events = agent.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], AgentCreated)
-        assert events[0].payload["name"] == "engineer"
+        assert isinstance(events[0], AgentCreatedEvent)
+        assert events[0].name == "engineer"
 
     def test_create_with_empty_name_raises_error(self):
         """Test that empty name raises error."""
@@ -301,8 +303,8 @@ class TestAgentCapabilityManagement:
 
         events = agent.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], AgentCapabilityAdded)
-        assert events[0].payload["skill"] == "javascript"
+        assert isinstance(events[0], AgentCapabilityAddedEvent)
+        assert events[0].skill == "javascript"
 
     def test_add_duplicate_capability_raises_error(self):
         """Test that adding duplicate capability raises error."""
@@ -329,8 +331,8 @@ class TestAgentCapabilityManagement:
 
         events = agent.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], AgentCapabilityRemoved)
-        assert events[0].payload["skill"] == "testing"
+        assert isinstance(events[0], AgentCapabilityRemovedEvent)
+        assert events[0].skill == "testing"
 
     def test_remove_nonexistent_capability_raises_error(self):
         """Test that removing nonexistent capability raises error."""
@@ -362,9 +364,9 @@ class TestAgentCapabilityManagement:
 
         events = agent.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], AgentCapabilityUpdated)
-        assert events[0].payload["old_proficiency"] == 0.9
-        assert events[0].payload["new_proficiency"] == 0.95
+        assert isinstance(events[0], AgentCapabilityUpdatedEvent)
+        assert events[0].old_proficiency == 0.9
+        assert events[0].new_proficiency == 0.95
 
     def test_update_proficiency_for_nonexistent_capability_raises_error(self):
         """Test that updating nonexistent capability raises error."""
@@ -400,9 +402,9 @@ class TestAgentConfigurationManagement:
 
         events = agent.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], AgentModelUpdated)
-        assert events[0].payload["old_model"] == "claude-sonnet-4-5"
-        assert events[0].payload["new_model"] == "claude-opus-4"
+        assert isinstance(events[0], AgentModelUpdatedEvent)
+        assert events[0].old_model == "claude-sonnet-4-5"
+        assert events[0].new_model == "claude-opus-4"
 
     def test_update_model_to_empty_raises_error(self):
         """Test that updating to empty model raises error."""
@@ -425,9 +427,9 @@ class TestAgentConfigurationManagement:
 
         events = agent.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], AgentTimeoutUpdated)
-        assert events[0].payload["old_timeout"] == 300
-        assert events[0].payload["new_timeout"] == 600
+        assert isinstance(events[0], AgentTimeoutUpdatedEvent)
+        assert events[0].old_timeout == 300
+        assert events[0].new_timeout == 600
 
     def test_update_timeout_to_zero_raises_error(self):
         """Test that zero timeout raises error."""
@@ -453,7 +455,7 @@ class TestAgentConfigurationManagement:
 
         events = agent.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], AgentConstraintsUpdated)
+        assert isinstance(events[0], AgentConstraintsUpdatedEvent)
 
     def test_update_constraints_partial(self):
         """Test updating only some constraints."""
@@ -482,8 +484,8 @@ class TestAgentMcpServerManagement:
 
         events = agent.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], AgentMcpServerAdded)
-        assert events[0].payload["server_name"] == "artifacts"
+        assert isinstance(events[0], AgentMcpServerAddedEvent)
+        assert events[0].server_name == "artifacts"
 
     def test_add_duplicate_mcp_server_raises_error(self):
         """Test that adding duplicate MCP server raises error."""
@@ -523,7 +525,7 @@ class TestAgentMcpServerManagement:
 
         events = agent.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], AgentMcpServerRemoved)
+        assert isinstance(events[0], AgentMcpServerRemovedEvent)
 
     def test_remove_nonexistent_mcp_server_raises_error(self):
         """Test that removing nonexistent MCP server raises error."""
@@ -636,7 +638,7 @@ class TestAgentEventManagement:
         events = agent.get_pending_events()
 
         assert len(events) == 1
-        assert isinstance(events[0], AgentCreated)
+        assert isinstance(events[0], AgentCreatedEvent)
 
     def test_clear_events(self):
         """Test clearing pending events."""

@@ -7,7 +7,7 @@ from typing import Any
 from redis import asyncio as aioredis
 
 from codetoreum.config import DEFAULT_REDIS_STREAM_MAX_LENGTH
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.event_serialization import EventSerializer
 
@@ -95,7 +95,7 @@ class RedisEventBuffer:
             message = f"Failed to initialize buffer: {e}"
             raise RedisEventBufferError(message) from e
 
-    async def buffer_event(self, event: DomainEvent) -> str:
+    async def buffer_event(self, event: CodetoreumEvent) -> str:
         """
         Write event to Redis Stream.
 
@@ -121,9 +121,14 @@ class RedisEventBuffer:
                 fields={
                     "event_id": str(event.event_id),
                     "event_type": event.event_type,
-                    "aggregate_id": event.aggregate_id,
-                    "aggregate_type": event.aggregate_type,
-                    "timestamp": event.occurred_at.isoformat(),
+                    "aggregate_id": str(
+                        getattr(event, "work_item_id", None)
+                        or getattr(event, "workflow_id", None)
+                        or getattr(event, "execution_id", None)
+                        or event.event_id
+                    ),
+                    "aggregate_type": getattr(event, "aggregate_type", type(event).__name__.replace("Event", "")),
+                    "timestamp": event.timestamp,
                     "payload": event_json,
                 },
                 maxlen=self.stream_max_length,
@@ -142,7 +147,7 @@ class RedisEventBuffer:
             message = f"Failed to buffer event: {e}"
             raise RedisEventBufferError(message) from e
 
-    async def buffer_events_batch(self, events: list[DomainEvent]) -> list[str]:
+    async def buffer_events_batch(self, events: list[CodetoreumEvent]) -> list[str]:
         """
         Buffer multiple events efficiently using pipeline.
 
@@ -172,9 +177,16 @@ class RedisEventBuffer:
                         fields={
                             "event_id": str(event.event_id),
                             "event_type": event.event_type,
-                            "aggregate_id": event.aggregate_id,
-                            "aggregate_type": event.aggregate_type,
-                            "timestamp": event.occurred_at.isoformat(),
+                            "aggregate_id": str(
+                                getattr(event, "work_item_id", None)
+                                or getattr(event, "workflow_id", None)
+                                or getattr(event, "execution_id", None)
+                                or event.event_id
+                            ),
+                            "aggregate_type": getattr(
+                                event, "aggregate_type", type(event).__name__.replace("Event", "")
+                            ),
+                            "timestamp": event.timestamp,
                             "payload": event_json,
                         },
                         maxlen=self.stream_max_length,

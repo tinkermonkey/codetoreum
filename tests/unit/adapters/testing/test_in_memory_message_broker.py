@@ -6,11 +6,26 @@ dispatch, statistics tracking, and subscription management.
 """
 
 import asyncio
+from datetime import UTC, datetime
+from uuid import uuid4
 
 import pytest
 
 from codetoreum.adapters.testing.in_memory_message_broker import InMemoryMessageBroker
-from codetoreum.domain.events import DomainEvent
+
+
+class DomainEvent:
+    def __init__(self, aggregate_id="", aggregate_type="", payload=None, **kwargs):
+        self.aggregate_id = aggregate_id
+        self.aggregate_type = aggregate_type
+        self.payload = payload or {}
+        self.event_id = str(uuid4())
+        self.occurred_at = datetime.now(UTC)
+        self.correlation_id = None
+
+    @property
+    def event_type(self):
+        return self.__class__.__name__
 
 
 def create_test_event(event_type: str = "TestEvent", payload: dict | None = None):

@@ -24,16 +24,17 @@ from codetoreum.domain.board_workflow_template import (
     ColumnType,
 )
 from codetoreum.domain.events import (
-    DomainEvent,
+    CodetoreumEvent,
     LockStuckEvent,
-    WorkflowCompleted,
-    WorkflowCreated,
-    WorkflowFailed,
-    WorkflowStageAdvanced,
-    WorkflowStarted,
-    WorkItemColumnChanged,
 )
 from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
+from codetoreum.domain.events.workflow_events import (
+    WorkflowCompletedEvent,
+    WorkflowCreatedEvent,
+    WorkflowFailedEvent,
+    WorkflowStageAdvancedEvent,
+    WorkflowStartedEvent,
+)
 from codetoreum.infrastructure.event_bus import EventBus, EventHandler, event_handler
 from codetoreum.ports.exceptions import ExternalServiceError, ResourceNotFoundError
 from codetoreum.ports.output.active_workflow_run_registry import (
@@ -68,7 +69,7 @@ class _WorkflowRunMetadata:
     stage_index: int
 
 
-@event_handler("WorkItemColumnChangedEvent", "WorkItemColumnChanged")
+@event_handler("WorkItemColumnChangedEvent")
 class BoardColumnEventHandler(EventHandler):
     """Handles workitem.column_changed events for board automation.
 
@@ -144,34 +145,28 @@ class BoardColumnEventHandler(EventHandler):
         """Get list of event types this handler processes.
 
         Returns:
-            List of event type names (includes both modern and legacy event types)
+            List of event type names
         """
-        return ["WorkItemColumnChangedEvent", "WorkItemColumnChanged"]
+        return ["WorkItemColumnChangedEvent"]
 
-    async def handle(self, event: DomainEvent) -> None:
+    async def handle(self, event: CodetoreumEvent) -> None:
         """
         Handle column change event and trigger appropriate workflow actions.
 
         Args:
-            event: Domain event to handle (supports both modern WorkItemColumnChangedEvent and legacy WorkItemColumnChanged)
+            event: Domain event to handle
 
         Raises:
             Exception: If handling fails
         """
-        # Accept both modern WorkItemColumnChangedEvent and legacy WorkItemColumnChanged events
-        if not isinstance(event, (WorkItemColumnChangedEvent, WorkItemColumnChanged)):
+        if not isinstance(event, WorkItemColumnChangedEvent):
             logger.warning(f"BoardColumnEventHandler received unexpected event type: {event.event_type}")
             return
 
         try:
             await self.handle_column_change(event)
         except Exception as e:
-            # Extract work_item_id from both modern and legacy event types
-            work_item_id = (
-                event.work_item_id
-                if isinstance(event, WorkItemColumnChangedEvent)
-                else event.payload.get("work_item_id", "unknown")
-            )
+            work_item_id = event.work_item_id
             logger.error(
                 f"Error handling column change for {work_item_id}: {e}",
                 exc_info=True,
@@ -179,7 +174,7 @@ class BoardColumnEventHandler(EventHandler):
             )
             raise
 
-    async def handle_column_change(self, event: WorkItemColumnChangedEvent | WorkItemColumnChanged) -> None:
+    async def handle_column_change(self, event: WorkItemColumnChangedEvent) -> None:
         """
         Process column movement and trigger appropriate actions.
 
@@ -194,39 +189,13 @@ class BoardColumnEventHandler(EventHandler):
 
         Args:
             event: WorkItemColumnChangedEvent with column movement details
-
-        Raises:
-            ValueError: If required payload keys are missing in legacy events
         """
-        # Handle both modern WorkItemColumnChangedEvent and legacy WorkItemColumnChanged events
-        if isinstance(event, WorkItemColumnChangedEvent):
-            # Modern event with direct attributes
-            # Required fields are guaranteed non-empty by WorkItemColumnChangedEvent.__post_init__
-            work_item_id: str = event.work_item_id
-            board_id: str = event.board_id
-            project_id: str = event.project_id
-            from_column: str = event.from_column or ""
-            to_column: str = event.to_column
-        else:
-            # Legacy event with payload — validate required keys
-            try:
-                work_item_id = event.payload["work_item_id"]
-                board_id = event.payload["board_id"]
-                project_id = event.payload["project_id"]
-                from_column = event.payload.get("from_column", "")
-                to_column = event.payload["to_column"]
-            except KeyError as e:
-                missing_key = str(e).strip("'")
-                logger.error(
-                    f"Legacy WorkItemColumnChanged event missing required key: {missing_key}",
-                    exc_info=True,
-                    extra={
-                        "error_id": "ERR_BOARD_EVENT_LEGACY_PAYLOAD_MISSING_KEY",
-                        "missing_key": missing_key,
-                        "event_type": event.event_type,
-                    },
-                )
-                raise ValueError(f"Legacy WorkItemColumnChanged event missing required key: {missing_key}") from e
+        # Required fields are guaranteed non-empty by WorkItemColumnChangedEvent.__post_init__
+        work_item_id: str = event.work_item_id
+        board_id: str = event.board_id
+        project_id: str = event.project_id
+        from_column: str = event.from_column or ""
+        to_column: str = event.to_column
 
         logger.info(f"Processing column change for {work_item_id}: {from_column} -> {to_column}")
 
@@ -444,7 +413,7 @@ class BoardColumnEventHandler(EventHandler):
             )
             # CRITICAL: Lock cannot be released — emit LockStuckEvent for manual intervention.
             # LockStuckEvent is a CodetoreumEvent; emit via IEventEmitter (not EventBus,
-            # which requires DomainEvent with aggregate_id/aggregate_type/occurred_at fields).
+            # which requires CodetoreumEvent with aggregate_id/aggregate_type/occurred_at fields).
             if self.event_emitter:
                 try:
                     self.event_emitter.emit(
@@ -507,7 +476,7 @@ class BoardColumnEventHandler(EventHandler):
                 )
                 # Next item holds lock but agent never triggered — emit event for observability.
                 # LockStuckEvent is a CodetoreumEvent; emit via IEventEmitter (not EventBus,
-                # which requires DomainEvent with aggregate_id/aggregate_type/occurred_at fields).
+                # which requires CodetoreumEvent with aggregate_id/aggregate_type/occurred_at fields).
                 if self.event_emitter:
                     try:
                         self.event_emitter.emit(
@@ -552,7 +521,6 @@ class BoardColumnEventHandler(EventHandler):
 
         workflow_run_id = str(uuid4())
         now = datetime.now(UTC)
-        stage_count = len([c for c in workflow_config.columns if c.agent_id])
 
         self._active_runs[work_item_id] = _WorkflowRunMetadata(
             run_id=workflow_run_id,
@@ -563,22 +531,22 @@ class BoardColumnEventHandler(EventHandler):
             stage_index=0,
         )
 
-        created = WorkflowCreated(
-            aggregate_id=workflow_run_id,
-            payload={
-                "work_item_id": work_item_id,
-                "template_id": workflow_config.id,
-                "project_id": project_id,
-                "stage_count": stage_count,
-            },
+        created = WorkflowCreatedEvent(
+            type="workflow.created",
+            timestamp=now.isoformat(),
+            source="board_event_handler",
+            workflow_id=workflow_run_id,
+            work_item_id=work_item_id,
+            pipeline_id=workflow_config.id,
+            stage_name=column_config.name,
         )
-        started = WorkflowStarted(
-            aggregate_id=workflow_run_id,
-            payload={
-                "started_at": now.isoformat(),
-                "work_item_id": work_item_id,
-                "first_stage": column_config.name,
-            },
+        started = WorkflowStartedEvent(
+            type="workflow.started",
+            timestamp=now.isoformat(),
+            source="board_event_handler",
+            workflow_id=workflow_run_id,
+            work_item_id=work_item_id,
+            stage_name=column_config.name,
         )
         try:
             await self.event_store.append(workflow_run_id, [created, started])
@@ -620,13 +588,14 @@ class BoardColumnEventHandler(EventHandler):
         run_info.stage_index += 1
         workflow_run_id = run_info.run_id
 
-        event = WorkflowStageAdvanced(
-            aggregate_id=workflow_run_id,
-            payload={
-                "stage_index": run_info.stage_index,
-                "from_stage": from_stage,
-                "to_stage": to_stage,
-            },
+        event = WorkflowStageAdvancedEvent(
+            type="workflow.stage_advanced",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="board_event_handler",
+            workflow_id=workflow_run_id,
+            work_item_id=work_item_id,
+            from_stage=from_stage,
+            to_stage=to_stage,
         )
         try:
             await self.event_store.append(workflow_run_id, [event])
@@ -651,14 +620,14 @@ class BoardColumnEventHandler(EventHandler):
         now = datetime.now(UTC)
         duration = (now - run_info.started_at).total_seconds()
 
-        event = WorkflowCompleted(
-            aggregate_id=workflow_run_id,
-            payload={
-                "completed_at": now.isoformat(),
-                "work_item_id": work_item_id,
-                "duration_seconds": duration,
-                "exit_column": exit_column,
-            },
+        event = WorkflowCompletedEvent(
+            type="workflow.completed",
+            timestamp=now.isoformat(),
+            source="board_event_handler",
+            workflow_id=workflow_run_id,
+            work_item_id=work_item_id,
+            final_stage=exit_column,
+            completed_at=now.isoformat(),
         )
         try:
             await self.event_store.append(workflow_run_id, [event])
@@ -683,14 +652,15 @@ class BoardColumnEventHandler(EventHandler):
         workflow_run_id = run_info.run_id
         now = datetime.now(UTC)
 
-        event = WorkflowFailed(
-            aggregate_id=workflow_run_id,
-            payload={
-                "failed_at": now.isoformat(),
-                "reason": reason,
-                "failed_stage": "",
-                "work_item_id": work_item_id,
-            },
+        event = WorkflowFailedEvent(
+            type="workflow.failed",
+            timestamp=now.isoformat(),
+            source="board_event_handler",
+            workflow_id=workflow_run_id,
+            work_item_id=work_item_id,
+            failed_stage="",
+            reason=reason,
+            failed_at=now.isoformat(),
         )
         try:
             await self.event_store.append(workflow_run_id, [event])

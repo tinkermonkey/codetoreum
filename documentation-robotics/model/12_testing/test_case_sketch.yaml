@@ -11,6 +11,10 @@ testing.testcasesketch.scenario-01-simple-workflow:
   attributes:
     status: automated
     implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/scenarios/scenario_01_simple_workflow.py
   metadata:
     created_at: 2026-05-08T12:18:23.165Z
     updated_at: 2026-05-08T12:18:23.165Z
@@ -28,6 +32,10 @@ testing.testcasesketch.scenario-02-parallel-executions:
   attributes:
     status: automated
     implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/scenarios/scenario_02_parallel_executions.py
   metadata:
     created_at: 2026-05-08T12:18:23.585Z
     updated_at: 2026-05-08T12:18:23.585Z
@@ -45,6 +53,10 @@ testing.testcasesketch.scenario-03-review-cycle:
   attributes:
     status: automated
     implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/scenarios/scenario_03_review_cycle.py
   metadata:
     created_at: 2026-05-08T12:18:24.024Z
     updated_at: 2026-05-08T12:18:24.024Z
@@ -62,6 +74,10 @@ testing.testcasesketch.scenario-04-execution-failure:
   attributes:
     status: automated
     implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/scenarios/scenario_04_execution_failure.py
   metadata:
     created_at: 2026-05-08T12:18:29.700Z
     updated_at: 2026-05-08T12:18:29.700Z
@@ -79,6 +95,10 @@ testing.testcasesketch.scenario-05-complex-workflow:
   attributes:
     status: automated
     implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/scenarios/scenario_05_complex_workflow.py
   metadata:
     created_at: 2026-05-08T12:18:30.120Z
     updated_at: 2026-05-08T12:18:30.120Z
@@ -96,6 +116,10 @@ testing.testcasesketch.scenario-06-sdlc-pipeline:
   attributes:
     status: automated
     implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/scenarios/scenario_06_sdlc_pipeline.py
   metadata:
     created_at: 2026-05-08T12:18:30.544Z
     updated_at: 2026-05-08T12:18:30.544Z
@@ -114,6 +138,10 @@ testing.testcasesketch.scenario-06b-sdlc-pipeline-with-repair:
   attributes:
     status: automated
     implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/scenarios/scenario_06_sdlc_pipeline_with_repair.py
   metadata:
     created_at: 2026-05-08T12:18:37.877Z
     updated_at: 2026-05-08T12:18:37.877Z
@@ -132,6 +160,10 @@ testing.testcasesketch.scenario-07-repair-cycle-test-fix-validate:
   attributes:
     status: automated
     implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/scenarios/scenario_07_repair_cycle.py
   metadata:
     created_at: 2026-05-08T12:18:38.312Z
     updated_at: 2026-05-08T12:18:38.312Z
@@ -149,6 +181,10 @@ testing.testcasesketch.scenario-09-queue-position-ordering:
   attributes:
     status: automated
     implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/scenarios/scenario_09_queue_position_ordering.py
   metadata:
     created_at: 2026-05-08T12:18:38.761Z
     updated_at: 2026-05-08T12:18:38.761Z
@@ -166,6 +202,10 @@ testing.testcasesketch.scenario-10-agent-execution:
   attributes:
     status: automated
     implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/scenarios/scenario_10_agent_execution.py
   metadata:
     created_at: 2026-05-08T12:18:46.053Z
     updated_at: 2026-05-08T12:18:46.053Z
@@ -183,6 +223,10 @@ testing.testcasesketch.scenario-10b-multi-turn-dialogue:
   attributes:
     status: automated
     implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/scenarios/scenario_10_conversational_modes.py
   metadata:
     created_at: 2026-05-08T12:18:46.518Z
     updated_at: 2026-05-08T12:18:46.518Z
@@ -200,6 +244,11 @@ testing.testcasesketch.scenario-12-container-failure-recovery:
   attributes:
     status: automated
     implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/scenarios/scenario_07_repair_cycle.py
+        symbol: test_scenario_12_warnings_without_review_enabled
   metadata:
     created_at: 2026-05-08T12:18:46.989Z
     updated_at: 2026-05-08T12:18:46.989Z
@@ -217,6 +266,10 @@ testing.testcasesketch.scenario-13-multi-project-orchestration:
   attributes:
     status: automated
     implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/scenarios/scenario_13_multi_project.py
   metadata:
     created_at: 2026-05-08T12:18:54.260Z
     updated_at: 2026-05-08T12:18:54.260Z
@@ -234,6 +287,10 @@ testing.testcasesketch.scenario-environment-repair:
   attributes:
     status: automated
     implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/scenarios/scenario_environment_repair.py
   metadata:
     created_at: 2026-05-08T12:18:54.990Z
     updated_at: 2026-05-08T12:18:54.990Z
@@ -252,6 +309,10 @@ testing.testcasesketch.board-automation-scenario-a-e2e-cascade:
   attributes:
     status: automated
     implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/test_board_automation_e2e.py
   metadata:
     created_at: 2026-05-08T12:19:14.989Z
     updated_at: 2026-05-08T12:19:14.989Z
@@ -270,6 +331,10 @@ testing.testcasesketch.board-automation-scenario-b-lock-contention:
   attributes:
     status: automated
     implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/test_board_automation_scenario_b.py
   metadata:
     created_at: 2026-05-08T12:19:15.502Z
     updated_at: 2026-05-08T12:19:15.502Z
@@ -287,6 +352,10 @@ testing.testcasesketch.board-automation-scenario-c-review-rejection-loop:
   attributes:
     status: automated
     implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/test_board_automation_scenario_c.py
   metadata:
     created_at: 2026-05-08T12:19:16.007Z
     updated_at: 2026-05-08T12:19:16.007Z
@@ -304,6 +373,10 @@ testing.testcasesketch.board-automation-scenario-d-edge-cases:
   attributes:
     status: automated
     implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/test_board_automation_edge_cases.py
   metadata:
     created_at: 2026-05-08T12:19:19.551Z
     updated_at: 2026-05-08T12:19:19.551Z
@@ -321,6 +394,10 @@ testing.testcasesketch.yaml-scenario-smoke:
   attributes:
     status: automated
     implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: scenarios/smoke/scenario.md
   metadata:
     created_at: 2026-05-08T12:19:27.172Z
     updated_at: 2026-05-08T12:19:27.172Z
@@ -339,6 +416,10 @@ testing.testcasesketch.yaml-scenario-sdlc-pipeline:
   attributes:
     status: automated
     implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: scenarios/sdlc_pipeline/scenario.md
   metadata:
     created_at: 2026-05-08T12:19:27.730Z
     updated_at: 2026-05-08T12:19:27.730Z
@@ -356,6 +437,10 @@ testing.testcasesketch.yaml-scenario-review-cycle:
   attributes:
     status: automated
     implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: scenarios/review_cycle/scenario.md
   metadata:
     created_at: 2026-05-08T12:19:28.270Z
     updated_at: 2026-05-08T12:19:28.270Z
@@ -373,6 +458,10 @@ testing.testcasesketch.yaml-scenario-failure-recovery:
   attributes:
     status: automated
     implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: scenarios/failure_recovery/scenario.md
   metadata:
     created_at: 2026-05-08T12:19:34.371Z
     updated_at: 2026-05-08T12:19:34.371Z
@@ -389,6 +478,10 @@ testing.testcasesketch.yaml-scenario-repair-cycle:
   attributes:
     status: automated
     implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: scenarios/repair_cycle_test/scenario.md
   metadata:
     created_at: 2026-05-08T12:19:35.298Z
     updated_at: 2026-05-08T12:19:35.298Z
@@ -407,6 +500,10 @@ testing.testcasesketch.yaml-scenario-dev-environment-repair:
   attributes:
     status: automated
     implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: scenarios/dev_environment_repair/scenario.md
   metadata:
     created_at: 2026-05-08T12:19:35.901Z
     updated_at: 2026-05-08T12:19:35.901Z
@@ -424,6 +521,10 @@ testing.testcasesketch.yaml-scenario-planning-design-pipeline:
   attributes:
     status: automated
     implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: scenarios/planning_design_pipeline/scenario.md
   metadata:
     created_at: 2026-05-08T12:19:42.372Z
     updated_at: 2026-05-08T12:19:42.372Z
@@ -441,6 +542,10 @@ testing.testcasesketch.yaml-scenario-planning-design-review-cycle:
   attributes:
     status: automated
     implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: scenarios/planning_design_review_cycle/scenario.md
   metadata:
     created_at: 2026-05-08T12:19:42.919Z
     updated_at: 2026-05-08T12:19:42.919Z
@@ -459,6 +564,10 @@ testing.testcasesketch.yaml-scenario-pr-feedback-child-issue:
   attributes:
     status: automated
     implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: scenarios/pr_feedback_child_issue/scenario.md
   metadata:
     created_at: 2026-05-08T12:19:43.451Z
     updated_at: 2026-05-08T12:19:43.451Z
@@ -476,6 +585,10 @@ testing.testcasesketch.yaml-scenario-stress-test:
   attributes:
     status: automated
     implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: scenarios/stress_test/scenario.md
   metadata:
     created_at: 2026-05-08T12:19:47.803Z
     updated_at: 2026-05-08T12:19:47.803Z

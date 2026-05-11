@@ -34,12 +34,10 @@ def create_orchestrator_router(
     """
     Create the orchestrator REST API router.
 
-    Args:
-        orchestration_command_port: Orchestration command input port
+    Args: orchestration_command_port: Orchestration command input port
         auth_deps: Optional authentication dependencies
 
-    Returns:
-        Configured APIRouter for orchestrator
+    Returns: Configured APIRouter for orchestrator
     """
     # Create router with authentication dependency if provided
     router_kwargs = {
@@ -68,8 +66,7 @@ def create_orchestrator_router(
         """
         Start a workflow execution for a work item.
 
-        This operation:
-        1. Validates workflow and work item exist
+        This operation: 1. Validates workflow and work item exist
         2. Checks entry conditions for the starting stage
         3. Creates a workflow run
         4. Queues the first agent execution

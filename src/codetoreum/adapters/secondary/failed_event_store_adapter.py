@@ -39,11 +39,9 @@ class DeadLetterQueueFailedEventStoreAdapter(IFailedEventStore):
     def __init__(self, dead_letter_queue: DeadLetterQueue) -> None:
         """Initialize the adapter.
 
-        Args:
-            dead_letter_queue: The DeadLetterQueue instance to wrap.
+        Args: dead_letter_queue: The DeadLetterQueue instance to wrap.
 
-        Raises:
-            ValueError: If dead_letter_queue is None.
+        Raises: ValueError: If dead_letter_queue is None.
         """
         if dead_letter_queue is None:
             raise ValueError("dead_letter_queue cannot be None; the caller must instantiate DeadLetterQueue")
@@ -59,15 +57,13 @@ class DeadLetterQueueFailedEventStoreAdapter(IFailedEventStore):
     ) -> str:
         """Add a failed event to the store.
 
-        Args:
-            event_type: Type of the event that failed
+        Args: event_type: Type of the event that failed
             event_data: Event payload data
             failure_reason: Reason for the failure
             error_message: Human-readable error message
             metadata: Optional additional metadata about the failure
 
-        Returns:
-            ID of the stored failed event
+        Returns: ID of the stored failed event
         """
         # Convert port FailureReason to infrastructure FailureReason
         dlq_failure_reason = DLQFailureReason(failure_reason.value)
@@ -83,8 +79,7 @@ class DeadLetterQueueFailedEventStoreAdapter(IFailedEventStore):
     def get_stats(self) -> FailedEventStoreStats:
         """Get statistics about stored failed events.
 
-        Returns:
-            Statistics including counts by reason, retry status, etc.
+        Returns: Statistics including counts by reason, retry status, etc.
         """
         dlq_stats = self._dead_letter_queue.get_stats()
 
@@ -108,13 +103,11 @@ class DeadLetterQueueFailedEventStoreAdapter(IFailedEventStore):
     ) -> list[FailedEventRecord]:
         """List failed events with optional filtering.
 
-        Args:
-            failure_reason: Filter by specific failure reason
+        Args: failure_reason: Filter by specific failure reason
             can_retry: Filter by retry capability (True/False)
             limit: Maximum number of events to return
 
-        Returns:
-            List of failed event records matching the filters
+        Returns: List of failed event records matching the filters
         """
         # Convert port FailureReason to infrastructure FailureReason if provided
         dlq_failure_reason = None
@@ -149,11 +142,9 @@ class DeadLetterQueueFailedEventStoreAdapter(IFailedEventStore):
     def get_event(self, event_id: str) -> FailedEventRecord | None:
         """Get a specific failed event by ID.
 
-        Args:
-            event_id: ID of the event to retrieve
+        Args: event_id: ID of the event to retrieve
 
-        Returns:
-            The failed event record, or None if not found
+        Returns: The failed event record, or None if not found
         """
         dlq_event = self._dead_letter_queue.get_event(event_id)
         if dlq_event is None:
@@ -176,11 +167,9 @@ class DeadLetterQueueFailedEventStoreAdapter(IFailedEventStore):
     def remove_event(self, event_id: str) -> bool:
         """Remove an event from the store.
 
-        Args:
-            event_id: ID of the event to remove
+        Args: event_id: ID of the event to remove
 
-        Returns:
-            True if removed, False if not found
+        Returns: True if removed, False if not found
         """
         return self._dead_letter_queue.remove_event(event_id)
 
@@ -194,8 +183,7 @@ class DeadLetterQueueFailedEventStoreAdapter(IFailedEventStore):
         This method is not part of the core IFailedEventStore interface but is
         exposed here for bootstrap coordination and management.
 
-        Args:
-            retry_handler: Async function to call for retrying events
+        Args: retry_handler: Async function to call for retrying events
                          Should accept (event_type, event_data) and raise on failure
         """
         await self._dead_letter_queue.start_retry_processor(retry_handler)

@@ -12,7 +12,7 @@ import pytest
 from httpx import AsyncClient
 
 from codetoreum.adapters.testing import InMemoryActiveWorkflowRunRegistry, InMemoryEventStore
-from codetoreum.domain.events.legacy_domain_events import AgentExecutionStarted, WorkflowCompleted
+from codetoreum.domain.events import AgentExecutionStarted, WorkflowCompleted
 from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 

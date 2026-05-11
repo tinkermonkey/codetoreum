@@ -14,7 +14,7 @@ from typing import Any
 
 from codetoreum.application.event_sequence_validator import EventSequenceValidator
 from codetoreum.application.expected_sequence_registry import ExpectedSequenceRegistry
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.domain.pipeline_stage import StageStatus
 from codetoreum.domain.types import WorkItemId
 from codetoreum.domain.workflow import Workflow, WorkflowStatus
@@ -867,7 +867,7 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         }
         return mapping[status]
 
-    def _event_to_dict(self, event: DomainEvent) -> dict:
+    def _event_to_dict(self, event: CodetoreumEvent) -> dict:
         """
         Convert domain event to dictionary format for API response.
 
@@ -877,20 +877,26 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         Returns:
             Dictionary with event data
         """
+        base = event.to_dict()
         return {
             "id": str(event.event_id),
             "event_type": event.event_type,
-            "aggregate_id": event.aggregate_id,
-            "aggregate_type": event.aggregate_type,
-            "timestamp": event.occurred_at.isoformat(),
-            "data": event.payload,
+            "aggregate_id": getattr(event, "work_item_id", None)
+            or getattr(event, "workflow_id", None)
+            or getattr(event, "execution_id", None)
+            or event.event_id,
+            "aggregate_type": type(event).__name__.replace("Event", ""),
+            "timestamp": event.timestamp,
+            "data": {
+                k: v for k, v in base.items() if k not in {"event_id", "type", "timestamp", "source", "correlation_id"}
+            },
             "correlation_id": event.correlation_id,
-            "causation_id": event.causation_id,
-            "user_id": event.user_id,
-            "metadata": event.metadata,
+            "causation_id": None,
+            "user_id": None,
+            "metadata": {},
         }
 
-    def _build_stage_info(self, workflow: Workflow, events: list[DomainEvent]) -> list[dict]:
+    def _build_stage_info(self, workflow: Workflow, events: list[CodetoreumEvent]) -> list[dict]:
         """
         Build stage-grouped event information for audit view.
 
@@ -905,13 +911,12 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         """
         # Pre-index events by stage_name and execution_id for O(1) lookup
         # This avoids O(stages * events) complexity
-        events_by_stage_name: dict[str, list[DomainEvent]] = {}
-        events_by_execution_id: dict[str, list[DomainEvent]] = {}
+        events_by_stage_name: dict[str, list[CodetoreumEvent]] = {}
+        events_by_execution_id: dict[str, list[CodetoreumEvent]] = {}
 
         for event in events:
-            event_data = event.payload if hasattr(event, "payload") else {}
-            event_stage_name = event_data.get("stage_name")
-            event_execution_id = event_data.get("execution_id")
+            event_stage_name = getattr(event, "stage_name", None)
+            event_execution_id = getattr(event, "execution_id", None)
 
             if event_stage_name:
                 if event_stage_name not in events_by_stage_name:

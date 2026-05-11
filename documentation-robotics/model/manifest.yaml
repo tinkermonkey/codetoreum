@@ -3,7 +3,7 @@ schema: documentation-robotics-v1
 cli_version: 0.1.3
 spec_version: 0.8.4
 created: 2026-05-08T10:23:47.104Z
-updated: 2026-05-08T12:30:44.962Z
+updated: 2026-05-09T09:28:54.063Z
 project:
   name: codetoreum
   description: Adaptable code orchestration
@@ -16,8 +16,12 @@ layers:
     path: documentation-robotics/model/01_motivation/
     enabled: true
     elements:
+      assessment: 2
+      constraint: 4
+      driver: 3
       goal: 4
       principle: 4
+      requirement: 3
   business:
     order: 2
     name: Business
@@ -34,7 +38,10 @@ layers:
     path: documentation-robotics/model/03_security/
     enabled: true
     elements:
-      securitypolicy: 5
+      actor: 4
+      role: 4
+      securitypolicy: 6
+      threat: 4
   application:
     order: 4
     name: Application
@@ -42,30 +49,31 @@ layers:
     enabled: true
     elements:
       applicationcomponent: 11
+      applicationfunction: 1
       applicationinterface: 59
-      applicationservice: 21
+      applicationservice: 22
   technology:
     order: 5
     name: Technology
     path: documentation-robotics/model/05_technology/
     enabled: true
     elements:
-      systemsoftware: 12
+      systemsoftware: 24
   api:
     order: 6
     name: Api
     path: documentation-robotics/model/06_api/
     enabled: true
     elements:
-      operation: 90
+      operation: 110
   data-model:
     order: 7
     name: Data model
     path: documentation-robotics/model/07_data-model/
     enabled: true
     elements:
-      objectschema: 45
-      schemadefinition: 17
+      objectschema: 50
+      schemadefinition: 25
   data-store:
     order: 8
     name: Data store
@@ -100,8 +108,8 @@ layers:
       dashboard: 2
       instrumentationconfig: 1
       logconfiguration: 1
-      metricinstrument: 4
-      span: 3
+      metricinstrument: 6
+      span: 6
       traceconfiguration: 1
   testing:
     order: 12
@@ -112,8 +120,8 @@ layers:
       coveragerequirement: 2
       testcasesketch: 28
       testcoveragemodel: 15
-      testcoveragetarget: 26
+      testcoveragetarget: 42
 changeset_history:
-  - name: orphan-relationship-wiring
-    committed_at: 2026-05-08T12:30:44.962Z
+  - name: data-model-value-objects
+    committed_at: 2026-05-09T09:28:54.062Z
     action: committed

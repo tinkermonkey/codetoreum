@@ -7,12 +7,12 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, cast
 
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType
-from codetoreum.domain.events import (
-    PipelineCompleted,
-    PipelineFailed,
-    PipelineStageCompleted,
-    PipelineStageFailed,
-    PipelineStageStarted,
+from codetoreum.domain.events.workflow_events import (
+    PipelineCompletedEvent,
+    PipelineFailedEvent,
+    PipelineStageCompletedEvent,
+    PipelineStageFailedEvent,
+    PipelineStageStartedEvent,
 )
 from codetoreum.domain.pipeline_stage import PipelineStage, StageStatus
 from codetoreum.domain.value_objects import ExecutionContext as ExecutionContextVO
@@ -155,8 +155,7 @@ class PipelineManager:
             event: Event to emit
         """
         try:
-            # Use aggregate_id as stream_id and wrap event in a list
-            await self.event_store.append(event.aggregate_id, [event])
+            await self.event_store.append(getattr(event, "pipeline_id", None) or event.event_id, [event])
         except Exception as e:
             self._logger.error(
                 f"Failed to emit event {type(event).__name__}: {e}",
@@ -650,14 +649,14 @@ class PipelineManager:
 
     async def _emit_stage_started(self, stage: PipelineStage, workflow_id: str, context: dict[str, Any]) -> None:
         """Emit stage started event."""
-        event = PipelineStageStarted(
-            aggregate_id=workflow_id,
+        event = PipelineStageStartedEvent(
+            type="pipeline.stage.started",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="pipeline_manager",
             pipeline_id=workflow_id,
+            stage_id=stage.id if hasattr(stage, "id") else "",
             stage_name=stage.name,
-            stage_type=stage.stage_type.value,
-            agent_config=stage.agent_config,
-            execution_id=stage.execution_id or "",
-            timestamp=datetime.now(UTC),
+            started_at=datetime.now(UTC).isoformat(),
         )
         await self._emit_event_safely(event)
 
@@ -669,14 +668,14 @@ class PipelineManager:
         duration_seconds: float,
     ) -> None:
         """Emit stage completed event."""
-        event = PipelineStageCompleted(
-            aggregate_id=workflow_id,
+        event = PipelineStageCompletedEvent(
+            type="pipeline.stage.completed",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="pipeline_manager",
             pipeline_id=workflow_id,
+            stage_id=stage.id if hasattr(stage, "id") else "",
             stage_name=stage.name,
-            execution_id=stage.execution_id or "",
-            output=output,
-            duration_seconds=duration_seconds,
-            timestamp=datetime.now(UTC),
+            completed_at=datetime.now(UTC).isoformat(),
         )
         await self._emit_event_safely(event)
 
@@ -688,14 +687,14 @@ class PipelineManager:
         duration_seconds: float,
     ) -> None:
         """Emit stage failed event."""
-        event = PipelineStageFailed(
-            aggregate_id=workflow_id,
+        event = PipelineStageFailedEvent(
+            type="pipeline.stage.failed",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="pipeline_manager",
             pipeline_id=workflow_id,
+            stage_id=stage.id if hasattr(stage, "id") else "",
             stage_name=stage.name,
-            execution_id=stage.execution_id or "",
             error=error,
-            duration_seconds=duration_seconds,
-            timestamp=datetime.now(UTC),
         )
         await self._emit_event_safely(event)
 
@@ -708,14 +707,14 @@ class PipelineManager:
         duration_seconds: float,
     ) -> None:
         """Emit pipeline completed event."""
-        event = PipelineCompleted(
-            aggregate_id=pipeline_id,
+        event = PipelineCompletedEvent(
+            type="pipeline.completed",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="pipeline_manager",
             pipeline_id=pipeline_id,
-            workflow_id=workflow.id,
-            completed_stages=completed_stages,
-            outputs=outputs,
-            duration_seconds=duration_seconds,
-            timestamp=datetime.now(UTC),
+            work_item_id=workflow.id,
+            completed_stages=tuple(completed_stages),
+            completed_at=datetime.now(UTC).isoformat(),
         )
         await self._emit_event_safely(event)
 
@@ -728,14 +727,15 @@ class PipelineManager:
         failed_stages: list[str],
     ) -> None:
         """Emit pipeline failed event."""
-        event = PipelineFailed(
-            aggregate_id=pipeline_id,
+        event = PipelineFailedEvent(
+            type="pipeline.failed",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="pipeline_manager",
             pipeline_id=pipeline_id,
-            workflow_id=workflow.id,
+            work_item_id=workflow.id,
             error=error,
-            completed_stages=completed_stages,
-            failed_stages=failed_stages,
-            timestamp=datetime.now(UTC),
+            completed_stages=tuple(completed_stages),
+            failed_stage=failed_stages[0] if failed_stages else "",
         )
         await self._emit_event_safely(event)
 

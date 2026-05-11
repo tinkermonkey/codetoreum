@@ -15,11 +15,10 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from codetoreum.domain.events import WorkflowFailed
-from codetoreum.domain.events.legacy_domain_events import (
-    LockStuckEvent,
-    WorkItemDeadLetterQueuedEvent,
-)
+from codetoreum.domain.events.lock_events import LockStuckEvent
+from codetoreum.domain.events.queue_events import WorkItemDeadLetterQueuedEvent
+from codetoreum.domain.events.workflow_events import WorkflowFailedEvent
+from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.failed_event_store import (
     FailedEventStoreStats,
     FailureReason,
@@ -54,6 +53,7 @@ class AgentExecutionRecoveryService:
         board_service: IBoardService | None = None,
         event_store: IEventStore | None = None,
         run_registry: IActiveWorkflowRunRegistry | None = None,
+        event_emitter: IEventEmitter | None = None,
     ) -> None:
         """Initialize recovery service.
 
@@ -62,11 +62,15 @@ class AgentExecutionRecoveryService:
             board_service: Optional board service for querying work items
             event_store: Optional event store for persisting recovery events
             run_registry: Optional registry for failing workflow runs
+            event_emitter: Optional event emitter for publishing CodetoreumEvent instances
+                           (LockStuckEvent, WorkItemDeadLetterQueuedEvent). Preferred over
+                           event_store for these modern frozen-dataclass events.
         """
         self._board_service = board_service
         self._event_store = event_store
         self._run_registry = run_registry
         self._failed_event_store = failed_event_store
+        self._event_emitter = event_emitter
 
     async def handle_completion_callback_failure(
         self,
@@ -272,14 +276,15 @@ class AgentExecutionRecoveryService:
                 return
 
             try:
-                workflow_failed = WorkflowFailed(
-                    aggregate_id=run_info.run_id,
-                    payload={
-                        "failed_at": datetime.now(UTC).isoformat(),
-                        "reason": reason,
-                        "failed_stage": run_info.stage_name,
-                        "work_item_id": work_item_id,
-                    },
+                workflow_failed = WorkflowFailedEvent(
+                    type="workflow.failed",
+                    timestamp=datetime.now(UTC).isoformat(),
+                    source="agent_execution_recovery_service",
+                    workflow_id=run_info.run_id,
+                    work_item_id=work_item_id,
+                    failed_stage=run_info.stage_name,
+                    reason=reason,
+                    failed_at=datetime.now(UTC).isoformat(),
                 )
                 await self._event_store.append(run_info.run_id, [workflow_failed])
             except Exception as persist_err:
@@ -305,8 +310,10 @@ class AgentExecutionRecoveryService:
     ) -> None:
         """Private helper to emit a WorkItemDeadLetterQueuedEvent.
 
-        Emits a domain event when a work item is queued to the dead letter queue.
-        This ensures other services can observe and react to DLQ enqueueing.
+        Emits a CodetoreumEvent when a work item is queued to the dead letter queue.
+        Uses IEventEmitter so the modern frozen-dataclass event is routed through the
+        event bus rather than stored directly via IEventStore (which expects CodetoreumEvent
+        fields like aggregate_id, aggregate_type, etc.).
 
         Args:
             work_item_id: Work item queued to DLQ
@@ -315,11 +322,12 @@ class AgentExecutionRecoveryService:
             reason: Reason for DLQ queueing
             failure_details: Additional error details
         """
-        if not self._event_store:
+        if not self._event_emitter:
             logger.warning(
-                f"Cannot emit WorkItemDeadLetterQueuedEvent for '{work_item_id}': " f"event_store dependency not wired",
+                f"Cannot emit WorkItemDeadLetterQueuedEvent for '{work_item_id}': "
+                f"event_emitter dependency not wired",
                 extra={
-                    "error_id": "ERR_AGENT_EXECUTION_MISSING_EVENT_STORE_FOR_DLQ_EVENT",
+                    "error_id": "ERR_AGENT_EXECUTION_MISSING_EVENT_EMITTER_FOR_DLQ_EVENT",
                     "work_item_id": work_item_id,
                 },
             )
@@ -327,17 +335,17 @@ class AgentExecutionRecoveryService:
 
         try:
             dlq_event = WorkItemDeadLetterQueuedEvent(
-                aggregate_id=work_item_id,
-                payload={
-                    "work_item_id": work_item_id,
-                    "board_id": board_id,
-                    "from_column": from_column,
-                    "to_column": "UNKNOWN",
-                    "reason": reason,
-                    "failure_details": failure_details,
-                },
+                type="dlq.work_item_queued",
+                timestamp=datetime.now(UTC).isoformat(),
+                source="agent_execution_recovery_service",
+                work_item_id=work_item_id,
+                board_id=board_id,
+                from_column=from_column,
+                to_column="UNKNOWN",
+                reason=reason,
+                failure_details=failure_details,
             )
-            await self._event_store.append(work_item_id, [dlq_event])
+            self._event_emitter.emit(dlq_event)
         except Exception as emit_err:
             logger.error(
                 f"Failed to emit WorkItemDeadLetterQueuedEvent for '{work_item_id}': {emit_err}",
@@ -384,11 +392,11 @@ class AgentExecutionRecoveryService:
             )
             return
 
-        if not self._event_store:
+        if not self._event_emitter:
             logger.warning(
-                f"Cannot emit LockStuckEvent for '{work_item_id}': " f"event_store dependency not wired",
+                f"Cannot emit LockStuckEvent for '{work_item_id}': " f"event_emitter dependency not wired",
                 extra={
-                    "error_id": "ERR_AGENT_EXECUTION_MISSING_EVENT_STORE_FOR_LOCK_STUCK_EVENT",
+                    "error_id": "ERR_AGENT_EXECUTION_MISSING_EVENT_EMITTER_FOR_LOCK_STUCK_EVENT",
                     "work_item_id": work_item_id,
                 },
             )
@@ -396,15 +404,15 @@ class AgentExecutionRecoveryService:
 
         try:
             stuck_event = LockStuckEvent(
-                aggregate_id=work_item_id,
-                payload={
-                    "project_id": project_id,
-                    "board_id": board_id,
-                    "work_item_id": work_item_id,
-                    "reason": reason,
-                },
+                type="lock.stuck",
+                timestamp=datetime.now(UTC).isoformat(),
+                source="agent_execution_recovery_service",
+                project_id=project_id,
+                board_id=board_id,
+                work_item_id=work_item_id,
+                reason=reason,
             )
-            await self._event_store.append(work_item_id, [stuck_event])
+            self._event_emitter.emit(stuck_event)
         except Exception as emit_err:
             logger.error(
                 f"Failed to emit LockStuckEvent for '{work_item_id}': {emit_err}",

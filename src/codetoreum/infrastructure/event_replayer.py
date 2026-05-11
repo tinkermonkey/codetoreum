@@ -6,7 +6,7 @@ from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime
 from typing import Any
 
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.ports.output.event_store import IEventStore
 
@@ -269,7 +269,7 @@ class EventReplayer:
         stream_id: str,
         from_version: int = 0,
         to_version: int | None = None,
-    ) -> AsyncIterator[DomainEvent]:
+    ) -> AsyncIterator[CodetoreumEvent]:
         """
         Stream events for replay (iterator pattern).
 

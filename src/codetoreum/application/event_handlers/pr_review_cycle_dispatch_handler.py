@@ -10,7 +10,7 @@ separately by PRReviewCycleEventHandler, which listens for outcome events.
 
 import logging
 
-from codetoreum.domain.events import DomainEvent, WorkItemColumnChanged
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.domain.types import WorkItemId
 from codetoreum.infrastructure.event_bus import EventHandler, event_handler
@@ -27,7 +27,7 @@ from codetoreum.ports.output.workflow_config_service import IWorkflowConfigServi
 logger = logging.getLogger(__name__)
 
 
-@event_handler("WorkItemColumnChangedEvent", "WorkItemColumnChanged")
+@event_handler("WorkItemColumnChangedEvent")
 class PRReviewCycleDispatchHandler(EventHandler):
     """
     Handles WorkItemColumnChangedEvent for PR review cycle dispatch.
@@ -88,34 +88,28 @@ class PRReviewCycleDispatchHandler(EventHandler):
         """Get list of event types this handler processes.
 
         Returns:
-            List of event type names (includes both modern and legacy event types)
+            List of event type names
         """
-        return ["WorkItemColumnChangedEvent", "WorkItemColumnChanged"]
+        return ["WorkItemColumnChangedEvent"]
 
-    async def handle(self, event: DomainEvent) -> None:
+    async def handle(self, event: CodetoreumEvent) -> None:
         """
         Handle column change event and dispatch PR review cycle if applicable.
 
         Args:
-            event: Domain event to handle (supports both modern WorkItemColumnChangedEvent and legacy WorkItemColumnChanged)
+            event: Domain event to handle
 
         Raises:
             Exception: If handling fails
         """
-        # Accept both modern WorkItemColumnChangedEvent and legacy WorkItemColumnChanged events
-        if not isinstance(event, (WorkItemColumnChangedEvent, WorkItemColumnChanged)):
+        if not isinstance(event, WorkItemColumnChangedEvent):
             logger.warning(f"PRReviewCycleDispatchHandler received unexpected event type: {event.event_type}")
             return
 
         try:
             await self.handle_pr_review_column_change(event)
         except Exception as e:
-            # Extract work_item_id from both modern and legacy event types
-            work_item_id = (
-                event.work_item_id
-                if isinstance(event, WorkItemColumnChangedEvent)
-                else event.payload.get("work_item_id", "unknown")
-            )
+            work_item_id = event.work_item_id
             logger.error(
                 f"Error handling PR review cycle dispatch for {work_item_id}: {e}",
                 exc_info=True,
@@ -123,7 +117,7 @@ class PRReviewCycleDispatchHandler(EventHandler):
             )
             raise
 
-    async def handle_pr_review_column_change(self, event: WorkItemColumnChangedEvent | WorkItemColumnChanged) -> None:
+    async def handle_pr_review_column_change(self, event: WorkItemColumnChangedEvent) -> None:
         """
         Process column movement and dispatch PR review cycle if applicable.
 
@@ -136,36 +130,13 @@ class PRReviewCycleDispatchHandler(EventHandler):
         Args:
             event: WorkItemColumnChangedEvent or legacy WorkItemColumnChanged with column movement details
 
-        Raises:
-            ValueError: If required payload keys are missing in legacy events
+
         """
-        # Handle both modern WorkItemColumnChangedEvent and legacy WorkItemColumnChanged events
-        if isinstance(event, WorkItemColumnChangedEvent):
-            # Modern event with direct attributes
-            # Required fields are guaranteed non-empty by WorkItemColumnChangedEvent.__post_init__
-            work_item_id: str = event.work_item_id
-            board_id: str = event.board_id
-            project_id: str = event.project_id
-            to_column: str = event.to_column
-        else:
-            # Legacy event with payload — validate required keys
-            try:
-                work_item_id = event.payload["work_item_id"]
-                board_id = event.payload["board_id"]
-                project_id = event.payload["project_id"]
-                to_column = event.payload["to_column"]
-            except KeyError as e:
-                missing_key = str(e).strip("'")
-                logger.error(
-                    f"Legacy WorkItemColumnChanged event missing required key: {missing_key}",
-                    exc_info=True,
-                    extra={
-                        "error_id": "ERR_PR_REVIEW_CYCLE_LEGACY_PAYLOAD_MISSING_KEY",
-                        "missing_key": missing_key,
-                        "event_type": event.event_type,
-                    },
-                )
-                raise ValueError(f"Legacy WorkItemColumnChanged event missing required key: {missing_key}") from e
+        # Required fields are guaranteed non-empty by WorkItemColumnChangedEvent.__post_init__
+        work_item_id: str = event.work_item_id
+        board_id: str = event.board_id
+        project_id: str = event.project_id
+        to_column: str = event.to_column
 
         logger.info(f"Checking PR review cycle for {work_item_id} in column '{to_column}'")
 

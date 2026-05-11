@@ -21,8 +21,7 @@ class IProjectManagerService(ABC):
     are cloned and updated for agent execution. Acts as a facade over
     project configuration storage and repository management operations.
 
-    Responsibilities:
-    1. Load and maintain project configurations
+    Responsibilities: 1. Load and maintain project configurations
     2. Filter enabled projects for processing
     3. Ensure repositories are cloned and up-to-date
     4. Derive workspace paths from repository URLs
@@ -45,17 +44,14 @@ class IProjectManagerService(ABC):
     - Session state uses {project_id}_workitem_{id}.yaml path
     - Workspace directories isolated per repository
 
-    Example:
-        async with service as svc:
+    Example: async with service as svc:
             # Reload configurations (called each orchestration cycle)
             await svc.reload_config()
 
             # Get all enabled projects
             projects = await svc.get_enabled_projects()
 
-            # For each enabled project:
-            for project_name in projects:
-                config = await svc.get_project_config(project_name)
+            # For each enabled project: for project_name in projects: config = await svc.get_project_config(project_name)
                 workspace = await svc.ensure_project_cloned(project_name)
                 # Process project...
     """
@@ -68,12 +64,10 @@ class IProjectManagerService(ABC):
         enabled=True. Returns project names in a consistent order
         for deterministic processing.
 
-        Returns:
-            List[str]: Project names that are enabled (enabled=True).
+        Returns: List[str]: Project names that are enabled (enabled=True).
                       Empty list if no projects are enabled.
 
-        Raises:
-            ExternalServiceError: Configuration service communication failure
+        Raises: ExternalServiceError: Configuration service communication failure
 
         Example:
             >>> projects = await svc.get_enabled_projects()
@@ -88,14 +82,11 @@ class IProjectManagerService(ABC):
         Retrieves the immutable ProjectConfig for the named project,
         including repository URL, branch, enabled status, and organization.
 
-        Args:
-            project_name: Name of the project to retrieve (e.g., "api-service")
+        Args: project_name: Name of the project to retrieve (e.g., "api-service")
 
-        Returns:
-            ProjectConfig: Immutable configuration for the project
+        Returns: ProjectConfig: Immutable configuration for the project
 
-        Raises:
-            ResourceNotFoundError: Project configuration doesn't exist
+        Raises: ResourceNotFoundError: Project configuration doesn't exist
             ExternalServiceError: Configuration service communication failure
 
         Example:
@@ -111,8 +102,7 @@ class IProjectManagerService(ABC):
         Derives the local workspace path where the project repository
         is or will be cloned. Path format: /workspace/{repo_name}
 
-        The repository name is extracted from the repository URL by:
-        1. Removing trailing ".git" suffix if present
+        The repository name is extracted from the repository URL by: 1. Removing trailing ".git" suffix if present
         2. Taking the final path component
 
         Examples:
@@ -120,14 +110,11 @@ class IProjectManagerService(ABC):
         - URL: "https://github.com/org/repo.git" → repo_name: "repo"
         - URL: "https://github.com/org/repo" → repo_name: "repo"
 
-        Args:
-            project_name: Name of the project
+        Args: project_name: Name of the project
 
-        Returns:
-            str: Absolute path to workspace directory (e.g., "/workspace/api-service")
+        Returns: str: Absolute path to workspace directory (e.g., "/workspace/api-service")
 
-        Raises:
-            ResourceNotFoundError: Project configuration doesn't exist
+        Raises: ResourceNotFoundError: Project configuration doesn't exist
             ExternalServiceError: Configuration service communication failure
 
         Example:
@@ -144,8 +131,7 @@ class IProjectManagerService(ABC):
         workspace path. If the repository doesn't exist, it is cloned.
         If it exists, it is updated and checked out to the configured branch.
 
-        Operations:
-        1. Checks if repository already exists at workspace path
+        Operations: 1. Checks if repository already exists at workspace path
         2. If not: Clones the repository from repo_url to workspace
         3. If yes: Pulls latest changes from remote
         4. Checks out the configured branch
@@ -156,14 +142,11 @@ class IProjectManagerService(ABC):
         and the caller is responsible for handling the error. The caller may choose
         to treat it as non-blocking and continue processing other projects.
 
-        Args:
-            project_name: Name of the project
+        Args: project_name: Name of the project
 
-        Returns:
-            str: Absolute path to workspace directory where project is cloned
+        Returns: str: Absolute path to workspace directory where project is cloned
 
-        Raises:
-            ResourceNotFoundError: Project configuration doesn't exist
+        Raises: ResourceNotFoundError: Project configuration doesn't exist
             ValidationError: Invalid repository URL or branch configuration
             ExternalServiceError: Repository clone/pull operation failed (transient)
 
@@ -195,8 +178,7 @@ class IProjectManagerService(ABC):
         - Repository URLs or branches changed
         - Projects removed from configuration
 
-        Raises:
-            ExternalServiceError: Configuration source read failure
+        Raises: ExternalServiceError: Configuration source read failure
 
         Example:
             >>> await svc.reload_config()  # Pick up changes from projects.yaml

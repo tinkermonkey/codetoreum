@@ -25,7 +25,7 @@ except ImportError:
     SpanKind = None
     otel_context = None
 
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.observability.trace_context_propagation import (
     TraceContextPropagator,
@@ -66,7 +66,7 @@ class InstrumentedEventBus:
         self._event_bus = event_bus
         self._tracer = trace.get_tracer(__name__) if OPENTELEMETRY_AVAILABLE else None
 
-    async def publish(self, event: DomainEvent) -> None:
+    async def publish(self, event: CodetoreumEvent) -> None:
         """
         Publish event with PRODUCER span and trace context injection.
 
@@ -110,8 +110,10 @@ class InstrumentedEventBus:
                 attributes={
                     "event.type": event.event_type,
                     "event.id": str(event.event_id),
-                    "aggregate.id": str(event.aggregate_id),
-                    "aggregate.type": event.aggregate_type,
+                    "aggregate.id": str(
+                        getattr(event, "work_item_id", None) or getattr(event, "workflow_id", None) or event.event_id
+                    ),
+                    "event.class": type(event).__name__,
                 },
             ) as span:
                 logger.debug(
@@ -130,7 +132,7 @@ class InstrumentedEventBus:
             if token:
                 otel_context.detach(token)
 
-    async def publish_batch(self, events: list[DomainEvent]) -> None:
+    async def publish_batch(self, events: list[CodetoreumEvent]) -> None:
         """
         Publish multiple events.
 
@@ -192,7 +194,7 @@ class InstrumentedEventBus:
                 self._event_bus.unregister_handler(h)
                 return
 
-    def subscribe(self, event_type: str | None, callback: Callable[[DomainEvent], Any]) -> None:
+    def subscribe(self, event_type: str | None, callback: Callable[[CodetoreumEvent], Any]) -> None:
         """
         Subscribe to events with a callback function.
 
@@ -207,7 +209,7 @@ class InstrumentedEventBus:
         wrapped_callback = self._create_instrumented_callback(callback)
         self._event_bus.subscribe(event_type, wrapped_callback)
 
-    def unsubscribe(self, event_type: str | None, callback: Callable[[DomainEvent], Any]) -> None:
+    def unsubscribe(self, event_type: str | None, callback: Callable[[CodetoreumEvent], Any]) -> None:
         """
         Unsubscribe a callback.
 
@@ -237,7 +239,9 @@ class InstrumentedEventBus:
         """
         return self._event_bus.get_statistics()
 
-    def _create_instrumented_callback(self, callback: Callable[[DomainEvent], Any]) -> Callable[[DomainEvent], Any]:
+    def _create_instrumented_callback(
+        self, callback: Callable[[CodetoreumEvent], Any]
+    ) -> Callable[[CodetoreumEvent], Any]:
         """
         Create instrumented version of callback that adds CONSUMER span.
 
@@ -250,7 +254,7 @@ class InstrumentedEventBus:
         if not self._tracer:
             return callback
 
-        async def instrumented_callback(event: DomainEvent) -> Any:
+        async def instrumented_callback(event: CodetoreumEvent) -> Any:
             span_name = f"event.handle.{event.event_type}"
 
             # Extract trace context from event to link CONSUMER to PRODUCER
@@ -263,8 +267,10 @@ class InstrumentedEventBus:
                 attributes={
                     "event.type": event.event_type,
                     "event.id": str(event.event_id),
-                    "aggregate.id": str(event.aggregate_id),
-                    "aggregate.type": event.aggregate_type,
+                    "aggregate.id": str(
+                        getattr(event, "work_item_id", None) or getattr(event, "workflow_id", None) or event.event_id
+                    ),
+                    "event.class": type(event).__name__,
                     "handler.class": callback.__name__,
                 },
             ) as span:
@@ -311,7 +317,7 @@ class InstrumentedEventHandler:
         self._handler = handler
         self._tracer = tracer
 
-    async def handle(self, event: DomainEvent) -> None:
+    async def handle(self, event: CodetoreumEvent) -> None:
         """
         Handle event with CONSUMER span.
 
@@ -338,8 +344,10 @@ class InstrumentedEventHandler:
             attributes={
                 "event.type": event.event_type,
                 "event.id": str(event.event_id),
-                "aggregate.id": str(event.aggregate_id),
-                "aggregate.type": event.aggregate_type,
+                "aggregate.id": str(
+                    getattr(event, "work_item_id", None) or getattr(event, "workflow_id", None) or event.event_id
+                ),
+                "event.class": type(event).__name__,
                 "handler.class": self._handler.__class__.__name__,
             },
         ) as span:

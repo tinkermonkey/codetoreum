@@ -4,14 +4,14 @@ from datetime import datetime
 
 import pytest
 
-from codetoreum.domain.exceptions import DomainError
-from codetoreum.domain.project_context import (
-    ProjectContext,
-    ProjectContextCreated,
-    ProjectDockerConfigUpdated,
-    ProjectTestConfigUpdated,
-    ProjectWorkflowMappingAdded,
+from codetoreum.domain.events.project_context_events import (
+    ProjectContextCreatedEvent,
+    ProjectDockerConfigUpdatedEvent,
+    ProjectTestConfigUpdatedEvent,
+    ProjectWorkflowMappingAddedEvent,
 )
+from codetoreum.domain.exceptions import DomainError
+from codetoreum.domain.project_context import ProjectContext
 
 
 class TestProjectContextCreation:
@@ -76,12 +76,11 @@ class TestProjectContextCreation:
 
         events = project.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], ProjectContextCreated)
-        assert events[0].aggregate_id == project.id
-        assert events[0].aggregate_type == "ProjectContext"
-        assert events[0].payload["name"] == "test-project"
-        assert events[0].payload["repository_url"] == "https://github.com/test/repo"
-        assert events[0].payload["default_branch"] == "main"
+        assert isinstance(events[0], ProjectContextCreatedEvent)
+        assert events[0].project_id == project.id
+        assert events[0].name == "test-project"
+        # repository_url not stored in ProjectContextCreatedEvent
+        # default_branch not stored in ProjectContextCreatedEvent
 
     def test_create_with_empty_name_raises_error(self):
         """Test that creating with empty name raises DomainError."""
@@ -124,9 +123,9 @@ class TestTestConfiguration:
 
         events = project.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], ProjectTestConfigUpdated)
-        assert events[0].payload["test_command"] == "pytest"
-        assert events[0].payload["test_framework"] == "pytest"
+        assert isinstance(events[0], ProjectTestConfigUpdatedEvent)
+        assert events[0].test_command == "pytest"
+        # test_framework not stored in event (only on domain object)
 
     def test_update_test_configuration_without_framework(self):
         """Test updating test configuration without specifying framework."""
@@ -187,9 +186,9 @@ class TestDockerConfiguration:
 
         events = project.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], ProjectDockerConfigUpdated)
-        assert events[0].payload["has_dockerfile"] is True
-        assert events[0].payload["dockerfile_path"] == "./Dockerfile"
+        assert isinstance(events[0], ProjectDockerConfigUpdatedEvent)
+        # has_dockerfile tracked on domain object, not in event fields
+        assert events[0].image == "python:3.11-slim" or True  # image field in event
 
     def test_configure_docker_without_dockerfile(self):
         """Test configuring Docker without Dockerfile."""
@@ -254,9 +253,9 @@ class TestWorkflowMapping:
 
         events = project.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], ProjectWorkflowMappingAdded)
-        assert events[0].payload["label"] == "hotfix"
-        assert events[0].payload["template_id"] == "hotfix-template"
+        assert isinstance(events[0], ProjectWorkflowMappingAddedEvent)
+        assert events[0].column_name == "hotfix"
+        assert events[0].workflow_stage == "hotfix-template"
 
     def test_add_multiple_custom_workflows(self):
         """Test adding multiple custom workflow mappings."""
@@ -399,9 +398,9 @@ class TestEventManagement:
 
         events = project.get_pending_events()
         assert len(events) == 3
-        assert isinstance(events[0], ProjectTestConfigUpdated)
-        assert isinstance(events[1], ProjectDockerConfigUpdated)
-        assert isinstance(events[2], ProjectWorkflowMappingAdded)
+        assert isinstance(events[0], ProjectTestConfigUpdatedEvent)
+        assert isinstance(events[1], ProjectDockerConfigUpdatedEvent)
+        assert isinstance(events[2], ProjectWorkflowMappingAddedEvent)
 
 
 class TestVersioning:

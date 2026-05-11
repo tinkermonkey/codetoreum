@@ -45,13 +45,11 @@ def create_agents_router(
     - Capability management
     - MCP server management
 
-    Args:
-        command_port: Agent command input port
+    Args: command_port: Agent command input port
         query_port: Agent query input port
         auth_deps: Optional authentication dependencies
 
-    Returns:
-        Configured APIRouter for agents
+    Returns: Configured APIRouter for agents
     """
     # Create router with authentication dependency if provided
     router_kwargs = {

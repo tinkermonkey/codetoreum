@@ -437,3 +437,194 @@ data-model.schemadefinition.prreview-status:
     created_at: 2026-05-08T12:20:25.891Z
     updated_at: 2026-05-08T12:20:25.891Z
     version: 1
+data-model.schemadefinition.type-safe-id:
+  id: ed3a071d-f543-4a31-b794-ddd9c3000694
+  path: data-model.schemadefinition.type-safe-id
+  spec_node_id: data-model.schemadefinition
+  type: schemadefinition
+  layer_id: data-model
+  name: TypeSafeId
+  description: Generic base class for type-safe domain identifiers. Wraps a
+    non-empty string value with type-level discrimination to prevent passing
+    wrong ID types (e.g., WorkItemId where AgentId is expected). Provides
+    generate() and from_string() factory methods. All typed ID subclasses
+    inherit from this base.
+  attributes:
+    title: TypeSafeId
+    type: object
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/value_objects.py
+        symbol: TypeSafeId
+  metadata:
+    created_at: 2026-05-09T09:27:32.940Z
+    updated_at: 2026-05-09T09:27:32.940Z
+    version: 1
+data-model.schemadefinition.work-item-id:
+  id: 786e0694-41f9-44fd-b8ca-137b1af37a06
+  path: data-model.schemadefinition.work-item-id
+  spec_node_id: data-model.schemadefinition
+  type: schemadefinition
+  layer_id: data-model
+  name: WorkItemId
+  description: Type-safe identifier for WorkItem domain objects. Frozen dataclass
+    inheriting TypeSafeId, ensuring WorkItem IDs cannot be accidentally
+    substituted for other ID types. Used as the primary key in all work item
+    operations, events, and cross-service references.
+  attributes:
+    title: WorkItemId
+    type: string
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/value_objects.py
+        symbol: WorkItemId
+  metadata:
+    created_at: 2026-05-09T09:27:39.005Z
+    updated_at: 2026-05-09T09:27:39.005Z
+    version: 1
+data-model.schemadefinition.workflow-id:
+  id: 7925b777-40fc-459e-aa07-d1c48bed2eb0
+  path: data-model.schemadefinition.workflow-id
+  spec_node_id: data-model.schemadefinition
+  type: schemadefinition
+  layer_id: data-model
+  name: WorkflowId
+  description: Type-safe identifier for Workflow domain objects. Frozen dataclass
+    inheriting TypeSafeId, ensuring Workflow IDs cannot be accidentally
+    substituted for WorkItem or Agent IDs. Used as the primary key in all
+    workflow operations and events.
+  attributes:
+    title: WorkflowId
+    type: string
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/value_objects.py
+        symbol: WorkflowId
+  metadata:
+    created_at: 2026-05-09T09:27:39.388Z
+    updated_at: 2026-05-09T09:27:39.388Z
+    version: 1
+data-model.schemadefinition.agent-id:
+  id: 791dc49b-2d07-4f12-9953-51393eaa2941
+  path: data-model.schemadefinition.agent-id
+  spec_node_id: data-model.schemadefinition
+  type: schemadefinition
+  layer_id: data-model
+  name: AgentId
+  description: Type-safe identifier for Agent domain objects. Frozen dataclass
+    inheriting TypeSafeId. Used in agent configuration, execution assignment,
+    and capability negotiation to ensure agent references cannot be confused
+    with work item or execution IDs.
+  attributes:
+    title: AgentId
+    type: string
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/value_objects.py
+        symbol: AgentId
+  metadata:
+    created_at: 2026-05-09T09:27:45.723Z
+    updated_at: 2026-05-09T09:27:45.723Z
+    version: 1
+data-model.schemadefinition.execution-id:
+  id: 7ba6377c-c40a-4ab2-bd33-bcefba551fdb
+  path: data-model.schemadefinition.execution-id
+  spec_node_id: data-model.schemadefinition
+  type: schemadefinition
+  layer_id: data-model
+  name: ExecutionId
+  description: Type-safe identifier for AgentExecution domain objects. Frozen
+    dataclass inheriting TypeSafeId. Used as primary key in all execution
+    lifecycle events (started, completed, failed) and cross-service execution
+    state references.
+  attributes:
+    title: ExecutionId
+    type: string
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/value_objects.py
+        symbol: ExecutionId
+  metadata:
+    created_at: 2026-05-09T09:27:46.099Z
+    updated_at: 2026-05-09T09:27:46.099Z
+    version: 1
+data-model.schemadefinition.commit-policy:
+  id: d4be3d5e-b82f-4cef-bb81-30611744b998
+  path: data-model.schemadefinition.commit-policy
+  spec_node_id: data-model.schemadefinition
+  type: schemadefinition
+  layer_id: data-model
+  name: CommitPolicy
+  description: Enum declaring what an agent does with file changes it produces.
+    NONE = analysis/comment-only agents that skip commit entirely. ON_SUCCESS =
+    code-producing agents that commit and push only on container exit 0. ALWAYS
+    = partial-progress agents that checkpoint even on failure. Controls
+    ExecutionService commit behavior.
+  attributes:
+    title: CommitPolicy
+    type: string
+    enum:
+      - none
+      - on_success
+      - always
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/value_objects.py
+        symbol: CommitPolicy
+  metadata:
+    created_at: 2026-05-09T09:27:50.907Z
+    updated_at: 2026-05-09T09:27:50.907Z
+    version: 1
+data-model.schemadefinition.time-range:
+  id: 6d043f34-b51b-47bf-b612-6054ef4f3ec2
+  path: data-model.schemadefinition.time-range
+  spec_node_id: data-model.schemadefinition
+  type: schemadefinition
+  layer_id: data-model
+  name: TimeRange
+  description: Immutable temporal range value object with start and end datetime.
+    Provides duration_seconds property, contains(timestamp) membership test, and
+    overlaps(other) intersection check. Used for scheduling windows, execution
+    time bounds, and audit queries.
+  attributes:
+    title: TimeRange
+    type: object
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/value_objects.py
+        symbol: TimeRange
+  metadata:
+    created_at: 2026-05-09T09:27:57.852Z
+    updated_at: 2026-05-09T09:27:57.852Z
+    version: 1
+data-model.schemadefinition.branch-resolution:
+  id: 44d81fc7-28c0-4dbb-9323-7769140f133f
+  path: data-model.schemadefinition.branch-resolution
+  spec_node_id: data-model.schemadefinition
+  type: schemadefinition
+  layer_id: data-model
+  name: BranchResolution
+  description: Immutable value object representing a resolved branch assignment
+    decision. Carries strategy (exact_match/parent_issue/sibling/fuzzy/new), the
+    resolved branch name, and confidence score. Used by WorkspaceRouter and
+    IBranchResolutionService to communicate branch selection outcomes across
+    service boundaries.
+  attributes:
+    title: BranchResolution
+    type: object
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/value_objects.py
+        symbol: BranchResolution
+  metadata:
+    created_at: 2026-05-09T09:27:58.233Z
+    updated_at: 2026-05-09T09:27:58.233Z
+    version: 1

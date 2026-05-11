@@ -35,11 +35,9 @@ class WorkItemMapper:
         """
         Convert CreateWorkItemRequest DTO to CreateWorkItemCommand.
 
-        Args:
-            dto: Request DTO from API
+        Args: dto: Request DTO from API
 
-        Returns:
-            Domain command object
+        Returns: Domain command object
         """
         # Parse priority
         priority = WorkItemPriority[dto.priority.upper()]
@@ -59,12 +57,10 @@ class WorkItemMapper:
         """
         Convert UpdateWorkItemRequest DTO to UpdateWorkItemCommand.
 
-        Args:
-            work_item_id: Work item ID
+        Args: work_item_id: Work item ID
             dto: Request DTO from API
 
-        Returns:
-            Domain command object
+        Returns: Domain command object
         """
         # Parse priority if provided
         priority = None
@@ -84,11 +80,9 @@ class WorkItemMapper:
         """
         Convert WorkItem domain model to WorkItemResponse DTO.
 
-        Args:
-            work_item: Domain model
+        Args: work_item: Domain model
 
-        Returns:
-            Response DTO for API
+        Returns: Response DTO for API
         """
         return WorkItemResponse(
             id=work_item.id,
@@ -114,12 +108,10 @@ class WorkItemMapper:
         """
         Convert WorkItem and history to WorkItemDetailResponse DTO.
 
-        Args:
-            work_item: Domain model
+        Args: work_item: Domain model
             history: Work item history with events
 
-        Returns:
-            Detailed response DTO for API
+        Returns: Detailed response DTO for API
         """
         return WorkItemDetailResponse(
             id=work_item.id,
@@ -147,11 +139,9 @@ class WorkItemMapper:
         """
         Convert WorkItemListResult to WorkItemListResponse DTO.
 
-        Args:
-            result: Query result from domain
+        Args: result: Query result from domain
 
-        Returns:
-            List response DTO for API
+        Returns: List response DTO for API
         """
         return WorkItemListResponse(
             work_items=[WorkItemMapper.to_response(wi) for wi in result.work_items],
@@ -166,11 +156,9 @@ class WorkItemMapper:
         """
         Convert domain command result to API command result.
 
-        Args:
-            result: Domain command result
+        Args: result: Domain command result
 
-        Returns:
-            API command result DTO
+        Returns: API command result DTO
         """
         return WorkItemCommandResult(
             success=result.success,

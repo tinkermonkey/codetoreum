@@ -5,7 +5,10 @@ from collections.abc import AsyncIterator
 from datetime import datetime
 from typing import Any
 
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
+
+# Union type accepted by event store methods
+AnyDomainEvent = CodetoreumEvent | CodetoreumEvent
 
 # ============================================================================
 # Port Interface
@@ -19,19 +22,17 @@ class IEventStore(ABC):
     async def append(
         self,
         stream_id: str,
-        events: list[DomainEvent],
+        events: list[CodetoreumEvent],
         expected_version: int | None = None,
     ) -> None:
         """
         Append events to a stream.
 
-        Args:
-            stream_id: Event stream identifier (e.g., aggregate ID)
+        Args: stream_id: Event stream identifier (e.g., aggregate ID)
             events: Events to append
             expected_version: Expected current version for optimistic concurrency
 
-        Raises:
-            ConcurrencyConflictError: Version mismatch
+        Raises: ConcurrencyConflictError: Version mismatch
             EventStoreError: Persistence failure
         """
 
@@ -41,20 +42,17 @@ class IEventStore(ABC):
         stream_id: str,
         from_version: int = 0,
         to_version: int | None = None,
-    ) -> list[DomainEvent]:
+    ) -> list[CodetoreumEvent]:
         """
         Get events from a stream.
 
-        Args:
-            stream_id: Event stream identifier
+        Args: stream_id: Event stream identifier
             from_version: Start from this version (inclusive)
             to_version: End at this version (inclusive), or None for all
 
-        Returns:
-            List[DomainEvent]: List of events in order
+        Returns: List[CodetoreumEvent]: List of events in order
 
-        Raises:
-            ResourceNotFoundError: Stream doesn't exist
+        Raises: ResourceNotFoundError: Stream doesn't exist
             EventStoreError: Retrieval failure
         """
 
@@ -63,19 +61,16 @@ class IEventStore(ABC):
         self,
         since: datetime,
         stream_id: str | None = None,
-    ) -> list[DomainEvent]:
+    ) -> list[CodetoreumEvent]:
         """
         Get events since a timestamp.
 
-        Args:
-            since: Return events after this timestamp
+        Args: since: Return events after this timestamp
             stream_id: Optional stream filter
 
-        Returns:
-            List[DomainEvent]: List of events
+        Returns: List[CodetoreumEvent]: List of events
 
-        Raises:
-            EventStoreError: Retrieval failure
+        Raises: EventStoreError: Retrieval failure
         """
 
     @abstractmethod
@@ -83,19 +78,16 @@ class IEventStore(ABC):
         self,
         stream_id: str | None = None,
         from_version: int = 0,
-    ) -> AsyncIterator[DomainEvent]:
+    ) -> AsyncIterator[CodetoreumEvent]:
         """
         Stream events in real-time.
 
-        Args:
-            stream_id: Optional stream filter
+        Args: stream_id: Optional stream filter
             from_version: Start from this version
 
-        Yields:
-            DomainEvent: Events as they are appended
+        Yields: CodetoreumEvent: Events as they are appended
 
-        Raises:
-            EventStoreError: Streaming failure
+        Raises: EventStoreError: Streaming failure
         """
 
     @abstractmethod
@@ -103,14 +95,11 @@ class IEventStore(ABC):
         """
         Get current version of a stream.
 
-        Args:
-            stream_id: Event stream identifier
+        Args: stream_id: Event stream identifier
 
-        Returns:
-            int: Current version (0 if stream doesn't exist)
+        Returns: int: Current version (0 if stream doesn't exist)
 
-        Raises:
-            EventStoreError: Query failure
+        Raises: EventStoreError: Query failure
         """
 
     @abstractmethod
@@ -118,14 +107,11 @@ class IEventStore(ABC):
         """
         Check if a stream exists.
 
-        Args:
-            stream_id: Event stream identifier
+        Args: stream_id: Event stream identifier
 
-        Returns:
-            bool: True if stream exists
+        Returns: bool: True if stream exists
 
-        Raises:
-            EventStoreError: Query failure
+        Raises: EventStoreError: Query failure
         """
 
     @abstractmethod
@@ -138,13 +124,11 @@ class IEventStore(ABC):
         """
         Save a snapshot for faster replay.
 
-        Args:
-            stream_id: Event stream identifier
+        Args: stream_id: Event stream identifier
             version: Stream version at snapshot time
             snapshot: Snapshot data
 
-        Raises:
-            EventStoreError: Snapshot save failure
+        Raises: EventStoreError: Snapshot save failure
         """
 
     @abstractmethod
@@ -155,14 +139,11 @@ class IEventStore(ABC):
         """
         Get most recent snapshot.
 
-        Args:
-            stream_id: Event stream identifier
+        Args: stream_id: Event stream identifier
 
-        Returns:
-            Optional[Dict[str, Any]]: Snapshot data or None if no snapshot exists
+        Returns: Optional[Dict[str, Any]]: Snapshot data or None if no snapshot exists
 
-        Raises:
-            EventStoreError: Snapshot retrieval failure
+        Raises: EventStoreError: Snapshot retrieval failure
         """
 
     @abstractmethod
@@ -170,11 +151,9 @@ class IEventStore(ABC):
         """
         Delete an event stream.
 
-        Args:
-            stream_id: Event stream identifier
+        Args: stream_id: Event stream identifier
 
-        Raises:
-            ResourceNotFoundError: Stream doesn't exist
+        Raises: ResourceNotFoundError: Stream doesn't exist
             EventStoreError: Delete operation failed
         """
 
@@ -186,14 +165,11 @@ class IEventStore(ABC):
         """
         Get all stream IDs.
 
-        Args:
-            aggregate_type: Optional filter by aggregate type
+        Args: aggregate_type: Optional filter by aggregate type
 
-        Returns:
-            List[str]: List of stream IDs
+        Returns: List[str]: List of stream IDs
 
-        Raises:
-            EventStoreError: Query failure
+        Raises: EventStoreError: Query failure
         """
 
     @abstractmethod
@@ -202,38 +178,32 @@ class IEventStore(ABC):
         event_type: str,
         since: datetime | None = None,
         limit: int = 1000,
-    ) -> list[DomainEvent]:
+    ) -> list[CodetoreumEvent]:
         """
         Get events by event type.
 
-        Args:
-            event_type: Event type name
+        Args: event_type: Event type name
             since: Optional timestamp filter
             limit: Maximum number of events to return
 
-        Returns:
-            List[DomainEvent]: List of matching events
+        Returns: List[CodetoreumEvent]: List of matching events
 
-        Raises:
-            EventStoreError: Query failure
+        Raises: EventStoreError: Query failure
         """
 
     @abstractmethod
     async def get_events_by_correlation_id(
         self,
         correlation_id: str,
-    ) -> list[DomainEvent]:
+    ) -> list[CodetoreumEvent]:
         """
         Get all events with a specific correlation ID.
 
-        Args:
-            correlation_id: Correlation ID to search for
+        Args: correlation_id: Correlation ID to search for
 
-        Returns:
-            List[DomainEvent]: List of correlated events
+        Returns: List[CodetoreumEvent]: List of correlated events
 
-        Raises:
-            EventStoreError: Query failure
+        Raises: EventStoreError: Query failure
         """
 
     @abstractmethod
@@ -242,20 +212,17 @@ class IEventStore(ABC):
         stream_id: str,
         from_version: int = 0,
         to_version: int | None = None,
-    ) -> AsyncIterator[DomainEvent]:
+    ) -> AsyncIterator[CodetoreumEvent]:
         """
         Replay events from a stream for debugging/recovery.
 
-        Args:
-            stream_id: Event stream identifier
+        Args: stream_id: Event stream identifier
             from_version: Start from this version
             to_version: End at this version (None for all)
 
-        Yields:
-            DomainEvent: Events in order
+        Yields: CodetoreumEvent: Events in order
 
-        Raises:
-            ResourceNotFoundError: Stream doesn't exist
+        Raises: ResourceNotFoundError: Stream doesn't exist
             EventStoreError: Replay failure
         """
 
@@ -264,9 +231,7 @@ class IEventStore(ABC):
         """
         Get event store statistics.
 
-        Returns:
-            Dict[str, Any]: Statistics (total events, streams, etc.)
+        Returns: Dict[str, Any]: Statistics (total events, streams, etc.)
 
-        Raises:
-            EventStoreError: Query failure
+        Raises: EventStoreError: Query failure
         """

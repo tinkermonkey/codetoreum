@@ -15,8 +15,7 @@ from datetime import datetime
 class ProjectStatus:
     """Status information for a single project.
 
-    Attributes:
-        project_name: Name of the project
+    Attributes: project_name: Name of the project
         enabled: Whether the project is enabled for orchestration
         repo_url: Repository URL for the project
         branch: Default branch for the project
@@ -36,8 +35,7 @@ class ProjectStatus:
 class OrchestrationCycleResult:
     """Result of a single orchestration cycle.
 
-    Attributes:
-        success: Whether the cycle completed without critical errors
+    Attributes: success: Whether the cycle completed without critical errors
         projects_processed: Number of projects processed
         total_actions: Total actions taken across all projects
         total_errors: Total errors encountered
@@ -59,8 +57,7 @@ class OrchestrationCycleResult:
 class ProjectOrchestrationResult:
     """Result of orchestrating a single project.
 
-    Attributes:
-        project_name: Name of the project
+    Attributes: project_name: Name of the project
         success: Whether project orchestration succeeded
         actions_taken: Number of actions taken for this project
         errors: Tuple of errors encountered (immutable)
@@ -83,8 +80,7 @@ class IMultiProjectOrchestrator(ABC):
     handling project initialization, per-project orchestration, and
     cross-project state management.
 
-    Responsibilities:
-    1. Load and track enabled projects
+    Responsibilities: 1. Load and track enabled projects
     2. Ensure project repositories are cloned and available
     3. Execute per-project orchestration cycles
     4. Handle project-specific state isolation (per-project locking, queueing)
@@ -101,8 +97,7 @@ class IMultiProjectOrchestrator(ABC):
     - Per-project: ensure cloned → orchestrate workflows → emit events
     - Errors in one project don't block others
 
-    Example:
-        async with orchestrator as orch:
+    Example: async with orchestrator as orch:
             # Run a complete orchestration cycle
             result = await orch.run_orchestration_cycle()
             assert result.success
@@ -113,11 +108,9 @@ class IMultiProjectOrchestrator(ABC):
     async def run_orchestration_cycle(self) -> OrchestrationCycleResult:
         """Execute a complete orchestration cycle across all enabled projects.
 
-        Operations:
-        1. Reload project configurations (detect added/removed projects)
+        Operations: 1. Reload project configurations (detect added/removed projects)
         2. Get list of enabled projects
-        3. For each enabled project:
-           a. Ensure project repository is cloned
+        3. For each enabled project: a. Ensure project repository is cloned
            b. Execute per-project workflow orchestration
            c. Collect results and errors
         4. Emit orchestration events
@@ -128,31 +121,25 @@ class IMultiProjectOrchestrator(ABC):
         - Clone failures emit ProjectCloneFailedEvent, processing continues
         - Workflow errors logged per project, not blocking overall cycle
 
-        Returns:
-            OrchestrationCycleResult: Aggregated results across all projects
+        Returns: OrchestrationCycleResult: Aggregated results across all projects
 
-        Raises:
-            ExternalServiceError: Critical infrastructure failure
+        Raises: ExternalServiceError: Critical infrastructure failure
         """
 
     @abstractmethod
     async def orchestrate_project(self, project_name: str) -> ProjectOrchestrationResult:
         """Execute orchestration for a single project.
 
-        Operations:
-        1. Load project configuration
+        Operations: 1. Load project configuration
         2. Ensure repository is cloned
         3. Execute workflow orchestration for the project
         4. Collect and return results
 
-        Args:
-            project_name: Name of the project to orchestrate
+        Args: project_name: Name of the project to orchestrate
 
-        Returns:
-            ProjectOrchestrationResult: Results for this project
+        Returns: ProjectOrchestrationResult: Results for this project
 
-        Raises:
-            ResourceNotFoundError: Project configuration doesn't exist
+        Raises: ResourceNotFoundError: Project configuration doesn't exist
             ExternalServiceError: Repository clone/orchestration failed
         """
 
@@ -167,14 +154,11 @@ class IMultiProjectOrchestrator(ABC):
         - Organization/owner
         - Workspace filesystem path
 
-        Args:
-            project_name: Name of the project
+        Args: project_name: Name of the project
 
-        Returns:
-            ProjectStatus with project configuration and path information
+        Returns: ProjectStatus with project configuration and path information
 
-        Raises:
-            ResourceNotFoundError: Project doesn't exist
+        Raises: ResourceNotFoundError: Project doesn't exist
         """
 
     @abstractmethod
@@ -183,9 +167,7 @@ class IMultiProjectOrchestrator(ABC):
 
         Returns project names that are configured and enabled.
 
-        Returns:
-            List of enabled project names
+        Returns: List of enabled project names
 
-        Raises:
-            ExternalServiceError: Configuration service failure
+        Raises: ExternalServiceError: Configuration service failure
         """

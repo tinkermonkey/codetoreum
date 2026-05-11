@@ -16,9 +16,9 @@ User interface components, screens, and user experience elements.
 | ------------------------- | ----- |
 | Elements                  | 13    |
 | Intra-Layer Relationships | 4     |
-| Inter-Layer Relationships | 61    |
+| Inter-Layer Relationships | 76    |
 | Inbound Relationships     | 9     |
-| Outbound Relationships    | 52    |
+| Outbound Relationships    | 67    |
 
 **Cross-Layer References**:
 
@@ -93,24 +93,33 @@ flowchart TB
 | `navigation.route.maps-to.ux.view`                         | `navigation.route.project-config-route`             | `ux.view.project-config`                                    | `ux`          | `maps-to`    | many-to-many | medium   |
 | `navigation.route.maps-to.ux.view`                         | `navigation.route.workflow-config-route`            | `ux.view.workflow-config`                                   | `ux`          | `maps-to`    | many-to-many | medium   |
 | `ux.librarycomponent.depends-on.technology.systemsoftware` | `ux.librarycomponent.flow-canvas`                   | `technology.systemsoftware.fast-api`                        | `technology`  | `depends-on` | many-to-many | medium   |
+| `ux.librarycomponent.depends-on.technology.systemsoftware` | `ux.librarycomponent.flow-canvas`                   | `technology.systemsoftware.xyflow`                          | `technology`  | `depends-on` | many-to-many | medium   |
+| `ux.librarycomponent.depends-on.technology.systemsoftware` | `ux.librarycomponent.system-status-header`          | `technology.systemsoftware.tan-stack-query`                 | `technology`  | `depends-on` | many-to-many | medium   |
 | `ux.librarycomponent.satisfies.motivation.principle`       | `ux.librarycomponent.system-status-header`          | `motivation.principle.hexagonal-architecture`               | `motivation`  | `satisfies`  | many-to-many | medium   |
 | `ux.librarycomponent.depends-on.technology.systemsoftware` | `ux.librarycomponent.workflow-flow-nodes`           | `technology.systemsoftware.python-311`                      | `technology`  | `depends-on` | many-to-many | medium   |
+| `ux.librarycomponent.depends-on.technology.systemsoftware` | `ux.librarycomponent.workflow-flow-nodes`           | `technology.systemsoftware.xyflow`                          | `technology`  | `depends-on` | many-to-many | medium   |
+| `ux.librarycomponent.depends-on.technology.systemsoftware` | `ux.librarycomponent.workflow-run-list`             | `technology.systemsoftware.tan-stack-query`                 | `technology`  | `depends-on` | many-to-many | medium   |
 | `ux.librarycomponent.satisfies.motivation.principle`       | `ux.librarycomponent.workflow-run-list`             | `motivation.principle.hexagonal-architecture`               | `motivation`  | `satisfies`  | many-to-many | medium   |
+| `ux.librarycomponent.depends-on.technology.systemsoftware` | `ux.librarycomponent.workflow-stage-editor`         | `technology.systemsoftware.zustand`                         | `technology`  | `depends-on` | many-to-many | medium   |
 | `ux.librarycomponent.satisfies.motivation.principle`       | `ux.librarycomponent.workflow-stage-editor`         | `motivation.principle.hexagonal-architecture`               | `motivation`  | `satisfies`  | many-to-many | medium   |
 | `ux.view.accesses.api.operation`                           | `ux.view.agent-config`                              | `api.operation.list-agents`                                 | `api`         | `accesses`   | many-to-many | medium   |
+| `ux.view.depends-on.technology.systemsoftware`             | `ux.view.agent-config`                              | `technology.systemsoftware.react`                           | `technology`  | `depends-on` | many-to-many | medium   |
 | `ux.view.references.data-model.objectschema`               | `ux.view.agent-config`                              | `data-model.objectschema.agent`                             | `data-model`  | `references` | many-to-many | medium   |
 | `ux.view.references.data-model.objectschema`               | `ux.view.agent-config`                              | `data-model.objectschema.agent-capability`                  | `data-model`  | `references` | many-to-many | medium   |
 | `ux.view.satisfies.security.securitypolicy`                | `ux.view.agent-config`                              | `security.securitypolicy.role-based-access-control`         | `security`    | `satisfies`  | many-to-many | medium   |
 | `ux.view.serves.application.applicationservice`            | `ux.view.agent-config`                              | `application.applicationservice.configuration-service`      | `application` | `serves`     | many-to-many | medium   |
 | `ux.view.serves.business.businessservice`                  | `ux.view.agent-config`                              | `business.businessservice.configuration-management`         | `business`    | `serves`     | many-to-many | medium   |
+| `ux.view.depends-on.technology.systemsoftware`             | `ux.view.auth-required`                             | `technology.systemsoftware.react`                           | `technology`  | `depends-on` | many-to-many | medium   |
 | `ux.view.satisfies.security.securitypolicy`                | `ux.view.auth-required`                             | `security.securitypolicy.jwt-bearer-authentication`         | `security`    | `satisfies`  | many-to-many | medium   |
 | `ux.view.satisfies.security.securitypolicy`                | `ux.view.auth-required`                             | `security.securitypolicy.role-based-access-control`         | `security`    | `satisfies`  | many-to-many | medium   |
+| `ux.view.depends-on.technology.systemsoftware`             | `ux.view.config-history`                            | `technology.systemsoftware.react`                           | `technology`  | `depends-on` | many-to-many | medium   |
 | `ux.view.references.data-model.objectschema`               | `ux.view.config-history`                            | `data-model.objectschema.project-config`                    | `data-model`  | `references` | many-to-many | medium   |
 | `ux.view.serves.application.applicationservice`            | `ux.view.config-history`                            | `application.applicationservice.configuration-service`      | `application` | `serves`     | many-to-many | medium   |
 | `ux.view.accesses.api.operation`                           | `ux.view.dashboard`                                 | `api.operation.get-system-health`                           | `api`         | `accesses`   | many-to-many | medium   |
 | `ux.view.accesses.api.operation`                           | `ux.view.dashboard`                                 | `api.operation.list-executions`                             | `api`         | `accesses`   | many-to-many | medium   |
 | `ux.view.accesses.application.applicationcomponent`        | `ux.view.dashboard`                                 | `application.applicationcomponent.execution-event-handler`  | `application` | `accesses`   | many-to-many | medium   |
 | `ux.view.depends-on.technology.systemsoftware`             | `ux.view.dashboard`                                 | `technology.systemsoftware.fast-api`                        | `technology`  | `depends-on` | many-to-many | medium   |
+| `ux.view.depends-on.technology.systemsoftware`             | `ux.view.dashboard`                                 | `technology.systemsoftware.react`                           | `technology`  | `depends-on` | many-to-many | medium   |
 | `ux.view.realizes.motivation.goal`                         | `ux.view.dashboard`                                 | `motivation.goal.automate-software-development-workflows`   | `motivation`  | `realizes`   | many-to-many | medium   |
 | `ux.view.references.data-model.objectschema`               | `ux.view.dashboard`                                 | `data-model.objectschema.agent-execution`                   | `data-model`  | `references` | many-to-many | medium   |
 | `ux.view.references.data-model.objectschema`               | `ux.view.dashboard`                                 | `data-model.objectschema.work-item`                         | `data-model`  | `references` | many-to-many | medium   |
@@ -121,6 +130,9 @@ flowchart TB
 | `ux.view.accesses.api.operation`                           | `ux.view.pipeline-flow`                             | `api.operation.list-workflow-runs`                          | `api`         | `accesses`   | many-to-many | medium   |
 | `ux.view.accesses.application.applicationcomponent`        | `ux.view.pipeline-flow`                             | `application.applicationcomponent.workflow-event-handler`   | `application` | `accesses`   | many-to-many | medium   |
 | `ux.view.depends-on.technology.systemsoftware`             | `ux.view.pipeline-flow`                             | `technology.systemsoftware.fast-api`                        | `technology`  | `depends-on` | many-to-many | medium   |
+| `ux.view.depends-on.technology.systemsoftware`             | `ux.view.pipeline-flow`                             | `technology.systemsoftware.react`                           | `technology`  | `depends-on` | many-to-many | medium   |
+| `ux.view.depends-on.technology.systemsoftware`             | `ux.view.pipeline-flow`                             | `technology.systemsoftware.react-router`                    | `technology`  | `depends-on` | many-to-many | medium   |
+| `ux.view.depends-on.technology.systemsoftware`             | `ux.view.pipeline-flow`                             | `technology.systemsoftware.xyflow`                          | `technology`  | `depends-on` | many-to-many | medium   |
 | `ux.view.realizes.motivation.goal`                         | `ux.view.pipeline-flow`                             | `motivation.goal.complete-observability-via-event-sourcing` | `motivation`  | `realizes`   | many-to-many | medium   |
 | `ux.view.references.data-model.objectschema`               | `ux.view.pipeline-flow`                             | `data-model.objectschema.agent-execution`                   | `data-model`  | `references` | many-to-many | medium   |
 | `ux.view.references.data-model.objectschema`               | `ux.view.pipeline-flow`                             | `data-model.objectschema.workflow`                          | `data-model`  | `references` | many-to-many | medium   |
@@ -129,15 +141,18 @@ flowchart TB
 | `ux.view.accesses.api.operation`                           | `ux.view.pipeline-run-details`                      | `api.operation.get-workflow-run`                            | `api`         | `accesses`   | many-to-many | medium   |
 | `ux.view.accesses.api.operation`                           | `ux.view.pipeline-run-details`                      | `api.operation.get-workflow-run-events`                     | `api`         | `accesses`   | many-to-many | medium   |
 | `ux.view.accesses.application.applicationcomponent`        | `ux.view.pipeline-run-details`                      | `application.applicationcomponent.execution-event-handler`  | `application` | `accesses`   | many-to-many | medium   |
+| `ux.view.depends-on.technology.systemsoftware`             | `ux.view.pipeline-run-details`                      | `technology.systemsoftware.react`                           | `technology`  | `depends-on` | many-to-many | medium   |
 | `ux.view.realizes.motivation.goal`                         | `ux.view.pipeline-run-details`                      | `motivation.goal.complete-observability-via-event-sourcing` | `motivation`  | `realizes`   | many-to-many | medium   |
 | `ux.view.references.data-model.objectschema`               | `ux.view.pipeline-run-details`                      | `data-model.objectschema.agent-execution`                   | `data-model`  | `references` | many-to-many | medium   |
 | `ux.view.references.data-model.objectschema`               | `ux.view.pipeline-run-details`                      | `data-model.objectschema.work-item`                         | `data-model`  | `references` | many-to-many | medium   |
 | `ux.view.serves.application.applicationservice`            | `ux.view.pipeline-run-details`                      | `application.applicationservice.workflow-run-query-service` | `application` | `serves`     | many-to-many | medium   |
 | `ux.view.accesses.api.operation`                           | `ux.view.project-config`                            | `api.operation.list-config-agents`                          | `api`         | `accesses`   | many-to-many | medium   |
+| `ux.view.depends-on.technology.systemsoftware`             | `ux.view.project-config`                            | `technology.systemsoftware.react`                           | `technology`  | `depends-on` | many-to-many | medium   |
 | `ux.view.references.data-model.objectschema`               | `ux.view.project-config`                            | `data-model.objectschema.project-config`                    | `data-model`  | `references` | many-to-many | medium   |
 | `ux.view.serves.application.applicationservice`            | `ux.view.project-config`                            | `application.applicationservice.configuration-service`      | `application` | `serves`     | many-to-many | medium   |
 | `ux.view.serves.business.businessservice`                  | `ux.view.project-config`                            | `business.businessservice.configuration-management`         | `business`    | `serves`     | many-to-many | medium   |
 | `ux.view.accesses.api.operation`                           | `ux.view.workflow-config`                           | `api.operation.list-workflows`                              | `api`         | `accesses`   | many-to-many | medium   |
+| `ux.view.depends-on.technology.systemsoftware`             | `ux.view.workflow-config`                           | `technology.systemsoftware.react`                           | `technology`  | `depends-on` | many-to-many | medium   |
 | `ux.view.realizes.motivation.goal`                         | `ux.view.workflow-config`                           | `motivation.goal.plugin-extensibility`                      | `motivation`  | `realizes`   | many-to-many | medium   |
 | `ux.view.references.data-model.objectschema`               | `ux.view.workflow-config`                           | `data-model.objectschema.workflow`                          | `data-model`  | `references` | many-to-many | medium   |
 | `ux.view.references.data-model.objectschema`               | `ux.view.workflow-config`                           | `data-model.objectschema.workflow-template`                 | `data-model`  | `references` | many-to-many | medium   |
@@ -160,6 +175,7 @@ React Flow canvas component for rendering workflow graph with draggable nodes an
 | Type        | Related Element                           | Predicate    | Direction |
 | ----------- | ----------------------------------------- | ------------ | --------- |
 | inter-layer | `technology.systemsoftware.fast-api`      | `depends-on` | outbound  |
+| inter-layer | `technology.systemsoftware.xyflow`        | `depends-on` | outbound  |
 | intra-layer | `ux.librarycomponent.workflow-flow-nodes` | `composes`   | outbound  |
 | intra-layer | `ux.librarycomponent.workflow-flow-nodes` | `renders`    | outbound  |
 | intra-layer | `ux.librarycomponent.workflow-run-list`   | `renders`    | outbound  |
@@ -174,10 +190,11 @@ Persistent system health monitoring component showing active agents, circuit bre
 
 #### Relationships
 
-| Type        | Related Element                               | Predicate   | Direction |
-| ----------- | --------------------------------------------- | ----------- | --------- |
-| inter-layer | `motivation.principle.hexagonal-architecture` | `satisfies` | outbound  |
-| intra-layer | `ux.librarycomponent.workflow-flow-nodes`     | `composes`  | inbound   |
+| Type        | Related Element                               | Predicate    | Direction |
+| ----------- | --------------------------------------------- | ------------ | --------- |
+| inter-layer | `technology.systemsoftware.tan-stack-query`   | `depends-on` | outbound  |
+| inter-layer | `motivation.principle.hexagonal-architecture` | `satisfies`  | outbound  |
+| intra-layer | `ux.librarycomponent.workflow-flow-nodes`     | `composes`   | inbound   |
 
 ### Workflow Flow Nodes {#workflow-flow-nodes}
 
@@ -192,6 +209,7 @@ Custom React Flow node components for agent execution, cycle bounding, decision,
 | Type        | Related Element                            | Predicate    | Direction |
 | ----------- | ------------------------------------------ | ------------ | --------- |
 | inter-layer | `technology.systemsoftware.python-311`     | `depends-on` | outbound  |
+| inter-layer | `technology.systemsoftware.xyflow`         | `depends-on` | outbound  |
 | intra-layer | `ux.librarycomponent.flow-canvas`          | `composes`   | inbound   |
 | intra-layer | `ux.librarycomponent.flow-canvas`          | `renders`    | inbound   |
 | intra-layer | `ux.librarycomponent.system-status-header` | `composes`   | outbound  |
@@ -206,10 +224,11 @@ Component displaying paginated list of pipeline workflow runs with status and ti
 
 #### Relationships
 
-| Type        | Related Element                               | Predicate   | Direction |
-| ----------- | --------------------------------------------- | ----------- | --------- |
-| inter-layer | `motivation.principle.hexagonal-architecture` | `satisfies` | outbound  |
-| intra-layer | `ux.librarycomponent.flow-canvas`             | `renders`   | inbound   |
+| Type        | Related Element                               | Predicate    | Direction |
+| ----------- | --------------------------------------------- | ------------ | --------- |
+| inter-layer | `technology.systemsoftware.tan-stack-query`   | `depends-on` | outbound  |
+| inter-layer | `motivation.principle.hexagonal-architecture` | `satisfies`  | outbound  |
+| intra-layer | `ux.librarycomponent.flow-canvas`             | `renders`    | inbound   |
 
 ### Workflow Stage Editor {#workflow-stage-editor}
 
@@ -221,9 +240,10 @@ Drag-and-drop stage editor component for defining pipeline stages and their conf
 
 #### Relationships
 
-| Type        | Related Element                               | Predicate   | Direction |
-| ----------- | --------------------------------------------- | ----------- | --------- |
-| inter-layer | `motivation.principle.hexagonal-architecture` | `satisfies` | outbound  |
+| Type        | Related Element                               | Predicate    | Direction |
+| ----------- | --------------------------------------------- | ------------ | --------- |
+| inter-layer | `technology.systemsoftware.zustand`           | `depends-on` | outbound  |
+| inter-layer | `motivation.principle.hexagonal-architecture` | `satisfies`  | outbound  |
 
 ### Agent Config {#agent-config}
 
@@ -239,6 +259,7 @@ Agent definition management interface for configuring AI agents, capabilities, a
 | ----------- | ------------------------------------------------------ | ------------ | --------- |
 | inter-layer | `navigation.route.agent-config-route`                  | `maps-to`    | inbound   |
 | inter-layer | `api.operation.list-agents`                            | `accesses`   | outbound  |
+| inter-layer | `technology.systemsoftware.react`                      | `depends-on` | outbound  |
 | inter-layer | `data-model.objectschema.agent`                        | `references` | outbound  |
 | inter-layer | `data-model.objectschema.agent-capability`             | `references` | outbound  |
 | inter-layer | `security.securitypolicy.role-based-access-control`    | `satisfies`  | outbound  |
@@ -255,10 +276,11 @@ Authentication gate page shown to unauthenticated users requiring JWT token entr
 
 #### Relationships
 
-| Type        | Related Element                                     | Predicate   | Direction |
-| ----------- | --------------------------------------------------- | ----------- | --------- |
-| inter-layer | `security.securitypolicy.jwt-bearer-authentication` | `satisfies` | outbound  |
-| inter-layer | `security.securitypolicy.role-based-access-control` | `satisfies` | outbound  |
+| Type        | Related Element                                     | Predicate    | Direction |
+| ----------- | --------------------------------------------------- | ------------ | --------- |
+| inter-layer | `technology.systemsoftware.react`                   | `depends-on` | outbound  |
+| inter-layer | `security.securitypolicy.jwt-bearer-authentication` | `satisfies`  | outbound  |
+| inter-layer | `security.securitypolicy.role-based-access-control` | `satisfies`  | outbound  |
 
 ### Config History {#config-history}
 
@@ -273,6 +295,7 @@ Configuration change history view showing audit log of all project, agent, and w
 | Type        | Related Element                                        | Predicate    | Direction |
 | ----------- | ------------------------------------------------------ | ------------ | --------- |
 | inter-layer | `navigation.route.config-history-route`                | `maps-to`    | inbound   |
+| inter-layer | `technology.systemsoftware.react`                      | `depends-on` | outbound  |
 | inter-layer | `data-model.objectschema.project-config`               | `references` | outbound  |
 | inter-layer | `application.applicationservice.configuration-service` | `serves`     | outbound  |
 
@@ -294,6 +317,7 @@ Main monitoring dashboard showing active agents, system health, circuit breaker 
 | inter-layer | `api.operation.list-executions`                             | `accesses`   | outbound  |
 | inter-layer | `application.applicationcomponent.execution-event-handler`  | `accesses`   | outbound  |
 | inter-layer | `technology.systemsoftware.fast-api`                        | `depends-on` | outbound  |
+| inter-layer | `technology.systemsoftware.react`                           | `depends-on` | outbound  |
 | inter-layer | `motivation.goal.automate-software-development-workflows`   | `realizes`   | outbound  |
 | inter-layer | `data-model.objectschema.agent-execution`                   | `references` | outbound  |
 | inter-layer | `data-model.objectschema.work-item`                         | `references` | outbound  |
@@ -319,6 +343,9 @@ Full-screen React Flow-based visualization of pipeline execution graph with node
 | inter-layer | `api.operation.list-workflow-runs`                          | `accesses`   | outbound  |
 | inter-layer | `application.applicationcomponent.workflow-event-handler`   | `accesses`   | outbound  |
 | inter-layer | `technology.systemsoftware.fast-api`                        | `depends-on` | outbound  |
+| inter-layer | `technology.systemsoftware.react`                           | `depends-on` | outbound  |
+| inter-layer | `technology.systemsoftware.react-router`                    | `depends-on` | outbound  |
+| inter-layer | `technology.systemsoftware.xyflow`                          | `depends-on` | outbound  |
 | inter-layer | `motivation.goal.complete-observability-via-event-sourcing` | `realizes`   | outbound  |
 | inter-layer | `data-model.objectschema.agent-execution`                   | `references` | outbound  |
 | inter-layer | `data-model.objectschema.workflow`                          | `references` | outbound  |
@@ -341,6 +368,7 @@ Full-screen detailed view of a pipeline run with event timeline, audit log, and 
 | inter-layer | `api.operation.get-workflow-run`                            | `accesses`   | outbound  |
 | inter-layer | `api.operation.get-workflow-run-events`                     | `accesses`   | outbound  |
 | inter-layer | `application.applicationcomponent.execution-event-handler`  | `accesses`   | outbound  |
+| inter-layer | `technology.systemsoftware.react`                           | `depends-on` | outbound  |
 | inter-layer | `motivation.goal.complete-observability-via-event-sourcing` | `realizes`   | outbound  |
 | inter-layer | `data-model.objectschema.agent-execution`                   | `references` | outbound  |
 | inter-layer | `data-model.objectschema.work-item`                         | `references` | outbound  |
@@ -360,6 +388,7 @@ Project settings and environment configuration interface for GitHub integration 
 | ----------- | ------------------------------------------------------ | ------------ | --------- |
 | inter-layer | `navigation.route.project-config-route`                | `maps-to`    | inbound   |
 | inter-layer | `api.operation.list-config-agents`                     | `accesses`   | outbound  |
+| inter-layer | `technology.systemsoftware.react`                      | `depends-on` | outbound  |
 | inter-layer | `data-model.objectschema.project-config`               | `references` | outbound  |
 | inter-layer | `application.applicationservice.configuration-service` | `serves`     | outbound  |
 | inter-layer | `business.businessservice.configuration-management`    | `serves`     | outbound  |
@@ -378,6 +407,7 @@ Workflow configuration editor for creating and managing pipeline stages and thei
 | ----------- | ------------------------------------------------------ | ------------ | --------- |
 | inter-layer | `navigation.route.workflow-config-route`               | `maps-to`    | inbound   |
 | inter-layer | `api.operation.list-workflows`                         | `accesses`   | outbound  |
+| inter-layer | `technology.systemsoftware.react`                      | `depends-on` | outbound  |
 | inter-layer | `motivation.goal.plugin-extensibility`                 | `realizes`   | outbound  |
 | inter-layer | `data-model.objectschema.workflow`                     | `references` | outbound  |
 | inter-layer | `data-model.objectschema.workflow-template`            | `references` | outbound  |
@@ -387,4 +417,4 @@ Workflow configuration editor for creating and managing pipeline stages and thei
 
 ---
 
-Generated: 2026-05-08T12:30:44.964Z | Model Version: 0.1.0
+Generated: 2026-05-09T09:28:54.064Z | Model Version: 0.1.0

@@ -102,20 +102,16 @@ class IWorkflowDefinitionCommandPort(ABC):
         """
         Creates a new workflow definition.
 
-        This operation:
-        1. Validates workflow structure (no circular dependencies)
+        This operation: 1. Validates workflow structure (no circular dependencies)
         2. Validates agent references exist
         3. Creates workflow definition with version 1
         4. Emits WorkflowDefinitionCreated event
 
-        Args:
-            command: Command with workflow definition
+        Args: command: Command with workflow definition
 
-        Returns:
-            Result containing workflow ID and version
+        Returns: Result containing workflow ID and version
 
-        Raises:
-            ProjectNotFoundError: If project doesn't exist
+        Raises: ProjectNotFoundError: If project doesn't exist
             AgentNotFoundError: If referenced agent doesn't exist
             CircularDependencyError: If stage transitions create a cycle
             ValidationError: If command parameters invalid
@@ -128,22 +124,18 @@ class IWorkflowDefinitionCommandPort(ABC):
         """
         Updates an existing workflow definition.
 
-        This operation:
-        1. Validates workflow exists
+        This operation: 1. Validates workflow exists
         2. Validates updated structure (no circular dependencies)
         3. Validates agent references
         4. Creates new version (increments version number)
         5. Preserves previous version in history
         6. Emits WorkflowDefinitionUpdated event
 
-        Args:
-            command: Command with workflow updates
+        Args: command: Command with workflow updates
 
-        Returns:
-            Result containing workflow ID and new version number
+        Returns: Result containing workflow ID and new version number
 
-        Raises:
-            WorkflowNotFoundError: If workflow doesn't exist
+        Raises: WorkflowNotFoundError: If workflow doesn't exist
             AgentNotFoundError: If referenced agent doesn't exist
             CircularDependencyError: If stage transitions create a cycle
             ValidationError: If command parameters invalid
@@ -160,19 +152,15 @@ class IWorkflowDefinitionCommandPort(ABC):
         If force=True, workflow is deleted regardless (active executions continue
         with the last known version).
 
-        This operation:
-        1. Checks for active executions (if force=False)
+        This operation: 1. Checks for active executions (if force=False)
         2. Marks workflow as deleted (soft delete)
         3. Emits WorkflowDefinitionDeleted event
 
-        Args:
-            command: Command with deletion parameters
+        Args: command: Command with deletion parameters
 
-        Returns:
-            Result indicating success or failure
+        Returns: Result indicating success or failure
 
-        Raises:
-            WorkflowNotFoundError: If workflow doesn't exist
+        Raises: WorkflowNotFoundError: If workflow doesn't exist
             ActiveExecutionsExistError: If active executions exist and force=False
         """
 
@@ -183,14 +171,11 @@ class IWorkflowDefinitionCommandPort(ABC):
 
         Inactive workflows cannot be used for new executions.
 
-        Args:
-            workflow_id: Workflow to activate
+        Args: workflow_id: Workflow to activate
 
-        Returns:
-            Result indicating success
+        Returns: Result indicating success
 
-        Raises:
-            WorkflowNotFoundError: If workflow doesn't exist
+        Raises: WorkflowNotFoundError: If workflow doesn't exist
         """
 
     @abstractmethod
@@ -201,12 +186,9 @@ class IWorkflowDefinitionCommandPort(ABC):
         Prevents new executions from using this workflow, but existing
         executions continue.
 
-        Args:
-            workflow_id: Workflow to deactivate
+        Args: workflow_id: Workflow to deactivate
 
-        Returns:
-            Result indicating success
+        Returns: Result indicating success
 
-        Raises:
-            WorkflowNotFoundError: If workflow doesn't exist
+        Raises: WorkflowNotFoundError: If workflow doesn't exist
         """

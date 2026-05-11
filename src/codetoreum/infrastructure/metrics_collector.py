@@ -3,9 +3,8 @@
 import logging
 from typing import Any
 
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.infrastructure.event_bus import EventBus
-from codetoreum.infrastructure.event_types import EventTypes
 
 logger = logging.getLogger(__name__)
 
@@ -68,36 +67,38 @@ class MetricsCollector:
             return
 
         # Board events
-        self.event_bus.subscribe(EventTypes.WORKITEM_COLUMN_CHANGED, self._record_column_change)
+        self.event_bus.subscribe("WorkItemColumnChangedEvent", self._record_column_change)
 
         # Lock events
-        self.event_bus.subscribe(EventTypes.LOCK_ACQUIRED, self._record_lock_acquisition)
-        self.event_bus.subscribe(EventTypes.LOCK_RELEASED, self._record_lock_release)
+        self.event_bus.subscribe("LockAcquiredEvent", self._record_lock_acquisition)
+        self.event_bus.subscribe("PipelineLockAcquiredEvent", self._record_lock_acquisition)
+        self.event_bus.subscribe("LockReleasedEvent", self._record_lock_release)
+        self.event_bus.subscribe("PipelineLockReleasedEvent", self._record_lock_release)
 
         # Review events
-        self.event_bus.subscribe(EventTypes.REVIEW_STATUS_CHANGED, self._record_review_status)
+        self.event_bus.subscribe("ReviewStatusChangedEvent", self._record_review_status)
 
         # Discussion events
-        self.event_bus.subscribe(EventTypes.COMMENT_POSTED, self._record_comment)
-        self.event_bus.subscribe(EventTypes.COMMENT_NEEDS_RESPONSE, self._record_comment_needs_response)
+        self.event_bus.subscribe("CommentPostedEvent", self._record_comment)
+        self.event_bus.subscribe("CommentNeedsResponseEvent", self._record_comment_needs_response)
 
         # Repair cycle events
-        self.event_bus.subscribe(EventTypes.REPAIR_CYCLE_STARTED, self._record_repair_cycle_started)
+        self.event_bus.subscribe("RepairCycleStartedEvent", self._record_repair_cycle_started)
         self.event_bus.subscribe(
-            EventTypes.REPAIR_CYCLE_TEST_EXECUTION_COMPLETED,
+            "RepairCycleTestExecutionCompletedEvent",
             self._record_repair_cycle_test_execution,
         )
-        self.event_bus.subscribe(EventTypes.REPAIR_CYCLE_FILE_FIX_COMPLETED, self._record_repair_cycle_file_fix)
+        self.event_bus.subscribe("RepairCycleFileFixCompletedEvent", self._record_repair_cycle_file_fix)
         self.event_bus.subscribe(
-            EventTypes.REPAIR_CYCLE_WARNING_REVIEW_COMPLETED,
+            "RepairCycleWarningReviewCompletedEvent",
             self._record_repair_cycle_warning_review,
         )
-        self.event_bus.subscribe(EventTypes.REPAIR_CYCLE_FAST_FAIL, self._record_repair_cycle_fast_fail)
-        self.event_bus.subscribe(EventTypes.REPAIR_CYCLE_COMPLETED, self._record_repair_cycle_completed)
+        self.event_bus.subscribe("RepairCycleFastFailEvent", self._record_repair_cycle_fast_fail)
+        self.event_bus.subscribe("RepairCycleCompletedEvent", self._record_repair_cycle_completed)
 
         logger.info("MetricsCollector subscribed to adapter events")
 
-    def _get_event_attribute(self, event: DomainEvent, attribute: str, default: Any = None) -> Any:
+    def _get_event_attribute(self, event: CodetoreumEvent, attribute: str, default: Any = None) -> Any:
         """
         Extract an attribute from an event supporting both dict and object formats.
 
@@ -123,7 +124,7 @@ class MetricsCollector:
 
         return default
 
-    async def _record_column_change(self, event: DomainEvent) -> None:
+    async def _record_column_change(self, event: CodetoreumEvent) -> None:
         """
         Record column change metric.
 
@@ -157,7 +158,7 @@ class MetricsCollector:
             )
             self._metrics["errors"] += 1
 
-    async def _record_lock_acquisition(self, event: DomainEvent) -> None:
+    async def _record_lock_acquisition(self, event: CodetoreumEvent) -> None:
         """
         Record lock acquisition metric.
 
@@ -180,7 +181,7 @@ class MetricsCollector:
             )
             self._metrics["errors"] += 1
 
-    async def _record_lock_release(self, event: DomainEvent) -> None:
+    async def _record_lock_release(self, event: CodetoreumEvent) -> None:
         """
         Record lock release metric.
 
@@ -207,7 +208,7 @@ class MetricsCollector:
             )
             self._metrics["errors"] += 1
 
-    async def _record_review_status(self, event: DomainEvent) -> None:
+    async def _record_review_status(self, event: CodetoreumEvent) -> None:
         """
         Record review status change metric.
 
@@ -232,7 +233,7 @@ class MetricsCollector:
             )
             self._metrics["errors"] += 1
 
-    async def _record_comment(self, event: DomainEvent) -> None:
+    async def _record_comment(self, event: CodetoreumEvent) -> None:
         """
         Record comment posted metric.
 
@@ -251,7 +252,7 @@ class MetricsCollector:
             )
             self._metrics["errors"] += 1
 
-    async def _record_comment_needs_response(self, event: DomainEvent) -> None:
+    async def _record_comment_needs_response(self, event: CodetoreumEvent) -> None:
         """
         Record comment requiring response metric.
 
@@ -271,7 +272,7 @@ class MetricsCollector:
             )
             self._metrics["errors"] += 1
 
-    async def _record_repair_cycle_started(self, event: DomainEvent) -> None:
+    async def _record_repair_cycle_started(self, event: CodetoreumEvent) -> None:
         """
         Record repair cycle started metric.
 
@@ -294,7 +295,7 @@ class MetricsCollector:
             )
             self._metrics["errors"] += 1
 
-    async def _record_repair_cycle_test_execution(self, event: DomainEvent) -> None:
+    async def _record_repair_cycle_test_execution(self, event: CodetoreumEvent) -> None:
         """
         Record repair cycle test execution metric.
 
@@ -325,7 +326,7 @@ class MetricsCollector:
             )
             self._metrics["errors"] += 1
 
-    async def _record_repair_cycle_file_fix(self, event: DomainEvent) -> None:
+    async def _record_repair_cycle_file_fix(self, event: CodetoreumEvent) -> None:
         """
         Record repair cycle file fix metric.
 
@@ -353,7 +354,7 @@ class MetricsCollector:
             )
             self._metrics["errors"] += 1
 
-    async def _record_repair_cycle_warning_review(self, event: DomainEvent) -> None:
+    async def _record_repair_cycle_warning_review(self, event: CodetoreumEvent) -> None:
         """
         Record repair cycle warning review metric.
 
@@ -374,7 +375,7 @@ class MetricsCollector:
             )
             self._metrics["errors"] += 1
 
-    async def _record_repair_cycle_fast_fail(self, event: DomainEvent) -> None:
+    async def _record_repair_cycle_fast_fail(self, event: CodetoreumEvent) -> None:
         """
         Record repair cycle fast-fail metric.
 
@@ -398,7 +399,7 @@ class MetricsCollector:
             )
             self._metrics["errors"] += 1
 
-    async def _record_repair_cycle_completed(self, event: DomainEvent) -> None:
+    async def _record_repair_cycle_completed(self, event: CodetoreumEvent) -> None:
         """
         Record repair cycle completed metric.
 

@@ -3,8 +3,9 @@
 import asyncio
 import logging
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
-from codetoreum.domain.events import WorkItemColumnChanged
+from codetoreum.domain.events import WorkItemColumnChangedEvent
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.ports.exceptions import (
     AuthenticationError,
@@ -241,16 +242,16 @@ class BoardPollingService:
             changes = self._detect_changes(previous_state, current_state)
 
             for change in changes:
-                event = WorkItemColumnChanged(
-                    aggregate_id=change["work_item_id"],
-                    payload={
-                        "work_item_id": change["work_item_id"],
-                        "from_column": change["from_column"],
-                        "to_column": change["to_column"],
-                        "moved_by": "HUMAN",  # Assume human since we can't distinguish
-                        "board_id": board_id,
-                        "project_id": project_id,
-                    },
+                event = WorkItemColumnChangedEvent(
+                    type="workitem.column_changed",
+                    timestamp=datetime.now(UTC).isoformat(),
+                    source="board_polling_service",
+                    work_item_id=change["work_item_id"],
+                    board_id=board_id,
+                    project_id=project_id,
+                    from_column=change["from_column"],
+                    to_column=change["to_column"],
+                    moved_by="human",
                 )
 
                 # Emit event with error handling

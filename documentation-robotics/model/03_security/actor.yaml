@@ -1,0 +1,111 @@
+security.actor.developer:
+  id: 6bedb456-b85f-4a3e-a7b0-16e2d97f532d
+  path: security.actor.developer
+  spec_node_id: security.actor
+  type: actor
+  layer_id: security
+  name: Developer
+  description: Human user accessing the REST API and configuration dashboard to
+    manage workflows, view executions, and configure projects.
+  attributes:
+    type: human
+    trustLevel: medium
+    objectives:
+      - Trigger and monitor workflows
+      - Configure project settings
+      - View agent execution results
+  source_reference:
+    provenance: manual
+    locations:
+      - file: src/codetoreum/domain/user.py
+  metadata:
+    created_at: 2026-05-08T20:42:53.044Z
+    updated_at: 2026-05-08T20:42:53.044Z
+    version: 1
+security.actor.ai-agent:
+  id: d91d3cd6-f056-41fb-ad98-d3f1fe677a5b
+  path: security.actor.ai-agent
+  spec_node_id: security.actor
+  type: actor
+  layer_id: security
+  name: AI Agent
+  description: "Containerized AI agent executing inside Docker with strictly
+    limited privileges: internet access and mounted project files only. No git
+    credentials, SSH keys, GitHub credentials, or Docker socket access."
+  attributes:
+    type: system
+    trustLevel: low
+    objectives:
+      - Execute assigned coding tasks
+      - Read project context files
+      - Write outputs to mounted workspace
+    dependencies:
+      - Docker container runtime
+      - Mounted project files
+  source_reference:
+    provenance: manual
+    locations:
+      - file: CLAUDE.md
+  metadata:
+    created_at: 2026-05-08T20:42:57.813Z
+    updated_at: 2026-05-08T20:42:57.813Z
+    version: 1
+security.actor.git-hub-webhook:
+  id: ea75746c-1825-4686-afef-721a77215ab5
+  path: security.actor.git-hub-webhook
+  spec_node_id: security.actor
+  type: actor
+  layer_id: security
+  name: GitHub Webhook
+  description: External system (GitHub) sending signed webhook payloads via
+    HMAC-SHA256 to the /webhooks/github endpoint. Authenticated by
+    X-Hub-Signature-256 header verification.
+  attributes:
+    type: external-entity
+    trustLevel: medium
+    objectives:
+      - Notify Codetoreum of repository events
+      - Trigger workflow automation on issue/PR changes
+    dependencies:
+      - GitHub HMAC secret for signing
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/fastapi_app.py
+        symbol: github_webhook
+  metadata:
+    created_at: 2026-05-08T20:43:03.156Z
+    updated_at: 2026-05-08T20:43:03.156Z
+    version: 1
+security.actor.system-orchestrator:
+  id: 44342163-d304-48df-9b5f-d57f390d35c9
+  path: security.actor.system-orchestrator
+  spec_node_id: security.actor
+  type: actor
+  layer_id: security
+  name: System Orchestrator
+  description: The Codetoreum service itself, acting on behalf of workflows. Holds
+    git credentials, performs all git operations (clone, commit, push), and
+    manages container lifecycle. The sole principal with elevated system
+    privileges.
+  attributes:
+    type: service
+    trustLevel: high
+    objectives:
+      - Orchestrate multi-agent workflows
+      - Execute all git operations on behalf of agents
+      - Manage Docker container lifecycle
+      - Distribute work items across agents
+    dependencies:
+      - GitHub App credentials
+      - Docker daemon
+      - PostgreSQL
+      - Redis
+  source_reference:
+    provenance: manual
+    locations:
+      - file: CLAUDE.md
+  metadata:
+    created_at: 2026-05-08T20:43:07.751Z
+    updated_at: 2026-05-08T20:43:07.751Z
+    version: 1

@@ -6,7 +6,7 @@ and moves work items to the appropriate next column based on cycle outcome.
 
 import logging
 
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.domain.events.pr_review_cycle_events import (
     PRReviewCycleApprovedEvent,
     PRReviewCycleIssuesFoundEvent,
@@ -75,7 +75,7 @@ class PRReviewCycleEventHandler(EventHandler):
             "PRReviewCycleMaxCyclesReachedEvent",
         ]
 
-    async def handle(self, event: DomainEvent) -> None:
+    async def handle(self, event: CodetoreumEvent) -> None:
         """
         Handle PR review cycle outcome event and move work item to next column.
 

@@ -22,8 +22,7 @@ class IRepairCycleCheckpointStore(ABC):
     - Key format: repair_cycle:{workflow_run_id}:{test_type}
     - Supports validation against stale or corrupted checkpoints
 
-    Example:
-        from codetoreum.domain.repair_cycle_types import RepairTestType
+    Example: from codetoreum.domain.repair_cycle_types import RepairTestType
 
         # Save checkpoint
         checkpoint = RepairCycleCheckpoint(
@@ -50,14 +49,11 @@ class IRepairCycleCheckpointStore(ABC):
         calls, and test results. Checkpoints are automatically expired
         after 24 hours.
 
-        Args:
-            checkpoint: Checkpoint to save (immutable)
+        Args: checkpoint: Checkpoint to save (immutable)
 
-        Returns:
-            None (void operation)
+        Returns: None (void operation)
 
-        Raises:
-            PersistenceError: If storage write fails
+        Raises: PersistenceError: If storage write fails
             ValueError: If checkpoint is invalid
 
         Contract:
@@ -79,15 +75,12 @@ class IRepairCycleCheckpointStore(ABC):
         and test type. Returns None if no checkpoint exists or checkpoint
         has expired.
 
-        Args:
-            workflow_run_id: Pipeline run identifier
+        Args: workflow_run_id: Pipeline run identifier
             test_type: Test type (unit, integration, e2e)
 
-        Returns:
-            RepairCycleCheckpoint if found and not expired, None otherwise
+        Returns: RepairCycleCheckpoint if found and not expired, None otherwise
 
-        Raises:
-            PersistenceError: If storage read fails
+        Raises: PersistenceError: If storage read fails
 
         Contract:
             - Returns None for missing checkpoints (no error)
@@ -107,15 +100,12 @@ class IRepairCycleCheckpointStore(ABC):
         Deletes checkpoints after successful completion or manual cleanup.
         If test_type is None, deletes all checkpoints for the pipeline run.
 
-        Args:
-            workflow_run_id: Pipeline run identifier
+        Args: workflow_run_id: Pipeline run identifier
             test_type: Optional specific test type, or None for all
 
-        Returns:
-            None (void operation)
+        Returns: None (void operation)
 
-        Raises:
-            PersistenceError: If storage delete fails
+        Raises: PersistenceError: If storage delete fails
 
         Contract:
             - Deletion is atomic
@@ -133,15 +123,12 @@ class IRepairCycleCheckpointStore(ABC):
 
         Quick check for checkpoint existence without retrieving full data.
 
-        Args:
-            workflow_run_id: Pipeline run identifier
+        Args: workflow_run_id: Pipeline run identifier
             test_type: Test type (unit, integration, e2e)
 
-        Returns:
-            True if checkpoint exists and has not expired, False otherwise
+        Returns: True if checkpoint exists and has not expired, False otherwise
 
-        Raises:
-            PersistenceError: If storage check fails
+        Raises: PersistenceError: If storage check fails
 
         Contract:
             - Returns False for missing checkpoints

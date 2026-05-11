@@ -14,7 +14,7 @@ from elasticsearch.exceptions import (
     NotFoundError,
 )
 
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.infrastructure.event_serialization import EventSerializer
 from codetoreum.ports.exceptions import (
     ConcurrencyConflictError,
@@ -131,7 +131,7 @@ class ElasticsearchEventStore(IEventStore):
     async def append(
         self,
         stream_id: str,
-        events: list[DomainEvent],
+        events: list[CodetoreumEvent],
         expected_version: int | None = None,
     ) -> None:
         """
@@ -205,7 +205,7 @@ class ElasticsearchEventStore(IEventStore):
         stream_id: str,
         from_version: int = 0,
         to_version: int | None = None,
-    ) -> list[DomainEvent]:
+    ) -> list[CodetoreumEvent]:
         """
         Get events from a stream.
 
@@ -272,7 +272,7 @@ class ElasticsearchEventStore(IEventStore):
         self,
         since: datetime,
         stream_id: str | None = None,
-    ) -> list[DomainEvent]:
+    ) -> list[CodetoreumEvent]:
         """
         Get events since a timestamp.
 
@@ -319,7 +319,7 @@ class ElasticsearchEventStore(IEventStore):
         self,
         stream_id: str | None = None,
         from_version: int = 0,
-    ) -> AsyncIterator[DomainEvent]:
+    ) -> AsyncIterator[CodetoreumEvent]:
         """
         Stream events in real-time.
 
@@ -678,7 +678,7 @@ class ElasticsearchEventStore(IEventStore):
         event_type: str,
         since: datetime | None = None,
         limit: int = 1000,
-    ) -> list[DomainEvent]:
+    ) -> list[CodetoreumEvent]:
         """
         Get events by event type.
 
@@ -725,7 +725,7 @@ class ElasticsearchEventStore(IEventStore):
     async def get_events_by_correlation_id(
         self,
         correlation_id: str,
-    ) -> list[DomainEvent]:
+    ) -> list[CodetoreumEvent]:
         """
         Get all events with a specific correlation ID.
 
@@ -765,7 +765,7 @@ class ElasticsearchEventStore(IEventStore):
         stream_id: str,
         from_version: int = 0,
         to_version: int | None = None,
-    ) -> AsyncIterator[DomainEvent]:
+    ) -> AsyncIterator[CodetoreumEvent]:
         """
         Replay events from a stream for debugging/recovery.
 
@@ -862,7 +862,7 @@ class ElasticsearchEventStore(IEventStore):
         """
         return f"{self.index_prefix}-{timestamp.strftime('%Y.%m')}"
 
-    async def _get_all_events(self, from_version: int = 0) -> list[DomainEvent]:
+    async def _get_all_events(self, from_version: int = 0) -> list[CodetoreumEvent]:
         """
         Get all events across all streams.
 

@@ -1550,3 +1550,405 @@ api.operation.move-simulation-issue:
     created_at: 2026-05-08T10:32:12.354Z
     updated_at: 2026-05-08T10:32:12.354Z
     version: 1
+api.operation.health-check:
+  id: 8e58c17c-4ddc-4828-9d81-250e97ac38b3
+  path: api.operation.health-check
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Health Check
+  attributes:
+    operationId: healthCheck
+    summary: Basic health check - no auth required
+    tags: health
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/fastapi_app.py
+        symbol: health_check
+  metadata:
+    created_at: 2026-05-08T18:23:24.717Z
+    updated_at: 2026-05-08T18:23:24.717Z
+    version: 1
+api.operation.readiness-check:
+  id: 7f7e4a79-ffc9-4d34-8136-11c3ba16aca2
+  path: api.operation.readiness-check
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Readiness Check
+  attributes:
+    operationId: readinessCheck
+    summary: Readiness check with dependency health details
+    tags: health
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/fastapi_app.py
+        symbol: readiness_check
+  metadata:
+    created_at: 2026-05-08T18:23:25.167Z
+    updated_at: 2026-05-08T18:23:25.167Z
+    version: 1
+api.operation.receive-git-hub-webhook:
+  id: 526db4f9-85e3-4b09-b8e3-e97277d909cd
+  path: api.operation.receive-git-hub-webhook
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Receive GitHub Webhook
+  attributes:
+    operationId: receiveGitHubWebhook
+    summary: Receive and process GitHub webhook events
+    tags: webhooks
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/fastapi_app.py
+        symbol: github_webhook
+  metadata:
+    created_at: 2026-05-08T18:23:30.247Z
+    updated_at: 2026-05-08T18:23:30.247Z
+    version: 1
+api.operation.web-socket-event-stream:
+  id: 6ad201da-87ec-43bd-a9b1-010e8ebb9eaf
+  path: api.operation.web-socket-event-stream
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: WebSocket Event Stream
+  attributes:
+    operationId: websocketEventStream
+    summary: WebSocket endpoint for real-time event streaming with subscription
+      filtering
+    tags: events
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/fastapi_app.py
+        symbol: websocket_events
+  metadata:
+    created_at: 2026-05-08T18:23:30.611Z
+    updated_at: 2026-05-08T18:23:30.612Z
+    version: 1
+api.operation.web-socket-event-stream-legacy:
+  id: 95dfa2a0-c07a-4751-99fd-71f0d7824bc4
+  path: api.operation.web-socket-event-stream-legacy
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: WebSocket Event Stream Legacy
+  attributes:
+    operationId: websocketEventStreamLegacy
+    summary: Legacy WebSocket endpoint for backward compatibility
+    tags: events
+    deprecated: true
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/fastapi_app.py
+        symbol: websocket_events_legacy
+  metadata:
+    created_at: 2026-05-08T18:23:30.976Z
+    updated_at: 2026-05-08T18:23:30.976Z
+    version: 1
+api.operation.get-token-info:
+  id: 331b8771-bc97-417a-8dee-c4ce895c2057
+  path: api.operation.get-token-info
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Token Info
+  attributes:
+    operationId: getTokenInfo
+    summary: Get information about the current authentication token
+    tags: authentication
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/fastapi_app.py
+        symbol: get_token_info
+  metadata:
+    created_at: 2026-05-08T18:23:35.013Z
+    updated_at: 2026-05-08T18:23:35.013Z
+    version: 1
+api.operation.logout:
+  id: e1da8e98-4520-400e-a9d1-a0a269e2232a
+  path: api.operation.logout
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Logout
+  attributes:
+    operationId: logout
+    summary: Logout by clearing the httpOnly authentication cookie
+    tags: authentication
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/fastapi_app.py
+        symbol: logout
+  metadata:
+    created_at: 2026-05-08T18:23:35.395Z
+    updated_at: 2026-05-08T18:23:35.395Z
+    version: 1
+api.operation.get-simulation-mode-info:
+  id: e79d305b-39ed-4d52-8615-1dc9f5ea5b21
+  path: api.operation.get-simulation-mode-info
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Simulation Mode Info
+  attributes:
+    operationId: getSimulationModeInfo
+    summary: Get simulation mode status and configuration
+    tags: metrics
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/metrics.py
+        symbol: get_simulation_mode_info
+  metadata:
+    created_at: 2026-05-08T18:23:41.229Z
+    updated_at: 2026-05-08T18:23:41.229Z
+    version: 1
+api.operation.get-endpoint-metrics:
+  id: 82379783-1c87-4706-a0e2-edd993391735
+  path: api.operation.get-endpoint-metrics
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Endpoint Metrics
+  attributes:
+    operationId: getEndpointMetrics
+    summary: Get per-endpoint API metrics
+    tags: metrics
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/metrics.py
+        symbol: get_endpoint_metrics
+  metadata:
+    created_at: 2026-05-08T18:23:41.600Z
+    updated_at: 2026-05-08T18:23:41.600Z
+    version: 1
+api.operation.get-agent-execution-metrics:
+  id: 61553e68-923e-4700-a48b-5860f71bb752
+  path: api.operation.get-agent-execution-metrics
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Agent Execution Metrics
+  attributes:
+    operationId: getAgentExecutionMetrics
+    summary: Get agent execution metrics
+    tags: metrics
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/metrics.py
+        symbol: get_agent_execution_metrics
+  metadata:
+    created_at: 2026-05-08T18:23:41.967Z
+    updated_at: 2026-05-08T18:23:41.967Z
+    version: 1
+api.operation.list-metric-names:
+  id: c79d742b-dbc6-4bac-831c-8f16d8c87fde
+  path: api.operation.list-metric-names
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: List Metric Names
+  attributes:
+    operationId: listMetricNames
+    summary: List available metric names
+    tags: metrics
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/metrics.py
+        symbol: list_metric_names
+  metadata:
+    created_at: 2026-05-08T18:23:48.807Z
+    updated_at: 2026-05-08T18:23:48.807Z
+    version: 1
+api.operation.get-active-agents:
+  id: c1ecaba2-5116-4d6f-ab34-5528298d8969
+  path: api.operation.get-active-agents
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Active Agents
+  attributes:
+    operationId: getActiveAgents
+    summary: Get currently active agents
+    tags: metrics
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/metrics.py
+        symbol: get_active_agents
+  metadata:
+    created_at: 2026-05-08T18:23:49.189Z
+    updated_at: 2026-05-08T18:23:49.189Z
+    version: 1
+api.operation.get-api-usage:
+  id: 10af2650-e686-4cba-86b0-85d1088bd273
+  path: api.operation.get-api-usage
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get API Usage
+  attributes:
+    operationId: getApiUsage
+    summary: Get API usage and quotas
+    tags: metrics
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/metrics.py
+        symbol: get_api_usage
+  metadata:
+    created_at: 2026-05-08T18:23:49.561Z
+    updated_at: 2026-05-08T18:23:49.561Z
+    version: 1
+api.operation.get-repair-cycle-metrics:
+  id: 43bf38df-1618-45bb-aa81-b9836e94a7f8
+  path: api.operation.get-repair-cycle-metrics
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Repair Cycle Metrics
+  attributes:
+    operationId: getRepairCycleMetrics
+    summary: Get repair cycle metrics
+    tags: metrics
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/metrics.py
+        symbol: get_repair_cycle_metrics
+  metadata:
+    created_at: 2026-05-08T18:23:49.937Z
+    updated_at: 2026-05-08T18:23:49.937Z
+    version: 1
+api.operation.get-workflow-versions:
+  id: 1efa4661-6833-455c-9595-0592e7b1bc92
+  path: api.operation.get-workflow-versions
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Workflow Versions
+  attributes:
+    operationId: getWorkflowVersions
+    summary: Get workflow version history
+    tags: workflows
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/workflows.py
+        symbol: get_workflow_versions
+  metadata:
+    created_at: 2026-05-08T18:23:54.191Z
+    updated_at: 2026-05-08T18:23:54.191Z
+    version: 1
+api.operation.validate-workflow-definition:
+  id: 9abce6ed-8ecd-4132-9b73-355e356e9d8c
+  path: api.operation.validate-workflow-definition
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Validate Workflow Definition
+  attributes:
+    operationId: validateWorkflowDefinition
+    summary: Validate workflow definition correctness and entry conditions
+    tags: workflows
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/workflows.py
+        symbol: validate_workflow
+  metadata:
+    created_at: 2026-05-08T18:23:54.574Z
+    updated_at: 2026-05-08T18:23:54.574Z
+    version: 1
+api.operation.list-config-agents-for-project:
+  id: 4bfdb692-a658-4333-a093-28e97be3b316
+  path: api.operation.list-config-agents-for-project
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: List Config Agents For Project
+  attributes:
+    operationId: listConfigAgentsForProject
+    summary: List agents for a specific project
+    tags: configuration
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/config/agents.py
+        symbol: list_agents
+  metadata:
+    created_at: 2026-05-08T18:23:58.834Z
+    updated_at: 2026-05-08T18:23:58.834Z
+    version: 1
+api.operation.list-config-pipelines-for-project:
+  id: b823fef3-36c2-4355-8e7f-288614cc9c7b
+  path: api.operation.list-config-pipelines-for-project
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: List Config Pipelines For Project
+  attributes:
+    operationId: listConfigPipelinesForProject
+    summary: List pipelines for a specific project
+    tags: configuration
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/config/pipelines.py
+        symbol: list_pipelines
+  metadata:
+    created_at: 2026-05-08T18:23:59.217Z
+    updated_at: 2026-05-08T18:23:59.217Z
+    version: 1
+api.operation.add-simulation-comment:
+  id: c80bf9f3-02b1-43f6-b56e-d7772664adda
+  path: api.operation.add-simulation-comment
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Add Simulation Comment
+  attributes:
+    operationId: addSimulationComment
+    summary: Add a comment to a simulation issue
+    tags: simulation-ticketing
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/simulation_ticketing.py
+        symbol: add_comment
+  metadata:
+    created_at: 2026-05-08T18:24:03.204Z
+    updated_at: 2026-05-08T18:24:03.204Z
+    version: 1
+api.operation.get-simulation-board-history:
+  id: 6adaba65-46f1-4cef-9a03-bef16bbeabe2
+  path: api.operation.get-simulation-board-history
+  spec_node_id: api.operation
+  type: operation
+  layer_id: api
+  name: Get Simulation Board History
+  attributes:
+    operationId: getSimulationBoardHistory
+    summary: Get board movement history for simulation
+    tags: simulation-ticketing
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/routers/simulation_ticketing.py
+        symbol: get_board_history
+  metadata:
+    created_at: 2026-05-08T18:24:03.626Z
+    updated_at: 2026-05-08T18:24:03.626Z
+    version: 1

@@ -7,7 +7,8 @@ from codetoreum.adapters.testing import (
     InMemoryEventStore,
     MockLLMAdapter,
 )
-from codetoreum.domain.events import WorkItemCreated
+from codetoreum.domain.events import WorkItemCreatedEvent
+from codetoreum.domain.events.adapter_events import now_iso
 from codetoreum.infrastructure.simulation.simulation_config import (
     FidelityLevel,
     SimulationConfig,
@@ -235,15 +236,13 @@ class TestHighFidelityInMemoryEventStore:
         """Create store with events using HIGH fidelity."""
         store = InMemoryEventStore(config=high_fidelity_config)
         events = [
-            WorkItemCreated(
-                aggregate_id=f"work-item-{i}",
-                payload={
-                    "title": f"Item {i}",
-                    "description": "Test",
-                    "project_id": "proj-1",
-                    "labels": [],
-                    "priority": 1,
-                },
+            WorkItemCreatedEvent(
+                type="workitem.created",
+                timestamp=now_iso(),
+                source="test",
+                work_item_id=f"work-item-{i}",
+                project_id="proj-1",
+                title=f"Item {i}",
             )
             for i in range(5)
         ]
@@ -255,15 +254,13 @@ class TestHighFidelityInMemoryEventStore:
         """Create store with events using MEDIUM fidelity."""
         store = InMemoryEventStore(config=medium_fidelity_config)
         events = [
-            WorkItemCreated(
-                aggregate_id=f"work-item-{i}",
-                payload={
-                    "title": f"Item {i}",
-                    "description": "Test",
-                    "project_id": "proj-1",
-                    "labels": [],
-                    "priority": 1,
-                },
+            WorkItemCreatedEvent(
+                type="workitem.created",
+                timestamp=now_iso(),
+                source="test",
+                work_item_id=f"work-item-{i}",
+                project_id="proj-1",
+                title=f"Item {i}",
             )
             for i in range(5)
         ]

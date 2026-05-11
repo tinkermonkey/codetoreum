@@ -60,8 +60,7 @@ class IHealthCheck(ABC):
         Liveness checks verify that the application is running and not deadlocked.
         Should be fast and not depend on external services.
 
-        Returns:
-            HealthCheckResult indicating if the application is alive
+        Returns: HealthCheckResult indicating if the application is alive
         """
 
     @abstractmethod
@@ -72,8 +71,7 @@ class IHealthCheck(ABC):
         Readiness checks verify that the application and its dependencies
         are healthy and can handle requests.
 
-        Returns:
-            HealthCheckResult indicating if the application is ready
+        Returns: HealthCheckResult indicating if the application is ready
         """
 
     @abstractmethod
@@ -81,9 +79,7 @@ class IHealthCheck(ABC):
         """
         Check health of a specific dependency.
 
-        Args:
-            dependency_name: Name of the dependency to check
+        Args: dependency_name: Name of the dependency to check
 
-        Returns:
-            DependencyHealth for the specified dependency
+        Returns: DependencyHealth for the specified dependency
         """

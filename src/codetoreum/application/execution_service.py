@@ -181,7 +181,7 @@ class ExecutionService:
             # Persist events
             events = execution.get_pending_events()
             for event in events:
-                await self.event_store.append(event.aggregate_id, [event])
+                await self.event_store.append(execution.id, [event])
             execution.clear_events()
 
             logger.info(f"Created execution {execution.id} for agent {agent.name} on work item {work_item.id}")
@@ -247,7 +247,7 @@ class ExecutionService:
             # Persist events
             events = execution.get_pending_events()
             for event in events:
-                await self.event_store.append(event.aggregate_id, [event])
+                await self.event_store.append(execution.id, [event])
             execution.clear_events()
 
             logger.info(f"Started execution {execution.id} (container: {container_name or 'none'})")
@@ -332,7 +332,7 @@ class ExecutionService:
                 # Persist events
                 events = execution.get_pending_events()
                 for event in events:
-                    await self.event_store.append(event.aggregate_id, [event])
+                    await self.event_store.append(execution.id, [event])
                 execution.clear_events()
 
                 # Clean up tracking
@@ -390,7 +390,7 @@ class ExecutionService:
         # Persist failure events
         events = execution.get_pending_events()
         for event in events:
-            await self.event_store.append(event.aggregate_id, [event])
+            await self.event_store.append(execution.id, [event])
         execution.clear_events()
 
         # Clean up tracking
@@ -593,7 +593,7 @@ class ExecutionService:
                 # Persist events
                 events = execution.get_pending_events()
                 for event in events:
-                    await self.event_store.append(event.aggregate_id, [event])
+                    await self.event_store.append(execution.id, [event])
                 execution.clear_events()
 
                 logger.info(f"Container execution {execution.id} completed successfully")
@@ -628,7 +628,7 @@ class ExecutionService:
             # Persist events
             events = execution.get_pending_events()
             for event in events:
-                await self.event_store.append(event.aggregate_id, [event])
+                await self.event_store.append(execution.id, [event])
             execution.clear_events()
 
             logger.error(
@@ -656,7 +656,7 @@ class ExecutionService:
             # Persist events
             events = execution.get_pending_events()
             for event in events:
-                await self.event_store.append(event.aggregate_id, [event])
+                await self.event_store.append(execution.id, [event])
             execution.clear_events()
 
             return ExecutionServiceResult(
@@ -679,7 +679,7 @@ class ExecutionService:
             # Persist events
             events = execution.get_pending_events()
             for event in events:
-                await self.event_store.append(event.aggregate_id, [event])
+                await self.event_store.append(execution.id, [event])
             execution.clear_events()
 
             return ExecutionServiceResult(
@@ -751,7 +751,7 @@ class ExecutionService:
                 # Persist events
                 events = execution.get_pending_events()
                 for event in events:
-                    await self.event_store.append(event.aggregate_id, [event])
+                    await self.event_store.append(execution.id, [event])
                 execution.clear_events()
 
                 # Clean up tracking

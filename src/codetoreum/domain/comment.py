@@ -10,8 +10,7 @@ from codetoreum.domain.types import CommentId, UserId, WorkItemId
 class Comment:
     """Represents a comment on a work item.
 
-    Attributes:
-        id: Unique identifier for the comment
+    Attributes: id: Unique identifier for the comment
         work_item_id: ID of the work item this comment belongs to
         author_id: ID of the user who created the comment
         body: Text content of the comment

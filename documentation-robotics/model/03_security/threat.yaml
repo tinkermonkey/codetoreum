@@ -1,0 +1,101 @@
+security.threat.unauthorized-agent-privilege-escalation:
+  id: cbc3ec62-5e72-450b-b715-20c6e17909e2
+  path: security.threat.unauthorized-agent-privilege-escalation
+  spec_node_id: security.threat
+  type: threat
+  layer_id: security
+  name: Unauthorized Agent Privilege Escalation
+  description: "A containerized AI agent attempts to access the host Docker socket
+    (e.g., via a mounted /var/run/docker.sock) to spawn new containers or escape
+    isolation. Mitigated by the container isolation policy: Docker socket is
+    explicitly not mounted into agent containers."
+  attributes:
+    threatens: Container Isolation
+    likelihood: low
+    impact: high
+    criticality: high
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: CLAUDE.md
+        symbol: Agent Security Model
+  metadata:
+    created_at: 2026-05-08T20:43:45.299Z
+    updated_at: 2026-05-08T20:43:45.299Z
+    version: 1
+security.threat.webhook-replay-attack:
+  id: c3522bc6-22c6-40f1-88ba-0a0f50f6d3d9
+  path: security.threat.webhook-replay-attack
+  spec_node_id: security.threat
+  type: threat
+  layer_id: security
+  name: Webhook Replay Attack
+  description: An attacker captures a valid GitHub webhook payload and replays it
+    at a later time to trigger duplicate or unauthorized workflow executions.
+    Mitigated by HMAC signature verification and timestamp validation on
+    incoming webhook events.
+  attributes:
+    threatens: GitHub Webhook HMAC Signature
+    likelihood: moderate
+    impact: moderate
+    criticality: medium
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/fastapi_app.py
+        symbol: github_webhook
+  metadata:
+    created_at: 2026-05-08T20:43:49.108Z
+    updated_at: 2026-05-08T20:43:49.108Z
+    version: 1
+security.threat.container-escape:
+  id: 3122c886-04c3-41bd-bd9c-06ccbb7a6156
+  path: security.threat.container-escape
+  spec_node_id: security.threat
+  type: threat
+  layer_id: security
+  name: Container Escape
+  description: A compromised or malicious AI agent exploits a Docker vulnerability
+    or misconfiguration to break out of its container and access the host
+    system, other containers, or orchestrator credentials. Mitigated by
+    container isolation policy, no privileged mode, and no host network access.
+  attributes:
+    threatens: Container Isolation
+    likelihood: low
+    impact: high
+    criticality: critical
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: CLAUDE.md
+        symbol: Agent Security Model
+  metadata:
+    created_at: 2026-05-08T20:43:53.701Z
+    updated_at: 2026-05-08T20:43:53.701Z
+    version: 1
+security.threat.credential-exfiltration-via-mounted-files:
+  id: 0646d335-9fed-4e22-b793-6ba066f091b0
+  path: security.threat.credential-exfiltration-via-mounted-files
+  spec_node_id: security.threat
+  type: threat
+  layer_id: security
+  name: Credential Exfiltration via Mounted Files
+  description: "A malicious agent reads sensitive credentials (git tokens, GitHub
+    App keys, SSH keys) from files accidentally mounted into the container
+    workspace. Mitigated by the agent security model: orchestrator holds all
+    credentials and never mounts credential files into agent containers; agents
+    only receive project context files."
+  attributes:
+    threatens: Container Isolation
+    likelihood: moderate
+    impact: high
+    criticality: high
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: CLAUDE.md
+        symbol: Agent Security Model
+  metadata:
+    created_at: 2026-05-08T20:43:58.053Z
+    updated_at: 2026-05-08T20:43:58.053Z
+    version: 1

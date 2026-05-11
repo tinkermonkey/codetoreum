@@ -7,12 +7,17 @@ import pytest
 from codetoreum.domain import (
     AgentExecution,
     DomainError,
-    ExecutionCompleted,
-    ExecutionFailed,
-    ExecutionInitialized,
-    ExecutionStarted,
     ExecutionStatus,
-    ExecutionTimeout,
+)
+from codetoreum.domain.events.execution_events import (
+    ExecutionCancelledEvent,
+    ExecutionCompletedEvent,
+    ExecutionFailedEvent,
+    ExecutionInitializedEvent,
+    ExecutionPausedEvent,
+    ExecutionResumedEvent,
+    ExecutionStartedEvent,
+    ExecutionTimedOutEvent,
 )
 
 
@@ -77,10 +82,10 @@ class TestAgentExecutionCreation:
 
         events = execution.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], ExecutionInitialized)
-        assert events[0].payload["agent_id"] == "agent-1"
-        assert events[0].payload["work_item_id"] == "work-1"
-        assert events[0].payload["stage_name"] == "coding"
+        assert isinstance(events[0], ExecutionInitializedEvent)
+        assert events[0].agent_id == "agent-1"
+        assert events[0].work_item_id == "work-1"
+        assert events[0].stage_name == "coding"
 
 
 class TestAgentExecutionLifecycle:
@@ -106,8 +111,8 @@ class TestAgentExecutionLifecycle:
 
         events = execution.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], ExecutionStarted)
-        assert events[0].payload["container_name"] == "agent-container-1"
+        assert isinstance(events[0], ExecutionStartedEvent)
+        assert events[0].container_name == "agent-container-1"
 
     def test_start_execution_without_container(self):
         """Test starting execution without container."""
@@ -174,9 +179,9 @@ class TestAgentExecutionLifecycle:
 
         events = execution.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], ExecutionCompleted)
-        assert events[0].payload["input_tokens"] == 1000
-        assert events[0].payload["output_tokens"] == 2000
+        assert isinstance(events[0], ExecutionCompletedEvent)
+        assert events[0].input_tokens == 1000
+        assert events[0].output_tokens == 2000
 
     def test_complete_without_session_id(self):
         """Test completing without updating session ID."""
@@ -234,9 +239,9 @@ class TestAgentExecutionLifecycle:
 
         events = execution.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], ExecutionFailed)
-        assert events[0].payload["error_message"] == "Container crashed"
-        assert events[0].payload["exit_code"] == 137
+        assert isinstance(events[0], ExecutionFailedEvent)
+        assert events[0].error_message == "Container crashed"
+        assert events[0].exit_code == 137
 
     def test_fail_before_start(self):
         """Test failing execution before it starts."""
@@ -310,7 +315,7 @@ class TestAgentExecutionLifecycle:
 
         events = execution.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], ExecutionTimeout)
+        assert isinstance(events[0], ExecutionTimedOutEvent)
 
     def test_timeout_non_running_execution_raises_error(self):
         """Test that timing out non-running execution raises error."""
@@ -507,8 +512,8 @@ class TestAgentExecutionEventManagement:
         events = execution.get_pending_events()
 
         assert len(events) == 2
-        assert isinstance(events[0], ExecutionInitialized)
-        assert isinstance(events[1], ExecutionStarted)
+        assert isinstance(events[0], ExecutionInitializedEvent)
+        assert isinstance(events[1], ExecutionStartedEvent)
 
     def test_clear_events(self):
         """Test clearing pending events."""
@@ -579,9 +584,9 @@ class TestAgentExecutionCompleteLifecycle:
 
         events = execution.get_pending_events()
         assert len(events) == 3
-        assert isinstance(events[0], ExecutionInitialized)
-        assert isinstance(events[1], ExecutionStarted)
-        assert isinstance(events[2], ExecutionCompleted)
+        assert isinstance(events[0], ExecutionInitializedEvent)
+        assert isinstance(events[1], ExecutionStartedEvent)
+        assert isinstance(events[2], ExecutionCompletedEvent)
 
     def test_failed_execution_lifecycle(self):
         """Test complete failed execution lifecycle."""
@@ -625,3 +630,175 @@ class TestAgentExecutionCompleteLifecycle:
         assert execution.error_message is not None
         assert "timeout" in execution.error_message.lower()
         assert execution.exit_code == -1
+
+
+class TestAgentExecutionCancelPauseResume:
+    """Tests for cancel(), pause(), and resume() lifecycle methods."""
+
+    def _make_running_execution(self) -> AgentExecution:
+        """Return an execution that has been started (status=RUNNING)."""
+        execution = AgentExecution.create(
+            agent_id="agent-1",
+            work_item_id="work-1",
+            workflow_id="workflow-1",
+            stage_name="coding",
+            prompt="Implement feature X",
+            model="claude-sonnet-4-5",
+        )
+        execution.start(container_name="container-1")
+        return execution
+
+    # ------------------------------------------------------------------
+    # cancel()
+    # ------------------------------------------------------------------
+
+    def test_cancel_running_execution_emits_event(self):
+        """cancel() on a RUNNING execution transitions to CANCELLED and emits ExecutionCancelledEvent."""
+        execution = self._make_running_execution()
+        execution.clear_events()  # ignore initialization/start events
+
+        execution.cancel(reason="test cancellation")
+
+        assert execution.status == ExecutionStatus.CANCELLED
+        assert execution.error_message == "test cancellation"
+        assert execution.exit_code == -2
+
+        events = execution.get_pending_events()
+        assert len(events) == 1
+        assert isinstance(events[0], ExecutionCancelledEvent)
+        assert events[0].execution_id == execution.id
+        assert events[0].work_item_id == execution.work_item_id
+
+    def test_cancel_initialized_execution_emits_event(self):
+        """cancel() on an INITIALIZED execution is also valid and emits ExecutionCancelledEvent."""
+        execution = AgentExecution.create(
+            agent_id="agent-1",
+            work_item_id="work-1",
+            workflow_id="workflow-1",
+            stage_name="coding",
+            prompt="Implement feature X",
+            model="claude-sonnet-4-5",
+        )
+        assert execution.status == ExecutionStatus.INITIALIZED
+        execution.clear_events()
+
+        execution.cancel()
+
+        assert execution.status == ExecutionStatus.CANCELLED
+        events = execution.get_pending_events()
+        assert len(events) == 1
+        assert isinstance(events[0], ExecutionCancelledEvent)
+
+    def test_cancel_non_cancellable_status_raises(self):
+        """cancel() on a COMPLETED execution raises DomainError."""
+        execution = self._make_running_execution()
+        execution.complete(output="done", input_tokens=10, output_tokens=20)
+
+        assert execution.status == ExecutionStatus.COMPLETED
+        with pytest.raises(DomainError):
+            execution.cancel()
+
+    def test_cancel_failed_execution_raises(self):
+        """cancel() on a FAILED execution raises DomainError."""
+        execution = self._make_running_execution()
+        execution.fail("something broke", exit_code=1)
+
+        assert execution.status == ExecutionStatus.FAILED
+        with pytest.raises(DomainError):
+            execution.cancel()
+
+    # ------------------------------------------------------------------
+    # pause()
+    # ------------------------------------------------------------------
+
+    def test_pause_running_execution_emits_event(self):
+        """pause() on a RUNNING execution transitions to PAUSED and emits ExecutionPausedEvent."""
+        execution = self._make_running_execution()
+        execution.clear_events()
+
+        execution.pause()
+
+        assert execution.status == ExecutionStatus.PAUSED
+
+        events = execution.get_pending_events()
+        assert len(events) == 1
+        assert isinstance(events[0], ExecutionPausedEvent)
+        assert events[0].execution_id == execution.id
+        assert events[0].work_item_id == execution.work_item_id
+
+    def test_pause_non_running_raises(self):
+        """pause() on a non-RUNNING execution raises DomainError."""
+        execution = AgentExecution.create(
+            agent_id="agent-1",
+            work_item_id="work-1",
+            workflow_id="workflow-1",
+            stage_name="coding",
+            prompt="Implement feature X",
+            model="claude-sonnet-4-5",
+        )
+        assert execution.status == ExecutionStatus.INITIALIZED
+        with pytest.raises(DomainError):
+            execution.pause()
+
+    def test_pause_completed_execution_raises(self):
+        """pause() on a COMPLETED execution raises DomainError."""
+        execution = self._make_running_execution()
+        execution.complete(output="done", input_tokens=10, output_tokens=20)
+
+        with pytest.raises(DomainError):
+            execution.pause()
+
+    # ------------------------------------------------------------------
+    # resume()
+    # ------------------------------------------------------------------
+
+    def test_resume_paused_execution_emits_event(self):
+        """resume() on a PAUSED execution transitions to RUNNING and emits ExecutionResumedEvent."""
+        execution = self._make_running_execution()
+        execution.pause()
+        execution.clear_events()
+
+        execution.resume()
+
+        assert execution.status == ExecutionStatus.RUNNING
+
+        events = execution.get_pending_events()
+        assert len(events) == 1
+        assert isinstance(events[0], ExecutionResumedEvent)
+        assert events[0].execution_id == execution.id
+        assert events[0].work_item_id == execution.work_item_id
+
+    def test_resume_non_paused_raises(self):
+        """resume() on a RUNNING (not PAUSED) execution raises DomainError."""
+        execution = self._make_running_execution()
+        assert execution.status == ExecutionStatus.RUNNING
+
+        with pytest.raises(DomainError):
+            execution.resume()
+
+    def test_resume_initialized_raises(self):
+        """resume() on an INITIALIZED execution raises DomainError."""
+        execution = AgentExecution.create(
+            agent_id="agent-1",
+            work_item_id="work-1",
+            workflow_id="workflow-1",
+            stage_name="coding",
+            prompt="Implement feature X",
+            model="claude-sonnet-4-5",
+        )
+        with pytest.raises(DomainError):
+            execution.resume()
+
+    def test_pause_then_cancel_emits_cancel_event(self):
+        """cancel() on a PAUSED execution is valid and emits ExecutionCancelledEvent."""
+        execution = self._make_running_execution()
+        execution.pause()
+        assert execution.status == ExecutionStatus.PAUSED
+        execution.clear_events()
+
+        execution.cancel(reason="cancelled while paused")
+
+        assert execution.status == ExecutionStatus.CANCELLED
+        events = execution.get_pending_events()
+        assert len(events) == 1
+        assert isinstance(events[0], ExecutionCancelledEvent)

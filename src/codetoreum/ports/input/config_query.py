@@ -120,15 +120,12 @@ class IConfigurationQueryPort(ABC):
         """
         Get project configuration by ID.
 
-        Args:
-            project_id: Project ID
+        Args: project_id: Project ID
             include_secrets: Whether to include secret values (default: False)
 
-        Returns:
-            Project configuration information
+        Returns: Project configuration information
 
-        Raises:
-            ProjectNotFoundError: If project doesn't exist
+        Raises: ProjectNotFoundError: If project doesn't exist
         """
 
     @abstractmethod
@@ -136,15 +133,12 @@ class IConfigurationQueryPort(ABC):
         """
         Get project configuration by name.
 
-        Args:
-            project_name: Project name
+        Args: project_name: Project name
             include_secrets: Whether to include secret values (default: False)
 
-        Returns:
-            Project configuration information
+        Returns: Project configuration information
 
-        Raises:
-            ProjectNotFoundError: If project doesn't exist
+        Raises: ProjectNotFoundError: If project doesn't exist
         """
 
     @abstractmethod
@@ -152,15 +146,12 @@ class IConfigurationQueryPort(ABC):
         """
         Get agent configuration.
 
-        Args:
-            project_id: Project ID
+        Args: project_id: Project ID
             agent_name: Agent name
 
-        Returns:
-            Agent configuration information
+        Returns: Agent configuration information
 
-        Raises:
-            ProjectNotFoundError: If project doesn't exist
+        Raises: ProjectNotFoundError: If project doesn't exist
             AgentNotFoundError: If agent doesn't exist
         """
 
@@ -169,15 +160,12 @@ class IConfigurationQueryPort(ABC):
         """
         Get pipeline configuration.
 
-        Args:
-            project_id: Project ID
+        Args: project_id: Project ID
             pipeline_name: Pipeline name
 
-        Returns:
-            Pipeline configuration information
+        Returns: Pipeline configuration information
 
-        Raises:
-            ProjectNotFoundError: If project doesn't exist
+        Raises: ProjectNotFoundError: If project doesn't exist
             PipelineNotFoundError: If pipeline doesn't exist
         """
 
@@ -186,11 +174,9 @@ class IConfigurationQueryPort(ABC):
         """
         List all projects.
 
-        Args:
-            pagination: Optional pagination parameters
+        Args: pagination: Optional pagination parameters
 
-        Returns:
-            List of project configurations
+        Returns: List of project configurations
         """
 
     @abstractmethod
@@ -200,15 +186,12 @@ class IConfigurationQueryPort(ABC):
         """
         List agents. When project_id is None, returns agents across all projects.
 
-        Args:
-            project_id: Project ID (None for all projects)
+        Args: project_id: Project ID (None for all projects)
             pagination: Optional pagination parameters
 
-        Returns:
-            List of agent configurations
+        Returns: List of agent configurations
 
-        Raises:
-            ProjectNotFoundError: If project_id is specified and doesn't exist
+        Raises: ProjectNotFoundError: If project_id is specified and doesn't exist
         """
 
     @abstractmethod
@@ -218,15 +201,12 @@ class IConfigurationQueryPort(ABC):
         """
         List pipelines. When project_id is None, returns pipelines across all projects.
 
-        Args:
-            project_id: Project ID (None for all projects)
+        Args: project_id: Project ID (None for all projects)
             pagination: Optional pagination parameters
 
-        Returns:
-            List of pipeline configurations
+        Returns: List of pipeline configurations
 
-        Raises:
-            ProjectNotFoundError: If project_id is specified and doesn't exist
+        Raises: ProjectNotFoundError: If project_id is specified and doesn't exist
         """
 
     @abstractmethod
@@ -240,14 +220,12 @@ class IConfigurationQueryPort(ABC):
         """
         Search across all configurations using full-text search.
 
-        Args:
-            query: Search query string
+        Args: query: Search query string
             config_type: Optional filter by type ("project", "agent", "pipeline")
             project_id: Optional filter by project
             pagination: Optional pagination parameters
 
-        Returns:
-            Search results with relevance scores
+        Returns: Search results with relevance scores
 
         Examples:
             - search_configs("authentication") - find all configs mentioning auth
@@ -261,16 +239,13 @@ class IConfigurationQueryPort(ABC):
         """
         Get version history for a configuration.
 
-        Args:
-            config_id: Configuration ID
+        Args: config_id: Configuration ID
             config_type: Type of configuration ("project", "agent", "pipeline")
             limit: Maximum number of versions to return (default: 10)
 
-        Returns:
-            List of version history entries, newest first
+        Returns: List of version history entries, newest first
 
-        Raises:
-            ConfigNotFoundError: If configuration doesn't exist
+        Raises: ConfigNotFoundError: If configuration doesn't exist
         """
 
     @abstractmethod
@@ -278,16 +253,13 @@ class IConfigurationQueryPort(ABC):
         """
         Get a specific version of a configuration.
 
-        Args:
-            config_id: Configuration ID
+        Args: config_id: Configuration ID
             config_type: Type of configuration
             version: Version number to retrieve
 
-        Returns:
-            Configuration at specified version
+        Returns: Configuration at specified version
 
-        Raises:
-            ConfigNotFoundError: If configuration or version doesn't exist
+        Raises: ConfigNotFoundError: If configuration or version doesn't exist
         """
 
     @abstractmethod
@@ -295,10 +267,8 @@ class IConfigurationQueryPort(ABC):
         """
         Count configurations.
 
-        Args:
-            config_type: Optional filter by type
+        Args: config_type: Optional filter by type
             project_id: Optional filter by project
 
-        Returns:
-            Count of matching configurations
+        Returns: Count of matching configurations
         """

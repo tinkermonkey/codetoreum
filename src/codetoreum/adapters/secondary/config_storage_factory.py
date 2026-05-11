@@ -28,14 +28,12 @@ def create_elasticsearch_config_storage(
     """
     Create Elasticsearch configuration storage adapter.
 
-    Args:
-        es_client: AsyncElasticsearch client
+    Args: es_client: AsyncElasticsearch client
         create_index_templates: Whether to create index templates on init
         shard_count: Number of shards for indices (default: 2 for production)
         replica_count: Number of replicas for indices (default: 1 for production)
 
-    Returns:
-        ElasticsearchConfigStorage instance
+    Returns: ElasticsearchConfigStorage instance
     """
     storage = ElasticsearchConfigStorage(
         es_client=es_client,
@@ -58,14 +56,12 @@ def create_redis_config_cache(
     """
     Create Redis configuration cache.
 
-    Args:
-        redis_client: Redis async client
+    Args: redis_client: Redis async client
         key_prefix: Prefix for cache keys (default: "config")
         default_ttl: Default TTL in seconds (default: 3600 = 1 hour)
         invalidation_channel: Pub/sub channel for invalidation (default: "config:invalidation")
 
-    Returns:
-        RedisConfigCache instance
+    Returns: RedisConfigCache instance
     """
     cache = RedisConfigCache(
         redis_client=redis_client,
@@ -95,11 +91,9 @@ def create_cached_config_store(
     This is the recommended production setup, combining Elasticsearch for
     persistent storage with Redis for fast caching.
 
-    Architecture:
-        Application → CachedConfigStore → Redis Cache → Elasticsearch
+    Architecture: Application → CachedConfigStore → Redis Cache → Elasticsearch
 
-    Args:
-        es_client: AsyncElasticsearch client
+    Args: es_client: AsyncElasticsearch client
         redis_client: Redis async client
         create_index_templates: Whether to create ES index templates
         shard_count: Number of ES shards (default: 2)
@@ -108,8 +102,7 @@ def create_cached_config_store(
         cache_ttl: Cache TTL in seconds (default: 3600 = 1 hour)
         invalidation_channel: Pub/sub channel for cache invalidation
 
-    Returns:
-        CachedConfigStore instance ready for use
+    Returns: CachedConfigStore instance ready for use
 
     Example:
         ```python
@@ -173,8 +166,7 @@ async def initialize_config_store(config_store: IConfigStore) -> None:
     This is a convenience function that handles initialization for different
     store types.
 
-    Args:
-        config_store: Configuration store instance to initialize
+    Args: config_store: Configuration store instance to initialize
 
     Example:
         ```python
@@ -208,8 +200,7 @@ async def close_config_store(config_store: IConfigStore) -> None:
     """
     Close a configuration store (cleanup resources).
 
-    Args:
-        config_store: Configuration store instance to close
+    Args: config_store: Configuration store instance to close
 
     Example:
         ```python

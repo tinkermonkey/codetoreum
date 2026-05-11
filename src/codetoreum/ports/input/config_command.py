@@ -135,14 +135,11 @@ class IConfigurationCommandPort(ABC):
         """
         Updates project configuration.
 
-        Args:
-            command: Update command with changes
+        Args: command: Update command with changes
 
-        Returns:
-            Result with new config version
+        Returns: Result with new config version
 
-        Raises:
-            ProjectNotFoundError: If project doesn't exist
+        Raises: ProjectNotFoundError: If project doesn't exist
             ValidationError: If updates invalid
             PermissionError: If user lacks permission
         """
@@ -152,14 +149,11 @@ class IConfigurationCommandPort(ABC):
         """
         Updates agent configuration for a project.
 
-        Args:
-            command: Update command with agent changes
+        Args: command: Update command with agent changes
 
-        Returns:
-            Result with new config version
+        Returns: Result with new config version
 
-        Raises:
-            ProjectNotFoundError: If project doesn't exist
+        Raises: ProjectNotFoundError: If project doesn't exist
             AgentNotFoundError: If agent doesn't exist
             ValidationError: If updates invalid
             PermissionError: If user lacks permission
@@ -170,14 +164,11 @@ class IConfigurationCommandPort(ABC):
         """
         Updates pipeline configuration for a project.
 
-        Args:
-            command: Update command with pipeline changes
+        Args: command: Update command with pipeline changes
 
-        Returns:
-            Result with new config version
+        Returns: Result with new config version
 
-        Raises:
-            ProjectNotFoundError: If project doesn't exist
+        Raises: ProjectNotFoundError: If project doesn't exist
             PipelineNotFoundError: If pipeline doesn't exist
             ValidationError: If updates invalid
             PermissionError: If user lacks permission
@@ -191,14 +182,11 @@ class IConfigurationCommandPort(ABC):
         This supports project-level environment variables that are
         passed to agent containers during execution.
 
-        Args:
-            command: Command with environment variable details
+        Args: command: Command with environment variable details
 
-        Returns:
-            Result with new config version
+        Returns: Result with new config version
 
-        Raises:
-            ProjectNotFoundError: If project doesn't exist
+        Raises: ProjectNotFoundError: If project doesn't exist
             ValidationError: If variable name/value invalid
             PermissionError: If user lacks permission
         """
@@ -210,14 +198,11 @@ class IConfigurationCommandPort(ABC):
         """
         Removes environment variable from project.
 
-        Args:
-            command: Command specifying variable to remove
+        Args: command: Command specifying variable to remove
 
-        Returns:
-            Result with new config version
+        Returns: Result with new config version
 
-        Raises:
-            ProjectNotFoundError: If project doesn't exist
+        Raises: ProjectNotFoundError: If project doesn't exist
             VariableNotFoundError: If variable doesn't exist
             PermissionError: If user lacks permission
         """
@@ -230,14 +215,11 @@ class IConfigurationCommandPort(ABC):
         This enables dynamic command mounting, allowing commands to be
         available to agents during execution.
 
-        Args:
-            command: Command with command file details
+        Args: command: Command with command file details
 
-        Returns:
-            Result with new config version
+        Returns: Result with new config version
 
-        Raises:
-            ProjectNotFoundError: If project doesn't exist
+        Raises: ProjectNotFoundError: If project doesn't exist
             CommandFileNotFoundError: If command file doesn't exist
             ValidationError: If command file invalid
             PermissionError: If user lacks permission
@@ -248,14 +230,11 @@ class IConfigurationCommandPort(ABC):
         """
         Unmounts a command from project agent.
 
-        Args:
-            command: Command specifying command to unmount
+        Args: command: Command specifying command to unmount
 
-        Returns:
-            Result with new config version
+        Returns: Result with new config version
 
-        Raises:
-            ProjectNotFoundError: If project doesn't exist
+        Raises: ProjectNotFoundError: If project doesn't exist
             CommandNotFoundError: If command not mounted
             PermissionError: If user lacks permission
         """
@@ -268,14 +247,11 @@ class IConfigurationCommandPort(ABC):
         This enables dynamic sub-agent mounting, allowing specialized
         agents to be available during execution.
 
-        Args:
-            command: Command with sub-agent configuration
+        Args: command: Command with sub-agent configuration
 
-        Returns:
-            Result with new config version
+        Returns: Result with new config version
 
-        Raises:
-            ProjectNotFoundError: If project doesn't exist
+        Raises: ProjectNotFoundError: If project doesn't exist
             ValidationError: If sub-agent config invalid
             PermissionError: If user lacks permission
         """
@@ -285,14 +261,11 @@ class IConfigurationCommandPort(ABC):
         """
         Unmounts a sub-agent from project agent.
 
-        Args:
-            command: Command specifying sub-agent to unmount
+        Args: command: Command specifying sub-agent to unmount
 
-        Returns:
-            Result with new config version
+        Returns: Result with new config version
 
-        Raises:
-            ProjectNotFoundError: If project doesn't exist
+        Raises: ProjectNotFoundError: If project doesn't exist
             SubAgentNotFoundError: If sub-agent not mounted
             PermissionError: If user lacks permission
         """

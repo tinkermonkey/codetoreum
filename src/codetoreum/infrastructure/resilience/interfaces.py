@@ -45,12 +45,10 @@ class IRateLimiter(ABC):
         """
         Wait until operation can proceed within rate limits.
 
-        Args:
-            operation: Operation name (for logging/metrics)
+        Args: operation: Operation name (for logging/metrics)
             cost: Cost in tokens/requests (default 1)
 
-        Raises:
-            RateLimitExceededError: If limit exceeded and wait would be too long
+        Raises: RateLimitExceededError: If limit exceeded and wait would be too long
         """
 
     @abstractmethod
@@ -58,8 +56,7 @@ class IRateLimiter(ABC):
         """
         Try to acquire without blocking.
 
-        Returns:
-            True if acquired, False if would exceed limit
+        Returns: True if acquired, False if would exceed limit
         """
 
     @abstractmethod
@@ -111,16 +108,13 @@ class ICircuitBreaker(ABC):
         """
         Execute operation with circuit breaker protection.
 
-        Args:
-            operation: Async function to execute
+        Args: operation: Async function to execute
             operation_name: Operation name (for logging)
             *args, **kwargs: Passed to operation
 
-        Returns:
-            Result from operation
+        Returns: Result from operation
 
-        Raises:
-            CircuitBreakerOpenError: If circuit is open
+        Raises: CircuitBreakerOpenError: If circuit is open
             Original exception: If operation fails
         """
 
@@ -177,16 +171,13 @@ class IRetryPolicy(ABC):
         """
         Execute operation with retry logic.
 
-        Args:
-            operation: Async function to execute
+        Args: operation: Async function to execute
             operation_name: Operation name (for logging)
             *args, **kwargs: Passed to operation
 
-        Returns:
-            Result from operation
+        Returns: Result from operation
 
-        Raises:
-            MaxRetriesExceededError: If all retries exhausted
+        Raises: MaxRetriesExceededError: If all retries exhausted
             Original exception: From last retry attempt
         """
 
@@ -195,11 +186,9 @@ class IRetryPolicy(ABC):
         """
         Determine if exception is retryable.
 
-        Args:
-            exception: Exception that occurred
+        Args: exception: Exception that occurred
 
-        Returns:
-            True if should retry, False otherwise
+        Returns: True if should retry, False otherwise
         """
 
     @abstractmethod
@@ -245,17 +234,14 @@ class ITimeout(ABC):
         """
         Execute operation with timeout.
 
-        Args:
-            operation: Async function to execute
+        Args: operation: Async function to execute
             timeout_seconds: Timeout in seconds
             operation_name: Operation name (for logging)
             *args, **kwargs: Passed to operation
 
-        Returns:
-            Result from operation
+        Returns: Result from operation
 
-        Raises:
-            TimeoutError: If operation exceeds timeout
+        Raises: TimeoutError: If operation exceeds timeout
         """
 
     @abstractmethod

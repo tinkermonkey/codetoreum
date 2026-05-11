@@ -198,14 +198,11 @@ class IExecutionQueryPort(ABC):
         """
         Get execution by ID.
 
-        Args:
-            execution_id: Execution ID
+        Args: execution_id: Execution ID
 
-        Returns:
-            ExecutionInfo with execution details including error details
+        Returns: ExecutionInfo with execution details including error details
 
-        Raises:
-            ExecutionNotFoundError: If execution doesn't exist
+        Raises: ExecutionNotFoundError: If execution doesn't exist
         """
 
     @abstractmethod
@@ -217,12 +214,10 @@ class IExecutionQueryPort(ABC):
         """
         List executions with optional filtering and pagination.
 
-        Args:
-            filters: Optional filters for execution selection
+        Args: filters: Optional filters for execution selection
             pagination: Optional pagination parameters
 
-        Returns:
-            ExecutionListResult with matching executions
+        Returns: ExecutionListResult with matching executions
         """
 
     @abstractmethod
@@ -235,16 +230,13 @@ class IExecutionQueryPort(ABC):
         """
         Get execution logs.
 
-        Args:
-            execution_id: Execution ID
+        Args: execution_id: Execution ID
             stage: Optional filter by stage name
             tail: Optional limit to last N lines
 
-        Returns:
-            ExecutionLogs with log entries
+        Returns: ExecutionLogs with log entries
 
-        Raises:
-            ExecutionNotFoundError: If execution doesn't exist
+        Raises: ExecutionNotFoundError: If execution doesn't exist
         """
 
     @abstractmethod
@@ -252,15 +244,12 @@ class IExecutionQueryPort(ABC):
         """
         Get execution event history.
 
-        Args:
-            execution_id: Execution ID
+        Args: execution_id: Execution ID
             limit: Optional limit on number of events
 
-        Returns:
-            ExecutionHistory with timeline of events
+        Returns: ExecutionHistory with timeline of events
 
-        Raises:
-            ExecutionNotFoundError: If execution doesn't exist
+        Raises: ExecutionNotFoundError: If execution doesn't exist
         """
 
     @abstractmethod
@@ -268,9 +257,7 @@ class IExecutionQueryPort(ABC):
         """
         Count executions matching filters.
 
-        Args:
-            filters: Optional filters for execution selection
+        Args: filters: Optional filters for execution selection
 
-        Returns:
-            Count of matching executions
+        Returns: Count of matching executions
         """

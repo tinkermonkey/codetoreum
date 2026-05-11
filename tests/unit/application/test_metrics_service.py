@@ -16,13 +16,12 @@ from uuid import uuid4
 import pytest
 
 from codetoreum.application.metrics_service import MetricsService
-from codetoreum.domain.events import DomainEvent
 from codetoreum.ports.exceptions import ComponentNotFoundError
 from codetoreum.ports.input.metrics_query import ComponentHealth
 from codetoreum.ports.output.event_store import IEventStore
 
 
-class MockEvent(DomainEvent):
+class MockEvent:
     """Mock domain event for testing."""
 
     def __init__(self, event_type: str, payload: dict[str, Any], occurred_at: datetime | None = None):
@@ -32,6 +31,9 @@ class MockEvent(DomainEvent):
         self.aggregate_type = "TestAggregate"
         self.occurred_at = occurred_at or datetime.now(UTC)
         self.payload = payload
+        # Expose payload keys as direct attributes to match modern CodetoreumEvent interface
+        for key, val in payload.items():
+            setattr(self, key, val)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -48,14 +50,14 @@ class MockEventStore(IEventStore):
     """Mock event store for testing."""
 
     def __init__(self):
-        self.events: list[DomainEvent] = []
+        self.events: list = []
         self.should_fail = False
         self.fail_on_type: str | None = None
 
     async def append(
         self,
         stream_id: str,
-        events: list[DomainEvent],
+        events: list,
         expected_version: int | None = None,
     ) -> None:
         if self.should_fail:
@@ -67,14 +69,14 @@ class MockEventStore(IEventStore):
         stream_id: str,
         from_version: int = 0,
         to_version: int | None = None,
-    ) -> list[DomainEvent]:
+    ) -> list:
         return self.events
 
     async def get_events_since(
         self,
         since: datetime,
         stream_id: str | None = None,
-    ) -> list[DomainEvent]:
+    ) -> list:
         # Handle both naive and aware datetimes
         if since.tzinfo is None:
             since = since.replace(tzinfo=UTC)
@@ -117,9 +119,7 @@ class MockEventStore(IEventStore):
     ) -> list[str]:
         return ["test-stream"]
 
-    async def get_events_by_type(
-        self, event_type: str, since: datetime | None = None, limit: int = 1000
-    ) -> list[DomainEvent]:
+    async def get_events_by_type(self, event_type: str, since: datetime | None = None, limit: int = 1000) -> list:
         events = [e for e in self.events if e.event_type == event_type]
 
         if since:
@@ -142,7 +142,7 @@ class MockEventStore(IEventStore):
     async def get_events_by_correlation_id(
         self,
         correlation_id: str,
-    ) -> list[DomainEvent]:
+    ) -> list:
         return []
 
     async def replay_events(

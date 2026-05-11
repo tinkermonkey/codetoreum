@@ -15,7 +15,8 @@ from datetime import UTC, datetime
 from codetoreum.application.repair_cycle_ci_integration import (
     convert_ci_run_result_to_repair_test_result,
 )
-from codetoreum.domain.events import DomainEvent, WorkItemColumnChanged
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
+from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.domain.events.repair_cycle_events import RepairCycleCompletedEvent
 from codetoreum.domain.repair_cycle_types import (
     CycleResult,
@@ -67,7 +68,7 @@ class RepairCycleEventContext:
     prior_classifications: tuple = ()
 
 
-@event_handler("WorkItemColumnChanged")
+@event_handler("WorkItemColumnChangedEvent")
 class RepairCycleEventHandler(EventHandler):
     """Handles workitem.column_changed events for repair cycle automation.
 
@@ -83,16 +84,16 @@ class RepairCycleEventHandler(EventHandler):
         bus.register_handler(handler)
 
         # When a work item moves to the configured repair cycle stage:
-        event = WorkItemColumnChanged(
-            aggregate_id="item-1",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "from_column": "Code Review",
-                "to_column": "Testing",
-                "moved_by": "system"
-            }
+        event = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp="2025-01-14T10:30:00+00:00",
+            source="github",
+            work_item_id="item-1",
+            board_id="board-1",
+            project_id="proj-1",
+            from_column="Code Review",
+            to_column="Testing",
+            moved_by="orchestrator",
         )
         await bus.publish(event)
         # Handler invokes repair cycle for item
@@ -147,7 +148,7 @@ class RepairCycleEventHandler(EventHandler):
         Returns:
             List of event type names
         """
-        return ["WorkItemColumnChanged"]
+        return ["WorkItemColumnChangedEvent"]
 
     @instrument_async_function(
         name="repair_cycle_event_handler.handle",
@@ -156,7 +157,7 @@ class RepairCycleEventHandler(EventHandler):
             "layer": "application",
         },
     )
-    async def handle(self, event: DomainEvent) -> None:
+    async def handle(self, event: CodetoreumEvent) -> None:
         """
         Handle column change event and trigger repair cycle if appropriate.
 
@@ -166,7 +167,7 @@ class RepairCycleEventHandler(EventHandler):
         Raises:
             Exception: If handling fails (logged and re-raised)
         """
-        if not isinstance(event, WorkItemColumnChanged):
+        if not isinstance(event, WorkItemColumnChangedEvent):
             logger.warning(f"RepairCycleEventHandler received unexpected event type: {event.event_type}")
             return
 
@@ -174,7 +175,7 @@ class RepairCycleEventHandler(EventHandler):
             await self.handle_column_change(event)
         except Exception as e:
             logger.error(
-                f"Error handling repair cycle for {event.payload.get('work_item_id')}: {e}",
+                f"Error handling repair cycle for {event.work_item_id}: {e}",
                 exc_info=True,
                 extra={"error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
             )
@@ -187,7 +188,7 @@ class RepairCycleEventHandler(EventHandler):
             "layer": "application",
         },
     )
-    async def handle_column_change(self, event: WorkItemColumnChanged) -> None:
+    async def handle_column_change(self, event: WorkItemColumnChangedEvent) -> None:
         """
         Process column movement and trigger repair cycle if entering configured repair stage.
 
@@ -198,10 +199,10 @@ class RepairCycleEventHandler(EventHandler):
         Args:
             event: WorkItemColumnChanged event with column movement details
         """
-        work_item_id: str = event.payload.get("work_item_id") or ""
-        board_id: str = event.payload.get("board_id") or ""
-        project_id: str = event.payload.get("project_id") or ""
-        to_column: str = event.payload.get("to_column") or ""
+        work_item_id: str = event.work_item_id
+        board_id: str = event.board_id
+        project_id: str = event.project_id
+        to_column: str = event.to_column
 
         # Retrieve column template to check if this column triggers a repair cycle
         # (columns with repair_cycle_agents configured are repair cycle columns)
@@ -395,7 +396,7 @@ class RepairCycleEventHandler(EventHandler):
                 board_id=board_id,
             )
             if self._event_bus:
-                await self._event_bus.publish(completed_event)  # type: ignore[arg-type]
+                await self._event_bus.publish(completed_event)
             else:
                 logger.warning(
                     f"RepairCycleCompletedEvent not published for {work_item_id}: event_bus not injected",

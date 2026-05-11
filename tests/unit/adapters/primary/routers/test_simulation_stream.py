@@ -13,8 +13,26 @@ from codetoreum.adapters.primary.routers.simulation_stream import (
     format_keepalive_comment,
     format_sse_frame,
 )
-from codetoreum.domain.events import DomainEvent
 from codetoreum.infrastructure.event_bus import EventBus
+
+
+class DomainEvent:
+    def __init__(self, aggregate_id="", aggregate_type="", payload=None, **kwargs):
+        self.aggregate_id = aggregate_id
+        self.aggregate_type = aggregate_type
+        self.payload = payload or {}
+        self.event_id = str(uuid4())
+        self.occurred_at = datetime.now(UTC)
+        self.correlation_id = None
+        # Expose payload keys as direct attributes to match modern CodetoreumEvent interface
+        for key, val in self.payload.items():
+            setattr(self, key, val)
+
+    @property
+    def event_type(self):
+        return self.__class__.__name__
+
+
 from codetoreum.infrastructure.simulation.simulation_engine import SimulationEngine
 
 # =========================================================================

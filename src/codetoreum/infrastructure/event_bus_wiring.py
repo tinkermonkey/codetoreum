@@ -37,8 +37,7 @@ class EventBusWiring:
         """
         Initialize event bus wiring.
 
-        Args:
-            event_bus: Central event bus for all event routing
+        Args: event_bus: Central event bus for all event routing
         """
         self._event_bus = event_bus
         self._wired_adapters = set()
@@ -50,8 +49,7 @@ class EventBusWiring:
 
         The board service should have an `on()` method for registering event handlers.
 
-        Args:
-            board_service: Board service adapter implementing event emission
+        Args: board_service: Board service adapter implementing event emission
         """
         if not self._has_event_method(board_service):
             logger.warning("Board service does not implement on() method, skipping")
@@ -70,8 +68,7 @@ class EventBusWiring:
 
         The discussion adapter should have an `on()` method for registering event handlers.
 
-        Args:
-            discussion_adapter: Discussion adapter implementing event emission
+        Args: discussion_adapter: Discussion adapter implementing event emission
         """
         if not self._has_event_method(discussion_adapter):
             logger.warning("Discussion adapter does not implement on() method, skipping")
@@ -90,8 +87,7 @@ class EventBusWiring:
 
         The lock service should have an `on()` method for registering event handlers.
 
-        Args:
-            lock_service: Lock service implementing event emission
+        Args: lock_service: Lock service implementing event emission
         """
         if not self._has_event_method(lock_service):
             logger.warning("Lock service does not implement on() method, skipping")
@@ -111,8 +107,7 @@ class EventBusWiring:
 
         The review service should have an `on()` method for registering event handlers.
 
-        Args:
-            review_service: Code review service implementing event emission
+        Args: review_service: Code review service implementing event emission
         """
         if not self._has_event_method(review_service):
             logger.warning("Review service does not implement on() method, skipping")
@@ -131,8 +126,7 @@ class EventBusWiring:
 
         The branch resolution service should have an `on()` method for registering event handlers.
 
-        Args:
-            branch_resolution_service: Branch resolution service implementing event emission
+        Args: branch_resolution_service: Branch resolution service implementing event emission
         """
         if not self._has_event_method(branch_resolution_service):
             logger.warning("Branch resolution service does not implement on() method, skipping")
@@ -157,8 +151,7 @@ class EventBusWiring:
         """
         Wire all provided adapters to the event bus.
 
-        Args:
-            board_service: Board service adapter (optional)
+        Args: board_service: Board service adapter (optional)
             discussion_adapter: Discussion adapter (optional)
             lock_service: Lock service (optional)
             review_service: Code review service (optional)
@@ -185,8 +178,7 @@ class EventBusWiring:
         """
         Get set of wired adapter names.
 
-        Returns:
-            Set of wired adapter names
+        Returns: Set of wired adapter names
         """
         return self._wired_adapters.copy()
 
@@ -194,11 +186,9 @@ class EventBusWiring:
         """
         Check if adapter has event emission method.
 
-        Args:
-            adapter: Adapter to check
+        Args: adapter: Adapter to check
 
-        Returns:
-            True if adapter has on() method
+        Returns: True if adapter has on() method
         """
         return hasattr(adapter, "on") and callable(adapter.on)
 
@@ -209,8 +199,7 @@ class EventBusWiring:
         The publisher handles both sync and async event emission to the bus,
         with proper error handling and task tracking.
 
-        Returns:
-            Callback function to publish events
+        Returns: Callback function to publish events
         """
 
         def publisher(event) -> None:
@@ -235,8 +224,8 @@ class EventBusWiring:
                 exc_info=True,
                 extra={"task_id": id(task), "error_id": ErrorRegistry.ERR_EVENT_BUS_ERROR},
             )
-            # TODO: Track metric for background task failures
-            # TODO: Consider emitting system event for monitoring
+        # TODO: Track metric for background task failures
+        # TODO: Consider emitting system event for monitoring
 
 
 def wire_adapters_to_event_bus(
@@ -252,16 +241,14 @@ def wire_adapters_to_event_bus(
 
     This is the main entry point for setting up event-driven adapter integration.
 
-    Args:
-        event_bus: Central event bus for routing
+    Args: event_bus: Central event bus for routing
         board_service: Board service adapter (optional)
         discussion_adapter: Discussion adapter (optional)
         lock_service: Lock service (optional)
         review_service: Code review service (optional)
         branch_resolution_service: Branch resolution service (optional)
 
-    Returns:
-        EventBusWiring instance managing the wired adapters
+    Returns: EventBusWiring instance managing the wired adapters
 
     Example:
         ```python

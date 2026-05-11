@@ -52,3 +52,98 @@ apm.span.web-socket-session-trace:
     created_at: 2026-05-08T11:07:35.838Z
     updated_at: 2026-05-08T11:07:35.838Z
     version: 1
+apm.span.dead-letter-queue-processing-span:
+  id: eb53fefb-3cc6-45ac-bc81-df07ab1a58f8
+  path: apm.span.dead-letter-queue-processing-span
+  spec_node_id: apm.span
+  type: span
+  layer_id: apm
+  name: Dead Letter Queue Processing Span
+  description: Distributed trace span covering the full lifecycle of failed event
+    processing through the DeadLetterQueue. Tracks retry attempts, delay
+    intervals, and final disposition (requeued, permanently failed, or
+    recovered). Enables debugging of event processing failures and retry storms.
+  attributes:
+    traceId: dlq-trace
+    spanId: dlq-span
+    traceState: ""
+    parentSpanId: ""
+    spanKind: INTERNAL
+    startTimeUnixNano: "0"
+    endTimeUnixNano: "0"
+    droppedAttributesCount: 0
+    droppedEventsCount: "0"
+    droppedLinksCount: "0"
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/infrastructure/dead_letter_queue.py
+        symbol: DeadLetterQueue
+  metadata:
+    created_at: 2026-05-09T09:23:45.953Z
+    updated_at: 2026-05-09T09:23:45.953Z
+    version: 1
+apm.span.repair-cycle-profiling-span:
+  id: 2923ea51-f726-4a39-b005-fb52f726538f
+  path: apm.span.repair-cycle-profiling-span
+  spec_node_id: apm.span
+  type: span
+  layer_id: apm
+  name: Repair Cycle Profiling Span
+  description: Distributed trace span for repair cycle operation profiling.
+    Captures memory usage (via tracemalloc), CPU percent, operation duration,
+    and peak resource consumption. Produced by RepairCycleProfiler and
+    RepairCycleProfilerContext for bottleneck identification across repair
+    iterations.
+  attributes:
+    traceId: profiler-trace
+    spanId: profiler-span
+    traceState: ""
+    parentSpanId: ""
+    spanKind: INTERNAL
+    startTimeUnixNano: "0"
+    endTimeUnixNano: "0"
+    droppedAttributesCount: 0
+    droppedEventsCount: "0"
+    droppedLinksCount: "0"
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/infrastructure/repair_cycle_profiling.py
+        symbol: RepairCycleProfiler
+  metadata:
+    created_at: 2026-05-09T09:23:52.092Z
+    updated_at: 2026-05-09T09:23:52.092Z
+    version: 1
+apm.span.event-replay-span:
+  id: 64b7270b-65f8-4eb2-87f2-5de2cd8a0299
+  path: apm.span.event-replay-span
+  spec_node_id: apm.span
+  type: span
+  layer_id: apm
+  name: Event Replay Span
+  description: Distributed trace span for EventReplayer operations. Covers
+    replay-from-timestamp and replay-for-aggregate workflows including event
+    filtering, time manipulation, dry-run mode, and progress tracking. Tracks
+    events_replayed count, error count, and replay duration for debugging and
+    recovery use cases.
+  attributes:
+    traceId: replay-trace
+    spanId: replay-span
+    traceState: ""
+    parentSpanId: ""
+    spanKind: INTERNAL
+    startTimeUnixNano: "0"
+    endTimeUnixNano: "0"
+    droppedAttributesCount: 0
+    droppedEventsCount: "0"
+    droppedLinksCount: "0"
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/infrastructure/event_replayer.py
+        symbol: EventReplayer
+  metadata:
+    created_at: 2026-05-09T09:24:20.277Z
+    updated_at: 2026-05-09T09:24:20.277Z
+    version: 1

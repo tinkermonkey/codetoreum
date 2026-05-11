@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import Any
 
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 
 # ============================================================================
 # Port Interface
@@ -24,20 +24,17 @@ class IMessageBroker(ABC):
         """
         Initialize the message broker connection and subscriptions.
 
-        Raises:
-            MessageBrokerError: If initialization fails
+        Raises: MessageBrokerError: If initialization fails
         """
 
     @abstractmethod
-    async def publish_event(self, event: DomainEvent) -> None:
+    async def publish_event(self, event: CodetoreumEvent) -> None:
         """
         Publish a domain event to all subscribers across all instances.
 
-        Args:
-            event: Domain event to publish
+        Args: event: Domain event to publish
 
-        Raises:
-            MessageBrokerError: If publish fails
+        Raises: MessageBrokerError: If publish fails
         """
 
     @abstractmethod
@@ -48,12 +45,10 @@ class IMessageBroker(ABC):
         Control messages are used for coordination between instances
         (e.g., disconnect client, update connection state).
 
-        Args:
-            message_type: Type of control message
+        Args: message_type: Type of control message
             data: Control message data
 
-        Raises:
-            MessageBrokerError: If publish fails
+        Raises: MessageBrokerError: If publish fails
         """
 
     @abstractmethod
@@ -61,13 +56,11 @@ class IMessageBroker(ABC):
         """
         Subscribe to a message channel with a callback.
 
-        Args:
-            channel: Channel name to subscribe to
+        Args: channel: Channel name to subscribe to
             callback: Async or sync callback function to handle messages
                      Signature: callback(message: Dict[str, Any]) -> None
 
-        Raises:
-            MessageBrokerError: If subscription fails
+        Raises: MessageBrokerError: If subscription fails
         """
 
     @abstractmethod
@@ -75,12 +68,10 @@ class IMessageBroker(ABC):
         """
         Unsubscribe from a message channel.
 
-        Args:
-            channel: Channel name to unsubscribe from
+        Args: channel: Channel name to unsubscribe from
             callback: Callback to remove
 
-        Raises:
-            MessageBrokerError: If unsubscription fails
+        Raises: MessageBrokerError: If unsubscription fails
         """
 
     @abstractmethod
@@ -88,8 +79,7 @@ class IMessageBroker(ABC):
         """
         Get message broker statistics.
 
-        Returns:
-            Dictionary with statistics (messages published/received, errors, etc.)
+        Returns: Dictionary with statistics (messages published/received, errors, etc.)
         """
 
     @abstractmethod

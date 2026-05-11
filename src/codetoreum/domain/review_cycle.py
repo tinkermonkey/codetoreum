@@ -6,89 +6,14 @@ from enum import Enum
 from typing import Any
 from uuid import uuid4
 
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events.review_cycle_events import (
+    ReviewCycleApprovedEvent,
+    ReviewCycleCreatedEvent,
+    ReviewCycleEscalatedToHumanEvent,
+    ReviewCycleFeedbackSubmittedEvent,
+    ReviewCycleIterationStartedEvent,
+)
 from codetoreum.domain.exceptions import DomainError
-
-# =============================================================================
-# Review Cycle Events
-# =============================================================================
-
-
-class ReviewCycleCreated(DomainEvent):
-    """Emitted when review cycle is created."""
-
-    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize ReviewCycleCreated event.
-
-        Required payload fields:
-        - workflow_id: str
-        - stage_name: str
-        - maker_agent_id: str
-        - reviewer_agent_id: str
-        - max_iterations: int
-        """
-        super().__init__(aggregate_id=aggregate_id, aggregate_type="ReviewCycle", payload=payload, **kwargs)
-
-
-class ReviewIterationStarted(DomainEvent):
-    """Emitted when new iteration begins."""
-
-    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize ReviewIterationStarted event.
-
-        Required payload fields:
-        - iteration_number: int
-        - maker_execution_id: str
-        """
-        super().__init__(aggregate_id=aggregate_id, aggregate_type="ReviewCycle", payload=payload, **kwargs)
-
-
-class ReviewFeedbackSubmitted(DomainEvent):
-    """Emitted when reviewer provides feedback."""
-
-    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize ReviewFeedbackSubmitted event.
-
-        Required payload fields:
-        - iteration_number: int
-        - decision: str
-        - reviewer_execution_id: str
-        - issues_count: int
-        """
-        super().__init__(aggregate_id=aggregate_id, aggregate_type="ReviewCycle", payload=payload, **kwargs)
-
-
-class ReviewCycleApproved(DomainEvent):
-    """Emitted when review cycle is approved."""
-
-    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize ReviewCycleApproved event.
-
-        Required payload fields:
-        - total_iterations: int
-        - approved_at: str (ISO format)
-        """
-        super().__init__(aggregate_id=aggregate_id, aggregate_type="ReviewCycle", payload=payload, **kwargs)
-
-
-class ReviewCycleEscalated(DomainEvent):
-    """Emitted when review cycle is escalated to human."""
-
-    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize ReviewCycleEscalated event.
-
-        Required payload fields:
-        - reason: str
-        - total_iterations: int
-        - escalated_at: str (ISO format)
-        """
-        super().__init__(aggregate_id=aggregate_id, aggregate_type="ReviewCycle", payload=payload, **kwargs)
-
 
 # =============================================================================
 # Review Cycle Domain Model
@@ -201,7 +126,7 @@ class ReviewCycle:
     _completed_at: datetime | None = field(default=None, repr=False)
 
     # Event tracking (private - guarded by methods)
-    _events: list[DomainEvent] = field(default_factory=list, init=False, repr=False)
+    _events: list = field(default_factory=list, init=False, repr=False)
     _version: int = field(default=0, init=False, repr=False)
 
     # Track initialization state for __setattr__ protection
@@ -361,15 +286,16 @@ class ReviewCycle:
             _completed_at=None,
         )
 
-        event = ReviewCycleCreated(
-            aggregate_id=cycle.id,
-            payload={
-                "workflow_id": workflow_id,
-                "stage_name": stage_name,
-                "maker_agent_id": maker_agent_id,
-                "reviewer_agent_id": reviewer_agent_id,
-                "max_iterations": max_iterations,
-            },
+        event = ReviewCycleCreatedEvent(
+            type="review_cycle.created",
+            timestamp=now.isoformat(),
+            source="review_cycle",
+            review_cycle_id=cycle.id,
+            workflow_id=workflow_id,
+            stage_name=stage_name,
+            maker_agent_id=maker_agent_id,
+            reviewer_agent_id=reviewer_agent_id,
+            max_iterations=max_iterations,
         )
         cycle._add_event(event)
 
@@ -414,12 +340,13 @@ class ReviewCycle:
         self._updated_at = datetime.now(UTC)
         self._version += 1
 
-        event = ReviewIterationStarted(
-            aggregate_id=self.id,
-            payload={
-                "iteration_number": self._current_iteration,
-                "maker_execution_id": maker_execution_id,
-            },
+        event = ReviewCycleIterationStartedEvent(
+            type="review_cycle.iteration_started",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="review_cycle",
+            review_cycle_id=self.id,
+            iteration_number=self._current_iteration,
+            maker_execution_id=maker_execution_id,
         )
         self._add_event(event)
 
@@ -481,14 +408,15 @@ class ReviewCycle:
         self._version += 1
 
         # Add feedback event first
-        event = ReviewFeedbackSubmitted(
-            aggregate_id=self.id,
-            payload={
-                "iteration_number": self._current_iteration,
-                "decision": decision.value,
-                "reviewer_execution_id": reviewer_execution_id,
-                "issues_count": len(issues or []),
-            },
+        event = ReviewCycleFeedbackSubmittedEvent(
+            type="review_cycle.feedback_submitted",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="review_cycle",
+            review_cycle_id=self.id,
+            iteration_number=self._current_iteration,
+            decision=decision.value,
+            reviewer_execution_id=reviewer_execution_id,
+            issues_count=len(issues or []),
         )
         self._add_event(event)
 
@@ -523,12 +451,13 @@ class ReviewCycle:
         self._updated_at = now
         self._version += 1
 
-        event = ReviewCycleApproved(
-            aggregate_id=self.id,
-            payload={
-                "total_iterations": self._current_iteration,
-                "approved_at": now.isoformat(),
-            },
+        event = ReviewCycleApprovedEvent(
+            type="review_cycle.approved",
+            timestamp=now.isoformat(),
+            source="review_cycle",
+            review_cycle_id=self.id,
+            work_item_id="",
+            total_iterations=max(self._current_iteration, 1),
         )
         self._add_event(event)
 
@@ -572,13 +501,15 @@ class ReviewCycle:
         self._updated_at = now
         self._version += 1
 
-        event = ReviewCycleEscalated(
-            aggregate_id=self.id,
-            payload={
-                "reason": reason,
-                "total_iterations": self._current_iteration,
-                "escalated_at": now.isoformat(),
-            },
+        event = ReviewCycleEscalatedToHumanEvent(
+            type="review_cycle.escalated_to_human",
+            timestamp=now.isoformat(),
+            source="review_cycle",
+            review_cycle_id=self.id,
+            work_item_id="",
+            iteration=max(self._current_iteration, 1),
+            blocking_count=0,
+            escalation_reason="MAX_ITERATIONS" if self._current_iteration >= self.max_iterations else "BLOCKED",
         )
         self._add_event(event)
 
@@ -613,7 +544,7 @@ class ReviewCycle:
         return self._iterations[-1].reviewer_feedback
 
     # Event management
-    def _add_event(self, event: DomainEvent) -> None:
+    def _add_event(self, event: object) -> None:
         """
         Add event to pending events list.
 
@@ -622,7 +553,7 @@ class ReviewCycle:
         """
         self._events.append(event)
 
-    def get_pending_events(self) -> list[DomainEvent]:
+    def get_pending_events(self) -> list:
         """
         Get all pending events.
 

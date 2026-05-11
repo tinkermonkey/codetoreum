@@ -12,8 +12,7 @@ class ResourceNotFoundError(PortError):
         """
         Initialize ResourceNotFoundError.
 
-        Args:
-            resource_type: Type of resource (WorkItem, Agent, etc.)
+        Args: resource_type: Type of resource (WorkItem, Agent, etc.)
             resource_id: Resource identifier
         """
         super().__init__(f"{resource_type} not found: {resource_id}")
@@ -32,8 +31,7 @@ class ExternalServiceError(PortError):
         """
         Initialize ExternalServiceError.
 
-        Args:
-            service: Name of external service
+        Args: service: Name of external service
             message: Error message
         """
         super().__init__(f"{service} error: {message}")
@@ -59,8 +57,7 @@ class RateLimitError(PortError):
         """
         Initialize RateLimitError.
 
-        Args:
-            retry_after: Seconds to wait before retrying (optional)
+        Args: retry_after: Seconds to wait before retrying (optional)
         """
         super().__init__(f"Rate limit exceeded, retry after {retry_after}s")
         self.retry_after = retry_after
@@ -103,8 +100,7 @@ class PromptTooLongError(LLMProviderError):
         """
         Initialize PromptTooLongError.
 
-        Args:
-            token_count: Actual token count
+        Args: token_count: Actual token count
             max_tokens: Maximum allowed tokens
         """
         super().__init__(f"Prompt too long: {token_count} > {max_tokens}")
@@ -139,8 +135,7 @@ class EmptyAgentResponseError(LLMProviderError):
         """
         Initialize EmptyAgentResponseError.
 
-        Args:
-            work_item_id: ID of the work item the agent was responding to
+        Args: work_item_id: ID of the work item the agent was responding to
         """
         super().__init__(f"Agent returned empty response for work item: {work_item_id}")
         self.work_item_id = work_item_id
@@ -235,8 +230,7 @@ class MetricNotFoundError(MetricsError):
         """
         Initialize MetricNotFoundError.
 
-        Args:
-            metric_name: Name of metric
+        Args: metric_name: Name of metric
         """
         super().__init__(f"Metric not found: {metric_name}")
         self.metric_name = metric_name
@@ -249,8 +243,7 @@ class ComponentNotFoundError(MetricsError):
         """
         Initialize ComponentNotFoundError.
 
-        Args:
-            component_name: Name of component
+        Args: component_name: Name of component
         """
         super().__init__(f"Component not found: {component_name}")
         self.component_name = component_name

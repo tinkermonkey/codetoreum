@@ -1,0 +1,10 @@
+id: changeset-1778318689926-ybzedrca8
+name: testing-adapter-coverage-completeness
+created: 2026-05-09T09:24:49.937Z
+modified: 2026-05-09T09:27:22.719Z
+status: committed
+baseSnapshot: sha256:4a55fa6cf9bd8ff5db3ef20fe46cd5a2de7285d1213eb734b5043326e7e8e544
+stats:
+  additions: 16
+  modifications: 0
+  deletions: 0

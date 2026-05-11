@@ -8,18 +8,55 @@ from uuid import uuid4
 import pytest
 
 from codetoreum.adapters.testing import InMemoryEventStore
-from codetoreum.domain.events import (
-    AgentCreated,
-    DomainEvent,
-    WorkItemCompleted,
-    WorkItemCreated,
-    WorkItemStarted,
-)
 from codetoreum.infrastructure.simulation.simulation_config import (
     FidelityLevel,
     SimulationConfig,
 )
 from codetoreum.ports.exceptions import ConcurrencyConflictError, ResourceNotFoundError
+
+
+class DomainEvent:
+    """Local shim replacing deleted legacy DomainEvent for test fixtures."""
+
+    def __init__(self, aggregate_id="", aggregate_type="", payload=None, correlation_id=None, **kwargs):
+        self.aggregate_id = aggregate_id
+        self.aggregate_type = aggregate_type
+        self.payload = payload or {}
+        self.event_id = str(uuid4())
+        self.occurred_at = datetime.now(UTC)
+        self.correlation_id = correlation_id
+
+    @property
+    def event_type(self):
+        return self.__class__.__name__
+
+
+class WorkItemCreated(DomainEvent):
+    def __init__(self, aggregate_id="", payload=None, correlation_id=None, **kwargs):
+        super().__init__(
+            aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, correlation_id=correlation_id
+        )
+
+
+class WorkItemStarted(DomainEvent):
+    def __init__(self, aggregate_id="", payload=None, correlation_id=None, **kwargs):
+        super().__init__(
+            aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, correlation_id=correlation_id
+        )
+
+
+class WorkItemCompleted(DomainEvent):
+    def __init__(self, aggregate_id="", payload=None, correlation_id=None, **kwargs):
+        super().__init__(
+            aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, correlation_id=correlation_id
+        )
+
+
+class AgentCreated(DomainEvent):
+    def __init__(self, aggregate_id="", payload=None, correlation_id=None, **kwargs):
+        super().__init__(
+            aggregate_id=aggregate_id, aggregate_type="Agent", payload=payload, correlation_id=correlation_id
+        )
 
 
 @pytest.mark.asyncio

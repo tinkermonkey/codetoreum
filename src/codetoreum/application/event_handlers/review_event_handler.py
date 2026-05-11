@@ -4,14 +4,14 @@ import logging
 
 from codetoreum.application.review_service import ReviewService
 from codetoreum.domain.events import (
-    DomainEvent,
-    ReviewCycleApproved,
-    ReviewCycleCreated,
-    ReviewCycleEscalated,
-    ReviewCycleRejected,
-    ReviewFeedbackSubmitted,
-    ReviewIterationStarted,
+    ReviewCycleApprovedEvent,
+    ReviewCycleCreatedEvent,
+    ReviewCycleEscalatedToHumanEvent,
+    ReviewCycleFeedbackSubmittedEvent,
+    ReviewCycleIterationStartedEvent,
+    ReviewCycleRejectedEvent,
 )
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.infrastructure.event_bus import EventHandler, event_handler
 from codetoreum.ports.output.ci_pipeline_service import ICIPipelineService
 
@@ -19,32 +19,31 @@ logger = logging.getLogger(__name__)
 
 
 @event_handler(
-    "ReviewCycleCreated",
-    "ReviewIterationStarted",
-    "ReviewFeedbackSubmitted",
-    "ReviewCycleApproved",
-    "ReviewCycleRejected",
-    "ReviewCycleEscalated",
+    "ReviewCycleCreatedEvent",
+    "ReviewCycleIterationStartedEvent",
+    "ReviewCycleFeedbackSubmittedEvent",
+    "ReviewCycleApprovedEvent",
+    "ReviewCycleRejectedEvent",
+    "ReviewCycleEscalatedToHumanEvent",
 )
 class ReviewEventHandler(EventHandler):
     """
     Event handler for review cycle events.
 
     Handles events for:
-    - ReviewCycleCreated: Initialize review tracking
-    - ReviewIterationStarted: Log iteration start
-    - ReviewFeedbackSubmitted: Process feedback
-    - ReviewCycleApproved: Handle approval
-    - ReviewCycleRejected: Handle rejection and re-execution
-    - ReviewCycleEscalated: Handle escalation to human
+    - ReviewCycleCreatedEvent: Initialize review tracking
+    - ReviewCycleIterationStartedEvent: Log iteration start
+    - ReviewCycleFeedbackSubmittedEvent: Process feedback
+    - ReviewCycleApprovedEvent: Handle approval
+    - ReviewCycleRejectedEvent: Handle rejection and re-execution
+    - ReviewCycleEscalatedToHumanEvent: Handle escalation to human
     """
 
     def __init__(self, review_service: ReviewService, ci_pipeline_service: ICIPipelineService | None = None):
         """
         Initialize handler.
 
-        Args:
-            review_service: Review service
+        Args: review_service: Review service
             ci_pipeline_service: Optional CI pipeline service for executing CI checks during review
         """
         self.review_service = review_service
@@ -68,47 +67,44 @@ class ReviewEventHandler(EventHandler):
         """Get the CI pipeline service if configured."""
         return self._ci_pipeline_service
 
-    async def handle(self, event: DomainEvent) -> None:
+    async def handle(self, event: CodetoreumEvent) -> None:
         """
         Handle review cycle events.
 
-        Args:
-            event: Domain event to handle
+        Args: event: Domain event to handle
 
-        Raises:
-            Exception: If handling fails
+        Raises: Exception: If handling fails
         """
-        if isinstance(event, ReviewCycleCreated):
+        if isinstance(event, ReviewCycleCreatedEvent):
             await self._handle_review_cycle_created(event)
-        elif isinstance(event, ReviewIterationStarted):
+        elif isinstance(event, ReviewCycleIterationStartedEvent):
             await self._handle_review_iteration_started(event)
-        elif isinstance(event, ReviewFeedbackSubmitted):
+        elif isinstance(event, ReviewCycleFeedbackSubmittedEvent):
             await self._handle_review_feedback_submitted(event)
-        elif isinstance(event, ReviewCycleApproved):
+        elif isinstance(event, ReviewCycleApprovedEvent):
             await self._handle_review_cycle_approved(event)
-        elif isinstance(event, ReviewCycleRejected):
+        elif isinstance(event, ReviewCycleRejectedEvent):
             await self._handle_review_cycle_rejected(event)
-        elif isinstance(event, ReviewCycleEscalated):
+        elif isinstance(event, ReviewCycleEscalatedToHumanEvent):
             await self._handle_review_cycle_escalated(event)
         else:
             logger.warning(f"ReviewEventHandler received unexpected event type: {event.event_type}")
 
-    async def _handle_review_cycle_created(self, event: ReviewCycleCreated) -> None:
+    async def _handle_review_cycle_created(self, event: ReviewCycleCreatedEvent) -> None:
         """
         Handle review cycle creation - initialize tracking.
 
-        Args:
-            event: ReviewCycleCreated event
+        Args: event: ReviewCycleCreatedEvent event
         """
         self._metrics["total_reviews"] += 1
         self._metrics["active_reviews"] += 1
-        self._active_reviews[event.aggregate_id] = event.payload.get("workflow_id", "")
+        self._active_reviews[event.review_cycle_id] = event.workflow_id
 
         logger.info(
-            f"Review cycle created: {event.aggregate_id} "
-            f"(workflow: {event.payload.get('workflow_id')}, stage: {event.payload.get('stage_name')}, "
-            f"maker: {event.payload.get('maker_agent_id')}, reviewer: {event.payload.get('reviewer_agent_id')}, "
-            f"max_iterations: {event.payload.get('max_iterations')})"
+            f"Review cycle created: {event.review_cycle_id} "
+            f"(workflow: {event.workflow_id}, stage: {event.stage_name}, "
+            f"maker: {event.maker_agent_id}, reviewer: {event.reviewer_agent_id}, "
+            f"max_iterations: {event.max_iterations})"
         )
 
         logger.debug(f"Total reviews: {self._metrics['total_reviews']}, Active: {self._metrics['active_reviews']}")
@@ -119,19 +115,18 @@ class ReviewEventHandler(EventHandler):
         # 3. Track review cycle start time
         # 4. Create review audit log
 
-    async def _handle_review_iteration_started(self, event: ReviewIterationStarted) -> None:
+    async def _handle_review_iteration_started(self, event: ReviewCycleIterationStartedEvent) -> None:
         """
         Handle review iteration start - log iteration.
 
-        Args:
-            event: ReviewIterationStarted event
+        Args: event: ReviewCycleIterationStartedEvent event
         """
         self._metrics["total_iterations"] += 1
 
         logger.info(
-            f"Review iteration started: {event.aggregate_id}, "
-            f"iteration {event.payload.get('iteration_number')} "
-            f"(maker_execution: {event.payload.get('maker_execution_id')})"
+            f"Review iteration started: {event.review_cycle_id}, "
+            f"iteration {event.iteration_number} "
+            f"(maker_execution: {event.maker_execution_id})"
         )
 
         logger.debug(
@@ -145,24 +140,18 @@ class ReviewEventHandler(EventHandler):
         # 3. Update review dashboard
         # 4. Stream maker output to reviewer
 
-    async def _handle_review_feedback_submitted(self, event: ReviewFeedbackSubmitted) -> None:
+    async def _handle_review_feedback_submitted(self, event: ReviewCycleFeedbackSubmittedEvent) -> None:
         """
         Handle review feedback submission.
 
-        Args:
-            event: ReviewFeedbackSubmitted event
+        Args: event: ReviewCycleFeedbackSubmittedEvent event
         """
-        issues_found = event.payload.get("issues_found", [])
         logger.info(
-            f"Review feedback submitted: {event.aggregate_id}, "
-            f"iteration {event.payload.get('iteration_number')}, "
-            f"decision: {event.payload.get('decision')}, "
-            f"issues: {len(issues_found)}"
+            f"Review feedback submitted: {event.review_cycle_id}, "
+            f"iteration {event.iteration_number}, "
+            f"decision: {event.decision}, "
+            f"issues: {event.issues_count}"
         )
-
-        feedback_text = event.payload.get("feedback")
-        if feedback_text:
-            logger.debug(f"Reviewer comment: {feedback_text}")
 
         # Note: In a full implementation, this would:
         # 1. Parse feedback for actionable items
@@ -173,20 +162,17 @@ class ReviewEventHandler(EventHandler):
         #    - REQUEST_CHANGES: Queue maker revision
         #    - ESCALATE: Escalate to human
 
-    async def _handle_review_cycle_approved(self, event: ReviewCycleApproved) -> None:
+    async def _handle_review_cycle_approved(self, event: ReviewCycleApprovedEvent) -> None:
         """
         Handle review cycle approval.
 
-        Args:
-            event: ReviewCycleApproved event
+        Args: event: ReviewCycleApprovedEvent event
         """
         self._metrics["approved_reviews"] += 1
         self._metrics["active_reviews"] -= 1
-        self._active_reviews.pop(event.aggregate_id, None)
+        self._active_reviews.pop(event.review_cycle_id, None)
 
-        logger.info(
-            f"Review cycle approved: {event.aggregate_id}, total iterations: {event.payload.get('total_iterations')}"
-        )
+        logger.info(f"Review cycle approved: {event.review_cycle_id}, total iterations: {event.total_iterations}")
 
         logger.info(
             f"Approval rate: {self._metrics['approved_reviews']}/{self._metrics['total_reviews']} "
@@ -201,24 +187,22 @@ class ReviewEventHandler(EventHandler):
         # 5. Archive review artifacts
         # 6. Update review dashboard
 
-    async def _handle_review_cycle_rejected(self, event: ReviewCycleRejected) -> None:
+    async def _handle_review_cycle_rejected(self, event: ReviewCycleRejectedEvent) -> None:
         """
         Handle review cycle rejection - trigger re-execution or escalation.
 
-        Args:
-            event: ReviewCycleRejected event
+        Args: event: ReviewCycleRejectedEvent event
         """
         self._metrics["rejected_reviews"] += 1
 
         # Decrement active reviews since rejection means review is complete
         self._metrics["active_reviews"] -= 1
-        self._active_reviews.pop(event.aggregate_id, None)
+        self._active_reviews.pop(event.review_cycle_id, None)
 
-        final_iteration = event.payload.get("final_iteration", 0)
         logger.warning(
-            f"Review cycle rejected: {event.aggregate_id}, "
-            f"final iteration: {final_iteration}, "
-            f"reason: {event.payload.get('rejection_reason')}"
+            f"Review cycle rejected: {event.review_cycle_id}, "
+            f"final iteration: {event.final_iteration}, "
+            f"reason: {event.rejection_reason}"
         )
 
         logger.warning(
@@ -234,18 +218,17 @@ class ReviewEventHandler(EventHandler):
         # 5. Update review dashboard
         # 6. Track rejection reasons for analysis
 
-    async def _handle_review_cycle_escalated(self, event: ReviewCycleEscalated) -> None:
+    async def _handle_review_cycle_escalated(self, event: ReviewCycleEscalatedToHumanEvent) -> None:
         """
         Handle review cycle escalation to human.
 
-        Args:
-            event: ReviewCycleEscalated event
+        Args: event: ReviewCycleEscalatedToHumanEvent event
         """
         self._metrics["escalated_reviews"] += 1
         self._metrics["active_reviews"] -= 1
-        self._active_reviews.pop(event.aggregate_id, None)
+        self._active_reviews.pop(event.review_cycle_id, None)
 
-        logger.warning(f"Review cycle escalated: {event.aggregate_id}, reason: {event.payload.get('reason')}")
+        logger.warning(f"Review cycle escalated: {event.review_cycle_id}, reason: {event.escalation_reason}")
 
         logger.warning(
             f"Escalation rate: {self._metrics['escalated_reviews']}/{self._metrics['total_reviews']} "
@@ -282,8 +265,7 @@ class ReviewEventHandler(EventHandler):
         """
         Get review metrics.
 
-        Returns:
-            Dictionary of review metrics
+        Returns: Dictionary of review metrics
         """
         avg_iterations = self._metrics["total_iterations"] / max(self._metrics["total_reviews"], 1)
 
@@ -299,7 +281,6 @@ class ReviewEventHandler(EventHandler):
         """
         Get currently active reviews.
 
-        Returns:
-            Dictionary mapping review_id to workflow_id
+        Returns: Dictionary mapping review_id to workflow_id
         """
         return dict(self._active_reviews)

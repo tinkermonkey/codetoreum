@@ -3,23 +3,25 @@
 import pytest
 
 from codetoreum.domain import (
-    AgentAssigned,
     DomainError,
-    WorkflowAttached,
     WorkItem,
-    WorkItemBlocked,
-    WorkItemCompleted,
-    WorkItemCreated,
-    WorkItemFailed,
-    WorkItemLabelsUpdated,
     WorkItemPriority,
-    WorkItemPriorityUpdated,
-    WorkItemStageUpdated,
-    WorkItemStarted,
     WorkItemStatus,
-    WorkItemUnblocked,
-    WorkItemUnderReview,
 )
+from codetoreum.domain.events.work_item_events import (
+    AgentAssignedEvent,
+    WorkItemBlockedEvent,
+    WorkItemCompletedEvent,
+    WorkItemCreatedEvent,
+    WorkItemFailedEvent,
+    WorkItemLabelsUpdatedEvent,
+    WorkItemPriorityUpdatedEvent,
+    WorkItemStageUpdatedEvent,
+    WorkItemStartedEvent,
+    WorkItemUnblockedEvent,
+    WorkItemUnderReviewEvent,
+)
+from codetoreum.domain.events.workflow_events import WorkflowAttachedEvent
 
 
 class TestWorkItemCreation:
@@ -71,9 +73,9 @@ class TestWorkItemCreation:
 
         events = work_item.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], WorkItemCreated)
-        assert events[0].aggregate_id == work_item.id
-        assert events[0].payload["title"] == "Test Feature"
+        assert isinstance(events[0], WorkItemCreatedEvent)
+        assert events[0].work_item_id == work_item.id
+        assert events[0].title == "Test Feature"
 
     def test_create_with_empty_title_raises_error(self):
         """Test that empty title raises DomainError."""
@@ -113,9 +115,9 @@ class TestWorkItemAssignment:
 
         events = work_item.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], AgentAssigned)
-        assert events[0].payload["agent_id"] == "agent-1"
-        assert events[0].payload["reason"] == "Best match for this task"
+        assert isinstance(events[0], AgentAssignedEvent)
+        assert events[0].agent_id == "agent-1"
+        assert events[0].reason == "Best match for this task"
 
     def test_assign_agent_to_already_assigned_item(self):
         """Test reassigning different agent to assigned item."""
@@ -161,7 +163,7 @@ class TestWorkItemLifecycle:
         assert work_item.status == WorkItemStatus.IN_PROGRESS
         events = work_item.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], WorkItemStarted)
+        assert isinstance(events[0], WorkItemStartedEvent)
 
     def test_start_unassigned_work_item_raises_error(self):
         """Test that starting unassigned item raises error."""
@@ -191,7 +193,7 @@ class TestWorkItemLifecycle:
         assert work_item.status == WorkItemStatus.UNDER_REVIEW
         events = work_item.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], WorkItemUnderReview)
+        assert isinstance(events[0], WorkItemUnderReviewEvent)
 
     def test_mark_under_review_when_not_in_progress_raises_error(self):
         """Test that marking non-in-progress item under review raises error."""
@@ -213,7 +215,7 @@ class TestWorkItemLifecycle:
         assert work_item.completed_at is not None
         events = work_item.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], WorkItemCompleted)
+        assert isinstance(events[0], WorkItemCompletedEvent)
 
     def test_complete_from_under_review(self):
         """Test completing work item from under-review status."""
@@ -241,15 +243,13 @@ class TestWorkItemLifecycle:
         work_item.start()
         work_item.clear_events()
 
-        error_details = {"error_code": "TIMEOUT", "message": "Agent timed out"}
-        work_item.fail("Execution timeout", error_details)
+        work_item.fail("Execution timeout")
 
         assert work_item.status == WorkItemStatus.FAILED
         events = work_item.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], WorkItemFailed)
-        assert events[0].payload["reason"] == "Execution timeout"
-        assert events[0].payload["error_details"] == error_details
+        assert isinstance(events[0], WorkItemFailedEvent)
+        assert events[0].reason == "Execution timeout"
 
     def test_fail_completed_work_item_raises_error(self):
         """Test that failing completed item raises error."""
@@ -277,9 +277,9 @@ class TestWorkItemBlocking:
         assert work_item.status == WorkItemStatus.BLOCKED
         events = work_item.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], WorkItemBlocked)
-        assert events[0].payload["reason"] == "Waiting for dependency"
-        assert events[0].payload["blocking_issue_id"] == "issue-456"
+        assert isinstance(events[0], WorkItemBlockedEvent)
+        assert events[0].reason == "Waiting for dependency"
+        assert events[0].blocking_issue_id == "issue-456"
 
     def test_block_completed_work_item_raises_error(self):
         """Test that blocking completed item raises error."""
@@ -303,8 +303,8 @@ class TestWorkItemBlocking:
         assert work_item.status == WorkItemStatus.ASSIGNED
         events = work_item.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], WorkItemUnblocked)
-        assert events[0].payload["new_status"] == "assigned"
+        assert isinstance(events[0], WorkItemUnblockedEvent)
+        assert events[0].new_status == "assigned"
 
     def test_unblock_work_item_without_agent(self):
         """Test unblocking work item without agent returns to NEW."""
@@ -338,7 +338,7 @@ class TestWorkItemWorkflow:
         assert work_item.current_workflow_id == "workflow-1"
         events = work_item.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], WorkflowAttached)
+        assert isinstance(events[0], WorkflowAttachedEvent)
 
     def test_attach_workflow_when_already_attached_raises_error(self):
         """Test that attaching workflow to item with workflow raises error."""
@@ -360,9 +360,9 @@ class TestWorkItemWorkflow:
         assert work_item.current_stage == "coding"
         events = work_item.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], WorkItemStageUpdated)
-        assert events[0].payload["new_stage"] == "coding"
-        assert events[0].payload["old_stage"] is None
+        assert isinstance(events[0], WorkItemStageUpdatedEvent)
+        assert events[0].new_stage == "coding"
+        assert events[0].old_stage == ""  # empty string when no prior stage
 
     def test_update_stage_without_workflow_raises_error(self):
         """Test that updating stage without workflow raises error."""
@@ -386,9 +386,9 @@ class TestWorkItemMetadata:
         assert work_item.labels == ["bug", "critical", "security"]
         events = work_item.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], WorkItemLabelsUpdated)
-        assert events[0].payload["old_labels"] == ["bug"]
-        assert events[0].payload["new_labels"] == ["bug", "critical", "security"]
+        assert isinstance(events[0], WorkItemLabelsUpdatedEvent)
+        assert list(events[0].old_labels) == ["bug"]
+        assert list(events[0].new_labels) == ["bug", "critical", "security"]
 
     def test_update_priority(self):
         """Test updating work item priority."""
@@ -400,9 +400,9 @@ class TestWorkItemMetadata:
         assert work_item.priority == WorkItemPriority.CRITICAL
         events = work_item.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], WorkItemPriorityUpdated)
-        assert events[0].payload["old_priority"] == WorkItemPriority.MEDIUM.value
-        assert events[0].payload["new_priority"] == WorkItemPriority.CRITICAL.value
+        assert isinstance(events[0], WorkItemPriorityUpdatedEvent)
+        assert events[0].old_priority == WorkItemPriority.MEDIUM.value
+        assert events[0].new_priority == WorkItemPriority.CRITICAL.value
 
 
 class TestWorkItemQueryMethods:
@@ -490,8 +490,8 @@ class TestWorkItemEventManagement:
         events = work_item.get_pending_events()
 
         assert len(events) == 2
-        assert isinstance(events[0], WorkItemCreated)
-        assert isinstance(events[1], AgentAssigned)
+        assert isinstance(events[0], WorkItemCreatedEvent)
+        assert isinstance(events[1], AgentAssignedEvent)
 
     def test_clear_events(self):
         """Test clearing pending events."""

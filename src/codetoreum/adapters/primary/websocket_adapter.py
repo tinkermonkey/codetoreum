@@ -34,7 +34,7 @@ from codetoreum.config import (
     DEFAULT_WS_RATE_LIMIT_MESSAGES,
     DEFAULT_WS_RATE_LIMIT_WINDOW,
 )
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.observability.websocket_instrumentation import (
     WebSocketMessageTracer,
@@ -861,7 +861,7 @@ class ConnectionManager:
         for connection_id in recipient_ids:
             await self.send_personal_message(message_dict, connection_id)
 
-    async def broadcast_event(self, event: DomainEvent) -> None:
+    async def broadcast_event(self, event: CodetoreumEvent) -> None:
         """
         Broadcast event to all subscribed connections with filtering.
 
@@ -951,7 +951,7 @@ class ConnectionManager:
 
         return True
 
-    def _event_matches_filter(self, event: DomainEvent, event_dict: dict[str, Any], filter: EventFilter) -> bool:
+    def _event_matches_filter(self, event: CodetoreumEvent, event_dict: dict[str, Any], filter: EventFilter) -> bool:
         """
         Check if event matches filter criteria.
 
@@ -1553,7 +1553,7 @@ class WebSocketAdapter:
             connection_id,
         )
 
-    async def broadcast_event(self, event: DomainEvent):
+    async def broadcast_event(self, event: CodetoreumEvent):
         """
         Broadcast domain event to subscribed connections.
 
@@ -1571,7 +1571,7 @@ class WebSocketAdapter:
         # (async, doesn't block broadcasting)
         self._record_event_deliveries(event)
 
-    def _record_event_deliveries(self, event: DomainEvent) -> None:
+    def _record_event_deliveries(self, event: CodetoreumEvent) -> None:
         """
         Record event delivery to clients for tracing purposes.
 
@@ -1619,7 +1619,7 @@ class WebSocketAdapter:
             logger.warning(f"Error in _record_event_deliveries: {e}", exc_info=True)
 
     @staticmethod
-    def _subscription_matches_event(subscription: Any, event: DomainEvent) -> bool:
+    def _subscription_matches_event(subscription: Any, event: CodetoreumEvent) -> bool:
         """
         Check if a subscription matches an event.
 

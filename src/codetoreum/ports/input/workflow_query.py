@@ -174,15 +174,12 @@ class IWorkflowQueryPort(ABC):
         """
         Retrieves a workflow definition by ID.
 
-        Args:
-            workflow_id: Unique identifier for the workflow
+        Args: workflow_id: Unique identifier for the workflow
             version: Optional specific version to retrieve (defaults to latest)
 
-        Returns:
-            Complete workflow definition
+        Returns: Complete workflow definition
 
-        Raises:
-            WorkflowNotFoundError: If workflow doesn't exist
+        Raises: WorkflowNotFoundError: If workflow doesn't exist
             VersionNotFoundError: If requested version doesn't exist
         """
 
@@ -195,15 +192,12 @@ class IWorkflowQueryPort(ABC):
         """
         Lists workflows matching the specified criteria.
 
-        Args:
-            filters: Optional filters to apply
+        Args: filters: Optional filters to apply
             pagination: Pagination parameters
 
-        Returns:
-            Paginated list of workflow summaries
+        Returns: Paginated list of workflow summaries
 
-        Raises:
-            ValidationError: If parameters are invalid
+        Raises: ValidationError: If parameters are invalid
         """
 
     @abstractmethod
@@ -211,15 +205,12 @@ class IWorkflowQueryPort(ABC):
         """
         Retrieves version history for a workflow.
 
-        Args:
-            workflow_id: Unique identifier for the workflow
+        Args: workflow_id: Unique identifier for the workflow
             limit: Maximum number of versions to return
 
-        Returns:
-            List of workflow versions with metadata
+        Returns: List of workflow versions with metadata
 
-        Raises:
-            WorkflowNotFoundError: If workflow doesn't exist
+        Raises: WorkflowNotFoundError: If workflow doesn't exist
         """
 
     @abstractmethod
@@ -233,15 +224,12 @@ class IWorkflowQueryPort(ABC):
         - Entry condition validity
         - Transition consistency
 
-        Args:
-            workflow_id: Unique identifier for the workflow
+        Args: workflow_id: Unique identifier for the workflow
             version: Optional specific version to validate (defaults to latest)
 
-        Returns:
-            Validation result with errors and warnings
+        Returns: Validation result with errors and warnings
 
-        Raises:
-            WorkflowNotFoundError: If workflow doesn't exist
+        Raises: WorkflowNotFoundError: If workflow doesn't exist
         """
 
     @abstractmethod
@@ -251,15 +239,12 @@ class IWorkflowQueryPort(ABC):
         """
         Retrieves workflows applicable to a specific work item type.
 
-        Args:
-            work_item_type: Type of work item (issue, pr, discussion, etc.)
+        Args: work_item_type: Type of work item (issue, pr, discussion, etc.)
             project_id: Optional project filter
 
-        Returns:
-            List of applicable workflow summaries
+        Returns: List of applicable workflow summaries
 
-        Raises:
-            ValidationError: If work item type is invalid
+        Raises: ValidationError: If work item type is invalid
         """
 
     @abstractmethod
@@ -269,12 +254,9 @@ class IWorkflowQueryPort(ABC):
 
         Used to determine if a workflow can be safely deleted.
 
-        Args:
-            workflow_id: Unique identifier for the workflow
+        Args: workflow_id: Unique identifier for the workflow
 
-        Returns:
-            Number of active (running or queued) executions
+        Returns: Number of active (running or queued) executions
 
-        Raises:
-            WorkflowNotFoundError: If workflow doesn't exist
+        Raises: WorkflowNotFoundError: If workflow doesn't exist
         """

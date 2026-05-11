@@ -180,8 +180,7 @@ class IMetricsQueryPort(ABC):
         - Docker runtime
         - LLM provider
 
-        Returns:
-            System health information
+        Returns: System health information
         """
 
     @abstractmethod
@@ -189,14 +188,11 @@ class IMetricsQueryPort(ABC):
         """
         Get health status for a specific component.
 
-        Args:
-            component_name: Name of component to check
+        Args: component_name: Name of component to check
 
-        Returns:
-            Component health information
+        Returns: Component health information
 
-        Raises:
-            ComponentNotFoundError: If component doesn't exist
+        Raises: ComponentNotFoundError: If component doesn't exist
         """
 
     @abstractmethod
@@ -206,13 +202,11 @@ class IMetricsQueryPort(ABC):
         """
         Get performance metrics over a time range.
 
-        Args:
-            start_time: Start of time range
+        Args: start_time: Start of time range
             end_time: End of time range
             aggregation_window_seconds: Aggregation window (default: 60s)
 
-        Returns:
-            Aggregated performance metrics
+        Returns: Aggregated performance metrics
         """
 
     @abstractmethod
@@ -223,12 +217,10 @@ class IMetricsQueryPort(ABC):
         Returns circuit breaker states, rate limiter utilization,
         retry statistics, and timeout information.
 
-        Args:
-            start_time: Start of time range
+        Args: start_time: Start of time range
             end_time: End of time range
 
-        Returns:
-            Resilience metrics
+        Returns: Resilience metrics
         """
 
     @abstractmethod
@@ -242,8 +234,7 @@ class IMetricsQueryPort(ABC):
         - Event store
         - Config store
 
-        Returns:
-            Integration status information
+        Returns: Integration status information
         """
 
     @abstractmethod
@@ -251,8 +242,7 @@ class IMetricsQueryPort(ABC):
         """
         Get simulation mode status and configuration.
 
-        Returns:
-            Simulation mode information
+        Returns: Simulation mode information
         """
 
     @abstractmethod
@@ -267,18 +257,15 @@ class IMetricsQueryPort(ABC):
         """
         Get time series data for a specific metric.
 
-        Args:
-            metric_name: Name of metric to query
+        Args: metric_name: Name of metric to query
             start_time: Start of time range
             end_time: End of time range
             labels: Optional label filters
             aggregation: Optional aggregation function (sum, avg, min, max, p95, p99)
 
-        Returns:
-            Time series data
+        Returns: Time series data
 
-        Raises:
-            MetricNotFoundError: If metric doesn't exist
+        Raises: MetricNotFoundError: If metric doesn't exist
         """
 
     @abstractmethod
@@ -286,11 +273,9 @@ class IMetricsQueryPort(ABC):
         """
         List available metric names.
 
-        Args:
-            prefix: Optional prefix filter
+        Args: prefix: Optional prefix filter
 
-        Returns:
-            List of metric names
+        Returns: List of metric names
         """
 
     @abstractmethod
@@ -303,13 +288,11 @@ class IMetricsQueryPort(ABC):
         """
         Get per-endpoint API metrics.
 
-        Args:
-            endpoint_path: Optional filter by specific endpoint
+        Args: endpoint_path: Optional filter by specific endpoint
             start_time: Start of time range (default: last hour)
             end_time: End of time range (default: now)
 
-        Returns:
-            Dict mapping endpoint paths to metrics (request count, error rate, latency percentiles)
+        Returns: Dict mapping endpoint paths to metrics (request count, error rate, latency percentiles)
         """
 
     @abstractmethod
@@ -322,13 +305,11 @@ class IMetricsQueryPort(ABC):
         """
         Get agent execution metrics.
 
-        Args:
-            agent_name: Optional filter by specific agent
+        Args: agent_name: Optional filter by specific agent
             start_time: Start of time range (default: last hour)
             end_time: End of time range (default: now)
 
-        Returns:
-            Dict with execution counts, success rates, duration stats per agent
+        Returns: Dict with execution counts, success rates, duration stats per agent
         """
 
     @abstractmethod
@@ -336,8 +317,7 @@ class IMetricsQueryPort(ABC):
         """
         Get currently active agent executions.
 
-        Returns:
-            Dict containing list of active agents with execution info
+        Returns: Dict containing list of active agents with execution info
         """
 
     @abstractmethod
@@ -345,8 +325,7 @@ class IMetricsQueryPort(ABC):
         """
         Get API usage and quota information.
 
-        Returns:
-            Dict with usage statistics for external APIs (Claude, etc.)
+        Returns: Dict with usage statistics for external APIs (Claude, etc.)
         """
 
     @abstractmethod
@@ -359,13 +338,11 @@ class IMetricsQueryPort(ABC):
         """
         Get repair cycle metrics.
 
-        Args:
-            agent_name: Optional filter by specific agent
+        Args: agent_name: Optional filter by specific agent
             start_time: Start of time range (default: last hour)
             end_time: End of time range (default: now)
 
-        Returns:
-            Dict with repair cycle statistics including:
+        Returns: Dict with repair cycle statistics including:
             - Cycle counts (started, completed, successful, failed, fast-failed)
             - Duration statistics
             - Per-test-type metrics (unit, integration, e2e)

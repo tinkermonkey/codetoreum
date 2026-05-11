@@ -6,18 +6,18 @@ from enum import Enum
 from typing import Any
 from uuid import uuid4
 
-from codetoreum.domain.events import (
-    AgentCapabilityAdded,
-    AgentCapabilityRemoved,
-    AgentCapabilityUpdated,
-    AgentConstraintsUpdated,
-    AgentCreated,
-    AgentMaxRetriesUpdated,
-    AgentMcpServerAdded,
-    AgentMcpServerRemoved,
-    AgentModelUpdated,
-    AgentTimeoutUpdated,
-    DomainEvent,
+from codetoreum.domain.events.adapter_events import CodetoreumEvent, now_iso
+from codetoreum.domain.events.agent_events import (
+    AgentCapabilityAddedEvent,
+    AgentCapabilityRemovedEvent,
+    AgentCapabilityUpdatedEvent,
+    AgentConstraintsUpdatedEvent,
+    AgentCreatedEvent,
+    AgentMaxRetriesUpdatedEvent,
+    AgentMcpServerAddedEvent,
+    AgentMcpServerRemovedEvent,
+    AgentModelUpdatedEvent,
+    AgentTimeoutUpdatedEvent,
 )
 from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.value_objects import CommitPolicy
@@ -100,7 +100,7 @@ class Agent:
     commit_policy: CommitPolicy = CommitPolicy.ON_SUCCESS  # When to commit file changes
 
     # Event tracking
-    _events: list[DomainEvent] = field(default_factory=list, init=False, repr=False)
+    _events: list[CodetoreumEvent] = field(default_factory=list, init=False, repr=False)
     _version: int = field(default=0, init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -219,15 +219,15 @@ class Agent:
             updated_at=datetime.now(UTC),
         )
 
-        event = AgentCreated(
-            aggregate_id=agent.id,
-            payload={
-                "name": name,
-                "display_name": display_name,
-                "agent_type": agent_type.value,
-                "model": model,
-                "capabilities": [c.skill for c in capabilities.values()],
-            },
+        event = AgentCreatedEvent(
+            type="agent.created",
+            timestamp=now_iso(),
+            source="domain",
+            agent_id=agent.id,
+            name=name,
+            display_name=display_name,
+            agent_type=agent_type.value if hasattr(agent_type, "value") else str(agent_type),
+            model=model,
         )
         agent._add_event(event)
 
@@ -254,13 +254,13 @@ class Agent:
         self.updated_at = datetime.now(UTC)
         self._version += 1
 
-        event = AgentCapabilityAdded(
-            aggregate_id=self.id,
-            payload={
-                "skill": capability.skill,
-                "proficiency": capability.proficiency,
-                "added_at": self.updated_at.isoformat(),
-            },
+        event = AgentCapabilityAddedEvent(
+            type="agent.capability_added",
+            timestamp=now_iso(),
+            source="domain",
+            agent_id=self.id,
+            skill=capability.skill,
+            proficiency=capability.proficiency,
         )
         self._add_event(event)
 
@@ -291,9 +291,12 @@ class Agent:
         self.updated_at = datetime.now(UTC)
         self._version += 1
 
-        event = AgentCapabilityRemoved(
-            aggregate_id=self.id,
-            payload={"skill": skill, "removed_at": self.updated_at.isoformat()},
+        event = AgentCapabilityRemovedEvent(
+            type="agent.capability_removed",
+            timestamp=now_iso(),
+            source="domain",
+            agent_id=self.id,
+            skill=skill,
         )
         self._add_event(event)
 
@@ -323,14 +326,14 @@ class Agent:
         self.updated_at = datetime.now(UTC)
         self._version += 1
 
-        event = AgentCapabilityUpdated(
-            aggregate_id=self.id,
-            payload={
-                "skill": skill,
-                "old_proficiency": old_proficiency,
-                "new_proficiency": proficiency,
-                "updated_at": self.updated_at.isoformat(),
-            },
+        event = AgentCapabilityUpdatedEvent(
+            type="agent.capability_updated",
+            timestamp=now_iso(),
+            source="domain",
+            agent_id=self.id,
+            skill=skill,
+            old_proficiency=old_proficiency,
+            new_proficiency=proficiency,
         )
         self._add_event(event)
 
@@ -356,13 +359,13 @@ class Agent:
         self.updated_at = datetime.now(UTC)
         self._version += 1
 
-        event = AgentModelUpdated(
-            aggregate_id=self.id,
-            payload={
-                "old_model": old_model,
-                "new_model": model,
-                "updated_at": self.updated_at.isoformat(),
-            },
+        event = AgentModelUpdatedEvent(
+            type="agent.model_updated",
+            timestamp=now_iso(),
+            source="domain",
+            agent_id=self.id,
+            old_model=old_model,
+            new_model=model,
         )
         self._add_event(event)
 
@@ -387,13 +390,13 @@ class Agent:
         self.updated_at = datetime.now(UTC)
         self._version += 1
 
-        event = AgentTimeoutUpdated(
-            aggregate_id=self.id,
-            payload={
-                "old_timeout": old_timeout,
-                "new_timeout": timeout_seconds,
-                "updated_at": self.updated_at.isoformat(),
-            },
+        event = AgentTimeoutUpdatedEvent(
+            type="agent.timeout_updated",
+            timestamp=now_iso(),
+            source="domain",
+            agent_id=self.id,
+            old_timeout=old_timeout,
+            new_timeout=timeout_seconds,
         )
         self._add_event(event)
 
@@ -418,13 +421,13 @@ class Agent:
         self.updated_at = datetime.now(UTC)
         self._version += 1
 
-        event = AgentMaxRetriesUpdated(
-            aggregate_id=self.id,
-            payload={
-                "old_max_retries": old_max_retries,
-                "new_max_retries": max_retries,
-                "updated_at": self.updated_at.isoformat(),
-            },
+        event = AgentMaxRetriesUpdatedEvent(
+            type="agent.max_retries_updated",
+            timestamp=now_iso(),
+            source="domain",
+            agent_id=self.id,
+            old_max_retries=old_max_retries,
+            new_max_retries=max_retries,
         )
         self._add_event(event)
 
@@ -482,18 +485,19 @@ class Agent:
         self.updated_at = datetime.now(UTC)
         self._version += 1
 
-        event = AgentConstraintsUpdated(
-            aggregate_id=self.id,
-            payload={
-                "old_constraints": old_constraints,
-                "new_constraints": {
-                    "requires_docker": self.requires_docker,
-                    "requires_dev_container": self.requires_dev_container,
-                    "makes_code_changes": self.makes_code_changes,
-                    "filesystem_write_allowed": self.filesystem_write_allowed,
-                },
-                "updated_at": self.updated_at.isoformat(),
-            },
+        new_constraints_dict = {
+            "requires_docker": self.requires_docker,
+            "requires_dev_container": self.requires_dev_container,
+            "makes_code_changes": self.makes_code_changes,
+            "filesystem_write_allowed": self.filesystem_write_allowed,
+        }
+        event = AgentConstraintsUpdatedEvent(
+            type="agent.constraints_updated",
+            timestamp=now_iso(),
+            source="domain",
+            agent_id=self.id,
+            old_constraints=tuple(sorted(old_constraints.items())),
+            new_constraints=tuple(sorted(new_constraints_dict.items())),
         )
         self._add_event(event)
 
@@ -518,12 +522,12 @@ class Agent:
         self.updated_at = datetime.now(UTC)
         self._version += 1
 
-        event = AgentMcpServerAdded(
-            aggregate_id=self.id,
-            payload={
-                "server_name": server_name,
-                "added_at": self.updated_at.isoformat(),
-            },
+        event = AgentMcpServerAddedEvent(
+            type="agent.mcp_server_added",
+            timestamp=now_iso(),
+            source="domain",
+            agent_id=self.id,
+            server_name=server_name,
         )
         self._add_event(event)
 
@@ -547,12 +551,12 @@ class Agent:
         self.updated_at = datetime.now(UTC)
         self._version += 1
 
-        event = AgentMcpServerRemoved(
-            aggregate_id=self.id,
-            payload={
-                "server_name": server_name,
-                "removed_at": self.updated_at.isoformat(),
-            },
+        event = AgentMcpServerRemovedEvent(
+            type="agent.mcp_server_removed",
+            timestamp=now_iso(),
+            source="domain",
+            agent_id=self.id,
+            server_name=server_name,
         )
         self._add_event(event)
 
@@ -622,7 +626,7 @@ class Agent:
         return self.agent_type == AgentType.REVIEWER
 
     # Event management
-    def _add_event(self, event: DomainEvent) -> None:
+    def _add_event(self, event: CodetoreumEvent) -> None:
         """
         Add event to pending events list.
 
@@ -631,7 +635,7 @@ class Agent:
         """
         self._events.append(event)
 
-    def get_pending_events(self) -> list[DomainEvent]:
+    def get_pending_events(self) -> list[CodetoreumEvent]:
         """
         Get all pending events.
 

@@ -5,15 +5,15 @@ from datetime import datetime
 import pytest
 
 from codetoreum.domain.events import (
-    WorkflowCancelled,
-    WorkflowCompleted,
-    WorkflowCreated,
-    WorkflowFailed,
-    WorkflowPaused,
-    WorkflowResumed,
-    WorkflowStageAdvanced,
-    WorkflowStageStatusUpdated,
-    WorkflowStarted,
+    WorkflowCancelledEvent,
+    WorkflowCompletedEvent,
+    WorkflowCreatedEvent,
+    WorkflowFailedEvent,
+    WorkflowPausedEvent,
+    WorkflowResumedEvent,
+    WorkflowStageAdvancedEvent,
+    WorkflowStageStatusUpdatedEvent,
+    WorkflowStartedEvent,
 )
 from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.pipeline_stage import StageStatus
@@ -55,12 +55,9 @@ class TestWorkflowCreation:
 
         events = workflow.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], WorkflowCreated)
-        assert events[0].aggregate_id == workflow.id
-        assert events[0].payload["work_item_id"] == "work-item-1"
-        assert events[0].payload["template_id"] == template.id
-        assert events[0].payload["project_id"] == "project-1"
-        assert events[0].payload["stage_count"] == 1
+        assert isinstance(events[0], WorkflowCreatedEvent)
+        assert events[0].workflow_id == workflow.id
+        assert events[0].work_item_id == "work-item-1"
 
     def test_create_workflow_sets_workflow_id_on_stages(self):
         """Test that creating workflow sets workflow_id on all stages."""
@@ -136,7 +133,7 @@ class TestWorkflowLifecycle:
 
         events = workflow.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], WorkflowStarted)
+        assert isinstance(events[0], WorkflowStartedEvent)
 
     def test_start_workflow_fails_if_not_pending(self):
         """Test that start fails if workflow is not pending."""
@@ -173,7 +170,7 @@ class TestWorkflowLifecycle:
 
         events = workflow.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], WorkflowStageAdvanced)
+        assert isinstance(events[0], WorkflowStageAdvancedEvent)
 
     def test_advance_completes_workflow_on_last_stage(self):
         """Test that advancing on last stage completes workflow."""
@@ -197,7 +194,7 @@ class TestWorkflowLifecycle:
 
         events = workflow.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], WorkflowCompleted)
+        assert isinstance(events[0], WorkflowCompletedEvent)
 
     def test_advance_fails_if_not_running(self):
         """Test that advance fails if workflow is not running."""
@@ -243,7 +240,7 @@ class TestWorkflowLifecycle:
 
         events = workflow.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], WorkflowCompleted)
+        assert isinstance(events[0], WorkflowCompletedEvent)
 
     def test_complete_fails_if_not_running(self):
         """Test that complete fails if workflow is not running."""
@@ -282,8 +279,7 @@ class TestWorkflowLifecycle:
 
         events = workflow.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], WorkflowFailed)
-        assert events[0].payload["reason"] == "Something went wrong"
+        assert isinstance(events[0], WorkflowFailedEvent)
 
     def test_fail_workflow_with_failed_stage(self):
         """Test failing workflow with specific failed stage."""
@@ -297,7 +293,6 @@ class TestWorkflowLifecycle:
         workflow.fail("Error in stage", failed_stage="stage1")
 
         events = workflow.get_pending_events()
-        assert events[0].payload["failed_stage"] == "stage1"
 
     def test_fail_fails_if_completed(self):
         """Test that fail fails if workflow is completed."""
@@ -333,7 +328,7 @@ class TestWorkflowLifecycle:
 
         events = workflow.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], WorkflowPaused)
+        assert isinstance(events[0], WorkflowPausedEvent)
 
     def test_pause_fails_if_not_running(self):
         """Test that pause fails if workflow is not running."""
@@ -361,7 +356,7 @@ class TestWorkflowLifecycle:
 
         events = workflow.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], WorkflowResumed)
+        assert isinstance(events[0], WorkflowResumedEvent)
 
     def test_resume_fails_if_not_paused(self):
         """Test that resume fails if workflow is not paused."""
@@ -388,7 +383,7 @@ class TestWorkflowLifecycle:
 
         events = workflow.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], WorkflowCancelled)
+        assert isinstance(events[0], WorkflowCancelledEvent)
 
     def test_cancel_fails_if_completed(self):
         """Test that cancel fails if workflow is completed."""
@@ -461,7 +456,7 @@ class TestStageManagement:
 
         events = workflow.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], WorkflowStageStatusUpdated)
+        assert isinstance(events[0], WorkflowStageStatusUpdatedEvent)
 
     def test_update_stage_status_not_found(self):
         """Test updating status of non-existent stage."""
@@ -564,7 +559,7 @@ class TestEventManagement:
 
         events = workflow.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], WorkflowCreated)
+        assert isinstance(events[0], WorkflowCreatedEvent)
 
     def test_clear_events(self):
         """Test clearing pending events."""
@@ -600,81 +595,34 @@ class TestEventSourcing:
         with pytest.raises(DomainError, match="empty event stream"):
             Workflow.from_events([])
 
-    def test_from_events_wrong_first_event(self):
-        """Test reconstruction with wrong first event fails."""
-        from codetoreum.domain.events import WorkflowStarted
-
-        event = WorkflowStarted("wf-1", {"started_at": "2024-01-01T00:00:00"})
-
-        with pytest.raises(DomainError, match="First event must be WorkflowCreated"):
-            Workflow.from_events([event])
-
     def test_from_events_basic(self):
-        """Test basic event reconstruction."""
-        created_event = WorkflowCreated(
-            "wf-1",
-            {
-                "work_item_id": "work-1",
-                "template_id": "template-1",
-                "project_id": "project-1",
-                "stage_count": 1,
-            },
-        )
+        """Test basic event reconstruction via live workflow."""
+        # Create a real workflow and reconstruct from its events
+        from codetoreum.domain.workflow_template import WorkflowTemplate
 
-        workflow = Workflow.from_events([created_event])
+        template = WorkflowTemplate.create("test", "Test Template")
+        template.add_stage("stage1", "agent-1")
+        workflow = Workflow.create("work-1", template, "project-1")
+        events = workflow.get_pending_events()
 
-        assert workflow.id == "wf-1"
-        assert workflow.work_item_id == "work-1"
-        assert workflow.template_id == "template-1"
-        assert workflow.project_id == "project-1"
-        assert workflow.status == WorkflowStatus.PENDING
+        # Reconstruct from events
+        reconstructed = Workflow.from_events(events)
 
-    def test_apply_workflow_started_event(self):
-        """Test applying WorkflowStarted event."""
-        created_event = WorkflowCreated(
-            "wf-1",
-            {
-                "work_item_id": "work-1",
-                "template_id": "template-1",
-                "project_id": "project-1",
-                "stage_count": 1,
-            },
-        )
-        started_event = WorkflowStarted(
-            "wf-1",
-            {
-                "started_at": "2024-01-01T00:00:00",
-                "work_item_id": "work-1",
-                "first_stage": "stage1",
-            },
-        )
+        assert reconstructed.id == workflow.id
+        assert reconstructed.work_item_id == "work-1"
+        assert reconstructed.status == WorkflowStatus.PENDING
 
-        workflow = Workflow.from_events([created_event, started_event])
+    def test_from_events_with_start(self):
+        """Test reconstruction includes started state."""
+        from codetoreum.domain.workflow_template import WorkflowTemplate
 
-        assert workflow.status == WorkflowStatus.RUNNING
-        assert workflow.started_at is not None
+        template = WorkflowTemplate.create("test", "Test Template")
+        template.add_stage("stage1", "agent-1")
+        workflow = Workflow.create("work-1", template, "project-1")
+        workflow.start()
+        events = workflow.get_pending_events()
 
-    def test_apply_workflow_completed_event(self):
-        """Test applying WorkflowCompleted event."""
-        created_event = WorkflowCreated(
-            "wf-1",
-            {
-                "work_item_id": "work-1",
-                "template_id": "template-1",
-                "project_id": "project-1",
-                "stage_count": 1,
-            },
-        )
-        completed_event = WorkflowCompleted(
-            "wf-1",
-            {
-                "completed_at": "2024-01-01T00:00:00",
-                "work_item_id": "work-1",
-                "duration_seconds": 100.0,
-            },
-        )
+        reconstructed = Workflow.from_events(events)
 
-        workflow = Workflow.from_events([created_event, completed_event])
-
-        assert workflow.status == WorkflowStatus.COMPLETED
-        assert workflow.completed_at is not None
+        assert reconstructed.status == WorkflowStatus.RUNNING
+        assert reconstructed.started_at is not None

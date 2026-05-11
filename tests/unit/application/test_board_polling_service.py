@@ -8,7 +8,7 @@ from codetoreum.application.board_polling_service import (
     BoardPollingService,
     BoardState,
 )
-from codetoreum.domain.events import WorkItemColumnChanged
+from codetoreum.domain.events import WorkItemColumnChangedEvent
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.ports.exceptions import (
     AuthenticationError,
@@ -300,7 +300,7 @@ class TestPollingIntegration:
         async def capture_event(event):
             events_received.append(event)
 
-        event_bus.subscribe("WorkItemColumnChanged", capture_event)
+        event_bus.subscribe("WorkItemColumnChangedEvent", capture_event)
 
         # Second poll should detect the change
         await polling_service._poll_board("proj-1", "board-1")
@@ -308,13 +308,12 @@ class TestPollingIntegration:
         # Verify event was emitted
         assert len(events_received) == 1
         event = events_received[0]
-        assert isinstance(event, WorkItemColumnChanged)
-        assert event.payload["work_item_id"] == "item-1"
-        assert event.payload["from_column"] == "Backlog"
-        assert event.payload["to_column"] == "In Progress"
-        assert event.payload["moved_by"] == "HUMAN"
-        assert event.payload["board_id"] == "board-1"
-        assert event.payload["project_id"] == "proj-1"
+        assert isinstance(event, WorkItemColumnChangedEvent)
+        assert event.work_item_id == "item-1"
+        assert event.from_column == "Backlog"
+        assert event.to_column == "In Progress"
+        assert event.board_id == "board-1"
+        assert event.project_id == "proj-1"
 
     @pytest.mark.asyncio
     async def test_polling_loop_continues_on_error(self, polling_service, mock_board_service):

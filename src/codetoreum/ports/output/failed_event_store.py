@@ -97,23 +97,20 @@ class IFailedEventStore(ABC):
     ) -> str:
         """Add a failed event to the store.
 
-        Args:
-            event_type: Type of the event that failed
+        Args: event_type: Type of the event that failed
             event_data: Event payload data
             failure_reason: Reason for the failure
             error_message: Human-readable error message
             metadata: Optional additional metadata about the failure
 
-        Returns:
-            ID of the stored failed event
+        Returns: ID of the stored failed event
         """
 
     @abstractmethod
     def get_stats(self) -> FailedEventStoreStats:
         """Get statistics about stored failed events.
 
-        Returns:
-            Statistics including counts by reason, retry status, etc.
+        Returns: Statistics including counts by reason, retry status, etc.
         """
 
     @abstractmethod
@@ -125,35 +122,29 @@ class IFailedEventStore(ABC):
     ) -> list[FailedEventRecord]:
         """List failed events with optional filtering.
 
-        Args:
-            failure_reason: Filter by specific failure reason
+        Args: failure_reason: Filter by specific failure reason
             can_retry: Filter by retry capability (True/False)
             limit: Maximum number of events to return
 
-        Returns:
-            List of failed event records matching the filters
+        Returns: List of failed event records matching the filters
         """
 
     @abstractmethod
     def get_event(self, event_id: str) -> FailedEventRecord | None:
         """Get a specific failed event by ID.
 
-        Args:
-            event_id: ID of the event to retrieve
+        Args: event_id: ID of the event to retrieve
 
-        Returns:
-            The failed event record, or None if not found
+        Returns: The failed event record, or None if not found
         """
 
     @abstractmethod
     def remove_event(self, event_id: str) -> bool:
         """Remove an event from the store.
 
-        Args:
-            event_id: ID of the event to remove
+        Args: event_id: ID of the event to remove
 
-        Returns:
-            True if removed, False if not found
+        Returns: True if removed, False if not found
         """
 
     @abstractmethod

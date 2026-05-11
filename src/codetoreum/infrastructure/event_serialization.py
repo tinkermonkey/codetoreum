@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 
 
 class EventSerializationError(Exception):
@@ -28,36 +28,48 @@ class EventSerializer:
     SCHEMA_VERSION = 1
 
     # Event type registry for deserialization
-    _event_type_registry: dict[str, type[DomainEvent]] = {}
+    _codetoeum_event_registry: dict[str, type[CodetoreumEvent]] = {}
 
     @classmethod
-    def register_event_type(cls, event_class: type[DomainEvent]) -> None:
+    def register_event_type(cls, event_class: type[CodetoreumEvent]) -> None:
         """
         Register an event type for deserialization.
 
         Args:
-            event_class: Event class to register
+            event_class: Event class to register (CodetoreumEvent subclass)
 
         Raises:
             ValueError: If event type already registered with different class
         """
         event_type_name = event_class.__name__
 
-        if event_type_name in cls._event_type_registry:
-            existing_class = cls._event_type_registry[event_type_name]
+        # Always check for duplicate registration regardless of subclass status
+        if event_type_name in cls._codetoeum_event_registry:
+            existing_class = cls._codetoeum_event_registry[event_type_name]
             if existing_class != event_class:
                 message = f"Event type '{event_type_name}' already registered with different class: {existing_class}"
                 raise ValueError(message)
-        else:
-            cls._event_type_registry[event_type_name] = event_class
+            return  # Same class, idempotent
+
+        if issubclass(event_class, CodetoreumEvent):
+            cls._codetoeum_event_registry[event_type_name] = event_class
+            return
+
+        raise ValueError(
+            f"Cannot register {event_type_name}: not a CodetoreumEvent subclass. "
+            "Legacy DomainEvent classes are no longer supported."
+        )
 
     @classmethod
-    def serialize(cls, event: DomainEvent) -> str:
+    def serialize(cls, event: CodetoreumEvent) -> str:
         """
         Serialize event to JSON string.
 
+        Handles both CodetoreumEvent (legacy) and CodetoreumEvent (modern) instances.
+        For CodetoreumEvent instances, delegates to event.to_dict().
+
         Args:
-            event: Domain event to serialize
+            event: Domain event to serialize (CodetoreumEvent or CodetoreumEvent)
 
         Returns:
             JSON string representation
@@ -66,29 +78,29 @@ class EventSerializer:
             EventSerializationError: If serialization fails
         """
         try:
-            data = {
-                "schema_version": cls.SCHEMA_VERSION,
-                "event_id": str(event.event_id),
-                "event_type": event.event_type,
-                "event_version": event.event_version,
-                "aggregate_id": event.aggregate_id,
-                "aggregate_type": event.aggregate_type,
-                "occurred_at": event.occurred_at.isoformat(),
-                "correlation_id": (str(event.correlation_id) if event.correlation_id else None),
-                "causation_id": str(event.causation_id) if event.causation_id else None,
-                "user_id": event.user_id,
-                "payload": event.payload,
-                "metadata": event.metadata,
-            }
+            if isinstance(event, CodetoreumEvent):
+                # Modern CodetoreumEvent: use its to_dict() method
+                data = {
+                    "schema_version": cls.SCHEMA_VERSION,
+                    "event_class": "CodetoreumEvent",
+                    "concrete_class": type(event).__name__,
+                    **event.to_dict(),
+                }
+                return json.dumps(data, cls=_EventJSONEncoder, ensure_ascii=False)
 
-            return json.dumps(data, cls=_EventJSONEncoder, ensure_ascii=False)
+            raise EventSerializationError(
+                f"serialize() requires CodetoreumEvent, got {type(event).__name__}. "
+                "Legacy DomainEvent objects are no longer supported."
+            )
 
+        except EventSerializationError:
+            raise
         except Exception as e:
-            message = f"Failed to serialize event {event.event_type}: {e}"
+            message = f"Failed to serialize event {getattr(event, 'event_type', type(event).__name__)}: {e}"
             raise EventSerializationError(message) from e
 
     @classmethod
-    def deserialize(cls, json_str: str) -> DomainEvent:
+    def deserialize(cls, json_str: str) -> CodetoreumEvent:
         """
         Deserialize event from JSON string.
 
@@ -114,32 +126,16 @@ class EventSerializer:
                 )
                 raise EventSerializationError(message)
 
-            # Get event type class from registry
-            event_type = data["event_type"]
-            event_class = cls._event_type_registry.get(event_type)
-
+            # Look up by concrete_class first, then event_class, then type
+            event_class_name = (
+                data.get("concrete_class") or data.get("event_class") or data.get("type") or data.get("event_type")
+            )
+            event_class = cls._codetoeum_event_registry.get(event_class_name)
             if event_class is None:
-                # Fallback to generic DomainEvent for unknown types
-                event_class = DomainEvent
+                message = f"Unknown event class: {event_class_name!r}. Register it with EventSerializer.register_event_type()."
+                raise EventSerializationError(message)
 
-            # Reconstruct event
-            # For specific event types (e.g., WorkItemCreated), they don't accept aggregate_type
-            # as it's hardcoded in their __init__. Only pass it for base DomainEvent.
-            kwargs = {
-                "payload": data.get("payload", {}),
-                "user_id": data.get("user_id"),
-                "correlation_id": (UUID(data["correlation_id"]) if data.get("correlation_id") else None),
-                "causation_id": (UUID(data["causation_id"]) if data.get("causation_id") else None),
-                "event_id": UUID(data["event_id"]) if data.get("event_id") else None,
-                "occurred_at": (datetime.fromisoformat(data["occurred_at"]) if data.get("occurred_at") else None),
-            }
-
-            # Only pass aggregate_type for base DomainEvent
-            if event_class == DomainEvent:
-                kwargs["aggregate_type"] = data["aggregate_type"]
-
-            return event_class(aggregate_id=data["aggregate_id"], **kwargs)
-
+            return event_class.from_dict(data)
         except EventSerializationError:
             raise
         except Exception as e:
@@ -147,7 +143,7 @@ class EventSerializer:
             raise EventSerializationError(message) from e
 
     @classmethod
-    def to_dict(cls, event: DomainEvent) -> dict[str, Any]:
+    def to_dict(cls, event: CodetoreumEvent) -> dict[str, Any]:
         """
         Convert event to dictionary (for Elasticsearch indexing).
 
@@ -161,18 +157,17 @@ class EventSerializer:
             EventSerializationError: If conversion fails
         """
         try:
+            d = event.to_dict()
             return {
-                "event_id": str(event.event_id),
+                "event_id": d.get("event_id", ""),
                 "event_type": event.event_type,
-                "event_version": event.event_version,
-                "aggregate_id": event.aggregate_id,
-                "aggregate_type": event.aggregate_type,
-                "timestamp": event.occurred_at.isoformat(),
-                "correlation_id": (str(event.correlation_id) if event.correlation_id else None),
-                "causation_id": str(event.causation_id) if event.causation_id else None,
-                "user_id": event.user_id,
-                "data": event.payload,
-                "metadata": event.metadata,
+                "event_class": event.__class__.__name__,
+                "timestamp": d.get("timestamp", ""),
+                "source": d.get("source", ""),
+                "correlation_id": d.get("correlation_id"),
+                "data": {
+                    k: v for k, v in d.items() if k not in {"event_id", "type", "timestamp", "source", "correlation_id"}
+                },
             }
 
         except Exception as e:
@@ -180,7 +175,7 @@ class EventSerializer:
             raise EventSerializationError(message) from e
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> DomainEvent:
+    def from_dict(cls, data: dict[str, Any]) -> CodetoreumEvent:
         """
         Reconstruct event from dictionary (from Elasticsearch).
 
@@ -194,26 +189,21 @@ class EventSerializer:
             EventSerializationError: If reconstruction fails
         """
         try:
-            # Get event type class from registry
-            event_type = data["event_type"]
-            event_class = cls._event_type_registry.get(event_type, DomainEvent)
-
-            # Build kwargs (specific event types don't accept aggregate_type)
-            kwargs = {
-                "payload": data.get("data", {}),
-                "user_id": data.get("user_id"),
-                "correlation_id": (UUID(data["correlation_id"]) if data.get("correlation_id") else None),
-                "causation_id": (UUID(data["causation_id"]) if data.get("causation_id") else None),
-                "event_id": UUID(data["event_id"]) if data.get("event_id") else None,
-                "occurred_at": (datetime.fromisoformat(data["timestamp"]) if data.get("timestamp") else None),
+            event_class_name = data.get("event_class") or data.get("event_type", "")
+            event_class = cls._codetoeum_event_registry.get(event_class_name)
+            if event_class is None:
+                message = f"Unknown event class: {event_class_name!r}. Register it with EventSerializer.register_event_type()."
+                raise EventSerializationError(message)
+            payload = data.get("data", {})
+            reconstructed = {
+                **payload,
+                "event_id": data.get("event_id", ""),
+                "correlation_id": data.get("correlation_id"),
             }
+            return event_class.from_dict(reconstructed)
 
-            # Only pass aggregate_type for base DomainEvent
-            if event_class == DomainEvent:
-                kwargs["aggregate_type"] = data["aggregate_type"]
-
-            return event_class(aggregate_id=data["aggregate_id"], **kwargs)
-
+        except EventSerializationError:
+            raise
         except Exception as e:
             message = f"Failed to reconstruct event from dict: {e}"
             raise EventSerializationError(message) from e
@@ -258,110 +248,102 @@ def auto_register_event_types() -> None:
     event type registry for deserialization.
     """
 
-    # Import all event classes
     from codetoreum.domain.events import (
-        AgentAssigned,
-        AgentCapabilityAdded,
-        AgentCapabilityRemoved,
-        AgentCapabilityUpdated,
-        AgentConstraintsUpdated,
-        AgentCreated,
-        AgentMaxRetriesUpdated,
-        AgentMcpServerAdded,
-        AgentMcpServerRemoved,
-        AgentModelUpdated,
-        AgentTimeoutUpdated,
-        ExecutionCompleted,
-        ExecutionFailed,
-        ExecutionInitialized,
-        ExecutionStarted,
-        ExecutionTimeout,
-        ProjectContextCreated,
-        ProjectDockerConfigUpdated,
-        ProjectTestConfigUpdated,
-        ProjectWorkflowMappingAdded,
-        ReviewCycleApproved,
-        ReviewCycleCreated,
-        ReviewCycleEscalated,
-        ReviewCycleRejected,
-        ReviewFeedbackSubmitted,
-        ReviewIterationStarted,
-        WorkflowAttached,
-        WorkflowCancelled,
-        WorkflowCompleted,
-        WorkflowCreated,
-        WorkflowFailed,
-        WorkflowPaused,
-        WorkflowResumed,
-        WorkflowStageAdvanced,
-        WorkflowStageStatusUpdated,
-        WorkflowStarted,
-        WorkItemBlocked,
-        WorkItemCompleted,
-        WorkItemCreated,
-        WorkItemFailed,
-        WorkItemLabelsUpdated,
-        WorkItemPriorityUpdated,
-        WorkItemStageUpdated,
-        WorkItemStarted,
-        WorkItemUnblocked,
-        WorkItemUnderReview,
+        AgentAssignedEvent,
+        AgentCapabilityAddedEvent,
+        AgentCapabilityRemovedEvent,
+        AgentCapabilityUpdatedEvent,
+        AgentConstraintsUpdatedEvent,
+        AgentCreatedEvent,
+        AgentMaxRetriesUpdatedEvent,
+        AgentMcpServerAddedEvent,
+        AgentMcpServerRemovedEvent,
+        AgentModelUpdatedEvent,
+        AgentTimeoutUpdatedEvent,
+        ExecutionCancelledEvent,
+        ExecutionCompletedEvent,
+        ExecutionFailedEvent,
+        ExecutionInitializedEvent,
+        ExecutionPausedEvent,
+        ExecutionResumedEvent,
+        ExecutionRetryScheduledEvent,
+        ExecutionStartedEvent,
+        ExecutionTimedOutEvent,
+        ProjectContextCreatedEvent,
+        ProjectDockerConfigUpdatedEvent,
+        ProjectTestConfigUpdatedEvent,
+        ProjectWorkflowMappingAddedEvent,
+        ReviewCycleApprovedEvent,
+        ReviewCycleEscalatedToHumanEvent,
+        ReviewCycleStartedEvent,
+        WorkflowCancelledEvent,
+        WorkflowCompletedEvent,
+        WorkflowCreatedEvent,
+        WorkflowFailedEvent,
+        WorkflowPausedEvent,
+        WorkflowResumedEvent,
+        WorkflowStageAdvancedEvent,
+        WorkflowStageStatusUpdatedEvent,
+        WorkflowStartedEvent,
+        WorkItemBlockedEvent,
+        WorkItemCompletedEvent,
+        WorkItemCreatedEvent,
+        WorkItemFailedEvent,
+        WorkItemLabelsUpdatedEvent,
+        WorkItemPriorityUpdatedEvent,
+        WorkItemStageUpdatedEvent,
+        WorkItemStartedEvent,
+        WorkItemUnblockedEvent,
+        WorkItemUnderReviewEvent,
     )
 
-    # Register all event types
     event_classes = [
-        # Work Item Events
-        WorkItemCreated,
-        AgentAssigned,
-        WorkItemStarted,
-        WorkItemUnderReview,
-        WorkItemCompleted,
-        WorkItemFailed,
-        WorkItemBlocked,
-        WorkItemUnblocked,
-        WorkflowAttached,
-        WorkItemStageUpdated,
-        WorkItemLabelsUpdated,
-        WorkItemPriorityUpdated,
-        # Agent Events
-        AgentCreated,
-        AgentCapabilityAdded,
-        AgentCapabilityRemoved,
-        AgentCapabilityUpdated,
-        AgentModelUpdated,
-        AgentTimeoutUpdated,
-        AgentMaxRetriesUpdated,
-        AgentConstraintsUpdated,
-        AgentMcpServerAdded,
-        AgentMcpServerRemoved,
-        # Agent Execution Events
-        ExecutionInitialized,
-        ExecutionStarted,
-        ExecutionCompleted,
-        ExecutionFailed,
-        ExecutionTimeout,
-        # Workflow Events
-        WorkflowCreated,
-        WorkflowStarted,
-        WorkflowStageAdvanced,
-        WorkflowStageStatusUpdated,
-        WorkflowCompleted,
-        WorkflowFailed,
-        WorkflowPaused,
-        WorkflowResumed,
-        WorkflowCancelled,
-        # Review Cycle Events
-        ReviewCycleCreated,
-        ReviewIterationStarted,
-        ReviewFeedbackSubmitted,
-        ReviewCycleApproved,
-        ReviewCycleRejected,
-        ReviewCycleEscalated,
-        # Project Context Events
-        ProjectContextCreated,
-        ProjectTestConfigUpdated,
-        ProjectDockerConfigUpdated,
-        ProjectWorkflowMappingAdded,
+        AgentAssignedEvent,
+        AgentCapabilityAddedEvent,
+        AgentCapabilityRemovedEvent,
+        AgentCapabilityUpdatedEvent,
+        AgentConstraintsUpdatedEvent,
+        AgentCreatedEvent,
+        AgentMaxRetriesUpdatedEvent,
+        AgentMcpServerAddedEvent,
+        AgentMcpServerRemovedEvent,
+        AgentModelUpdatedEvent,
+        AgentTimeoutUpdatedEvent,
+        ExecutionCancelledEvent,
+        ExecutionCompletedEvent,
+        ExecutionFailedEvent,
+        ExecutionInitializedEvent,
+        ExecutionPausedEvent,
+        ExecutionResumedEvent,
+        ExecutionRetryScheduledEvent,
+        ExecutionStartedEvent,
+        ExecutionTimedOutEvent,
+        ProjectContextCreatedEvent,
+        ProjectDockerConfigUpdatedEvent,
+        ProjectTestConfigUpdatedEvent,
+        ProjectWorkflowMappingAddedEvent,
+        ReviewCycleApprovedEvent,
+        ReviewCycleStartedEvent,
+        ReviewCycleEscalatedToHumanEvent,
+        WorkflowCancelledEvent,
+        WorkflowCompletedEvent,
+        WorkflowCreatedEvent,
+        WorkflowFailedEvent,
+        WorkflowPausedEvent,
+        WorkflowResumedEvent,
+        WorkflowStageAdvancedEvent,
+        WorkflowStageStatusUpdatedEvent,
+        WorkflowStartedEvent,
+        WorkItemBlockedEvent,
+        WorkItemCompletedEvent,
+        WorkItemCreatedEvent,
+        WorkItemFailedEvent,
+        WorkItemLabelsUpdatedEvent,
+        WorkItemPriorityUpdatedEvent,
+        WorkItemStageUpdatedEvent,
+        WorkItemStartedEvent,
+        WorkItemUnblockedEvent,
+        WorkItemUnderReviewEvent,
     ]
 
     for event_class in event_classes:

@@ -55,8 +55,7 @@ class IAuditStore(ABC):
         """
         Store an audit event.
 
-        Args:
-            timestamp: When the event occurred
+        Args: timestamp: When the event occurred
             event_type: Type of event (e.g., "agent_deleted")
             resource_type: Type of resource (e.g., "agent")
             resource_id: ID of the resource
@@ -67,8 +66,7 @@ class IAuditStore(ABC):
             success: Whether the action succeeded
             error_message: Optional error message if action failed
 
-        Returns:
-            ID of the stored audit event
+        Returns: ID of the stored audit event
         """
 
     @abstractmethod
@@ -76,11 +74,9 @@ class IAuditStore(ABC):
         """
         Query audit events with filters.
 
-        Args:
-            filters: Query filters
+        Args: filters: Query filters
 
-        Returns:
-            List of matching audit events
+        Returns: List of matching audit events
         """
 
     @abstractmethod
@@ -88,11 +84,9 @@ class IAuditStore(ABC):
         """
         Count audit events matching filters.
 
-        Args:
-            filters: Query filters
+        Args: filters: Query filters
 
-        Returns:
-            Number of matching events
+        Returns: Number of matching events
         """
 
     @abstractmethod
@@ -100,11 +94,9 @@ class IAuditStore(ABC):
         """
         Delete audit events older than retention period.
 
-        Args:
-            retention_days: Number of days to retain events
+        Args: retention_days: Number of days to retain events
 
-        Returns:
-            Number of events deleted
+        Returns: Number of events deleted
         """
 
     @abstractmethod
@@ -112,9 +104,7 @@ class IAuditStore(ABC):
         """
         Retrieve a specific audit event by ID.
 
-        Args:
-            event_id: ID of the event
+        Args: event_id: ID of the event
 
-        Returns:
-            Event data or None if not found
+        Returns: Event data or None if not found
         """

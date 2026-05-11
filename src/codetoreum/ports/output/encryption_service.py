@@ -20,15 +20,12 @@ class IEncryptionService(ABC):
         """
         Encrypt a plaintext string.
 
-        Args:
-            plaintext: The string to encrypt
+        Args: plaintext: The string to encrypt
             key_id: Optional identifier for encryption key (for key rotation support)
 
-        Returns:
-            The encrypted string (typically base64-encoded ciphertext)
+        Returns: The encrypted string (typically base64-encoded ciphertext)
 
-        Raises:
-            EncryptionError: If encryption fails
+        Raises: EncryptionError: If encryption fails
         """
 
     @abstractmethod
@@ -36,14 +33,11 @@ class IEncryptionService(ABC):
         """
         Decrypt a ciphertext string.
 
-        Args:
-            ciphertext: The encrypted string to decrypt
+        Args: ciphertext: The encrypted string to decrypt
 
-        Returns:
-            The decrypted plaintext string
+        Returns: The decrypted plaintext string
 
-        Raises:
-            DecryptionError: If decryption fails
+        Raises: DecryptionError: If decryption fails
         """
 
     @abstractmethod
@@ -51,12 +45,10 @@ class IEncryptionService(ABC):
         """
         Rotate encryption keys.
 
-        Args:
-            old_key_id: Identifier of the old encryption key
+        Args: old_key_id: Identifier of the old encryption key
             new_key_id: Identifier of the new encryption key
 
-        Raises:
-            EncryptionError: If key rotation fails
+        Raises: EncryptionError: If key rotation fails
         """
 
 

@@ -99,14 +99,11 @@ class IWorkflowCommandPort(ABC):
         """
         Starts a new workflow execution.
 
-        Args:
-            command: Command with workflow execution parameters
+        Args: command: Command with workflow execution parameters
 
-        Returns:
-            Result containing workflow run ID and status
+        Returns: Result containing workflow run ID and status
 
-        Raises:
-            ProjectNotFoundError: If project doesn't exist
+        Raises: ProjectNotFoundError: If project doesn't exist
             PipelineNotFoundError: If pipeline doesn't exist
             WorkItemNotFoundError: If work item doesn't exist
             ValidationError: If command parameters invalid
@@ -117,14 +114,11 @@ class IWorkflowCommandPort(ABC):
         """
         Pauses an active workflow execution.
 
-        Args:
-            command: Command with pause parameters
+        Args: command: Command with pause parameters
 
-        Returns:
-            Result containing updated workflow status
+        Returns: Result containing updated workflow status
 
-        Raises:
-            WorkflowNotFoundError: If workflow doesn't exist
+        Raises: WorkflowNotFoundError: If workflow doesn't exist
             WorkflowNotActiveError: If workflow not in active state
         """
 
@@ -133,14 +127,11 @@ class IWorkflowCommandPort(ABC):
         """
         Resumes a paused workflow execution.
 
-        Args:
-            command: Command with resume parameters
+        Args: command: Command with resume parameters
 
-        Returns:
-            Result containing updated workflow status
+        Returns: Result containing updated workflow status
 
-        Raises:
-            WorkflowNotFoundError: If workflow doesn't exist
+        Raises: WorkflowNotFoundError: If workflow doesn't exist
             WorkflowNotPausedError: If workflow not in paused state
         """
 
@@ -149,14 +140,11 @@ class IWorkflowCommandPort(ABC):
         """
         Cancels a workflow execution.
 
-        Args:
-            command: Command with cancellation parameters
+        Args: command: Command with cancellation parameters
 
-        Returns:
-            Result containing final workflow status
+        Returns: Result containing final workflow status
 
-        Raises:
-            WorkflowNotFoundError: If workflow doesn't exist
+        Raises: WorkflowNotFoundError: If workflow doesn't exist
         """
 
     @abstractmethod
@@ -164,13 +152,10 @@ class IWorkflowCommandPort(ABC):
         """
         Retries a failed workflow stage.
 
-        Args:
-            command: Command with retry parameters
+        Args: command: Command with retry parameters
 
-        Returns:
-            Result containing updated workflow status
+        Returns: Result containing updated workflow status
 
-        Raises:
-            WorkflowNotFoundError: If workflow doesn't exist
+        Raises: WorkflowNotFoundError: If workflow doesn't exist
             StageNotFoundError: If stage doesn't exist
         """

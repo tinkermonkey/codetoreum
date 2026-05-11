@@ -22,14 +22,11 @@ class InMemoryAgentRepository(IAgentRepository):
     async def get_by_id(self, agent_id: str) -> Agent:
         """Get agent by ID.
 
-        Args:
-            agent_id: Unique identifier for the agent
+        Args: agent_id: Unique identifier for the agent
 
-        Returns:
-            Agent domain object
+        Returns: Agent domain object
 
-        Raises:
-            ResourceNotFoundError: If agent not found
+        Raises: ResourceNotFoundError: If agent not found
         """
         if agent_id not in self._agents_by_id:
             raise ResourceNotFoundError("Agent", agent_id)
@@ -38,14 +35,11 @@ class InMemoryAgentRepository(IAgentRepository):
     async def get_by_name(self, name: str) -> Agent:
         """Get agent by name.
 
-        Args:
-            name: Agent name
+        Args: name: Agent name
 
-        Returns:
-            Agent domain object
+        Returns: Agent domain object
 
-        Raises:
-            ResourceNotFoundError: If agent not found
+        Raises: ResourceNotFoundError: If agent not found
         """
         if name not in self._agents_by_name:
             raise ResourceNotFoundError("Agent", name)
@@ -54,8 +48,7 @@ class InMemoryAgentRepository(IAgentRepository):
     async def save(self, agent: Agent, project_id: str | None = None) -> None:
         """Persist an agent.
 
-        Args:
-            agent: Agent domain object to persist
+        Args: agent: Agent domain object to persist
             project_id: Optional project to associate the agent with
         """
         self._agents_by_id[agent.id] = agent
@@ -66,11 +59,9 @@ class InMemoryAgentRepository(IAgentRepository):
     async def list_by_project(self, project_id: str) -> list[Agent]:
         """List all agents for a project.
 
-        Args:
-            project_id: Project identifier
+        Args: project_id: Project identifier
 
-        Returns:
-            List of Agent domain objects for the project
+        Returns: List of Agent domain objects for the project
         """
         agent_ids = self._project_agents.get(project_id, set())
         return [self._agents_by_id[aid] for aid in agent_ids if aid in self._agents_by_id]
@@ -81,8 +72,7 @@ class InMemoryAgentRepository(IAgentRepository):
         Helper method for test setup that persists the agent and registers
         the project association.
 
-        Args:
-            project_id: Project identifier
+        Args: project_id: Project identifier
             agent: Agent domain object to persist
         """
         await self.save(agent, project_id)
@@ -90,8 +80,7 @@ class InMemoryAgentRepository(IAgentRepository):
     async def get_all(self) -> list[Agent]:
         """Get all agents in the repository.
 
-        Returns:
-            List of all Agent domain objects
+        Returns: List of all Agent domain objects
         """
         return list(self._agents_by_id.values())
 
@@ -102,8 +91,7 @@ class InMemoryAgentRepository(IAgentRepository):
         initialization when we need to populate caches without async/await.
         InMemoryAgentRepository stores agents in memory, so this is safe.
 
-        Returns:
-            List of all Agent domain objects
+        Returns: List of all Agent domain objects
         """
         return list(self._agents_by_id.values())
 
@@ -114,14 +102,11 @@ class InMemoryAgentRepository(IAgentRepository):
         where async/await is not available. InMemoryAgentRepository stores
         agents in memory, so this is safe to call synchronously.
 
-        Args:
-            name: Agent name
+        Args: name: Agent name
 
-        Returns:
-            Agent domain object
+        Returns: Agent domain object
 
-        Raises:
-            ResourceNotFoundError: If agent not found
+        Raises: ResourceNotFoundError: If agent not found
         """
         if name not in self._agents_by_name:
             raise ResourceNotFoundError("Agent", name)

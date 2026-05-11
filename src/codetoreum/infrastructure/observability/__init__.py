@@ -12,8 +12,7 @@ This package enables:
 - Configurable sampling strategies and performance tuning
 - Granular enable/disable controls for all observability features
 
-Quick Start:
-    from codetoreum.infrastructure.observability import ObservabilityConfig, setup_opentelemetry
+Quick Start: from codetoreum.infrastructure.observability import ObservabilityConfig, setup_opentelemetry
 
     # Load comprehensive config from environment
     config = ObservabilityConfig.from_env()
@@ -21,8 +20,7 @@ Quick Start:
     # Initialize OpenTelemetry with Signoz
     setup_opentelemetry(config, app)
 
-Trace Context Propagation:
-    from codetoreum.infrastructure.observability import TraceContextPropagator
+Trace Context Propagation: from codetoreum.infrastructure.observability import TraceContextPropagator
 
     # Inject trace context into events when publishing
     TraceContextPropagator.inject_trace_context(event)

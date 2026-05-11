@@ -25,14 +25,11 @@ class ITicketSystem(ABC):
         """
         Retrieve a work item by ID.
 
-        Args:
-            item_id: Unique identifier for the work item
+        Args: item_id: Unique identifier for the work item
 
-        Returns:
-            WorkItem: The requested work item
+        Returns: WorkItem: The requested work item
 
-        Raises:
-            WorkItemNotFoundError: Work item doesn't exist
+        Raises: WorkItemNotFoundError: Work item doesn't exist
             ExternalServiceError: Service communication failure
         """
 
@@ -53,8 +50,7 @@ class ITicketSystem(ABC):
         """
         Create a new work item.
 
-        Args:
-            title: Work item title
+        Args: title: Work item title
             description: Work item description
             project_id: Project identifier
             labels: Optional list of labels
@@ -65,11 +61,9 @@ class ITicketSystem(ABC):
             pr_id: Optional pull request ID for PR-related work items
             discussion_id: Optional discussion ID for discussion-related work items
 
-        Returns:
-            WorkItem: Newly created work item
+        Returns: WorkItem: Newly created work item
 
-        Raises:
-            ValidationError: Invalid input data
+        Raises: ValidationError: Invalid input data
             ProjectNotFoundError: Project doesn't exist
             ExternalServiceError: Service communication failure
         """
@@ -79,14 +73,11 @@ class ITicketSystem(ABC):
         """
         Retrieve all child work items for a given parent.
 
-        Args:
-            parent_id: ID of the parent work item
+        Args: parent_id: ID of the parent work item
 
-        Returns:
-            list[WorkItem]: Child work items (empty list if none exist)
+        Returns: list[WorkItem]: Child work items (empty list if none exist)
 
-        Raises:
-            WorkItemNotFoundError: Parent work item doesn't exist
+        Raises: WorkItemNotFoundError: Parent work item doesn't exist
             ExternalServiceError: Service communication failure
         """
 
@@ -95,15 +86,12 @@ class ITicketSystem(ABC):
         """
         Update an existing work item.
 
-        Args:
-            item_id: Work item identifier
+        Args: item_id: Work item identifier
             updates: Dictionary of fields to update
 
-        Returns:
-            WorkItem: Updated work item
+        Returns: WorkItem: Updated work item
 
-        Raises:
-            WorkItemNotFoundError: Work item doesn't exist
+        Raises: WorkItemNotFoundError: Work item doesn't exist
             ValidationError: Invalid update data
             ExternalServiceError: Service communication failure
         """
@@ -113,11 +101,9 @@ class ITicketSystem(ABC):
         """
         Delete a work item.
 
-        Args:
-            item_id: Work item identifier
+        Args: item_id: Work item identifier
 
-        Raises:
-            WorkItemNotFoundError: Work item doesn't exist
+        Raises: WorkItemNotFoundError: Work item doesn't exist
             ExternalServiceError: Service communication failure
         """
 
@@ -131,16 +117,13 @@ class ITicketSystem(ABC):
         """
         Update work item status.
 
-        Args:
-            item_id: Work item identifier
+        Args: item_id: Work item identifier
             status: New status
             reason: Optional reason for status change
 
-        Returns:
-            WorkItem: Updated work item
+        Returns: WorkItem: Updated work item
 
-        Raises:
-            WorkItemNotFoundError: Work item doesn't exist
+        Raises: WorkItemNotFoundError: Work item doesn't exist
             ValidationError: Invalid status transition
             ExternalServiceError: Service communication failure
         """
@@ -162,8 +145,7 @@ class ITicketSystem(ABC):
         """
         List work items with filters.
 
-        Args:
-            project_id: Filter by project
+        Args: project_id: Filter by project
             status: Filter by status
             assignee: Filter by assignee
             labels: Filter by labels (work item must have all specified labels)
@@ -172,11 +154,9 @@ class ITicketSystem(ABC):
             limit: Maximum number of results
             offset: Pagination offset
 
-        Returns:
-            List[WorkItem]: List of matching work items
+        Returns: List[WorkItem]: List of matching work items
 
-        Raises:
-            ValidationError: Invalid filter parameters
+        Raises: ValidationError: Invalid filter parameters
             ProjectNotFoundError: Project doesn't exist
             ExternalServiceError: Service communication failure
         """
@@ -191,16 +171,13 @@ class ITicketSystem(ABC):
         """
         Full-text search for work items.
 
-        Args:
-            query: Search query string
+        Args: query: Search query string
             project_id: Optional project filter
             limit: Maximum number of results
 
-        Returns:
-            List[WorkItem]: List of matching work items
+        Returns: List[WorkItem]: List of matching work items
 
-        Raises:
-            ProjectNotFoundError: Project doesn't exist
+        Raises: ProjectNotFoundError: Project doesn't exist
             ExternalServiceError: Service communication failure
         """
 
@@ -213,15 +190,12 @@ class ITicketSystem(ABC):
         """
         Stream work item updates in real-time.
 
-        Args:
-            project_id: Optional project filter
+        Args: project_id: Optional project filter
             since: Only stream items updated since this timestamp
 
-        Yields:
-            WorkItem: Work items as they are created/updated
+        Yields: WorkItem: Work items as they are created/updated
 
-        Raises:
-            ProjectNotFoundError: Project doesn't exist (if project_id specified)
+        Raises: ProjectNotFoundError: Project doesn't exist (if project_id specified)
             ExternalServiceError: Service communication failure
         """
 
@@ -238,17 +212,14 @@ class ITicketSystem(ABC):
         """
         Add a comment to a work item.
 
-        Args:
-            item_id: Work item identifier
+        Args: item_id: Work item identifier
             body: Comment text
             author: Optional author user ID
             metadata: Optional additional metadata
 
-        Returns:
-            Comment: Newly created comment
+        Returns: Comment: Newly created comment
 
-        Raises:
-            WorkItemNotFoundError: Work item doesn't exist
+        Raises: WorkItemNotFoundError: Work item doesn't exist
             ValidationError: Invalid comment data
             ExternalServiceError: Service communication failure
         """
@@ -263,16 +234,13 @@ class ITicketSystem(ABC):
         """
         Get comments for a work item.
 
-        Args:
-            item_id: Work item identifier
+        Args: item_id: Work item identifier
             since: Only return comments created after this timestamp
             limit: Maximum number of comments to return
 
-        Returns:
-            List[Comment]: List of comments
+        Returns: List[Comment]: List of comments
 
-        Raises:
-            WorkItemNotFoundError: Work item doesn't exist
+        Raises: WorkItemNotFoundError: Work item doesn't exist
             ExternalServiceError: Service communication failure
         """
 
@@ -290,13 +258,11 @@ class ITicketSystem(ABC):
 
         Common relationships: blocks, relates-to, parent-of, child-of
 
-        Args:
-            source_id: Source work item ID
+        Args: source_id: Source work item ID
             target_id: Target work item ID
             relationship: Type of relationship
 
-        Raises:
-            WorkItemNotFoundError: One or both work items don't exist
+        Raises: WorkItemNotFoundError: One or both work items don't exist
             ValidationError: Invalid relationship type
             ExternalServiceError: Service communication failure
         """
@@ -310,15 +276,12 @@ class ITicketSystem(ABC):
         """
         Get related work items.
 
-        Args:
-            item_id: Work item identifier
+        Args: item_id: Work item identifier
             relationship: Optional filter by relationship type
 
-        Returns:
-            List[WorkItem]: List of related work items
+        Returns: List[WorkItem]: List of related work items
 
-        Raises:
-            WorkItemNotFoundError: Work item doesn't exist
+        Raises: WorkItemNotFoundError: Work item doesn't exist
             ExternalServiceError: Service communication failure
         """
 
@@ -334,16 +297,13 @@ class ITicketSystem(ABC):
         """
         Register a webhook for events.
 
-        Args:
-            url: Webhook URL to POST events to
+        Args: url: Webhook URL to POST events to
             events: List of event types to subscribe to
             project_id: Optional project filter
 
-        Returns:
-            str: Webhook identifier
+        Returns: str: Webhook identifier
 
-        Raises:
-            ValidationError: Invalid webhook configuration
+        Raises: ValidationError: Invalid webhook configuration
             ProjectNotFoundError: Project doesn't exist
             ExternalServiceError: Service communication failure
         """
@@ -353,10 +313,8 @@ class ITicketSystem(ABC):
         """
         Unregister a webhook.
 
-        Args:
-            webhook_id: Webhook identifier
+        Args: webhook_id: Webhook identifier
 
-        Raises:
-            ResourceNotFoundError: Webhook doesn't exist
+        Raises: ResourceNotFoundError: Webhook doesn't exist
             ExternalServiceError: Service communication failure
         """

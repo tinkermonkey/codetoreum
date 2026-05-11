@@ -1,7 +1,6 @@
 """Unit tests for WorkflowEventHandler."""
 
-from datetime import UTC, datetime
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -10,40 +9,109 @@ from codetoreum.application.event_handlers.workflow_event_handler import (
 )
 from codetoreum.application.workflow_orchestrator import WorkflowOrchestrator
 from codetoreum.domain.events import (
-    ExecutionCompleted,
-    ExecutionFailed,
-    ReviewCycleApproved,
-    ReviewCycleEscalated,
-    ReviewCycleRejected,
-    WorkItemCreated,
+    ExecutionCompletedEvent,
+    ExecutionFailedEvent,
+    ReviewCycleApprovedEvent,
+    ReviewCycleEscalatedToHumanEvent,
+    ReviewCycleRejectedEvent,
+    WorkItemCreatedEvent,
 )
+from codetoreum.domain.events.adapter_events import now_iso
+
+
+def _work_item_created(work_item_id: str = "wi-1", title: str = "Test Task") -> WorkItemCreatedEvent:
+    return WorkItemCreatedEvent(
+        type="workitem.created",
+        timestamp=now_iso(),
+        source="test",
+        work_item_id=work_item_id,
+        project_id="proj-1",
+        title=title,
+    )
+
+
+def _exec_completed(exec_id: str = "exec-1", work_item_id: str = "wi-1") -> ExecutionCompletedEvent:
+    return ExecutionCompletedEvent(
+        type="execution.completed",
+        timestamp=now_iso(),
+        source="test",
+        execution_id=exec_id,
+        work_item_id=work_item_id,
+        agent_id="agent-1",
+        input_tokens=100,
+        output_tokens=200,
+    )
+
+
+def _exec_failed(exec_id: str = "exec-1", work_item_id: str = "wi-1", error: str = "Failed") -> ExecutionFailedEvent:
+    return ExecutionFailedEvent(
+        type="execution.failed",
+        timestamp=now_iso(),
+        source="test",
+        execution_id=exec_id,
+        work_item_id=work_item_id,
+        agent_id="agent-1",
+        error=error,
+    )
+
+
+def _review_approved(review_id: str = "review-1", total_iterations: int = 1) -> ReviewCycleApprovedEvent:
+    return ReviewCycleApprovedEvent(
+        type="review_cycle.approved",
+        timestamp=now_iso(),
+        source="test",
+        review_cycle_id=review_id,
+        work_item_id="wi-1",
+        total_iterations=total_iterations,
+    )
+
+
+def _review_rejected(
+    review_id: str = "review-1", final_iteration: int = 1, reason: str = "Quality issues"
+) -> ReviewCycleRejectedEvent:
+    return ReviewCycleRejectedEvent(
+        type="review_cycle.rejected",
+        timestamp=now_iso(),
+        source="test",
+        review_cycle_id=review_id,
+        final_iteration=final_iteration,
+        rejection_reason=reason,
+    )
+
+
+def _review_escalated(review_id: str = "review-1", reason: str = "MAX_ITERATIONS") -> ReviewCycleEscalatedToHumanEvent:
+    return ReviewCycleEscalatedToHumanEvent(
+        type="review_cycle.escalated_to_human",
+        timestamp=now_iso(),
+        source="test",
+        review_cycle_id=review_id,
+        work_item_id="wi-1",
+        iteration=1,
+        escalation_reason=reason,
+    )
 
 
 class TestWorkflowEventHandlerInitialization:
     """Test WorkflowEventHandler initialization."""
 
     def test_handler_initialization(self):
-        """Test handler initializes with orchestrator."""
         mock_orchestrator = Mock(spec=WorkflowOrchestrator)
         handler = WorkflowEventHandler(mock_orchestrator)
 
         assert handler.orchestrator is mock_orchestrator
-        # Verify service mock is not accidentally called
         mock_orchestrator.assert_not_called()
 
     def test_handler_has_event_types(self):
-        """Test handler is decorated with correct event types."""
         mock_orchestrator = Mock(spec=WorkflowOrchestrator)
         handler = WorkflowEventHandler(mock_orchestrator)
 
-        # Verify handler class has event_types attribute set by decorator
         assert hasattr(WorkflowEventHandler, "event_types")
-        assert "WorkItemCreated" in WorkflowEventHandler.event_types
-        assert "ExecutionCompleted" in WorkflowEventHandler.event_types
-        assert "ExecutionFailed" in WorkflowEventHandler.event_types
-        assert "ReviewCycleApproved" in WorkflowEventHandler.event_types
-        assert "ReviewCycleRejected" in WorkflowEventHandler.event_types
-        assert "ReviewCycleEscalated" in WorkflowEventHandler.event_types
+        assert "WorkItemCreatedEvent" in WorkflowEventHandler.event_types
+        assert "ExecutionCompletedEvent" in WorkflowEventHandler.event_types
+        assert "ExecutionFailedEvent" in WorkflowEventHandler.event_types
+        assert "ReviewCycleApprovedEvent" in WorkflowEventHandler.event_types
+        assert "ReviewCycleRejectedEvent" in WorkflowEventHandler.event_types
+        assert "ReviewCycleEscalatedToHumanEvent" in WorkflowEventHandler.event_types
 
 
 @pytest.mark.asyncio
@@ -51,152 +119,61 @@ class TestWorkflowEventHandlerMethods:
     """Test WorkflowEventHandler event handling methods."""
 
     async def test_handle_work_item_created(self):
-        """Test handling WorkItemCreated event."""
         mock_orchestrator = Mock(spec=WorkflowOrchestrator)
         handler = WorkflowEventHandler(mock_orchestrator)
 
-        event = WorkItemCreated(
-            aggregate_id="wi-1",
-            payload={
-                "title": "Fix authentication bug",
-                "project_id": "proj-1",
-            },
-            occurred_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
-        )
-
         with patch("codetoreum.application.event_handlers.workflow_event_handler.logger") as mock_logger:
-            await handler.handle(event)
-            # Verify logging indicates workflow started
+            await handler.handle(_work_item_created("wi-1", "Fix authentication bug"))
             mock_logger.info.assert_called()
             call_args = str(mock_logger.info.call_args)
-            assert "Starting workflow" in call_args or "workflow" in call_args.lower()
+            assert "workflow" in call_args.lower() or "work item" in call_args.lower()
 
     async def test_handle_execution_completed(self):
-        """Test handling ExecutionCompleted event."""
         mock_orchestrator = Mock(spec=WorkflowOrchestrator)
         handler = WorkflowEventHandler(mock_orchestrator)
 
-        event = ExecutionCompleted(
-            aggregate_id="exec-1",
-            payload={
-                "work_item_id": "wi-1",
-                "input_tokens": 100,
-                "output_tokens": 200,
-            },
-            occurred_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
-        )
-
         with patch("codetoreum.application.event_handlers.workflow_event_handler.logger") as mock_logger:
-            await handler.handle(event)
-            # Verify logging indicates execution completion
+            await handler.handle(_exec_completed())
             assert mock_logger.info.called or mock_logger.debug.called
 
     async def test_handle_execution_failed(self):
-        """Test handling ExecutionFailed event."""
         mock_orchestrator = Mock(spec=WorkflowOrchestrator)
         handler = WorkflowEventHandler(mock_orchestrator)
 
-        event = ExecutionFailed(
-            aggregate_id="exec-1",
-            payload={
-                "work_item_id": "wi-1",
-                "error_message": "Container crashed",
-                "exit_code": 139,
-            },
-            occurred_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
-        )
-
         with patch("codetoreum.application.event_handlers.workflow_event_handler.logger") as mock_logger:
-            await handler.handle(event)
-            # Verify logging indicates error handling
+            await handler.handle(_exec_failed(error="Container crashed"))
             assert mock_logger.error.called or mock_logger.warning.called
 
     async def test_handle_review_cycle_approved(self):
-        """Test handling ReviewCycleApproved event."""
         mock_orchestrator = Mock(spec=WorkflowOrchestrator)
         handler = WorkflowEventHandler(mock_orchestrator)
-
-        event = ReviewCycleApproved(
-            aggregate_id="review-1",
-            payload={"total_iterations": 2},
-            occurred_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
-        )
-
-        await handler.handle(event)
-
-        # Should not raise any exception
-        # WorkflowEventHandler logs the event
+        await handler.handle(_review_approved(total_iterations=2))
 
     async def test_handle_review_cycle_rejected(self):
-        """Test handling ReviewCycleRejected event."""
         mock_orchestrator = Mock(spec=WorkflowOrchestrator)
         handler = WorkflowEventHandler(mock_orchestrator)
-
-        event = ReviewCycleRejected(
-            aggregate_id="review-1",
-            payload={
-                "current_iteration": 1,
-                "max_iterations": 3,
-                "rejection_reason": "Quality issues",
-            },
-            occurred_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
-        )
-
-        await handler.handle(event)
-
-        # Should not raise any exception
-        # WorkflowEventHandler logs the event
+        await handler.handle(_review_rejected(reason="Quality issues"))
 
     async def test_handle_review_cycle_rejected_at_max_iterations(self):
-        """Test handling ReviewCycleRejected event at max iterations."""
         mock_orchestrator = Mock(spec=WorkflowOrchestrator)
         handler = WorkflowEventHandler(mock_orchestrator)
 
-        event = ReviewCycleRejected(
-            aggregate_id="review-1",
-            payload={
-                "current_iteration": 3,
-                "max_iterations": 3,
-                "rejection_reason": "Still has issues",
-            },
-            occurred_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
-        )
-
         with patch("codetoreum.application.event_handlers.workflow_event_handler.logger") as mock_logger:
-            await handler.handle(event)
-            # Verify logging detects max iterations
-            # Handler should log when max iterations reached
+            await handler.handle(_review_rejected(final_iteration=3, reason="Still has issues"))
             assert mock_logger.error.called or mock_logger.warning.called or mock_logger.info.called
 
     async def test_handle_review_cycle_escalated(self):
-        """Test handling ReviewCycleEscalated event."""
         mock_orchestrator = Mock(spec=WorkflowOrchestrator)
         handler = WorkflowEventHandler(mock_orchestrator)
-
-        event = ReviewCycleEscalated(
-            aggregate_id="review-1",
-            payload={"reason": "Max iterations reached"},
-            occurred_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
-        )
-
-        await handler.handle(event)
-
-        # Should not raise any exception
-        # WorkflowEventHandler logs the escalation
+        await handler.handle(_review_escalated())
 
     async def test_handle_unexpected_event(self):
-        """Test handling unexpected event type."""
         mock_orchestrator = Mock(spec=WorkflowOrchestrator)
         handler = WorkflowEventHandler(mock_orchestrator)
 
-        # Create a mock event with unexpected type
         event = Mock()
         event.event_type = "UnexpectedEvent"
-
-        # Should not raise, just log warning
         await handler.handle(event)
-
-        # No exception should be raised
 
 
 @pytest.mark.asyncio
@@ -204,295 +181,72 @@ class TestWorkflowEventHandlerWorkflows:
     """Test WorkflowEventHandler in realistic workflows."""
 
     async def test_work_item_to_execution_workflow(self):
-        """Test workflow from work item creation through execution."""
         mock_orchestrator = Mock(spec=WorkflowOrchestrator)
         handler = WorkflowEventHandler(mock_orchestrator)
-
-        # Create work item
-        create_event = WorkItemCreated(
-            aggregate_id="wi-1",
-            payload={"title": "Implement feature X", "project_id": "proj-1"},
-            occurred_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
-        )
-        await handler.handle(create_event)
-
-        # Execution starts (handled by other handlers)
-        # When execution completes
-        complete_event = ExecutionCompleted(
-            aggregate_id="exec-1",
-            payload={"work_item_id": "wi-1"},
-            occurred_at=datetime(2024, 1, 1, 1, 0, 0, tzinfo=UTC),
-        )
-        await handler.handle(complete_event)
-
-        # No exception should be raised
+        await handler.handle(_work_item_created("wi-1", "Implement feature X"))
+        await handler.handle(_exec_completed("exec-1", "wi-1"))
 
     async def test_execution_failure_workflow(self):
-        """Test workflow handling execution failure."""
         mock_orchestrator = Mock(spec=WorkflowOrchestrator)
         handler = WorkflowEventHandler(mock_orchestrator)
-
-        # Create work item
-        create_event = WorkItemCreated(
-            aggregate_id="wi-1",
-            payload={"title": "Complex task"},
-            occurred_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
-        )
-        await handler.handle(create_event)
-
-        # Execution fails
-        fail_event = ExecutionFailed(
-            aggregate_id="exec-1",
-            payload={
-                "work_item_id": "wi-1",
-                "error_message": "Container out of memory",
-                "exit_code": 137,
-            },
-            occurred_at=datetime(2024, 1, 1, 1, 0, 0, tzinfo=UTC),
-        )
-        await handler.handle(fail_event)
-
-        # No exception should be raised
+        await handler.handle(_work_item_created("wi-1", "Complex task"))
+        await handler.handle(_exec_failed("exec-1", "wi-1", "Container out of memory"))
 
     async def test_review_approval_workflow(self):
-        """Test workflow with review approval."""
         mock_orchestrator = Mock(spec=WorkflowOrchestrator)
         handler = WorkflowEventHandler(mock_orchestrator)
-
-        # Create work item
-        create_event = WorkItemCreated(
-            aggregate_id="wi-1",
-            payload={"title": "Code changes"},
-            occurred_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
-        )
-        await handler.handle(create_event)
-
-        # Execution completes
-        complete_event = ExecutionCompleted(
-            aggregate_id="exec-1",
-            payload={"work_item_id": "wi-1"},
-            occurred_at=datetime(2024, 1, 1, 1, 0, 0, tzinfo=UTC),
-        )
-        await handler.handle(complete_event)
-
-        # Review cycle is created and approved
-        approve_event = ReviewCycleApproved(
-            aggregate_id="review-1",
-            payload={"total_iterations": 1},
-            occurred_at=datetime(2024, 1, 1, 2, 0, 0, tzinfo=UTC),
-        )
-        await handler.handle(approve_event)
-
-        # No exception should be raised
+        await handler.handle(_work_item_created("wi-1", "Code changes"))
+        await handler.handle(_exec_completed("exec-1", "wi-1"))
+        await handler.handle(_review_approved("review-1", 1))
 
     async def test_review_rejection_and_retry_workflow(self):
-        """Test workflow with review rejection and retry."""
         mock_orchestrator = Mock(spec=WorkflowOrchestrator)
         handler = WorkflowEventHandler(mock_orchestrator)
-
-        # Create work item
-        create_event = WorkItemCreated(
-            aggregate_id="wi-1",
-            payload={"title": "Code changes"},
-            occurred_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
-        )
-        await handler.handle(create_event)
-
-        # First execution completes
-        complete_event1 = ExecutionCompleted(
-            aggregate_id="exec-1",
-            payload={"work_item_id": "wi-1"},
-            occurred_at=datetime(2024, 1, 1, 1, 0, 0, tzinfo=UTC),
-        )
-        await handler.handle(complete_event1)
-
-        # Review rejects, asks for changes
-        reject_event = ReviewCycleRejected(
-            aggregate_id="review-1",
-            payload={
-                "current_iteration": 1,
-                "max_iterations": 3,
-                "rejection_reason": "Code quality not met",
-            },
-            occurred_at=datetime(2024, 1, 1, 2, 0, 0, tzinfo=UTC),
-        )
-        await handler.handle(reject_event)
-
-        # Maker retries
-        complete_event2 = ExecutionCompleted(
-            aggregate_id="exec-2",
-            payload={"work_item_id": "wi-1"},
-            occurred_at=datetime(2024, 1, 1, 3, 0, 0, tzinfo=UTC),
-        )
-        await handler.handle(complete_event2)
-
-        # Review approves
-        approve_event = ReviewCycleApproved(
-            aggregate_id="review-1",
-            payload={"total_iterations": 2},
-            occurred_at=datetime(2024, 1, 1, 4, 0, 0, tzinfo=UTC),
-        )
-        await handler.handle(approve_event)
-
-        # No exception should be raised
+        await handler.handle(_work_item_created("wi-1", "Code changes"))
+        await handler.handle(_exec_completed("exec-1", "wi-1"))
+        await handler.handle(_review_rejected("review-1", final_iteration=1, reason="Code quality not met"))
+        await handler.handle(_exec_completed("exec-2", "wi-1"))
+        await handler.handle(_review_approved("review-1", total_iterations=2))
 
     async def test_review_escalation_workflow(self):
-        """Test workflow with review escalation."""
         mock_orchestrator = Mock(spec=WorkflowOrchestrator)
         handler = WorkflowEventHandler(mock_orchestrator)
+        await handler.handle(_work_item_created("wi-1", "Complex changes"))
 
-        # Create work item
-        create_event = WorkItemCreated(
-            aggregate_id="wi-1",
-            payload={"title": "Complex changes"},
-            occurred_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
-        )
-        await handler.handle(create_event)
-
-        # Multiple execution/rejection cycles
         for i in range(1, 4):
-            # Execution
-            complete_event = ExecutionCompleted(
-                aggregate_id=f"exec-{i}",
-                payload={"work_item_id": "wi-1"},
-                occurred_at=datetime(2024, 1, 1, i, 0, 0, tzinfo=UTC),
-            )
-            await handler.handle(complete_event)
-
-            # Review rejection (except last)
+            await handler.handle(_exec_completed(f"exec-{i}", "wi-1"))
             if i < 3:
-                reject_event = ReviewCycleRejected(
-                    aggregate_id="review-1",
-                    payload={
-                        "current_iteration": i,
-                        "max_iterations": 3,
-                        "rejection_reason": "Still needs work",
-                    },
-                    occurred_at=datetime(2024, 1, 1, i, 30, 0, tzinfo=UTC),
-                )
-                await handler.handle(reject_event)
+                await handler.handle(_review_rejected("review-1", final_iteration=i, reason="Still needs work"))
 
-        # Escalate to human
-        escalate_event = ReviewCycleEscalated(
-            aggregate_id="review-1",
-            payload={"reason": "Max iterations reached"},
-            occurred_at=datetime(2024, 1, 1, 4, 0, 0, tzinfo=UTC),
-        )
-        await handler.handle(escalate_event)
-
-        # No exception should be raised
+        await handler.handle(_review_escalated("review-1", "MAX_ITERATIONS"))
 
     async def test_multiple_work_items_in_workflow(self):
-        """Test handling multiple work items in parallel."""
         mock_orchestrator = Mock(spec=WorkflowOrchestrator)
         handler = WorkflowEventHandler(mock_orchestrator)
 
-        # Create multiple work items
         for i in range(5):
-            create_event = WorkItemCreated(
-                aggregate_id=f"wi-{i}",
-                payload={"title": f"Task {i}"},
-                occurred_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
-            )
-            await handler.handle(create_event)
+            await handler.handle(_work_item_created(f"wi-{i}", f"Task {i}"))
 
-        # Process each work item
         for i in range(5):
-            complete_event = ExecutionCompleted(
-                aggregate_id=f"exec-{i}",
-                payload={"work_item_id": f"wi-{i}"},
-                occurred_at=datetime(2024, 1, 1, 1, 0, 0, tzinfo=UTC),
-            )
-            await handler.handle(complete_event)
-
-            # Different outcomes
+            await handler.handle(_exec_completed(f"exec-{i}", f"wi-{i}"))
             if i < 3:
-                # Approve first 3
-                approve_event = ReviewCycleApproved(
-                    aggregate_id=f"review-{i}",
-                    payload={"total_iterations": 1},
-                    occurred_at=datetime(2024, 1, 1, 2, 0, 0, tzinfo=UTC),
-                )
-                await handler.handle(approve_event)
+                await handler.handle(_review_approved(f"review-{i}", total_iterations=1))
             elif i < 4:
-                # Reject 4th
-                reject_event = ReviewCycleRejected(
-                    aggregate_id=f"review-{i}",
-                    payload={
-                        "current_iteration": 1,
-                        "max_iterations": 3,
-                        "rejection_reason": "Needs changes",
-                    },
-                    occurred_at=datetime(2024, 1, 1, 2, 0, 0, tzinfo=UTC),
-                )
-                await handler.handle(reject_event)
+                await handler.handle(_review_rejected(f"review-{i}", final_iteration=1, reason="Needs changes"))
             else:
-                # Escalate 5th
-                escalate_event = ReviewCycleEscalated(
-                    aggregate_id=f"review-{i}",
-                    payload={"reason": "Human review needed"},
-                    occurred_at=datetime(2024, 1, 1, 2, 0, 0, tzinfo=UTC),
-                )
-                await handler.handle(escalate_event)
-
-        # No exception should be raised
-
-    async def test_review_escalation_at_max_iterations(self):
-        """Test that max iterations logic works correctly."""
-        mock_orchestrator = Mock(spec=WorkflowOrchestrator)
-        handler = WorkflowEventHandler(mock_orchestrator)
-
-        # Event where current_iteration equals max_iterations
-        reject_event = ReviewCycleRejected(
-            aggregate_id="review-1",
-            payload={
-                "current_iteration": 5,
-                "max_iterations": 5,
-                "rejection_reason": "Quality not met",
-            },
-            occurred_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
-        )
-
-        await handler.handle(reject_event)
-
-        # No exception should be raised
-        # Handler should detect max iterations reached condition
+                await handler.handle(_review_escalated(f"review-{i}", "MAX_ITERATIONS"))
 
     async def test_event_sequence_consistency(self):
-        """Test that events can be handled in realistic sequences."""
         mock_orchestrator = Mock(spec=WorkflowOrchestrator)
         handler = WorkflowEventHandler(mock_orchestrator)
 
         events = [
-            WorkItemCreated(
-                aggregate_id="wi-1",
-                payload={"title": "Task 1"},
-                occurred_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
-            ),
-            ExecutionCompleted(
-                aggregate_id="exec-1",
-                payload={"work_item_id": "wi-1"},
-                occurred_at=datetime(2024, 1, 1, 1, 0, 0, tzinfo=UTC),
-            ),
-            ReviewCycleApproved(
-                aggregate_id="review-1",
-                payload={"total_iterations": 1},
-                occurred_at=datetime(2024, 1, 1, 2, 0, 0, tzinfo=UTC),
-            ),
-            WorkItemCreated(
-                aggregate_id="wi-2",
-                payload={"title": "Task 2"},
-                occurred_at=datetime(2024, 1, 1, 3, 0, 0, tzinfo=UTC),
-            ),
-            ExecutionFailed(
-                aggregate_id="exec-2",
-                payload={"work_item_id": "wi-2", "error_message": "Failed"},
-                occurred_at=datetime(2024, 1, 1, 4, 0, 0, tzinfo=UTC),
-            ),
+            _work_item_created("wi-1", "Task 1"),
+            _exec_completed("exec-1", "wi-1"),
+            _review_approved("review-1", 1),
+            _work_item_created("wi-2", "Task 2"),
+            _exec_failed("exec-2", "wi-2", "Failed"),
         ]
 
-        # Process all events in sequence
         for event in events:
             await handler.handle(event)
-
-        # No exception should be raised

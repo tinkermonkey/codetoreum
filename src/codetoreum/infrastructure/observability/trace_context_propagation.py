@@ -41,7 +41,7 @@ except ImportError:
     TraceFlags = None
     Context = None
 
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.output.i_tracer import W3C_TRACE_CONTEXT_VERSION
 
@@ -159,7 +159,7 @@ class TraceContextPropagator:
     TRACE_CONTEXT_KEY = "traceparent"
 
     @staticmethod
-    def inject_trace_context(event: DomainEvent, span_context: Optional["SpanContext"] = None) -> None:
+    def inject_trace_context(event: CodetoreumEvent, span_context: Optional["SpanContext"] = None) -> None:
         """
         Inject current trace context into event metadata.
 
@@ -177,7 +177,7 @@ class TraceContextPropagator:
 
         Example:
             # Events should be created with metadata at initialization:
-            event = DomainEvent(..., metadata={"traceparent": traceparent})
+            event = CodetoreumEvent(..., metadata={"traceparent": traceparent})
 
             # OR if using OpenTelemetry, provide span_context at creation time
         """
@@ -219,7 +219,7 @@ class TraceContextPropagator:
             )
 
     @staticmethod
-    def extract_trace_context(event: DomainEvent) -> TraceContextData | None:
+    def extract_trace_context(event: CodetoreumEvent) -> TraceContextData | None:
         """
         Extract trace context from event metadata.
 
@@ -236,7 +236,7 @@ class TraceContextPropagator:
             if trace_data:
                 TraceContextPropagator.activate_trace_context(trace_data)
         """
-        # CodetoreumEvent (adapter events) don't have metadata; only DomainEvent does
+        # CodetoreumEvent (adapter events) don't have metadata; only CodetoreumEvent does
         if not hasattr(event, "metadata") or not event.metadata:
             return None
 
@@ -343,7 +343,7 @@ class EventBusTraceContext:
         self.context: Context | None = None
 
     @classmethod
-    def from_event(cls, event: DomainEvent) -> "EventBusTraceContext":
+    def from_event(cls, event: CodetoreumEvent) -> "EventBusTraceContext":
         """
         Create trace context from event.
 
@@ -383,7 +383,7 @@ class EventBusTraceContext:
 # Convenience functions for event bus integration
 
 
-def inject_current_trace_context_into_event(event: DomainEvent) -> None:
+def inject_current_trace_context_into_event(event: CodetoreumEvent) -> None:
     """
     Inject current trace context into event (convenience function).
 
@@ -396,7 +396,7 @@ def inject_current_trace_context_into_event(event: DomainEvent) -> None:
     TraceContextPropagator.inject_trace_context(event)
 
 
-def extract_and_activate_trace_context(event: DomainEvent) -> Optional["Context"]:
+def extract_and_activate_trace_context(event: CodetoreumEvent) -> Optional["Context"]:
     """
     Extract trace context from event and activate it (convenience function).
 

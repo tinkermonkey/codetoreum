@@ -33,13 +33,11 @@ def create_config_router(
     """
     Create the configuration REST API router.
 
-    Args:
-        command_port: Configuration command input port
+    Args: command_port: Configuration command input port
         query_port: Configuration query input port
         auth_deps: Optional authentication dependencies
 
-    Returns:
-        Configured APIRouter for configuration management
+    Returns: Configured APIRouter for configuration management
     """
     # Create router with authentication dependency if provided
     router_kwargs = {

@@ -22,12 +22,10 @@ def validate_id(value: str, name: str = "id") -> None:
     """
     Validate that an ID is non-empty and properly formatted.
 
-    Args:
-        value: The ID value to validate
+    Args: value: The ID value to validate
         name: The name of the field (for error messages)
 
-    Raises:
-        ValueError: If the ID is invalid
+    Raises: ValueError: If the ID is invalid
     """
     if not value or not isinstance(value, str):
         message = f"{name} must be a non-empty string"
@@ -41,11 +39,9 @@ def validate_name(value: str) -> None:
     """
     Validate that a name is non-empty and properly formatted.
 
-    Args:
-        value: The name value to validate
+    Args: value: The name value to validate
 
-    Raises:
-        ValueError: If the name is invalid
+    Raises: ValueError: If the name is invalid
     """
     if not value or not isinstance(value, str):
         message = "name must be a non-empty string"
@@ -89,11 +85,9 @@ def project_config_to_dict(config: ProjectConfig) -> dict[str, Any]:
     """
     Serialize ProjectConfig to dictionary.
 
-    Args:
-        config: The ProjectConfig instance
+    Args: config: The ProjectConfig instance
 
-    Returns:
-        Dictionary representation suitable for storage
+    Returns: Dictionary representation suitable for storage
     """
     return {
         "id": config.id,
@@ -112,11 +106,9 @@ def dict_to_project_config(data: dict[str, Any]) -> ProjectConfig:
     """
     Deserialize dictionary to ProjectConfig.
 
-    Args:
-        data: Dictionary representation from storage
+    Args: data: Dictionary representation from storage
 
-    Returns:
-        ProjectConfig instance
+    Returns: ProjectConfig instance
     """
     return ProjectConfig(
         id=data["id"],
@@ -135,11 +127,9 @@ def agent_config_to_dict(config: AgentConfig) -> dict[str, Any]:
     """
     Serialize AgentConfig to dictionary.
 
-    Args:
-        config: The AgentConfig instance
+    Args: config: The AgentConfig instance
 
-    Returns:
-        Dictionary representation suitable for storage
+    Returns: Dictionary representation suitable for storage
     """
     return {
         "id": config.id,
@@ -158,11 +148,9 @@ def dict_to_agent_config(data: dict[str, Any]) -> AgentConfig:
     """
     Deserialize dictionary to AgentConfig.
 
-    Args:
-        data: Dictionary representation from storage
+    Args: data: Dictionary representation from storage
 
-    Returns:
-        AgentConfig instance
+    Returns: AgentConfig instance
     """
     return AgentConfig(
         id=data["id"],
@@ -181,11 +169,9 @@ def pipeline_config_to_dict(config: PipelineConfig) -> dict[str, Any]:
     """
     Serialize PipelineConfig to dictionary.
 
-    Args:
-        config: The PipelineConfig instance
+    Args: config: The PipelineConfig instance
 
-    Returns:
-        Dictionary representation suitable for storage
+    Returns: Dictionary representation suitable for storage
     """
     return {
         "id": config.id,
@@ -212,11 +198,9 @@ def dict_to_pipeline_config(data: dict[str, Any]) -> PipelineConfig:
     """
     Deserialize dictionary to PipelineConfig.
 
-    Args:
-        data: Dictionary representation from storage
+    Args: data: Dictionary representation from storage
 
-    Returns:
-        PipelineConfig instance
+    Returns: PipelineConfig instance
     """
     from codetoreum.domain.models import PipelineStageConfig
 
@@ -245,11 +229,9 @@ def workflow_config_to_dict(config: WorkflowConfig) -> dict[str, Any]:
     """
     Serialize WorkflowConfig to dictionary.
 
-    Args:
-        config: The WorkflowConfig instance
+    Args: config: The WorkflowConfig instance
 
-    Returns:
-        Dictionary representation suitable for storage
+    Returns: Dictionary representation suitable for storage
     """
     return {
         "id": config.id,
@@ -267,11 +249,9 @@ def dict_to_workflow_config(data: dict[str, Any]) -> WorkflowConfig:
     """
     Deserialize dictionary to WorkflowConfig.
 
-    Args:
-        data: Dictionary representation from storage
+    Args: data: Dictionary representation from storage
 
-    Returns:
-        WorkflowConfig instance
+    Returns: WorkflowConfig instance
     """
     return WorkflowConfig(
         id=data["id"],
@@ -289,11 +269,9 @@ def environment_variable_to_dict(env_var: EnvironmentVariable) -> dict[str, Any]
     """
     Serialize EnvironmentVariable to dictionary.
 
-    Args:
-        env_var: The EnvironmentVariable instance
+    Args: env_var: The EnvironmentVariable instance
 
-    Returns:
-        Dictionary representation suitable for storage
+    Returns: Dictionary representation suitable for storage
     """
     return {
         "id": env_var.id,
@@ -311,11 +289,9 @@ def dict_to_environment_variable(data: dict[str, Any]) -> EnvironmentVariable:
     """
     Deserialize dictionary to EnvironmentVariable.
 
-    Args:
-        data: Dictionary representation from storage
+    Args: data: Dictionary representation from storage
 
-    Returns:
-        EnvironmentVariable instance
+    Returns: EnvironmentVariable instance
     """
     return EnvironmentVariable(
         id=data["id"],

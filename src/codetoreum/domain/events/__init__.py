@@ -1,7 +1,7 @@
 """Vendor-agnostic events for adapter integration and domain events.
 
 This package contains two types of events:
-1. Domain Events: Internal events for workflow state management (DomainEvent)
+1. Domain Events: Internal events for workflow state management (CodetoreumEvent)
 2. Adapter Events: Vendor-agnostic events emitted by adapters to the orchestrator
 
 Event Categories (Adapter Events):
@@ -16,6 +16,20 @@ Event Categories (Adapter Events):
 from .adapter_events import (
     CodetoreumEvent,
     now_iso,
+)
+
+# Agent domain events (frozen dataclasses)
+from .agent_events import (
+    AgentCapabilityAddedEvent,
+    AgentCapabilityRemovedEvent,
+    AgentCapabilityUpdatedEvent,
+    AgentConstraintsUpdatedEvent,
+    AgentCreatedEvent,
+    AgentMaxRetriesUpdatedEvent,
+    AgentMcpServerAddedEvent,
+    AgentMcpServerRemovedEvent,
+    AgentModelUpdatedEvent,
+    AgentTimeoutUpdatedEvent,
 )
 
 # Board events
@@ -39,6 +53,18 @@ from .ci_pipeline_events import (
     CIPipelineStatusValue,
     CIRunCompletedEvent,
     CIRunStartedEvent,
+)
+
+# Configuration domain events (frozen dataclasses)
+from .configuration_events import (
+    AgentConfigUpdatedEvent,
+    CommandMountedEvent,
+    CommandUnmountedEvent,
+    EnvironmentVariableChangedEvent,
+    PipelineConfigUpdatedEvent,
+    ProjectConfigUpdatedEvent,
+    SubAgentMountedEvent,
+    SubAgentUnmountedEvent,
 )
 
 # Container execution events
@@ -67,83 +93,15 @@ from .discussion_events import (
 
 # Execution events
 from .execution_events import (
+    ExecutionCancelledEvent,
+    ExecutionCompletedEvent,
+    ExecutionFailedEvent,
+    ExecutionInitializedEvent,
+    ExecutionPausedEvent,
+    ExecutionResumedEvent,
+    ExecutionRetryScheduledEvent,
+    ExecutionStartedEvent,
     ExecutionTimedOutEvent,
-)
-
-# Legacy domain events (static imports for mypy compatibility)
-from .legacy_domain_events import (
-    AgentAssigned,
-    AgentCapabilityAdded,
-    AgentCapabilityRemoved,
-    AgentCapabilityUpdated,
-    AgentConfigUpdated,
-    AgentConstraintsUpdated,
-    AgentCreated,
-    AgentExecutionCompleted,
-    AgentExecutionFailed,
-    AgentExecutionStarted,
-    AgentMaxRetriesUpdated,
-    AgentMcpServerAdded,
-    AgentMcpServerRemoved,
-    AgentModelUpdated,
-    AgentTimeoutUpdated,
-    BoardReconciled,
-    CommandMounted,
-    CommandUnmounted,
-    DomainEvent,
-    EnvironmentVariableChanged,
-    ExecutionCancelled,
-    ExecutionCompleted,
-    ExecutionFailed,
-    ExecutionInitialized,
-    ExecutionPaused,
-    ExecutionResumed,
-    ExecutionRetryScheduled,
-    ExecutionStarted,
-    ExecutionTimeout,
-    PipelineCompleted,
-    PipelineConfigUpdated,
-    PipelineFailed,
-    PipelineStageCompleted,
-    PipelineStageFailed,
-    PipelineStageStarted,
-    ProjectConfigUpdated,
-    ProjectContextCreated,
-    ProjectDockerConfigUpdated,
-    ProjectTestConfigUpdated,
-    ProjectWorkflowMappingAdded,
-    ReviewApproved,
-    ReviewCycleApproved,
-    ReviewCycleCreated,
-    ReviewCycleEscalated,
-    ReviewCycleRejected,
-    ReviewFeedbackSubmitted,
-    ReviewIterationStarted,
-    ReviewRejected,
-    SubAgentMounted,
-    SubAgentUnmounted,
-    WorkflowAttached,
-    WorkflowBranchSelected,
-    WorkflowCancelled,
-    WorkflowCompleted,
-    WorkflowCreated,
-    WorkflowFailed,
-    WorkflowPaused,
-    WorkflowResumed,
-    WorkflowStageAdvanced,
-    WorkflowStageStatusUpdated,
-    WorkflowStarted,
-    WorkItemBlocked,
-    WorkItemColumnChanged,
-    WorkItemCompleted,
-    WorkItemCreated,
-    WorkItemFailed,
-    WorkItemLabelsUpdated,
-    WorkItemPriorityUpdated,
-    WorkItemStageUpdated,
-    WorkItemStarted,
-    WorkItemUnblocked,
-    WorkItemUnderReview,
 )
 
 # Pipeline lock events
@@ -172,6 +130,14 @@ from .pr_review_cycle_events import (
     PRReviewCycleStartedEvent,
     PRReviewCycleSubIssuesCreatedEvent,
     PRReviewCycleVerificationStartedEvent,
+)
+
+# Project context domain events (frozen dataclasses)
+from .project_context_events import (
+    ProjectContextCreatedEvent,
+    ProjectDockerConfigUpdatedEvent,
+    ProjectTestConfigUpdatedEvent,
+    ProjectWorkflowMappingAddedEvent,
 )
 
 # Project management events
@@ -229,11 +195,15 @@ from .repository_events import (
 # Review cycle events
 from .review_cycle_events import (
     ReviewCycleApprovedEvent,
+    ReviewCycleCreatedEvent,
     ReviewCycleEscalatedToHumanEvent,
+    ReviewCycleFeedbackSubmittedEvent,
     ReviewCycleHumanFeedbackReceivedEvent,
     ReviewCycleIterationCompletedEvent,
+    ReviewCycleIterationStartedEvent,
     ReviewCycleMakerRevisionEvent,
     ReviewCycleMaxIterationsReachedEvent,
+    ReviewCycleRejectedEvent,
     ReviewCycleStartedEvent,
 )
 
@@ -250,86 +220,48 @@ from .storage_events import (
     ArtifactUploadedEvent,
 )
 
-# Work item events
+# Work item lifecycle domain events (frozen dataclasses)
 from .work_item_events import (
+    AgentAssignedEvent,
+    WorkItemBlockedEvent,
+    WorkItemCompletedEvent,
     WorkItemCreatedEvent,
+    WorkItemFailedEvent,
+    WorkItemLabelsUpdatedEvent,
+    WorkItemPriorityUpdatedEvent,
+    WorkItemStageUpdatedEvent,
+    WorkItemStartedEvent,
+    WorkItemUnblockedEvent,
+    WorkItemUnderReviewEvent,
     WorkItemUpdatedEvent,
 )
 
+# Pipeline domain events (frozen dataclasses)
+# Workflow events
+from .workflow_events import (
+    PipelineCompletedEvent,
+    PipelineFailedEvent,
+    PipelineStageCompletedEvent,
+    PipelineStageFailedEvent,
+    PipelineStageStartedEvent,
+    WorkflowAttachedEvent,
+    WorkflowBranchSelectedEvent,
+    WorkflowCancelledEvent,
+    WorkflowCompletedEvent,
+    WorkflowCreatedEvent,
+    WorkflowFailedEvent,
+    WorkflowPausedEvent,
+    WorkflowResumedEvent,
+    WorkflowStageAdvancedEvent,
+    WorkflowStageStatusUpdatedEvent,
+    WorkflowStartedEvent,
+)
+
+# Work item events
+
 __all__ = [
-    # Legacy domain events (from events.py)
-    "DomainEvent",
-    "WorkItemCreated",
-    "AgentAssigned",
-    "WorkItemStarted",
-    "WorkItemUnderReview",
-    "WorkItemCompleted",
-    "WorkItemFailed",
-    "WorkItemBlocked",
-    "WorkItemUnblocked",
-    "WorkflowAttached",
-    "WorkItemStageUpdated",
-    "WorkItemLabelsUpdated",
-    "WorkItemPriorityUpdated",
-    "AgentCreated",
-    "AgentCapabilityAdded",
-    "AgentCapabilityRemoved",
-    "AgentCapabilityUpdated",
-    "AgentModelUpdated",
-    "AgentTimeoutUpdated",
-    "AgentMaxRetriesUpdated",
-    "AgentConstraintsUpdated",
-    "AgentMcpServerAdded",
-    "AgentMcpServerRemoved",
-    "AgentExecutionStarted",
-    "AgentExecutionCompleted",
-    "AgentExecutionFailed",
-    "ExecutionInitialized",
-    "ExecutionStarted",
-    "ExecutionCompleted",
-    "ExecutionFailed",
-    "ExecutionTimeout",
-    "ExecutionCancelled",
-    "ExecutionPaused",
-    "ExecutionResumed",
-    "ExecutionRetryScheduled",
-    "WorkflowBranchSelected",
-    "WorkflowCreated",
-    "WorkflowStarted",
-    "WorkflowStageAdvanced",
-    "WorkflowStageStatusUpdated",
-    "WorkflowCompleted",
-    "WorkflowFailed",
-    "WorkflowPaused",
-    "WorkflowResumed",
-    "WorkflowCancelled",
-    "ReviewApproved",
-    "ReviewCycleCreated",
-    "ReviewIterationStarted",
-    "ReviewFeedbackSubmitted",
-    "ReviewCycleApproved",
-    "ReviewCycleRejected",
-    "ReviewCycleEscalated",
-    "ReviewRejected",
-    "ProjectContextCreated",
-    "ProjectTestConfigUpdated",
-    "ProjectDockerConfigUpdated",
-    "ProjectWorkflowMappingAdded",
-    "PipelineStageStarted",
-    "PipelineStageCompleted",
-    "PipelineStageFailed",
-    "PipelineCompleted",
-    "PipelineFailed",
-    "ProjectConfigUpdated",
-    "AgentConfigUpdated",
-    "PipelineConfigUpdated",
-    "EnvironmentVariableChanged",
-    "CommandMounted",
-    "CommandUnmounted",
-    "SubAgentMounted",
-    "SubAgentUnmounted",
-    # Adapter event infrastructure
     "CodetoreumEvent",
+    # Adapter event infrastructure
     "now_iso",
     # Board events
     "WorkItemColumnChangedEvent",
@@ -394,6 +326,10 @@ __all__ = [
     "EnvironmentVerificationStartedEvent",
     "EnvironmentVerificationCompletedEvent",
     # Review cycle events
+    "ReviewCycleCreatedEvent",
+    "ReviewCycleIterationStartedEvent",
+    "ReviewCycleFeedbackSubmittedEvent",
+    "ReviewCycleRejectedEvent",
     "ReviewCycleStartedEvent",
     "ReviewCycleIterationCompletedEvent",
     "ReviewCycleMakerRevisionEvent",
@@ -418,6 +354,14 @@ __all__ = [
     # Container execution events
     "ContainerExecutionCompletedEvent",
     # Execution events
+    "ExecutionCancelledEvent",
+    "ExecutionInitializedEvent",
+    "ExecutionPausedEvent",
+    "ExecutionResumedEvent",
+    "ExecutionRetryScheduledEvent",
+    "ExecutionStartedEvent",
+    "ExecutionCompletedEvent",
+    "ExecutionFailedEvent",
     "ExecutionTimedOutEvent",
     # Container recovery events
     "ContainerRecoveredEvent",
@@ -442,4 +386,54 @@ __all__ = [
     # Storage events
     "ArtifactUploadedEvent",
     "ArtifactDeletedEvent",
+    # Workflow events
+    "WorkflowAttachedEvent",
+    "WorkflowBranchSelectedEvent",
+    "WorkflowCancelledEvent",
+    "WorkflowCompletedEvent",
+    "WorkflowCreatedEvent",
+    "WorkflowFailedEvent",
+    "WorkflowPausedEvent",
+    "WorkflowResumedEvent",
+    "WorkflowStageAdvancedEvent",
+    "WorkflowStageStatusUpdatedEvent",
+    "WorkflowStartedEvent",
+    # Modern domain events
+    "AgentCreatedEvent",
+    "AgentCapabilityAddedEvent",
+    "AgentCapabilityRemovedEvent",
+    "AgentCapabilityUpdatedEvent",
+    "AgentModelUpdatedEvent",
+    "AgentTimeoutUpdatedEvent",
+    "AgentMaxRetriesUpdatedEvent",
+    "AgentConstraintsUpdatedEvent",
+    "AgentMcpServerAddedEvent",
+    "AgentMcpServerRemovedEvent",
+    "ProjectContextCreatedEvent",
+    "ProjectTestConfigUpdatedEvent",
+    "ProjectDockerConfigUpdatedEvent",
+    "ProjectWorkflowMappingAddedEvent",
+    "ProjectConfigUpdatedEvent",
+    "AgentConfigUpdatedEvent",
+    "PipelineConfigUpdatedEvent",
+    "EnvironmentVariableChangedEvent",
+    "CommandMountedEvent",
+    "CommandUnmountedEvent",
+    "SubAgentMountedEvent",
+    "SubAgentUnmountedEvent",
+    "AgentAssignedEvent",
+    "WorkItemStartedEvent",
+    "WorkItemUnderReviewEvent",
+    "WorkItemCompletedEvent",
+    "WorkItemFailedEvent",
+    "WorkItemBlockedEvent",
+    "WorkItemUnblockedEvent",
+    "WorkItemStageUpdatedEvent",
+    "WorkItemLabelsUpdatedEvent",
+    "WorkItemPriorityUpdatedEvent",
+    "PipelineStageStartedEvent",
+    "PipelineStageCompletedEvent",
+    "PipelineStageFailedEvent",
+    "PipelineCompletedEvent",
+    "PipelineFailedEvent",
 ]

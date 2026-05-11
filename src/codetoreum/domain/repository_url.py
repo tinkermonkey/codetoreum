@@ -17,14 +17,11 @@ def extract_repo_name(repo_url: str) -> str:
     - HTTPS (no .git): https://github.com/org/repo → repo
     - Nested paths: https://example.com/org/sub/repo.git → repo
 
-    Args:
-        repo_url: Repository URL in SSH or HTTPS format
+    Args: repo_url: Repository URL in SSH or HTTPS format
 
-    Returns:
-        str: Repository name (final path component without .git)
+    Returns: str: Repository name (final path component without .git)
 
-    Raises:
-        ValueError: If repo_url is empty, None, or contains only whitespace
+    Raises: ValueError: If repo_url is empty, None, or contains only whitespace
 
     Example:
         >>> extract_repo_name("git@github.com:acme/api-service.git")

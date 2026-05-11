@@ -12,8 +12,7 @@ Delay calculation depends on fidelity level:
 - MEDIUM: Proportional delays based on workload (causal linking enabled, ~10-50x)
 - HIGH: Full delays with realistic jitter (highest fidelity, ~1-5x)
 
-Example:
-    config = SimulationConfig.create_realistic_config()
+Example: config = SimulationConfig.create_realistic_config()
     calculator = ProportionalDelayCalculator(config)
 
     # Calculate container delay based on command complexity
@@ -47,8 +46,7 @@ class ProportionalDelayCalculator:
     def __init__(self, config: SimulationConfig | None = None) -> None:
         """Initialize the calculator with simulation configuration.
 
-        Args:
-            config: SimulationConfig instance. If None, all delays return 0.0
+        Args: config: SimulationConfig instance. If None, all delays return 0.0
         """
         self._config = config
 
@@ -58,11 +56,9 @@ class ProportionalDelayCalculator:
         Delay is proportional to estimated file operations in the command.
         Base delay of 100ms plus 10ms per estimated file operation.
 
-        Args:
-            command: Shell command being executed
+        Args: command: Shell command being executed
 
-        Returns:
-            Delay in seconds
+        Returns: Delay in seconds
         """
         if not self._config:
             return 0.0
@@ -85,12 +81,10 @@ class ProportionalDelayCalculator:
         Delay is proportional to total tokens (prompt + response).
         Uses 4 characters per token as approximation.
 
-        Args:
-            prompt: LLM prompt text
+        Args: prompt: LLM prompt text
             response: LLM response text
 
-        Returns:
-            Delay in seconds
+        Returns: Delay in seconds
         """
         if not self._config:
             return 0.0
@@ -115,11 +109,9 @@ class ProportionalDelayCalculator:
 
         Delay is proportional to event size in kilobytes.
 
-        Args:
-            event_size_kb: Event size in kilobytes
+        Args: event_size_kb: Event size in kilobytes
 
-        Returns:
-            Delay in seconds
+        Returns: Delay in seconds
         """
         if not self._config:
             return 0.0
@@ -143,13 +135,11 @@ class ProportionalDelayCalculator:
     ) -> float:
         """Core proportional delay calculation with fidelity support.
 
-        Args:
-            base_ms: Base delay in milliseconds
+        Args: base_ms: Base delay in milliseconds
             operation_count: Number of operations to account for
             ms_per_operation: Milliseconds per operation
 
-        Returns:
-            Delay in seconds
+        Returns: Delay in seconds
         """
         # Calculate total delay
         operation_delay_ms = operation_count * ms_per_operation
@@ -175,11 +165,9 @@ class ProportionalDelayCalculator:
         - find/grep: 1 operation per match
         - tar/zip: 50 base + 1 per file
 
-        Args:
-            command: Shell command string
+        Args: command: Shell command string
 
-        Returns:
-            Estimated number of file operations
+        Returns: Estimated number of file operations
         """
         count = 0
 

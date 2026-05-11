@@ -51,13 +51,11 @@ def create_error_response(
     """
     Create error JSON response with correlation ID header.
 
-    Args:
-        status_code: HTTP status code
+    Args: status_code: HTTP status code
         error_response: Error response model
         correlation_id: Correlation ID for tracking
 
-    Returns:
-        JSONResponse with correlation ID header
+    Returns: JSONResponse with correlation ID header
     """
     response = JSONResponse(
         status_code=status_code,
@@ -80,12 +78,10 @@ async def error_handling_middleware(request: Request, call_next: Callable):
     - Production mode always returns generic error messages
     - All errors include correlation ID for support tracking
 
-    Args:
-        request: FastAPI request
+    Args: request: FastAPI request
         call_next: Next middleware/handler in chain
 
-    Returns:
-        Response (either successful or error)
+    Returns: Response (either successful or error)
     """
     # Extract correlation ID from request headers or generate new one
     correlation_id = request.headers.get("X-Correlation-ID") or request.headers.get("X-Request-ID") or str(uuid4())

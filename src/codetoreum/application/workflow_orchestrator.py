@@ -9,14 +9,11 @@ from enum import Enum
 from typing import Any
 
 from codetoreum.domain.board_workflow_template import ColumnTemplate
-from codetoreum.domain.events import (
-    DomainEvent,
-)
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.domain.events.repair_cycle_events import RepairCycleCompletedEvent
 from codetoreum.domain.value_objects import ProjectConfig
 from codetoreum.domain.work_item import WorkItemPriority
 from codetoreum.infrastructure.event_bus import EventBus
-from codetoreum.infrastructure.event_types import EventTypes
 from codetoreum.infrastructure.observability.instrumentation import (
     instrument_async_function,
 )
@@ -896,18 +893,19 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
 
         # Subscribe to board events.
         # NOTE: EventBus routes callbacks by event.event_type, which is the Python class name
-        # ("WorkItemColumnChanged"), not the dot-notation constant in EventTypes.
+        # (e.g. "WorkItemColumnChangedEvent"), not the dot-notation constant from EventTypes.
         # Using the class name here ensures this callback actually receives the event.
-        self.event_bus.subscribe("WorkItemColumnChanged", self._handle_column_change)
+        self.event_bus.subscribe("WorkItemColumnChangedEvent", self._handle_column_change)
 
         # Subscribe to discussion events
-        self.event_bus.subscribe(EventTypes.COMMENT_NEEDS_RESPONSE, self._handle_comment_needs_response)
+        self.event_bus.subscribe("CommentNeedsResponseEvent", self._handle_comment_needs_response)
 
         # Subscribe to lock events
-        self.event_bus.subscribe(EventTypes.LOCK_RELEASED, self._handle_lock_released)
+        self.event_bus.subscribe("LockReleasedEvent", self._handle_lock_released)
+        self.event_bus.subscribe("PipelineLockReleasedEvent", self._handle_lock_released)
 
         # Subscribe to review events
-        self.event_bus.subscribe(EventTypes.REVIEW_STATUS_CHANGED, self._handle_review_status_changed)
+        self.event_bus.subscribe("ReviewStatusChangedEvent", self._handle_review_status_changed)
 
         # Subscribe to repair cycle events (keyed by class name — EventBus routes by event.event_type)
         self.event_bus.subscribe("RepairCycleCompletedEvent", self._handle_repair_cycle_completed)
@@ -918,7 +916,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
         name="workflow.handle_column_change",
         attributes={"service": "workflow_orchestrator", "event_handler": "true"},
     )
-    async def _handle_column_change(self, event: DomainEvent) -> None:
+    async def _handle_column_change(self, event: CodetoreumEvent) -> None:
         """
         Handle work item column change event.
 
@@ -934,22 +932,22 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
         via _handle_lock_released() to check for queued items and continue processing.
 
         Args:
-            event: WorkItemColumnChanged DomainEvent
+            event: WorkItemColumnChanged CodetoreumEvent
         """
         # Validate event structure upfront - extract required fields with safe defaults
         # (KeyError will not be raised due to .get() usage; validation occurs below)
-        work_item_id: str = event.payload.get("work_item_id") or ""
-        project_id: str = event.payload.get("project_id") or ""
-        board_id: str = event.payload.get("board_id") or ""
-        to_column: str = event.payload.get("to_column") or ""
-        moved_by: str = event.payload.get("moved_by") or "unknown"
+        work_item_id: str = getattr(event, "work_item_id", None) or ""
+        project_id: str = getattr(event, "project_id", None) or ""
+        board_id: str = getattr(event, "board_id", None) or ""
+        to_column: str = getattr(event, "to_column", None) or ""
+        moved_by: str = getattr(event, "moved_by", None) or "unknown"
 
         if not all([work_item_id, project_id, board_id, to_column]):
             logger.warning(
                 "Column change event has empty required fields",
                 extra={
                     "error_id": "ERR_ORCHESTRATOR_COLUMN_CHANGE_VALIDATION_FAILURE",
-                    "event_payload": event.payload,
+                    "event_payload": event.to_dict(),
                 },
             )
             return
@@ -1134,7 +1132,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
         name="workflow.handle_comment_needs_response",
         attributes={"service": "workflow_orchestrator", "event_handler": "true"},
     )
-    async def _handle_comment_needs_response(self, event: DomainEvent) -> None:
+    async def _handle_comment_needs_response(self, event: CodetoreumEvent) -> None:
         """
         Handle comment requiring response event.
 
@@ -1145,17 +1143,17 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
         """
         # Validate event structure upfront - extract required fields with safe defaults
         # (KeyError will not be raised due to .get() usage; validation occurs below)
-        work_item_id: str = event.payload.get("work_item_id") or ""
-        project_id: str = event.payload.get("project_id") or ""
-        agent_name: str = event.payload.get("agent_assignment") or ""
-        comment_text: str = event.payload.get("comment") or ""
+        work_item_id: str = getattr(event, "work_item_id", None) or ""
+        project_id: str = getattr(event, "project_id", None) or ""
+        agent_name: str = getattr(event, "agent_assignment", None) or ""
+        comment_text: str = getattr(event, "comment", None) or ""
 
         if not all([work_item_id, project_id, agent_name]):
             logger.warning(
                 "Comment event has empty required fields",
                 extra={
                     "error_id": "ERR_ORCHESTRATOR_COMMENT_EVENT_VALIDATION_FAILURE",
-                    "event_payload": event.payload,
+                    "event_payload": event.to_dict(),
                 },
             )
             return
@@ -1210,7 +1208,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
         name="workflow.handle_lock_released",
         attributes={"service": "workflow_orchestrator", "event_handler": "true"},
     )
-    async def _handle_lock_released(self, event: DomainEvent) -> None:
+    async def _handle_lock_released(self, event: CodetoreumEvent) -> None:
         """
         Handle pipeline lock released event.
 
@@ -1222,16 +1220,16 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
         """
         # Validate event structure upfront - extract required fields with safe defaults
         # (KeyError will not be raised due to .get() usage; validation occurs below)
-        project_id: str = event.payload.get("project_id") or ""
-        board_id: str = event.payload.get("board_id") or ""
-        next_in_queue: str = event.payload.get("next_in_queue") or ""
+        project_id: str = getattr(event, "project_id", None) or ""
+        board_id: str = getattr(event, "board_id", None) or ""
+        next_in_queue: str = getattr(event, "next_in_queue", None) or ""
 
         if not all([project_id, board_id]):
             logger.warning(
                 "Lock event has empty required fields",
                 extra={
                     "error_id": "ERR_ORCHESTRATOR_LOCK_EVENT_VALIDATION_FAILURE",
-                    "event_payload": event.payload,
+                    "event_payload": event.to_dict(),
                 },
             )
             return
@@ -1328,7 +1326,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
         name="workflow.handle_review_status_changed",
         attributes={"service": "workflow_orchestrator", "event_handler": "true"},
     )
-    async def _handle_review_status_changed(self, event: DomainEvent) -> None:
+    async def _handle_review_status_changed(self, event: CodetoreumEvent) -> None:
         """
         Handle code review status change event.
 
@@ -1339,14 +1337,14 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
         Args:
             event: review.status_changed event
         """
-        work_item_id: str = event.payload.get("work_item_id") or ""
-        project_id: str = event.payload.get("project_id") or ""
-        new_status: str = event.payload.get("new_status") or ""
-        previous_status: str = event.payload.get("previous_status") or ""
+        work_item_id: str = getattr(event, "work_item_id", None) or ""
+        project_id: str = getattr(event, "project_id", None) or ""
+        new_status: str = getattr(event, "new_status", None) or ""
+        previous_status: str = getattr(event, "previous_status", None) or ""
 
         if not all([work_item_id, project_id, new_status]):
             logger.warning(
-                f"Review event missing required fields: {event.payload}",
+                f"Review event missing required fields: {event.to_dict()}",
                 extra={"error_id": "ERR_ORCHESTRATOR_REVIEW_EVENT_VALIDATION_FAILURE"},
             )
             return
@@ -1358,7 +1356,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
             if self.projects_api:
                 try:
                     # Get workflow to find next column
-                    board_id_local: str = event.payload.get("board_id") or "default"
+                    board_id_local: str = getattr(event, "board_id", None) or "default"
                     workflow_config = await self.config.get_workflow_config(project_id, board_id_local)
 
                     # Find current column
@@ -1406,7 +1404,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
             # Move back to development column
             if self.projects_api:
                 try:
-                    board_id_local2: str = event.payload.get("board_id") or "default"
+                    board_id_local2: str = getattr(event, "board_id", None) or "default"
                     workflow_config = await self.config.get_workflow_config(project_id, board_id_local2)
 
                     # Find development column (typically first column or has "dev" in name)
@@ -1442,7 +1440,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
         name="workflow.handle_repair_cycle_completed",
         attributes={"service": "workflow_orchestrator", "event_handler": "true"},
     )
-    async def _handle_repair_cycle_completed(self, event: DomainEvent) -> None:
+    async def _handle_repair_cycle_completed(self, event: CodetoreumEvent) -> None:
         """
         Handle repair cycle completed event.
 
@@ -1451,7 +1449,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
         - overall_success=False: Move to failure column if configured, else log warning
 
         Args:
-            event: RepairCycleCompletedEvent DomainEvent (arrives directly, no deserialization)
+            event: RepairCycleCompletedEvent CodetoreumEvent (arrives directly, no deserialization)
         """
         # The event arrives as a RepairCycleCompletedEvent (CodetoreumEvent duck-typed via EventBus).
         # Access fields directly — no payload deserialization needed.

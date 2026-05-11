@@ -1,0 +1,351 @@
+- type: add
+  elementId: motivation.requirement.full-end-to-end-testability-without-external-services
+  layerName: motivation
+  after:
+    id: 624c0051-9cca-4c3c-ae17-e8b1eb66d04a
+    path: motivation.requirement.full-end-to-end-testability-without-external-services
+    spec_node_id: motivation.requirement
+    type: requirement
+    layer_id: motivation
+    name: Full End-to-End Testability Without External Services
+    description: The system must support complete end-to-end workflow testing
+      without any external service dependencies (GitHub, Docker, Claude API).
+      Achieved via the simulation framework with 54 mock/in-memory adapters,
+      deterministic LLM responses, and time manipulation (10-100x faster than
+      real execution).
+    attributes:
+      requirementType: non-functional
+      priority: critical
+      documentation: Realized by SimulationBootstrap, SimulationRunner,
+        SimulationClock, and 54 mock adapters in adapters/testing/ and
+        adapters/primary/input_port_adapters/mock/
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/infrastructure/simulation/bootstrap.py
+          symbol: SimulationBootstrap
+    metadata:
+      created_at: 2026-05-08T20:44:17.790Z
+      updated_at: 2026-05-08T20:44:17.790Z
+      version: 1
+  timestamp: 2026-05-08T20:44:17.810Z
+  sequenceNumber: 0
+- type: add
+  elementId: motivation.requirement.vendor-agnostic-llm-provider-support
+  layerName: motivation
+  after:
+    id: 2397948e-441d-4437-afc9-1c7b4d3e8d2c
+    path: motivation.requirement.vendor-agnostic-llm-provider-support
+    spec_node_id: motivation.requirement
+    type: requirement
+    layer_id: motivation
+    name: Vendor-Agnostic LLM Provider Support
+    description: The system must not couple to any single LLM provider. All LLM
+      interactions must flow through the ILLMProvider output port interface,
+      enabling swappable implementations. Claude Code is the primary provider
+      but the architecture must accommodate alternatives.
+    attributes:
+      requirementType: non-functional
+      priority: high
+      documentation: Enforced by the ILLMProvider output port in ports/output/.
+        ClaudeCodeAdapter is the production implementation; MockLLMAdapter is
+        used in simulation.
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/
+          symbol: ILLMProvider
+    metadata:
+      created_at: 2026-05-08T20:44:22.580Z
+      updated_at: 2026-05-08T20:44:22.580Z
+      version: 1
+  timestamp: 2026-05-08T20:44:22.600Z
+  sequenceNumber: 1
+- type: add
+  elementId: motivation.requirement.complete-audit-trail-for-all-state-changes
+  layerName: motivation
+  after:
+    id: 1457025c-75e2-480c-ac52-2d24282968a6
+    path: motivation.requirement.complete-audit-trail-for-all-state-changes
+    spec_node_id: motivation.requirement
+    type: requirement
+    layer_id: motivation
+    name: Complete Audit Trail for All State Changes
+    description: Every state change in the system must be captured as an immutable
+      domain event persisted to the event store (Redis-backed InMemoryEventStore
+      in simulation). The system must support event replay for debugging. 165
+      total domain event classes cover the full state lifecycle.
+    attributes:
+      requirementType: non-functional
+      priority: critical
+      documentation: Realized by 165 domain events (91 modern + 74 legacy) in
+        domain/events/, Redis-backed event store, and IEventStore output port.
+        Supports full replay and audit.
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/events/
+          symbol: DomainEvent
+    metadata:
+      created_at: 2026-05-08T20:44:27.644Z
+      updated_at: 2026-05-08T20:44:27.644Z
+      version: 1
+  timestamp: 2026-05-08T20:44:27.664Z
+  sequenceNumber: 2
+- type: add
+  elementId: motivation.constraint.domain-layer-zero-external-dependencies
+  layerName: motivation
+  after:
+    id: 9331102b-f802-4d39-bfe9-fcbd838c5bfa
+    path: motivation.constraint.domain-layer-zero-external-dependencies
+    spec_node_id: motivation.constraint
+    type: constraint
+    layer_id: motivation
+    name: Domain Layer Zero External Dependencies
+    description: "The domain layer (src/codetoreum/domain/) must have zero external
+      library or service dependencies. It contains only pure Python business
+      logic: domain models, domain events, and domain services. Any violation of
+      this boundary breaks the hexagonal architecture guarantee."
+    attributes:
+      constraintType: technical
+      documentation: Enforced by architecture review. ~95 domain model classes and 165
+        event classes must remain dependency-free. External interactions only
+        via port interfaces in ports/output/.
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: CLAUDE.md
+          symbol: Key Constraints
+    metadata:
+      created_at: 2026-05-08T20:44:33.862Z
+      updated_at: 2026-05-08T20:44:33.862Z
+      version: 1
+  timestamp: 2026-05-08T20:44:33.883Z
+  sequenceNumber: 3
+- type: add
+  elementId: motivation.constraint.all-external-interactions-via-port-interfaces
+  layerName: motivation
+  after:
+    id: a945e83e-00cc-41de-a516-2f826057e411
+    path: motivation.constraint.all-external-interactions-via-port-interfaces
+    spec_node_id: motivation.constraint
+    type: constraint
+    layer_id: motivation
+    name: All External Interactions via Port Interfaces
+    description: "Every external system interaction (GitHub, Docker, LLM, Redis,
+      PostgreSQL, Elasticsearch) must flow through a named port interface (59
+      total: 19 input + 40 output). Direct adapter-to-adapter calls or
+      domain-to-infrastructure calls are prohibited."
+    attributes:
+      constraintType: technical
+      documentation: 59 port interfaces defined in ports/input/ (19) and ports/output/
+        (40). Adapters are swappable behind these contracts. No direct coupling
+        allowed across the hexagonal boundary.
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: CLAUDE.md
+          symbol: Key Constraints
+    metadata:
+      created_at: 2026-05-08T20:44:39.026Z
+      updated_at: 2026-05-08T20:44:39.026Z
+      version: 1
+  timestamp: 2026-05-08T20:44:39.048Z
+  sequenceNumber: 4
+- type: add
+  elementId: motivation.constraint.domain-events-must-be-immutable
+  layerName: motivation
+  after:
+    id: e6466302-6ad2-4768-a246-72c5793fde39
+    path: motivation.constraint.domain-events-must-be-immutable
+    spec_node_id: motivation.constraint
+    type: constraint
+    layer_id: motivation
+    name: Domain Events Must Be Immutable
+    description: "All domain event classes must be immutable frozen dataclasses. No
+      field may be mutated after construction. This guarantees audit integrity:
+      an event in the store is always the exact record of the state change that
+      occurred."
+    attributes:
+      constraintType: technical
+      documentation: Enforced via @dataclass(frozen=True) on all 165 event classes in
+        domain/events/. Serialization support is provided without mutation.
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/domain/events/
+          symbol: DomainEvent
+    metadata:
+      created_at: 2026-05-08T20:44:43.357Z
+      updated_at: 2026-05-08T20:44:43.357Z
+      version: 1
+  timestamp: 2026-05-08T20:44:43.379Z
+  sequenceNumber: 5
+- type: add
+  elementId: motivation.constraint.configuration-must-be-database-backed
+  layerName: motivation
+  after:
+    id: 0ef01762-0b23-4c77-a356-53014c975278
+    path: motivation.constraint.configuration-must-be-database-backed
+    spec_node_id: motivation.constraint
+    type: constraint
+    layer_id: motivation
+    name: Configuration Must Be Database-Backed
+    description: All runtime configuration (project settings, workflow definitions,
+      agent configurations, environment variables) must be stored in PostgreSQL
+      and managed via a web UI. YAML-based configuration files are prohibited in
+      production. Only simulation testing uses YAML scenario definitions.
+    attributes:
+      constraintType: technical
+      documentation: Production config backed by PostgreSQL via SQLAlchemy. Web
+        dashboard provides UI management. Simulation-only YAML scenario
+        definitions in scenarios/ directory are the sole exception.
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: CLAUDE.md
+          symbol: Configuration Management
+    metadata:
+      created_at: 2026-05-08T20:44:48.285Z
+      updated_at: 2026-05-08T20:44:48.285Z
+      version: 1
+  timestamp: 2026-05-08T20:44:48.306Z
+  sequenceNumber: 6
+- type: add
+  elementId: motivation.driver.reduce-developer-toil-on-repetitive-coding-tasks
+  layerName: motivation
+  after:
+    id: 15d16d8c-0743-4883-ac25-02dbec6284ed
+    path: motivation.driver.reduce-developer-toil-on-repetitive-coding-tasks
+    spec_node_id: motivation.driver
+    type: driver
+    layer_id: motivation
+    name: Reduce Developer Toil on Repetitive Coding Tasks
+    description: "Software developers spend significant time on repetitive,
+      automatable tasks: writing boilerplate, triaging issues, responding to
+      review comments, and running test-fix cycles. Automating these via
+      specialized AI agents frees developers for higher-value creative and
+      design work."
+    attributes:
+      category: operational
+      documentation: Primary motivation for the agent orchestration platform. Agents
+        handle issue triage, code generation, review responses, and repair
+        cycles autonomously.
+    metadata:
+      created_at: 2026-05-08T20:44:53.496Z
+      updated_at: 2026-05-08T20:44:53.496Z
+      version: 1
+  timestamp: 2026-05-08T20:44:53.519Z
+  sequenceNumber: 7
+- type: add
+  elementId: motivation.driver.accelerate-software-delivery-throughput
+  layerName: motivation
+  after:
+    id: 9f538c30-1d1e-4b57-8b71-8560a9d6aa0a
+    path: motivation.driver.accelerate-software-delivery-throughput
+    spec_node_id: motivation.driver
+    type: driver
+    layer_id: motivation
+    name: Accelerate Software Delivery Throughput
+    description: Engineering organizations face pressure to ship features faster
+      while maintaining quality. AI agent orchestration enables parallel
+      execution of coding, review, and repair workflows, compressing cycle times
+      and increasing throughput without proportional headcount growth.
+    attributes:
+      category: business
+      documentation: Drives the multi-agent parallel execution model, pipeline stage
+        design, and the full SDLC scenario (scenario 06) covering planning
+        through PR merge.
+    metadata:
+      created_at: 2026-05-08T20:44:58.248Z
+      updated_at: 2026-05-08T20:44:58.248Z
+      version: 1
+  timestamp: 2026-05-08T20:44:58.270Z
+  sequenceNumber: 8
+- type: add
+  elementId: motivation.driver.maintain-code-quality-through-automated-review-cycles
+  layerName: motivation
+  after:
+    id: ee039443-41af-4e0c-b488-dbdd60665adc
+    path: motivation.driver.maintain-code-quality-through-automated-review-cycles
+    spec_node_id: motivation.driver
+    type: driver
+    layer_id: motivation
+    name: Maintain Code Quality Through Automated Review Cycles
+    description: Automated review feedback and test-fix-validate repair loops
+      (maker-checker ReviewCycle pattern) ensure that AI-generated code meets
+      quality standards before human review, reducing the burden on human
+      reviewers and catching regressions earlier in the pipeline.
+    attributes:
+      category: operational
+      documentation: Drives the ReviewService, RepairCycleAdapter, and review cycle
+        scenarios (scenarios 03, 07). The ReviewCycle domain model implements
+        maker-checker with feedback loops.
+    metadata:
+      created_at: 2026-05-08T20:45:02.887Z
+      updated_at: 2026-05-08T20:45:02.887Z
+      version: 1
+  timestamp: 2026-05-08T20:45:02.912Z
+  sequenceNumber: 9
+- type: add
+  elementId: motivation.assessment.simulation-framework-test-execution-speed
+  layerName: motivation
+  after:
+    id: b6a07bd2-f199-46ec-af79-6d3afbe10842
+    path: motivation.assessment.simulation-framework-test-execution-speed
+    spec_node_id: motivation.assessment
+    type: assessment
+    layer_id: motivation
+    name: Simulation Framework Test Execution Speed
+    description: The simulation framework enables 10-100x faster test execution
+      compared to real end-to-end execution against live services. A typical
+      scenario that would take 30+ minutes in production completes in under 30
+      seconds via SimulationClock time manipulation and deterministic mock
+      adapters.
+    attributes:
+      assessmentType: feasibility
+      documentation: Validated by SimulationConfig.create_fast_config() with
+        speed_multiplier=100.0 and SimulationClock.advance(). 13+ predefined
+        scenarios run in CI without external service dependencies.
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/infrastructure/simulation/simulation_config.py
+          symbol: create_fast_config
+    metadata:
+      created_at: 2026-05-08T20:45:09.984Z
+      updated_at: 2026-05-08T20:45:09.984Z
+      version: 1
+  timestamp: 2026-05-08T20:45:10.007Z
+  sequenceNumber: 10
+- type: add
+  elementId: motivation.assessment.hexagonal-architecture-adapter-coupling
+  layerName: motivation
+  after:
+    id: 87b2317e-4c57-426b-80e2-9def5e382a6b
+    path: motivation.assessment.hexagonal-architecture-adapter-coupling
+    spec_node_id: motivation.assessment
+    type: assessment
+    layer_id: motivation
+    name: Hexagonal Architecture Adapter Coupling
+    description: "The hexagonal architecture design results in low coupling between
+      adapter implementations: fewer than 5% of code is shared between
+      production adapters (GitHub, Docker, Claude) and mock adapters. Port
+      interfaces provide the only shared contract, enabling independent adapter
+      evolution."
+    attributes:
+      assessmentType: impact
+      documentation: 54 total adapters (35 in testing/, 19 input port mocks) share no
+        implementation code with the 5 production adapters. All coupling flows
+        through 59 port interface ABCs.
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: CLAUDE.md
+          symbol: Adapters
+    metadata:
+      created_at: 2026-05-08T20:45:15.857Z
+      updated_at: 2026-05-08T20:45:15.857Z
+      version: 1
+  timestamp: 2026-05-08T20:45:15.881Z
+  sequenceNumber: 11

@@ -22,8 +22,7 @@ class InMemoryActiveWorkflowRunRegistry(IActiveWorkflowRunRegistry):
     ) -> None:
         """Register an active workflow run for a work item.
 
-        Args:
-            work_item_id: Work item being processed
+        Args: work_item_id: Work item being processed
             run_id: Workflow run identifier
             stage_name: Current stage name
             project_id: Project identifier
@@ -38,26 +37,22 @@ class InMemoryActiveWorkflowRunRegistry(IActiveWorkflowRunRegistry):
     async def get_active_run(self, work_item_id: str) -> ActiveRunInfo | None:
         """Get active run info for a work item.
 
-        Args:
-            work_item_id: Work item identifier
+        Args: work_item_id: Work item identifier
 
-        Returns:
-            ActiveRunInfo if an active run exists, None otherwise
+        Returns: ActiveRunInfo if an active run exists, None otherwise
         """
         return self._runs.get(work_item_id)
 
     async def clear_run(self, work_item_id: str) -> None:
         """Remove active run entry for a work item.
 
-        Args:
-            work_item_id: Work item identifier
+        Args: work_item_id: Work item identifier
         """
         self._runs.pop(work_item_id, None)
 
     async def get_all_runs(self) -> list[tuple[str, ActiveRunInfo]]:
         """Get all active workflow runs.
 
-        Returns:
-            List of tuples (work_item_id, ActiveRunInfo) for all active runs
+        Returns: List of tuples (work_item_id, ActiveRunInfo) for all active runs
         """
         return list(self._runs.items())

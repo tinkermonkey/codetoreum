@@ -123,14 +123,11 @@ class IAgentCommandPort(ABC):
         """
         Create a new agent.
 
-        Args:
-            command: CreateAgentCommand with agent details
+        Args: command: CreateAgentCommand with agent details
 
-        Returns:
-            Created Agent domain model
+        Returns: Created Agent domain model
 
-        Raises:
-            DomainError: If agent with same name already exists or validation fails
+        Raises: DomainError: If agent with same name already exists or validation fails
         """
 
     @abstractmethod
@@ -138,14 +135,11 @@ class IAgentCommandPort(ABC):
         """
         Update an existing agent.
 
-        Args:
-            command: UpdateAgentCommand with fields to update
+        Args: command: UpdateAgentCommand with fields to update
 
-        Returns:
-            Updated Agent domain model
+        Returns: Updated Agent domain model
 
-        Raises:
-            AgentNotFoundError: If agent doesn't exist
+        Raises: AgentNotFoundError: If agent doesn't exist
             DomainError: If validation fails
         """
 
@@ -154,14 +148,11 @@ class IAgentCommandPort(ABC):
         """
         Add a capability to an agent.
 
-        Args:
-            command: AddAgentCapabilityCommand with capability details
+        Args: command: AddAgentCapabilityCommand with capability details
 
-        Returns:
-            Updated Agent domain model
+        Returns: Updated Agent domain model
 
-        Raises:
-            AgentNotFoundError: If agent doesn't exist
+        Raises: AgentNotFoundError: If agent doesn't exist
             DomainError: If capability already exists or validation fails
         """
 
@@ -170,14 +161,11 @@ class IAgentCommandPort(ABC):
         """
         Remove a capability from an agent.
 
-        Args:
-            command: RemoveAgentCapabilityCommand with skill to remove
+        Args: command: RemoveAgentCapabilityCommand with skill to remove
 
-        Returns:
-            Updated Agent domain model
+        Returns: Updated Agent domain model
 
-        Raises:
-            AgentNotFoundError: If agent doesn't exist
+        Raises: AgentNotFoundError: If agent doesn't exist
             DomainError: If capability doesn't exist or it's the last capability
         """
 
@@ -186,14 +174,11 @@ class IAgentCommandPort(ABC):
         """
         Update capability proficiency.
 
-        Args:
-            command: UpdateAgentCapabilityCommand with updated proficiency
+        Args: command: UpdateAgentCapabilityCommand with updated proficiency
 
-        Returns:
-            Updated Agent domain model
+        Returns: Updated Agent domain model
 
-        Raises:
-            AgentNotFoundError: If agent doesn't exist
+        Raises: AgentNotFoundError: If agent doesn't exist
             DomainError: If capability doesn't exist or proficiency is invalid
         """
 
@@ -202,14 +187,11 @@ class IAgentCommandPort(ABC):
         """
         Add an MCP server to agent configuration.
 
-        Args:
-            command: AddMcpServerCommand with server name
+        Args: command: AddMcpServerCommand with server name
 
-        Returns:
-            Updated Agent domain model
+        Returns: Updated Agent domain model
 
-        Raises:
-            AgentNotFoundError: If agent doesn't exist
+        Raises: AgentNotFoundError: If agent doesn't exist
             DomainError: If server already configured
         """
 
@@ -218,14 +200,11 @@ class IAgentCommandPort(ABC):
         """
         Remove an MCP server from agent configuration.
 
-        Args:
-            command: RemoveMcpServerCommand with server name
+        Args: command: RemoveMcpServerCommand with server name
 
-        Returns:
-            Updated Agent domain model
+        Returns: Updated Agent domain model
 
-        Raises:
-            AgentNotFoundError: If agent doesn't exist
+        Raises: AgentNotFoundError: If agent doesn't exist
             DomainError: If server not configured
         """
 
@@ -234,12 +213,9 @@ class IAgentCommandPort(ABC):
         """
         Delete an agent (soft delete).
 
-        Args:
-            agent_id: Agent ID
+        Args: agent_id: Agent ID
 
-        Returns:
-            AgentCommandResult with operation status
+        Returns: AgentCommandResult with operation status
 
-        Raises:
-            AgentNotFoundError: If agent doesn't exist
+        Raises: AgentNotFoundError: If agent doesn't exist
         """

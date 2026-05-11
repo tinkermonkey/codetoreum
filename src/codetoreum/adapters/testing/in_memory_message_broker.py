@@ -12,7 +12,7 @@ from collections import defaultdict
 from collections.abc import Callable
 from typing import Any
 
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.ports.output.message_broker import IMessageBroker
 
 _logger = logging.getLogger(__name__)
@@ -77,7 +77,7 @@ class InMemoryMessageBroker(IMessageBroker):
         """
         # Nothing to initialize for in-memory broker
 
-    async def publish_event(self, event: DomainEvent) -> None:
+    async def publish_event(self, event: CodetoreumEvent) -> None:
         """Publish a domain event to all subscribers across all instances.
 
         Args:

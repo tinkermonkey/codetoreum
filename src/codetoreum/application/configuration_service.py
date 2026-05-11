@@ -15,15 +15,15 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Optional
 
-from codetoreum.domain.events import (
-    AgentConfigUpdated,
-    CommandMounted,
-    CommandUnmounted,
-    EnvironmentVariableChanged,
-    PipelineConfigUpdated,
-    ProjectConfigUpdated,
-    SubAgentMounted,
-    SubAgentUnmounted,
+from codetoreum.domain.events.configuration_events import (
+    AgentConfigUpdatedEvent,
+    CommandMountedEvent,
+    CommandUnmountedEvent,
+    EnvironmentVariableChangedEvent,
+    PipelineConfigUpdatedEvent,
+    ProjectConfigUpdatedEvent,
+    SubAgentMountedEvent,
+    SubAgentUnmountedEvent,
 )
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.ports.output import IEncryptionService
@@ -174,16 +174,14 @@ class ConfigurationService:
                 )
 
                 # Emit event
-                event = ProjectConfigUpdated(
-                    aggregate_id=config.id,
-                    payload={
-                        "project_id": config.id,
-                        "version": config.version,
-                        "changes": changes,
-                        "updated_by": command.user_id,
-                        "reason": command.reason,
-                    },
-                    user_id=command.user_id,
+                event = ProjectConfigUpdatedEvent(
+                    type="config.project.updated",
+                    timestamp=datetime.now(UTC).isoformat(),
+                    source="configuration_service",
+                    project_id=config.id,
+                    config_key="project_config",
+                    old_value="",
+                    new_value=str(changes),
                 )
                 await self.event_bus.publish(event)
 
@@ -300,17 +298,14 @@ class ConfigurationService:
         )
 
         # Emit event
-        event = AgentConfigUpdated(
-            aggregate_id=f"{project.id}:{command.agent_name}",
-            payload={
-                "project_id": project.id,
-                "agent_name": command.agent_name,
-                "version": config.version,
-                "changes": changes,
-                "updated_by": command.user_id,
-                "reason": command.reason,
-            },
-            user_id=command.user_id,
+        event = AgentConfigUpdatedEvent(
+            type="config.agent.updated",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="configuration_service",
+            agent_id=f"{project.id}:{command.agent_name}",
+            config_key="agent_config",
+            old_value="",
+            new_value=str(changes),
         )
         await self.event_bus.publish(event)
 
@@ -400,17 +395,14 @@ class ConfigurationService:
         )
 
         # Emit event
-        event = PipelineConfigUpdated(
-            aggregate_id=config.id,
-            payload={
-                "project_id": project.id,
-                "pipeline_name": command.pipeline_name,
-                "version": config.version,
-                "changes": changes,
-                "updated_by": command.user_id,
-                "reason": command.reason,
-            },
-            user_id=command.user_id,
+        event = PipelineConfigUpdatedEvent(
+            type="config.pipeline.updated",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="configuration_service",
+            pipeline_id=config.id,
+            config_key="pipeline_config",
+            old_value="",
+            new_value=str(changes),
         )
         await self.event_bus.publish(event)
 
@@ -505,16 +497,14 @@ class ConfigurationService:
                 await self.config_store.save_project_config(config)
 
                 # Emit event
-                event = EnvironmentVariableChanged(
-                    aggregate_id=config.id,
-                    payload={
-                        "project_id": config.id,
-                        "variable_name": command.variable_name,
-                        "action": action,
-                        "is_secret": command.is_secret,
-                        "changed_by": command.user_id,
-                    },
-                    user_id=command.user_id,
+                event = EnvironmentVariableChangedEvent(
+                    type="config.env_var.changed",
+                    timestamp=datetime.now(UTC).isoformat(),
+                    source="configuration_service",
+                    project_id=config.id,
+                    variable_name=command.variable_name,
+                    old_value="",
+                    new_value=getattr(command, "value", "") or "",
                 )
                 await self.event_bus.publish(event)
 
@@ -588,16 +578,14 @@ class ConfigurationService:
         await self.config_store.save_project_config(config)
 
         # Emit event
-        event = EnvironmentVariableChanged(
-            aggregate_id=config.id,
-            payload={
-                "project_id": config.id,
-                "variable_name": command.variable_name,
-                "action": "removed",
-                "is_secret": False,
-                "changed_by": command.user_id,
-            },
-            user_id=command.user_id,
+        event = EnvironmentVariableChangedEvent(
+            type="config.env_var.changed",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="configuration_service",
+            project_id=config.id,
+            variable_name=command.variable_name,
+            old_value="",
+            new_value=getattr(command, "value", "") or "",
         )
         await self.event_bus.publish(event)
 
@@ -669,15 +657,12 @@ class ConfigurationService:
         await self.config_store.save_project_config(config)
 
         # Emit event
-        event = CommandMounted(
-            aggregate_id=config.id,
-            payload={
-                "project_id": config.id,
-                "command_name": command.command_name,
-                "command_path": command.command_path,
-                "mounted_by": command.user_id,
-            },
-            user_id=command.user_id,
+        event = CommandMountedEvent(
+            type="config.command.mounted",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="configuration_service",
+            project_id=config.id,
+            command_name=command.command_name,
         )
         await self.event_bus.publish(event)
 
@@ -738,14 +723,12 @@ class ConfigurationService:
         await self.config_store.save_project_config(config)
 
         # Emit event
-        event = CommandUnmounted(
-            aggregate_id=config.id,
-            payload={
-                "project_id": config.id,
-                "command_name": command.command_name,
-                "unmounted_by": command.user_id,
-            },
-            user_id=command.user_id,
+        event = CommandUnmountedEvent(
+            type="config.command.unmounted",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="configuration_service",
+            project_id=config.id,
+            command_name=command.command_name,
         )
         await self.event_bus.publish(event)
 
@@ -811,14 +794,12 @@ class ConfigurationService:
         await self.config_store.save_project_config(config)
 
         # Emit event
-        event = SubAgentMounted(
-            aggregate_id=config.id,
-            payload={
-                "project_id": config.id,
-                "subagent_name": command.subagent_name,
-                "mounted_by": command.user_id,
-            },
-            user_id=command.user_id,
+        event = SubAgentMountedEvent(
+            type="config.subagent.mounted",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="configuration_service",
+            project_id=config.id,
+            agent_id=getattr(command, "agent_id", "") or getattr(command, "sub_agent_id", ""),
         )
         await self.event_bus.publish(event)
 
@@ -879,14 +860,12 @@ class ConfigurationService:
         await self.config_store.save_project_config(config)
 
         # Emit event
-        event = SubAgentUnmounted(
-            aggregate_id=config.id,
-            payload={
-                "project_id": config.id,
-                "subagent_name": command.subagent_name,
-                "unmounted_by": command.user_id,
-            },
-            user_id=command.user_id,
+        event = SubAgentUnmountedEvent(
+            type="config.subagent.unmounted",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="configuration_service",
+            project_id=config.id,
+            agent_id=getattr(command, "agent_id", "") or getattr(command, "sub_agent_id", ""),
         )
         await self.event_bus.publish(event)
 

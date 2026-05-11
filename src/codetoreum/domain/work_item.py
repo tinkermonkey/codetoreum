@@ -6,21 +6,21 @@ from enum import Enum
 from typing import Any
 from uuid import uuid4
 
-from codetoreum.domain.events import (
-    AgentAssigned,
-    DomainEvent,
-    WorkflowAttached,
-    WorkItemBlocked,
-    WorkItemCompleted,
-    WorkItemCreated,
-    WorkItemFailed,
-    WorkItemLabelsUpdated,
-    WorkItemPriorityUpdated,
-    WorkItemStageUpdated,
-    WorkItemStarted,
-    WorkItemUnblocked,
-    WorkItemUnderReview,
+from codetoreum.domain.events.adapter_events import CodetoreumEvent, now_iso
+from codetoreum.domain.events.work_item_events import (
+    AgentAssignedEvent,
+    WorkItemBlockedEvent,
+    WorkItemCompletedEvent,
+    WorkItemCreatedEvent,
+    WorkItemFailedEvent,
+    WorkItemLabelsUpdatedEvent,
+    WorkItemPriorityUpdatedEvent,
+    WorkItemStageUpdatedEvent,
+    WorkItemStartedEvent,
+    WorkItemUnblockedEvent,
+    WorkItemUnderReviewEvent,
 )
+from codetoreum.domain.events.workflow_events import WorkflowAttachedEvent
 from codetoreum.domain.exceptions import DomainError
 
 
@@ -94,7 +94,7 @@ class WorkItem:
     completed_at: datetime | None = None
 
     # Event tracking
-    _events: list[DomainEvent] = field(default_factory=list, init=False, repr=False)
+    _events: list[CodetoreumEvent] = field(default_factory=list, init=False, repr=False)
     _version: int = field(default=0, init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -184,19 +184,21 @@ class WorkItem:
         )
 
         # Emit creation event
-        event = WorkItemCreated(
-            aggregate_id=work_item.id,
-            payload={
-                "title": title,
-                "description": description,
-                "project_id": project_id,
-                "labels": labels or [],
-                "priority": priority.value,
-                "external_id": external_id,
-                "external_url": external_url,
-                "pr_id": pr_id,
-                "discussion_id": discussion_id,
-            },
+        event = WorkItemCreatedEvent(
+            type="workitem.created",
+            timestamp=now_iso(),
+            source="domain",
+            work_item_id=work_item.id,
+            title=title,
+            description=description,
+            project_id=project_id,
+            priority=priority.value,
+            labels=tuple(labels or []),
+            external_id=external_id or "",
+            external_url=external_url or "",
+            pr_id=pr_id or "",
+            discussion_id=discussion_id or "",
+            created_at=work_item.created_at.isoformat(),
         )
         work_item._add_event(event)
 
@@ -234,13 +236,14 @@ class WorkItem:
         self.updated_at = datetime.now(UTC)
         self._version += 1
 
-        event = AgentAssigned(
-            aggregate_id=self.id,
-            payload={
-                "agent_id": agent_id,
-                "reason": reason,
-                "assigned_at": self.assigned_at.isoformat(),
-            },
+        event = AgentAssignedEvent(
+            type="workitem.agent_assigned",
+            timestamp=now_iso(),
+            source="domain",
+            work_item_id=self.id,
+            agent_id=agent_id,
+            reason=reason,
+            assigned_at=self.assigned_at.isoformat() if self.assigned_at else "",
         )
         self._add_event(event)
 
@@ -269,12 +272,12 @@ class WorkItem:
         self.updated_at = datetime.now(UTC)
         self._version += 1
 
-        event = WorkItemStarted(
-            aggregate_id=self.id,
-            payload={
-                "started_at": self.updated_at.isoformat(),
-                "agent_id": self.assigned_agent_id,
-            },
+        event = WorkItemStartedEvent(
+            type="workitem.started",
+            timestamp=now_iso(),
+            source="domain",
+            work_item_id=self.id,
+            started_at=self.updated_at.isoformat() if self.updated_at else "",
         )
         self._add_event(event)
 
@@ -298,9 +301,11 @@ class WorkItem:
         self.updated_at = datetime.now(UTC)
         self._version += 1
 
-        event = WorkItemUnderReview(
-            aggregate_id=self.id,
-            payload={"review_started_at": self.updated_at.isoformat()},
+        event = WorkItemUnderReviewEvent(
+            type="workitem.under_review",
+            timestamp=now_iso(),
+            source="domain",
+            work_item_id=self.id,
         )
         self._add_event(event)
 
@@ -328,12 +333,12 @@ class WorkItem:
         self.updated_at = self.completed_at
         self._version += 1
 
-        event = WorkItemCompleted(
-            aggregate_id=self.id,
-            payload={
-                "completed_at": self.completed_at.isoformat(),
-                "agent_id": self.assigned_agent_id,
-            },
+        event = WorkItemCompletedEvent(
+            type="workitem.completed",
+            timestamp=now_iso(),
+            source="domain",
+            work_item_id=self.id,
+            completed_at=self.completed_at.isoformat() if self.completed_at else "",
         )
         self._add_event(event)
 
@@ -361,14 +366,13 @@ class WorkItem:
         self.updated_at = datetime.now(UTC)
         self._version += 1
 
-        event = WorkItemFailed(
-            aggregate_id=self.id,
-            payload={
-                "failed_at": self.updated_at.isoformat(),
-                "reason": reason,
-                "error_details": error_details or {},
-                "agent_id": self.assigned_agent_id,
-            },
+        event = WorkItemFailedEvent(
+            type="workitem.failed",
+            timestamp=now_iso(),
+            source="domain",
+            work_item_id=self.id,
+            reason=reason,
+            new_status=self.status.value,
         )
         self._add_event(event)
 
@@ -396,13 +400,13 @@ class WorkItem:
         self.updated_at = datetime.now(UTC)
         self._version += 1
 
-        event = WorkItemBlocked(
-            aggregate_id=self.id,
-            payload={
-                "blocked_at": self.updated_at.isoformat(),
-                "reason": reason,
-                "blocking_issue_id": blocking_issue_id,
-            },
+        event = WorkItemBlockedEvent(
+            type="workitem.blocked",
+            timestamp=now_iso(),
+            source="domain",
+            work_item_id=self.id,
+            reason=reason,
+            blocking_issue_id=blocking_issue_id or "",
         )
         self._add_event(event)
 
@@ -427,12 +431,12 @@ class WorkItem:
         self.updated_at = datetime.now(UTC)
         self._version += 1
 
-        event = WorkItemUnblocked(
-            aggregate_id=self.id,
-            payload={
-                "unblocked_at": self.updated_at.isoformat(),
-                "new_status": self.status.value,
-            },
+        event = WorkItemUnblockedEvent(
+            type="workitem.unblocked",
+            timestamp=now_iso(),
+            source="domain",
+            work_item_id=self.id,
+            new_status=self.status.value,
         )
         self._add_event(event)
 
@@ -457,12 +461,12 @@ class WorkItem:
         self.updated_at = datetime.now(UTC)
         self._version += 1
 
-        event = WorkflowAttached(
-            aggregate_id=self.id,
-            payload={
-                "workflow_id": workflow_id,
-                "attached_at": self.updated_at.isoformat(),
-            },
+        event = WorkflowAttachedEvent(
+            type="workflow.attached",
+            timestamp=self.updated_at.isoformat(),
+            source="work_item",
+            work_item_id=self.id,
+            workflow_id=workflow_id,
         )
         self._add_event(event)
 
@@ -487,14 +491,13 @@ class WorkItem:
         self.updated_at = datetime.now(UTC)
         self._version += 1
 
-        event = WorkItemStageUpdated(
-            aggregate_id=self.id,
-            payload={
-                "workflow_id": self.current_workflow_id,
-                "old_stage": old_stage,
-                "new_stage": stage,
-                "updated_at": self.updated_at.isoformat(),
-            },
+        event = WorkItemStageUpdatedEvent(
+            type="workitem.stage_updated",
+            timestamp=now_iso(),
+            source="domain",
+            work_item_id=self.id,
+            old_stage=old_stage or "",
+            new_stage=stage,
         )
         self._add_event(event)
 
@@ -529,13 +532,13 @@ class WorkItem:
         self.updated_at = datetime.now(UTC)
         self._version += 1
 
-        event = WorkItemLabelsUpdated(
-            aggregate_id=self.id,
-            payload={
-                "old_labels": old_labels,
-                "new_labels": labels,
-                "updated_at": self.updated_at.isoformat(),
-            },
+        event = WorkItemLabelsUpdatedEvent(
+            type="workitem.labels_updated",
+            timestamp=now_iso(),
+            source="domain",
+            work_item_id=self.id,
+            old_labels=tuple(old_labels),
+            new_labels=tuple(labels),
         )
         self._add_event(event)
 
@@ -553,13 +556,13 @@ class WorkItem:
         self.updated_at = datetime.now(UTC)
         self._version += 1
 
-        event = WorkItemPriorityUpdated(
-            aggregate_id=self.id,
-            payload={
-                "old_priority": old_priority.value,
-                "new_priority": priority.value,
-                "updated_at": self.updated_at.isoformat(),
-            },
+        event = WorkItemPriorityUpdatedEvent(
+            type="workitem.priority_updated",
+            timestamp=now_iso(),
+            source="domain",
+            work_item_id=self.id,
+            old_priority=old_priority.value,
+            new_priority=priority.value,
         )
         self._add_event(event)
 
@@ -595,7 +598,7 @@ class WorkItem:
         ]
 
     # Event management
-    def _add_event(self, event: DomainEvent) -> None:
+    def _add_event(self, event: CodetoreumEvent) -> None:
         """
         Add event to pending events list.
 
@@ -604,7 +607,7 @@ class WorkItem:
         """
         self._events.append(event)
 
-    def get_pending_events(self) -> list[DomainEvent]:
+    def get_pending_events(self) -> list[CodetoreumEvent]:
         """
         Get all pending events.
 
@@ -620,7 +623,7 @@ class WorkItem:
 
     # Reconstruction from events
     @classmethod
-    def from_events(cls, events: list[DomainEvent]) -> "WorkItem":
+    def from_events(cls, events: list[CodetoreumEvent]) -> "WorkItem":
         """
         Reconstruct work item from event stream.
 
@@ -641,40 +644,32 @@ class WorkItem:
 
         # First event must be WorkItemCreated
         first_event = events[0]
-        if not isinstance(first_event, WorkItemCreated):
+        if not isinstance(first_event, WorkItemCreatedEvent):
             msg = "First event must be WorkItemCreated"
             raise DomainError(msg)
 
         # Create initial state from creation event
-        payload = first_event.payload
-
-        # Validate required fields are present in payload
-        required_fields = ["project_id", "title", "description", "priority", "labels"]
-        missing_fields = [f for f in required_fields if f not in payload]
-        if missing_fields:
-            msg = f"Missing required fields in WorkItemCreated event: {', '.join(missing_fields)}"
-            raise DomainError(msg)
 
         work_item = cls(
-            id=first_event.aggregate_id,
-            project_id=payload["project_id"],
-            title=payload["title"],
-            description=payload["description"],
+            id=first_event.work_item_id,
+            project_id=first_event.project_id,
+            title=first_event.title,
+            description=first_event.description,
             status=WorkItemStatus.NEW,
-            priority=WorkItemPriority(payload["priority"]),
-            labels=payload["labels"],
-            external_id=payload.get("external_id"),
-            external_url=payload.get("external_url"),
+            priority=WorkItemPriority(first_event.priority),
+            labels=list(first_event.labels),
+            external_id=first_event.external_id or None,
+            external_url=first_event.external_url or None,
             assigned_agent_id=None,
             assigned_at=None,
             current_workflow_id=None,
             current_stage=None,
             current_column=None,
             entered_column_at=None,
-            created_at=first_event.occurred_at,
-            updated_at=first_event.occurred_at,
-            pr_id=payload.get("pr_id"),
-            discussion_id=payload.get("discussion_id"),
+            created_at=datetime.fromisoformat(first_event.created_at) if first_event.created_at else datetime.now(UTC),
+            updated_at=datetime.fromisoformat(first_event.created_at) if first_event.created_at else datetime.now(UTC),
+            pr_id=first_event.pr_id or None,
+            discussion_id=first_event.discussion_id or None,
             completed_at=None,
         )
 
@@ -685,52 +680,52 @@ class WorkItem:
         work_item._version = len(events)
         return work_item
 
-    def _apply_agent_assigned(self, event: AgentAssigned) -> None:
+    def _apply_agent_assigned(self, event: AgentAssignedEvent) -> None:
         """Apply AgentAssigned event."""
-        self.assigned_agent_id = event.payload["agent_id"]
-        self.assigned_at = datetime.fromisoformat(event.payload["assigned_at"])
+        self.assigned_agent_id = event.agent_id
+        self.assigned_at = datetime.fromisoformat(event.assigned_at) if event.assigned_at else datetime.now(UTC)
         self.status = WorkItemStatus.ASSIGNED
 
-    def _apply_work_item_started(self, _event: WorkItemStarted) -> None:
+    def _apply_work_item_started(self, _event: WorkItemStartedEvent) -> None:
         """Apply WorkItemStarted event."""
         self.status = WorkItemStatus.IN_PROGRESS
 
-    def _apply_work_item_under_review(self, _event: WorkItemUnderReview) -> None:
+    def _apply_work_item_under_review(self, _event: WorkItemUnderReviewEvent) -> None:
         """Apply WorkItemUnderReview event."""
         self.status = WorkItemStatus.UNDER_REVIEW
 
-    def _apply_work_item_completed(self, event: WorkItemCompleted) -> None:
+    def _apply_work_item_completed(self, event: WorkItemCompletedEvent) -> None:
         """Apply WorkItemCompleted event."""
         self.status = WorkItemStatus.COMPLETED
-        self.completed_at = datetime.fromisoformat(event.payload["completed_at"])
+        self.completed_at = datetime.fromisoformat(event.completed_at) if event.completed_at else datetime.now(UTC)
 
-    def _apply_work_item_failed(self, _event: WorkItemFailed) -> None:
+    def _apply_work_item_failed(self, _event: WorkItemFailedEvent) -> None:
         """Apply WorkItemFailed event."""
         self.status = WorkItemStatus.FAILED
 
-    def _apply_work_item_blocked(self, _event: WorkItemBlocked) -> None:
+    def _apply_work_item_blocked(self, _event: WorkItemBlockedEvent) -> None:
         """Apply WorkItemBlocked event."""
         self.status = WorkItemStatus.BLOCKED
 
-    def _apply_work_item_unblocked(self, event: WorkItemUnblocked) -> None:
+    def _apply_work_item_unblocked(self, event: WorkItemUnblockedEvent) -> None:
         """Apply WorkItemUnblocked event."""
-        self.status = WorkItemStatus(event.payload["new_status"])
+        self.status = WorkItemStatus(event.new_status)
 
-    def _apply_workflow_attached(self, event: WorkflowAttached) -> None:
-        """Apply WorkflowAttached event."""
-        self.current_workflow_id = event.payload["workflow_id"]
+    def _apply_workflow_attached(self, event: WorkflowAttachedEvent) -> None:
+        """Apply WorkflowAttachedEvent."""
+        self.current_workflow_id = event.workflow_id
 
-    def _apply_work_item_stage_updated(self, event: WorkItemStageUpdated) -> None:
+    def _apply_work_item_stage_updated(self, event: WorkItemStageUpdatedEvent) -> None:
         """Apply WorkItemStageUpdated event."""
-        self.current_stage = event.payload["new_stage"]
+        self.current_stage = event.new_stage
 
-    def _apply_work_item_labels_updated(self, event: WorkItemLabelsUpdated) -> None:
+    def _apply_work_item_labels_updated(self, event: WorkItemLabelsUpdatedEvent) -> None:
         """Apply WorkItemLabelsUpdated event."""
-        self.labels = event.payload["new_labels"]
+        self.labels = list(event.new_labels)
 
-    def _apply_work_item_priority_updated(self, event: WorkItemPriorityUpdated) -> None:
+    def _apply_work_item_priority_updated(self, event: WorkItemPriorityUpdatedEvent) -> None:
         """Apply WorkItemPriorityUpdated event."""
-        self.priority = WorkItemPriority(event.payload["new_priority"])
+        self.priority = WorkItemPriority(event.new_priority)
 
     def _get_event_handlers(self) -> dict[type, Any]:
         """Get mapping of event types to handler methods.
@@ -739,20 +734,20 @@ class WorkItem:
             Dictionary mapping event types to handler methods
         """
         return {
-            AgentAssigned: self._apply_agent_assigned,
-            WorkItemStarted: self._apply_work_item_started,
-            WorkItemUnderReview: self._apply_work_item_under_review,
-            WorkItemCompleted: self._apply_work_item_completed,
-            WorkItemFailed: self._apply_work_item_failed,
-            WorkItemBlocked: self._apply_work_item_blocked,
-            WorkItemUnblocked: self._apply_work_item_unblocked,
-            WorkflowAttached: self._apply_workflow_attached,
-            WorkItemStageUpdated: self._apply_work_item_stage_updated,
-            WorkItemLabelsUpdated: self._apply_work_item_labels_updated,
-            WorkItemPriorityUpdated: self._apply_work_item_priority_updated,
+            AgentAssignedEvent: self._apply_agent_assigned,
+            WorkItemStartedEvent: self._apply_work_item_started,
+            WorkItemUnderReviewEvent: self._apply_work_item_under_review,
+            WorkItemCompletedEvent: self._apply_work_item_completed,
+            WorkItemFailedEvent: self._apply_work_item_failed,
+            WorkItemBlockedEvent: self._apply_work_item_blocked,
+            WorkItemUnblockedEvent: self._apply_work_item_unblocked,
+            WorkflowAttachedEvent: self._apply_workflow_attached,
+            WorkItemStageUpdatedEvent: self._apply_work_item_stage_updated,
+            WorkItemLabelsUpdatedEvent: self._apply_work_item_labels_updated,
+            WorkItemPriorityUpdatedEvent: self._apply_work_item_priority_updated,
         }
 
-    def _apply_event(self, event: DomainEvent) -> None:
+    def _apply_event(self, event: CodetoreumEvent) -> None:
         """
         Apply an event to update state.
 
@@ -766,4 +761,4 @@ class WorkItem:
             handlers[event_type](event)
 
         # Update timestamp for all events
-        self.updated_at = event.occurred_at
+        self.updated_at = datetime.fromisoformat(event.timestamp) if event.timestamp else datetime.now(UTC)

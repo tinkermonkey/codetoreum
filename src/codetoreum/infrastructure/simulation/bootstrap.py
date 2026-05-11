@@ -36,7 +36,6 @@ from typing import Any, cast
 
 from fastapi import FastAPI
 
-# FastAPI app factory
 from codetoreum.adapters.primary.fastapi_app import create_app
 
 # Mock Port Adapters (these wrap application services to implement port interfaces)
@@ -153,8 +152,9 @@ from codetoreum.application.workflow_orchestrator import WorkflowOrchestrator, W
 from codetoreum.application.workflow_run_query_service import WorkflowRunQueryService
 from codetoreum.application.workspace_router import WorkspaceRouter
 
+# FastAPI app factory
 # Domain
-from codetoreum.domain.events import BoardReconciled, WorkItemColumnChanged
+from codetoreum.domain.events.board_events import BoardReconciledEvent, WorkItemColumnChangedEvent
 from codetoreum.domain.value_objects import ProjectConfig
 from codetoreum.domain.work_item import WorkItemStatus
 from codetoreum.infrastructure.adapters.factory import (
@@ -2255,7 +2255,7 @@ class SimulationApplicationBootstrap:
         Bridge board adapter events to the central EventBus.
 
         The MockBoardAdapter emits CodetoreumEvent objects (which have `.type`),
-        but the EventBus expects DomainEvent objects (which have `.event_type`).
+        but the EventBus expects CodetoreumEvent objects (which have `.event_type`).
         This bridge translates between the two event hierarchies before publishing.
 
         CRITICAL: Event publishing is awaited (not fire-and-forget) to ensure failures
@@ -2284,7 +2284,7 @@ class SimulationApplicationBootstrap:
         }
 
         def board_column_changed_bridge(event):
-            """Translate WorkItemColumnChangedEvent (CodetoreumEvent) to WorkItemColumnChanged (DomainEvent).
+            """Translate WorkItemColumnChangedEvent (CodetoreumEvent) to WorkItemColumnChanged (CodetoreumEvent).
 
             Also syncs work item status in the ticket adapter so the UX reflects the current column position.
 
@@ -2299,16 +2299,16 @@ class SimulationApplicationBootstrap:
             """
             try:
                 loop = asyncio.get_running_loop()
-                domain_event = WorkItemColumnChanged(
-                    aggregate_id=event.work_item_id,
-                    payload={
-                        "work_item_id": event.work_item_id,
-                        "board_id": event.board_id,
-                        "project_id": event.project_id,
-                        "from_column": event.from_column,
-                        "to_column": event.to_column,
-                        "moved_by": event.moved_by,
-                    },
+                domain_event = WorkItemColumnChangedEvent(
+                    type="workitem.column_changed",
+                    timestamp=datetime.now(UTC).isoformat(),
+                    source="simulation_board_adapter",
+                    work_item_id=event.work_item_id,
+                    board_id=event.board_id,
+                    project_id=event.project_id,
+                    from_column=event.from_column,
+                    to_column=event.to_column,
+                    moved_by=event.moved_by,
                 )
 
                 # Create task to handle event publishing with dead letter queue fallback
@@ -2347,7 +2347,7 @@ class SimulationApplicationBootstrap:
                 )
 
         async def _handle_column_changed_event(
-            domain_event: WorkItemColumnChanged, work_item_id: str, to_column: str
+            domain_event: WorkItemColumnChangedEvent, work_item_id: str, to_column: str
         ) -> None:
             """Handle publishing WorkItemColumnChanged event with dead letter queue fallback.
 
@@ -2363,8 +2363,8 @@ class SimulationApplicationBootstrap:
                 # Publish the event - this will trigger BoardColumnEventHandler and automation
                 await event_bus.publish(domain_event)
                 logger.debug(
-                    f"Successfully published WorkItemColumnChanged event for {work_item_id}",
-                    extra={"work_item_id": work_item_id, "event_type": "WorkItemColumnChanged"},
+                    f"Successfully published WorkItemColumnChangedEvent for {work_item_id}",
+                    extra={"work_item_id": work_item_id, "event_type": "WorkItemColumnChangedEvent"},
                 )
             except Exception as publish_error:
                 # Publishing failed - send to failed event store for retry
@@ -2391,7 +2391,7 @@ class SimulationApplicationBootstrap:
 
                 await failed_event_store.add_failed_event(
                     event_type=event_type,
-                    event_data=domain_event.payload,
+                    event_data=domain_event.to_dict(),
                     failure_reason=FailureReason.TRANSIENT_ERROR if is_transient else FailureReason.PROCESSING_ERROR,
                     error_message=str(publish_error),
                     metadata={
@@ -2494,7 +2494,7 @@ class SimulationApplicationBootstrap:
                 )
 
         def board_reconciled_bridge(event):
-            """Translate BoardReconciledEvent (CodetoreumEvent) to BoardReconciled (DomainEvent).
+            """Bridge BoardReconciledEvent to event bus for handler dispatch.
 
             CRITICAL: This bridge runs as a fire-and-forget async task created via loop.create_task().
             However, failures within the task are NOT silent:
@@ -2507,15 +2507,15 @@ class SimulationApplicationBootstrap:
             """
             try:
                 loop = asyncio.get_running_loop()
-                domain_event = BoardReconciled(
-                    aggregate_id=event.board_id,
-                    payload={
-                        "board_id": event.board_id,
-                        "project_id": event.project_id,
-                        "columns_added": list(event.columns_added) if hasattr(event, "columns_added") else [],
-                        "columns_removed": list(event.columns_removed) if hasattr(event, "columns_removed") else [],
-                        "orphaned_items": [],
-                    },
+                domain_event = BoardReconciledEvent(
+                    type="board.reconciled",
+                    timestamp=datetime.now(UTC).isoformat(),
+                    source="simulation_board_adapter",
+                    project_id=event.project_id,
+                    board_id=event.board_id,
+                    columns_added=tuple(event.columns_added) if hasattr(event, "columns_added") else (),
+                    columns_removed=tuple(event.columns_removed) if hasattr(event, "columns_removed") else (),
+                    items_moved=0,
                 )
 
                 # Create task to handle event publishing with dead letter queue fallback
@@ -2553,8 +2553,8 @@ class SimulationApplicationBootstrap:
                     extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
                 )
 
-        async def _handle_board_reconciled_event(domain_event: BoardReconciled, board_id: str) -> None:
-            """Handle publishing BoardReconciled event with dead letter queue fallback.
+        async def _handle_board_reconciled_event(domain_event: BoardReconciledEvent, board_id: str) -> None:
+            """Handle publishing BoardReconciledEvent with dead letter queue fallback.
 
             Awaiting this function ensures that if publishing fails, we capture the
             failure properly instead of silently losing the event.
@@ -2562,8 +2562,8 @@ class SimulationApplicationBootstrap:
             try:
                 await event_bus.publish(domain_event)
                 logger.debug(
-                    f"Successfully published BoardReconciled event for {board_id}",
-                    extra={"board_id": board_id, "event_type": "BoardReconciled"},
+                    f"Successfully published BoardReconciledEvent for {board_id}",
+                    extra={"board_id": board_id, "event_type": "BoardReconciledEvent"},
                 )
             except Exception as publish_error:
                 # Publishing failed - send to failed event store for retry

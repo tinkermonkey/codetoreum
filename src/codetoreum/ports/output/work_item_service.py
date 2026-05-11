@@ -32,8 +32,7 @@ class IWorkItemService(IEventEmitter, IMonitoredService, ABC):
         - 'workitem.updated' → WorkItemUpdatedEvent
         - 'workitem.status_changed' → Status change detection
 
-    Example:
-        async with service as svc:
+    Example: async with service as svc:
             # Start monitoring for changes
             await svc.start_monitoring(
                 project_id="proj-123",
@@ -56,14 +55,11 @@ class IWorkItemService(IEventEmitter, IMonitoredService, ABC):
     async def get_work_item(self, item_id: WorkItemId) -> WorkItem:
         """Retrieve a work item by ID.
 
-        Args:
-            item_id: Unique identifier for the work item
+        Args: item_id: Unique identifier for the work item
 
-        Returns:
-            WorkItem: The requested work item with all details
+        Returns: WorkItem: The requested work item with all details
 
-        Raises:
-            WorkItemNotFoundError: Work item doesn't exist
+        Raises: WorkItemNotFoundError: Work item doesn't exist
             ValidationError: Invalid item_id format
             ExternalServiceError: Service communication failure
         """
@@ -74,15 +70,12 @@ class IWorkItemService(IEventEmitter, IMonitoredService, ABC):
 
         Returns all work items in a given project with the specified status.
 
-        Args:
-            project_id: Project to query
+        Args: project_id: Project to query
             status: Status filter (e.g., "open", "closed", "in_progress")
 
-        Returns:
-            List[WorkItem]: Work items matching the status filter
+        Returns: List[WorkItem]: Work items matching the status filter
 
-        Raises:
-            ProjectNotFoundError: Project doesn't exist
+        Raises: ProjectNotFoundError: Project doesn't exist
             ValidationError: Invalid status value
             ExternalServiceError: Service communication failure
         """
@@ -93,15 +86,12 @@ class IWorkItemService(IEventEmitter, IMonitoredService, ABC):
 
         Returns all work items currently assigned to a column on a project board.
 
-        Args:
-            project_id: Project containing the board
+        Args: project_id: Project containing the board
             column_name: Column name (e.g., "Backlog", "In Progress", "Done")
 
-        Returns:
-            List[WorkItem]: Work items in the column
+        Returns: List[WorkItem]: Work items in the column
 
-        Raises:
-            ProjectNotFoundError: Project doesn't exist
+        Raises: ProjectNotFoundError: Project doesn't exist
             ValidationError: Invalid column_name
             ExternalServiceError: Service communication failure
         """
@@ -116,55 +106,44 @@ class IWorkItemService(IEventEmitter, IMonitoredService, ABC):
         Supported update fields depend on the ticket system implementation
         but typically include: title, description, status, assignee, labels.
 
-        Args:
-            item_id: Work item to update
+        Args: item_id: Work item to update
             updates: Dictionary of fields to update
                     e.g., {"status": "in_progress", "assignee": "user-123"}
 
-        Returns:
-            WorkItem: Updated work item state
+        Returns: WorkItem: Updated work item state
 
-        Raises:
-            WorkItemNotFoundError: Work item doesn't exist
+        Raises: WorkItemNotFoundError: Work item doesn't exist
             ValidationError: Invalid update data or field names
             ExternalServiceError: Service communication failure
 
-        Events:
-            Emits 'workitem.updated' event with updated state
+        Events: Emits 'workitem.updated' event with updated state
         """
 
     @abstractmethod
     async def create_work_item(self, project_id: ProjectId, title: str, description: str, **kwargs: Any) -> WorkItem:
         """Create a new work item and emit creation event.
 
-        Args:
-            project_id: Project to create item in
+        Args: project_id: Project to create item in
             title: Work item title
             description: Work item description
             **kwargs: Additional fields (labels, assignee, etc.)
 
-        Returns:
-            WorkItem: Newly created work item
+        Returns: WorkItem: Newly created work item
 
-        Raises:
-            ProjectNotFoundError: Project doesn't exist
+        Raises: ProjectNotFoundError: Project doesn't exist
             ValidationError: Invalid input data
             ExternalServiceError: Service communication failure
 
-        Events:
-            Emits 'workitem.created' event with new work item
+        Events: Emits 'workitem.created' event with new work item
         """
 
     @abstractmethod
     async def get_child_issues(self, parent_id: WorkItemId) -> list[WorkItem]:
         """Retrieve all child work items created under a parent.
 
-        Args:
-            parent_id: ID of the parent work item
+        Args: parent_id: ID of the parent work item
 
-        Returns:
-            list[WorkItem]: Child work items in creation order (empty if none)
+        Returns: list[WorkItem]: Child work items in creation order (empty if none)
 
-        Raises:
-            WorkItemNotFoundError: Parent work item doesn't exist
+        Raises: WorkItemNotFoundError: Parent work item doesn't exist
         """

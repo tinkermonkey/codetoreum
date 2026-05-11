@@ -12,8 +12,7 @@ class InMemoryWorkflowConfigService(IWorkflowConfigService):
     methods are implemented so that this adapter satisfies the full contract
     and production code can be written against the interface without mocks.
 
-    Attributes:
-        _templates: board_id -> BoardWorkflowTemplate
+    Attributes: _templates: board_id -> BoardWorkflowTemplate
     """
 
     def __init__(self) -> None:
@@ -29,12 +28,10 @@ class InMemoryWorkflowConfigService(IWorkflowConfigService):
     async def save_board_workflow_template(self, template: BoardWorkflowTemplate) -> None:
         """Persist (or overwrite) the template, keyed by template.board_id.
 
-        Args:
-            template: Fully-populated BoardWorkflowTemplate with non-empty
+        Args: template: Fully-populated BoardWorkflowTemplate with non-empty
                 board_id and project_id.
 
-        Raises:
-            ValidationError: If template.board_id or template.project_id is empty.
+        Raises: ValidationError: If template.board_id or template.project_id is empty.
         """
         if not template.board_id or not template.board_id.strip():
             msg = "template.board_id cannot be empty"
@@ -47,11 +44,9 @@ class InMemoryWorkflowConfigService(IWorkflowConfigService):
     async def list_board_workflow_templates(self, project_id: str) -> list[BoardWorkflowTemplate]:
         """Return all templates whose project_id matches, sorted by board_id.
 
-        Args:
-            project_id: Project to filter by.
+        Args: project_id: Project to filter by.
 
-        Raises:
-            ValidationError: If project_id is empty.
+        Raises: ValidationError: If project_id is empty.
         """
         if not project_id or not project_id.strip():
             msg = "project_id cannot be empty"
@@ -73,8 +68,7 @@ class InMemoryWorkflowConfigService(IWorkflowConfigService):
         Prefer ``save_board_workflow_template`` in application code; use this
         only in test fixtures where ``await`` is not available.
 
-        Args:
-            board_id: Key to store the template under.
+        Args: board_id: Key to store the template under.
             template: Workflow template to store.
         """
         self._templates[board_id] = template

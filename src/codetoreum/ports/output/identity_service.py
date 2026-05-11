@@ -21,8 +21,7 @@ class BotIdentityConfig:
     Frozen to prevent accidental mutation after creation. Lists are converted to
     tuples for immutability.
 
-    Attributes:
-        bot_usernames: Exact usernames to identify as bots
+    Attributes: bot_usernames: Exact usernames to identify as bots
                       (e.g., ["dependabot", "renovate", "codecov"])
         bot_patterns: Regex patterns for matching bot usernames
                      (e.g., [re.compile("^bot-.*"), re.compile(".*-bot$")])
@@ -62,8 +61,7 @@ class IIdentityService(ABC):
     """Bot identity queries (no events).
 
     Provides mechanisms to identify bot vs. human users in the system.
-    This is a simple query-only interface used to:
-    1. Filter bot comments from human feedback
+    This is a simple query-only interface used to: 1. Filter bot comments from human feedback
     2. Determine who created changes (human vs. bot)
     3. Apply different logic based on user identity
 
@@ -73,13 +71,10 @@ class IIdentityService(ABC):
     Configuration is typically set once during system setup, but can
     be updated dynamically via the configure() method.
 
-    Bot Detection Rules:
-        A user is considered a bot if their username:
-        1. Matches an entry in bot_usernames (exact match), OR
+    Bot Detection Rules: A user is considered a bot if their username: 1. Matches an entry in bot_usernames (exact match), OR
         2. Matches a pattern in bot_patterns (regex match)
 
-    Example:
-        async with service as svc:
+    Example: async with service as svc:
             # Configure bots
             config = BotIdentityConfig(
                 bot_usernames=["dependabot", "renovate"],
@@ -109,11 +104,9 @@ class IIdentityService(ABC):
 
         Determines if the given username matches configured bot identifiers.
 
-        Args:
-            username: Username to check
+        Args: username: Username to check
 
-        Returns:
-            bool: True if username is identified as a bot, False if human
+        Returns: bool: True if username is identified as a bot, False if human
         """
 
     @abstractmethod
@@ -123,11 +116,9 @@ class IIdentityService(ABC):
         Returns the primary bot username that represents the orchestrator itself.
         Used when posting comments or making changes on behalf of the system.
 
-        Returns:
-            str: Bot username for the orchestrator
+        Returns: str: Bot username for the orchestrator
 
-        Raises:
-            ConfigurationError: No bot username configured
+        Raises: ConfigurationError: No bot username configured
         """
 
     @abstractmethod
@@ -136,14 +127,11 @@ class IIdentityService(ABC):
 
         Removes any bots from the provided list of usernames.
 
-        Args:
-            usernames: List of usernames to filter
+        Args: usernames: List of usernames to filter
 
-        Returns:
-            List[str]: Subset of input containing only human users
+        Returns: List[str]: Subset of input containing only human users
 
-        Example:
-            all_users = ["alice", "dependabot", "bob", "codetoreum-agent"]
+        Example: all_users = ["alice", "dependabot", "bob", "codetoreum-agent"]
             humans = service.get_human_users(all_users)
             # Returns: ["alice", "bob"]
         """
@@ -155,10 +143,8 @@ class IIdentityService(ABC):
         Updates the list of usernames and patterns used to identify bots.
         Called during system initialization or when configuration changes.
 
-        Args:
-            config: New bot identity configuration
+        Args: config: New bot identity configuration
 
-        Raises:
-            ValidationError: Invalid configuration (empty bot_usernames
+        Raises: ValidationError: Invalid configuration (empty bot_usernames
                             and bot_patterns, etc.)
         """

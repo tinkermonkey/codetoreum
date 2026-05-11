@@ -42,8 +42,7 @@ def register_import_export_endpoints(router: APIRouter) -> None:
         - Content type validation (YAML, JSON, plain text only)
         - Filename validation (no path traversal)
 
-        Returns:
-            ImportResponse with success status and details
+        Returns: ImportResponse with success status and details
         """
         try:
             # Validate file upload

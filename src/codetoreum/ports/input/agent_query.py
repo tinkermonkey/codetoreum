@@ -129,15 +129,12 @@ class IAgentQueryPort(ABC):
         """
         Get agent by ID.
 
-        Args:
-            agent_id: Agent ID
+        Args: agent_id: Agent ID
             include_stats: Whether to include execution statistics
 
-        Returns:
-            AgentInfo with agent details
+        Returns: AgentInfo with agent details
 
-        Raises:
-            AgentNotFoundError: If agent doesn't exist
+        Raises: AgentNotFoundError: If agent doesn't exist
         """
 
     @abstractmethod
@@ -145,15 +142,12 @@ class IAgentQueryPort(ABC):
         """
         Get agent by name.
 
-        Args:
-            name: Agent name (unique identifier)
+        Args: name: Agent name (unique identifier)
             include_stats: Whether to include execution statistics
 
-        Returns:
-            AgentInfo with agent details
+        Returns: AgentInfo with agent details
 
-        Raises:
-            AgentNotFoundError: If agent doesn't exist
+        Raises: AgentNotFoundError: If agent doesn't exist
         """
 
     @abstractmethod
@@ -163,12 +157,10 @@ class IAgentQueryPort(ABC):
         """
         List agents with optional filtering and pagination.
 
-        Args:
-            filters: Optional filters for agent selection
+        Args: filters: Optional filters for agent selection
             pagination: Optional pagination parameters
 
-        Returns:
-            AgentListResult with matching agents
+        Returns: AgentListResult with matching agents
         """
 
     @abstractmethod
@@ -181,13 +173,11 @@ class IAgentQueryPort(ABC):
         """
         List agents that have a specific capability.
 
-        Args:
-            capability: Capability/skill name
+        Args: capability: Capability/skill name
             min_proficiency: Minimum proficiency level (0.0 to 1.0)
             pagination: Optional pagination parameters
 
-        Returns:
-            AgentListResult with matching agents sorted by proficiency (descending)
+        Returns: AgentListResult with matching agents sorted by proficiency (descending)
         """
 
     @abstractmethod
@@ -195,9 +185,7 @@ class IAgentQueryPort(ABC):
         """
         Count agents matching filters.
 
-        Args:
-            filters: Optional filters for agent selection
+        Args: filters: Optional filters for agent selection
 
-        Returns:
-            Count of matching agents
+        Returns: Count of matching agents
         """

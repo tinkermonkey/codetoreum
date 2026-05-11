@@ -25,17 +25,14 @@ def convert_ci_run_result_to_repair_test_result(
     Maps CI check failures to RepairTestFailure with file="ci" and test=<check_name>
     to enable systemic analysis integration without breaking existing aggregation.
 
-    Args:
-        ci_result: CIRunResult from ICIPipelineService.run_ci_checks()
+    Args: ci_result: CIRunResult from ICIPipelineService.run_ci_checks()
         iteration: Iteration number (defaults to 1 for single CI check)
         clock: Optional SimulationClock for deterministic time in tests.
                If provided, uses simulation clock time; otherwise uses wall clock time.
 
-    Returns:
-        RepairTestResult with CI results converted to repair cycle format
+    Returns: RepairTestResult with CI results converted to repair cycle format
 
-    Example:
-        ci_result = await ci_service.run_ci_checks("proj-1", "/workspace")
+    Example: ci_result = await ci_service.run_ci_checks("proj-1", "/workspace")
         repair_result = convert_ci_run_result_to_repair_test_result(ci_result)
         # repair_result.failures contains RepairTestFailure(file="ci", test=<check_name>, ...)
     """

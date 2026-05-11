@@ -7,15 +7,14 @@ from typing import Any
 from uuid import uuid4
 
 from codetoreum.domain.events import (
-    DomainEvent,
-    ExecutionCancelled,
-    ExecutionCompleted,
-    ExecutionFailed,
-    ExecutionInitialized,
-    ExecutionPaused,
-    ExecutionResumed,
-    ExecutionStarted,
-    ExecutionTimeout,
+    ExecutionCancelledEvent,
+    ExecutionCompletedEvent,
+    ExecutionFailedEvent,
+    ExecutionInitializedEvent,
+    ExecutionPausedEvent,
+    ExecutionResumedEvent,
+    ExecutionStartedEvent,
+    ExecutionTimedOutEvent,
 )
 from codetoreum.domain.exceptions import DomainError
 
@@ -80,7 +79,7 @@ class AgentExecution:
     metadata: dict[str, Any]
 
     # Event tracking
-    _events: list[DomainEvent] = field(default_factory=list, init=False, repr=False)
+    _events: list = field(default_factory=list, init=False, repr=False)
 
     @classmethod
     def create(
@@ -134,15 +133,14 @@ class AgentExecution:
             metadata={},
         )
 
-        event = ExecutionInitialized(
-            aggregate_id=execution.id,
-            payload={
-                "agent_id": agent_id,
-                "work_item_id": work_item_id,
-                "workflow_id": workflow_id,
-                "stage_name": stage_name,
-                "model": model,
-            },
+        event = ExecutionInitializedEvent(
+            type="execution.initialized",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="agent_execution",
+            execution_id=execution.id,
+            work_item_id=work_item_id,
+            agent_id=agent_id,
+            stage_name=stage_name,
         )
         execution._add_event(event)
 
@@ -168,12 +166,14 @@ class AgentExecution:
         self.started_at = datetime.now(UTC)
         self.container_name = container_name
 
-        event = ExecutionStarted(
-            aggregate_id=self.id,
-            payload={
-                "started_at": self.started_at.isoformat(),
-                "container_name": container_name,
-            },
+        event = ExecutionStartedEvent(
+            type="execution.started",
+            timestamp=self.started_at.isoformat(),
+            source="agent_execution",
+            execution_id=self.id,
+            work_item_id=self.work_item_id,
+            agent_id=self.agent_id,
+            container_name=container_name,
         )
         self._add_event(event)
 
@@ -219,17 +219,16 @@ class AgentExecution:
         if self.started_at:
             self.duration_seconds = (self.completed_at - self.started_at).total_seconds()
 
-        event = ExecutionCompleted(
-            aggregate_id=self.id,
-            payload={
-                "completed_at": self.completed_at.isoformat(),
-                "input_tokens": input_tokens,
-                "output_tokens": output_tokens,
-                "duration_seconds": self.duration_seconds,
-                "session_id": session_id,
-                "commit_sha": commit_sha,
-                "branch": branch,
-            },
+        event = ExecutionCompletedEvent(
+            type="execution.completed",
+            timestamp=self.completed_at.isoformat(),
+            source="agent_execution",
+            execution_id=self.id,
+            work_item_id=self.work_item_id,
+            agent_id=self.agent_id,
+            output=output or "",
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
         )
         self._add_event(event)
 
@@ -258,14 +257,16 @@ class AgentExecution:
         if self.started_at:
             self.duration_seconds = (self.completed_at - self.started_at).total_seconds()
 
-        event = ExecutionFailed(
-            aggregate_id=self.id,
-            payload={
-                "failed_at": self.completed_at.isoformat(),
-                "error_message": error_message,
-                "exit_code": exit_code,
-                "duration_seconds": self.duration_seconds,
-            },
+        event = ExecutionFailedEvent(
+            type="execution.failed",
+            timestamp=self.completed_at.isoformat(),
+            source="agent_execution",
+            execution_id=self.id,
+            work_item_id=self.work_item_id,
+            agent_id=self.agent_id,
+            error=error_message,
+            error_message=error_message,
+            exit_code=exit_code,
         )
         self._add_event(event)
 
@@ -290,12 +291,15 @@ class AgentExecution:
         if self.started_at:
             self.duration_seconds = (self.completed_at - self.started_at).total_seconds()
 
-        event = ExecutionTimeout(
-            aggregate_id=self.id,
-            payload={
-                "timeout_at": self.completed_at.isoformat(),
-                "duration_seconds": self.duration_seconds,
-            },
+        elapsed = int((self.completed_at - self.started_at).total_seconds()) if self.started_at else 0
+        event = ExecutionTimedOutEvent(
+            type="execution.timed_out",
+            timestamp=self.completed_at.isoformat(),
+            source="agent_execution",
+            execution_id=self.id,
+            work_item_id=self.work_item_id,
+            timeout_seconds=max(elapsed, 1),
+            started_at=self.started_at.isoformat() if self.started_at else "",
         )
         self._add_event(event)
 
@@ -327,13 +331,14 @@ class AgentExecution:
         if self.started_at:
             self.duration_seconds = (self.completed_at - self.started_at).total_seconds()
 
-        event = ExecutionCancelled(
-            aggregate_id=self.id,
-            payload={
-                "cancelled_at": self.completed_at.isoformat(),
-                "reason": reason,
-                "duration_seconds": self.duration_seconds,
-            },
+        event = ExecutionCancelledEvent(
+            type="execution.cancelled",
+            timestamp=self.completed_at.isoformat(),
+            source="agent_execution",
+            execution_id=self.id,
+            work_item_id=self.work_item_id,
+            agent_id=self.agent_id,
+            cancelled_at=self.completed_at.isoformat(),
         )
         self._add_event(event)
 
@@ -355,12 +360,14 @@ class AgentExecution:
 
         self.status = ExecutionStatus.PAUSED
 
-        event = ExecutionPaused(
-            aggregate_id=self.id,
-            payload={
-                "paused_at": datetime.now(UTC).isoformat(),
-                "reason": reason,
-            },
+        event = ExecutionPausedEvent(
+            type="execution.paused",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="agent_execution",
+            execution_id=self.id,
+            work_item_id=self.work_item_id,
+            agent_id=self.agent_id,
+            paused_at=datetime.now(UTC).isoformat(),
         )
         self._add_event(event)
 
@@ -379,11 +386,14 @@ class AgentExecution:
 
         self.status = ExecutionStatus.RUNNING
 
-        event = ExecutionResumed(
-            aggregate_id=self.id,
-            payload={
-                "resumed_at": datetime.now(UTC).isoformat(),
-            },
+        event = ExecutionResumedEvent(
+            type="execution.resumed",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="agent_execution",
+            execution_id=self.id,
+            work_item_id=self.work_item_id,
+            agent_id=self.agent_id,
+            resumed_at=datetime.now(UTC).isoformat(),
         )
         self._add_event(event)
 
@@ -429,7 +439,7 @@ class AgentExecution:
         """
         return self.input_tokens + self.output_tokens
 
-    def _add_event(self, event: DomainEvent) -> None:
+    def _add_event(self, event: object) -> None:
         """
         Add event to pending events.
 
@@ -438,7 +448,7 @@ class AgentExecution:
         """
         self._events.append(event)
 
-    def get_pending_events(self) -> list[DomainEvent]:
+    def get_pending_events(self) -> list:
         """
         Get pending events.
 

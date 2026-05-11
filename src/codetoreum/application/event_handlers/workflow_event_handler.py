@@ -4,14 +4,14 @@ import logging
 
 from codetoreum.application.workflow_orchestrator import WorkflowOrchestrator
 from codetoreum.domain.events import (
-    DomainEvent,
-    ExecutionCompleted,
-    ExecutionFailed,
-    ReviewCycleApproved,
-    ReviewCycleEscalated,
-    ReviewCycleRejected,
-    WorkItemCreated,
+    ExecutionCompletedEvent,
+    ExecutionFailedEvent,
+    ReviewCycleApprovedEvent,
+    ReviewCycleEscalatedToHumanEvent,
+    ReviewCycleRejectedEvent,
+    WorkItemCreatedEvent,
 )
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.event_bus import EventHandler, event_handler
 
@@ -19,68 +19,64 @@ logger = logging.getLogger(__name__)
 
 
 @event_handler(
-    "WorkItemCreated",
-    "ExecutionCompleted",
-    "ExecutionFailed",
-    "ReviewCycleApproved",
-    "ReviewCycleRejected",
-    "ReviewCycleEscalated",
+    "WorkItemCreatedEvent",
+    "ExecutionCompletedEvent",
+    "ExecutionFailedEvent",
+    "ReviewCycleApprovedEvent",
+    "ReviewCycleRejectedEvent",
+    "ReviewCycleEscalatedToHumanEvent",
 )
 class WorkflowEventHandler(EventHandler):
     """
     Event handler for workflow orchestration events.
 
     Handles events that trigger workflow actions:
-    - WorkItemCreated: Start new workflow
-    - ExecutionCompleted: Advance workflow stage
-    - ExecutionFailed: Handle execution failure
-    - ReviewCycleApproved: Progress after review approval
-    - ReviewCycleRejected: Handle review rejection
-    - ReviewCycleEscalated: Handle human escalation
+    - WorkItemCreatedEvent: Start new workflow
+    - ExecutionCompletedEvent: Advance workflow stage
+    - ExecutionFailedEvent: Handle execution failure
+    - ReviewCycleApprovedEvent: Progress after review approval
+    - ReviewCycleRejectedEvent: Handle review rejection
+    - ReviewCycleEscalatedToHumanEvent: Handle human escalation
     """
 
     def __init__(self, orchestrator: WorkflowOrchestrator):
         """
         Initialize handler.
 
-        Args:
-            orchestrator: Workflow orchestrator service
+        Args: orchestrator: Workflow orchestrator service
         """
         self.orchestrator = orchestrator
 
-    async def handle(self, event: DomainEvent) -> None:
+    async def handle(self, event: CodetoreumEvent) -> None:
         """
         Handle workflow-related events.
 
-        Args:
-            event: Domain event to handle
+        Args: event: Domain event to handle
 
-        Raises:
-            Exception: If handling fails
+        Raises: Exception: If handling fails
         """
-        if isinstance(event, WorkItemCreated):
+        if isinstance(event, WorkItemCreatedEvent):
             await self._handle_work_item_created(event)
-        elif isinstance(event, ExecutionCompleted):
+        elif isinstance(event, ExecutionCompletedEvent):
             await self._handle_execution_completed(event)
-        elif isinstance(event, ExecutionFailed):
+        elif isinstance(event, ExecutionFailedEvent):
             await self._handle_execution_failed(event)
-        elif isinstance(event, ReviewCycleApproved):
+        elif isinstance(event, ReviewCycleApprovedEvent):
             await self._handle_review_approved(event)
-        elif isinstance(event, ReviewCycleRejected):
+        elif isinstance(event, ReviewCycleRejectedEvent):
             await self._handle_review_rejected(event)
-        elif isinstance(event, ReviewCycleEscalated):
+        elif isinstance(event, ReviewCycleEscalatedToHumanEvent):
             await self._handle_review_escalated(event)
         else:
             logger.warning(f"WorkflowEventHandler received unexpected event type: {event.event_type}")
 
-    async def _handle_work_item_created(self, event: WorkItemCreated) -> None:
+    async def _handle_work_item_created(self, event: WorkItemCreatedEvent) -> None:
         """
         Handle work item creation - start workflow.
 
-        Args:
-            event: WorkItemCreated event
+        Args: event: WorkItemCreatedEvent event
         """
-        logger.info(f"Starting workflow for new work item: {event.aggregate_id} (title: {event.payload.get('title')})")
+        logger.info(f"Starting workflow for new work item: {event.work_item_id} (title: {event.title})")
 
         # Note: In a full implementation, this would:
         # 1. Load workflow configuration for the project
@@ -89,96 +85,68 @@ class WorkflowEventHandler(EventHandler):
         #
         # For now, we log the event and rely on external triggers
         # (GitHub webhook) to move cards to initial column
-        logger.debug(f"Work item {event.aggregate_id} created, waiting for initial column assignment")
+        logger.debug(f"Work item {event.work_item_id} created, waiting for initial column assignment")
 
-    async def _handle_execution_completed(self, event: ExecutionCompleted) -> None:
+    async def _handle_execution_completed(self, event: ExecutionCompletedEvent) -> None:
         """
         Handle execution completion - advance workflow or queue review.
 
-        Args:
-            event: ExecutionCompleted event
+        Args: event: ExecutionCompletedEvent event
         """
-        logger.info(
-            f"Execution completed for work item: {event.payload.get('work_item_id', '')}, "
-            f"triggering workflow progression"
-        )
+        logger.info(f"Execution completed for work item: {event.work_item_id}, " f"triggering workflow progression")
 
         # Note: In a full implementation, this would:
         # 1. Reconstruct StageCompletedEvent from execution data
         # 2. Call orchestrator.handle_stage_completion()
         # 3. Either queue review or auto-advance to next stage
-        #
-        # This requires additional context not available in the event:
-        # - Project and board information
-        # - Stage configuration
-        # - Execution output
-        #
-        # For Phase 5.6, we demonstrate the pattern but defer
-        # full implementation to integration phase
 
-        logger.debug(f"Execution {event.aggregate_id} completed, workflow progression deferred to integration phase")
+        logger.debug(f"Execution {event.execution_id} completed, workflow progression deferred to integration phase")
 
-    async def _handle_execution_failed(self, event: ExecutionFailed) -> None:
+    async def _handle_execution_failed(self, event: ExecutionFailedEvent) -> None:
         """
         Handle execution failure - escalate or retry.
 
-        Args:
-            event: ExecutionFailed event
+        Args: event: ExecutionFailedEvent event
         """
-        logger.warning(
-            f"Execution failed for work item: {event.payload.get('work_item_id', '')}, "
-            f"error: {event.payload.get('error_message', '')}"
-        )
+        logger.warning(f"Execution failed for work item: {event.work_item_id}, " f"error: {event.error}")
 
         # Note: In a full implementation, this would:
         # 1. Check retry policy
         # 2. Either retry execution or escalate to human
         # 3. Update work item status
         # 4. Notify stakeholders
-        #
-        # For Phase 5.6, we log the failure and track metrics
 
         logger.error(
-            f"Execution {event.aggregate_id} failed, escalation logic deferred to integration phase",
+            f"Execution {event.execution_id} failed, escalation logic deferred to integration phase",
             extra={"error_id": ErrorRegistry.ERR_EXECUTION_ERROR},
         )
 
-    async def _handle_review_approved(self, event: ReviewCycleApproved) -> None:
+    async def _handle_review_approved(self, event: ReviewCycleApprovedEvent) -> None:
         """
         Handle review approval - advance workflow.
 
-        Args:
-            event: ReviewCycleApproved event
+        Args: event: ReviewCycleApprovedEvent event
         """
-        logger.info(
-            f"Review cycle approved: {event.aggregate_id}, "
-            f"after {event.payload.get('total_iterations', 0)} iteration(s)"
-        )
+        logger.info(f"Review cycle approved: {event.review_cycle_id}, " f"after {event.total_iterations} iteration(s)")
 
         # Note: In a full implementation, this would:
         # 1. Reconstruct ReviewCycleCompletedEvent
         # 2. Call orchestrator.handle_review_cycle_completion()
         # 3. Auto-advance to next stage if configured
-        #
-        # Requires additional context:
-        # - Project and board information
-        # - Workflow configuration
-        # - Stage information
-        #
-        # For Phase 5.6, we demonstrate the event handling pattern
 
-        logger.debug(f"Review cycle {event.aggregate_id} approved, workflow advancement deferred to integration phase")
+        logger.debug(
+            f"Review cycle {event.review_cycle_id} approved, workflow advancement deferred to integration phase"
+        )
 
-    async def _handle_review_rejected(self, event: ReviewCycleRejected) -> None:
+    async def _handle_review_rejected(self, event: ReviewCycleRejectedEvent) -> None:
         """
         Handle review rejection - queue maker revision or escalate.
 
-        Args:
-            event: ReviewCycleRejected event
+        Args: event: ReviewCycleRejectedEvent event
         """
         logger.info(
-            f"Review cycle rejected: {event.aggregate_id}, "
-            f"iteration {event.payload.get('current_iteration', 0)}/{event.payload.get('max_iterations', 0)}"
+            f"Review cycle rejected: {event.review_cycle_id}, "
+            f"final iteration: {event.final_iteration}, reason: {event.rejection_reason}"
         )
 
         # Note: In a full implementation, this would:
@@ -186,33 +154,23 @@ class WorkflowEventHandler(EventHandler):
         # 2. If yes, escalate to human
         # 3. If no, queue revision task for maker
         # 4. Update work item status
-        #
-        # For Phase 5.6, we demonstrate the pattern
 
-        if event.payload.get("current_iteration", 0) >= event.payload.get("max_iterations", 0):
-            logger.warning(f"Review cycle {event.aggregate_id} reached max iterations, escalation required")
-        else:
-            logger.info(
-                f"Review cycle {event.aggregate_id} needs maker revision, task queuing deferred to integration phase"
-            )
+        logger.info(
+            f"Review cycle {event.review_cycle_id} needs maker revision, task queuing deferred to integration phase"
+        )
 
-    async def _handle_review_escalated(self, event: ReviewCycleEscalated) -> None:
+    async def _handle_review_escalated(self, event: ReviewCycleEscalatedToHumanEvent) -> None:
         """
         Handle review escalation - notify human reviewers.
 
-        Args:
-            event: ReviewCycleEscalated event
+        Args: event: ReviewCycleEscalatedToHumanEvent event
         """
-        logger.warning(
-            f"Review cycle escalated to human: {event.aggregate_id}, reason: {event.payload.get('reason', '')}"
-        )
+        logger.warning(f"Review cycle escalated to human: {event.review_cycle_id}, reason: {event.escalation_reason}")
 
         # Note: In a full implementation, this would:
         # 1. Add "needs-human-review" label to work item
         # 2. Create GitHub discussion or issue comment
         # 3. Send notifications to project maintainers
         # 4. Update work item status
-        #
-        # For Phase 5.6, we log the escalation
 
-        logger.info(f"Review cycle {event.aggregate_id} escalated, notification logic deferred to integration phase")
+        logger.info(f"Review cycle {event.review_cycle_id} escalated, notification logic deferred to integration phase")

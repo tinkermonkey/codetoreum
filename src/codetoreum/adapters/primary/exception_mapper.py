@@ -80,12 +80,10 @@ def map_exception_to_http(exc: Exception, default_detail: str | None = None) -> 
     - Port exceptions: Infrastructure/external service errors
     - Input port exceptions: Command/query execution errors
 
-    Args:
-        exc: The exception to map
+    Args: exc: The exception to map
         default_detail: Optional default detail message if exception message is empty
 
-    Returns:
-        HTTPException with appropriate status code and detail message
+    Returns: HTTPException with appropriate status code and detail message
 
     Design Notes:
         - Type-safe: Uses isinstance checks instead of string matching

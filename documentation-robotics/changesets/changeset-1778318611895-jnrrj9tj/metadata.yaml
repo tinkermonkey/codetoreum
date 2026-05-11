@@ -1,0 +1,10 @@
+id: changeset-1778318611895-jnrrj9tj
+name: apm-infrastructure-observability
+created: 2026-05-09T09:23:31.907Z
+modified: 2026-05-09T09:24:46.604Z
+status: committed
+baseSnapshot: sha256:e3a6727001653ebd42ded2b1fadd31d15caa7fd7d93f2020b924203e5dacd666
+stats:
+  additions: 7
+  modifications: 0
+  deletions: 0

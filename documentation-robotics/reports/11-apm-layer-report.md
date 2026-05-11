@@ -14,11 +14,11 @@ Observability, monitoring, metrics, logging, and tracing.
 
 | Metric                    | Count |
 | ------------------------- | ----- |
-| Elements                  | 12    |
+| Elements                  | 17    |
 | Intra-Layer Relationships | 17    |
-| Inter-Layer Relationships | 42    |
+| Inter-Layer Relationships | 44    |
 | Inbound Relationships     | 7     |
-| Outbound Relationships    | 35    |
+| Outbound Relationships    | 37    |
 
 **Cross-Layer References**:
 
@@ -36,10 +36,15 @@ flowchart LR
     apm_logconfiguration_structured_logging_with_trace_context["Structured Logging with Trace Context"]
     apm_metricinstrument_agent_execution_duration["Agent Execution Duration"]
     apm_metricinstrument_board_reconciliation_metrics["Board Reconciliation Metrics"]
+    apm_metricinstrument_circuit_breaker_state_metrics["CircuitBreaker State Metrics"]
     apm_metricinstrument_event_bus_stats["Event Bus Stats"]
+    apm_metricinstrument_performance_threshold_metrics["Performance Threshold Metrics"]
     apm_metricinstrument_repair_cycle_metrics["Repair Cycle Metrics"]
     apm_span_agent_execution_trace["Agent Execution Trace"]
+    apm_span_dead_letter_queue_processing_span["Dead Letter Queue Processing Span"]
     apm_span_event_handler_trace["Event Handler Trace"]
+    apm_span_event_replay_span["Event Replay Span"]
+    apm_span_repair_cycle_profiling_span["Repair Cycle Profiling Span"]
     apm_span_web_socket_session_trace["WebSocket Session Trace"]
     apm_traceconfiguration_open_telemetry_setup["OpenTelemetry Setup"]
     apm_dashboard_pipeline_performance_dashboard -->|monitors| apm_metricinstrument_agent_execution_duration
@@ -115,6 +120,7 @@ flowchart TB
 | `apm.metricinstrument.monitors.application.applicationcomponent`      | `apm.metricinstrument.board-reconciliation-metrics`          | `application.applicationcomponent.board-column-event-handler` | `application` | `monitors`   | many-to-many | medium   |
 | `apm.metricinstrument.monitors.data-store.database`                   | `apm.metricinstrument.board-reconciliation-metrics`          | `data-store.database.elasticsearch-event-store`               | `data-store`  | `monitors`   | many-to-many | medium   |
 | `apm.metricinstrument.monitors.ux.view`                               | `apm.metricinstrument.board-reconciliation-metrics`          | `ux.view.dashboard`                                           | `ux`          | `monitors`   | many-to-many | medium   |
+| `apm.metricinstrument.monitors.application.applicationservice`        | `apm.metricinstrument.circuit-breaker-state-metrics`         | `application.applicationservice.workflow-orchestrator`        | `application` | `monitors`   | many-to-many | medium   |
 | `apm.metricinstrument.monitors.application.applicationservice`        | `apm.metricinstrument.event-bus-stats`                       | `application.applicationservice.workflow-orchestrator`        | `application` | `monitors`   | many-to-many | medium   |
 | `apm.metricinstrument.monitors.data-store.database`                   | `apm.metricinstrument.event-bus-stats`                       | `data-store.database.redis-event-store`                       | `data-store`  | `monitors`   | many-to-many | medium   |
 | `apm.metricinstrument.realizes.motivation.goal`                       | `apm.metricinstrument.event-bus-stats`                       | `motivation.goal.complete-observability-via-event-sourcing`   | `motivation`  | `realizes`   | many-to-many | medium   |
@@ -126,6 +132,7 @@ flowchart TB
 | `apm.span.monitors.api.operation`                                     | `apm.span.event-handler-trace`                               | `api.operation.get-domain-events`                             | `api`         | `monitors`   | many-to-many | medium   |
 | `apm.span.monitors.application.applicationcomponent`                  | `apm.span.event-handler-trace`                               | `application.applicationcomponent.execution-event-handler`    | `application` | `monitors`   | many-to-many | medium   |
 | `apm.span.monitors.data-store.database`                               | `apm.span.event-handler-trace`                               | `data-store.database.elasticsearch-event-store`               | `data-store`  | `monitors`   | many-to-many | medium   |
+| `apm.span.monitors.application.applicationcomponent`                  | `apm.span.repair-cycle-profiling-span`                       | `application.applicationcomponent.repair-cycle-event-handler` | `application` | `monitors`   | many-to-many | medium   |
 | `apm.span.monitors.api.operation`                                     | `apm.span.web-socket-session-trace`                          | `api.operation.stream-simulation-events`                      | `api`         | `monitors`   | many-to-many | medium   |
 | `apm.span.monitors.application.applicationcomponent`                  | `apm.span.web-socket-session-trace`                          | `application.applicationcomponent.event-bus-wiring`           | `application` | `monitors`   | many-to-many | medium   |
 | `apm.traceconfiguration.monitors.application.applicationservice`      | `apm.traceconfiguration.open-telemetry-setup`                | `application.applicationservice.board-polling-service`        | `application` | `monitors`   | many-to-many | medium   |
@@ -254,6 +261,27 @@ Counter metrics for board reconciliation cycles, drift detections, and sync oper
 | inter-layer | `ux.view.dashboard`                                           | `monitors` | outbound  |
 | intra-layer | `apm.dashboard.system-health-dashboard`                       | `monitors` | inbound   |
 
+### CircuitBreaker State Metrics {#circuitbreaker-state-metrics}
+
+**ID**: `apm.metricinstrument.circuit-breaker-state-metrics`
+
+**Type**: `metricinstrument`
+
+Metric instrument tracking circuit breaker state transitions (CLOSED/OPEN/HALF_OPEN) and failure counts for external service calls. Records total_calls, total_failures, total_successes, and current state per service. Used for resilience observability and detecting cascading failures.
+
+#### Attributes
+
+| Name | Value           |
+| ---- | --------------- |
+| type | ObservableGauge |
+| unit | state           |
+
+#### Relationships
+
+| Type        | Related Element                                        | Predicate  | Direction |
+| ----------- | ------------------------------------------------------ | ---------- | --------- |
+| inter-layer | `application.applicationservice.workflow-orchestrator` | `monitors` | outbound  |
+
 ### Event Bus Stats {#event-bus-stats}
 
 **ID**: `apm.metricinstrument.event-bus-stats`
@@ -271,6 +299,21 @@ Gauge and counter metrics for event bus throughput, handler errors, and queue de
 | inter-layer | `motivation.goal.complete-observability-via-event-sourcing` | `realizes`   | outbound  |
 | intra-layer | `apm.dashboard.system-health-dashboard`                     | `monitors`   | inbound   |
 | intra-layer | `apm.span.event-handler-trace`                              | `references` | outbound  |
+
+### Performance Threshold Metrics {#performance-threshold-metrics}
+
+**ID**: `apm.metricinstrument.performance-threshold-metrics`
+
+**Type**: `metricinstrument`
+
+Metric instrument for PerformanceThresholdMonitor tracking violations of configured performance thresholds (duration, memory, CPU) across repair cycle operations. Emits threshold violation counts per operation type enabling SLO enforcement and alerting on regression.
+
+#### Attributes
+
+| Name | Value      |
+| ---- | ---------- |
+| type | Counter    |
+| unit | violations |
 
 ### Repair Cycle Metrics {#repair-cycle-metrics}
 
@@ -311,6 +354,29 @@ OpenTelemetry distributed trace span covering the full lifecycle of an agent exe
 | intra-layer | `apm.metricinstrument.repair-cycle-metrics`        | `references` | inbound   |
 | intra-layer | `apm.traceconfiguration.open-telemetry-setup`      | `aggregates` | inbound   |
 
+### Dead Letter Queue Processing Span {#dead-letter-queue-processing-span}
+
+**ID**: `apm.span.dead-letter-queue-processing-span`
+
+**Type**: `span`
+
+Distributed trace span covering the full lifecycle of failed event processing through the DeadLetterQueue. Tracks retry attempts, delay intervals, and final disposition (requeued, permanently failed, or recovered). Enables debugging of event processing failures and retry storms.
+
+#### Attributes
+
+| Name                   | Value     |
+| ---------------------- | --------- |
+| droppedAttributesCount | 0         |
+| droppedEventsCount     | 0         |
+| droppedLinksCount      | 0         |
+| endTimeUnixNano        | 0         |
+| parentSpanId           |           |
+| spanId                 | dlq-span  |
+| spanKind               | INTERNAL  |
+| startTimeUnixNano      | 0         |
+| traceId                | dlq-trace |
+| traceState             |           |
+
 ### Event Handler Trace {#event-handler-trace}
 
 **ID**: `apm.span.event-handler-trace`
@@ -329,6 +395,58 @@ Distributed trace span for domain event handler invocations with causal linking
 | intra-layer | `apm.dashboard.system-health-dashboard`                    | `monitors`   | inbound   |
 | intra-layer | `apm.metricinstrument.event-bus-stats`                     | `references` | inbound   |
 | intra-layer | `apm.traceconfiguration.open-telemetry-setup`              | `aggregates` | inbound   |
+
+### Event Replay Span {#event-replay-span}
+
+**ID**: `apm.span.event-replay-span`
+
+**Type**: `span`
+
+Distributed trace span for EventReplayer operations. Covers replay-from-timestamp and replay-for-aggregate workflows including event filtering, time manipulation, dry-run mode, and progress tracking. Tracks events_replayed count, error count, and replay duration for debugging and recovery use cases.
+
+#### Attributes
+
+| Name                   | Value        |
+| ---------------------- | ------------ |
+| droppedAttributesCount | 0            |
+| droppedEventsCount     | 0            |
+| droppedLinksCount      | 0            |
+| endTimeUnixNano        | 0            |
+| parentSpanId           |              |
+| spanId                 | replay-span  |
+| spanKind               | INTERNAL     |
+| startTimeUnixNano      | 0            |
+| traceId                | replay-trace |
+| traceState             |              |
+
+### Repair Cycle Profiling Span {#repair-cycle-profiling-span}
+
+**ID**: `apm.span.repair-cycle-profiling-span`
+
+**Type**: `span`
+
+Distributed trace span for repair cycle operation profiling. Captures memory usage (via tracemalloc), CPU percent, operation duration, and peak resource consumption. Produced by RepairCycleProfiler and RepairCycleProfilerContext for bottleneck identification across repair iterations.
+
+#### Attributes
+
+| Name                   | Value          |
+| ---------------------- | -------------- |
+| droppedAttributesCount | 0              |
+| droppedEventsCount     | 0              |
+| droppedLinksCount      | 0              |
+| endTimeUnixNano        | 0              |
+| parentSpanId           |                |
+| spanId                 | profiler-span  |
+| spanKind               | INTERNAL       |
+| startTimeUnixNano      | 0              |
+| traceId                | profiler-trace |
+| traceState             |                |
+
+#### Relationships
+
+| Type        | Related Element                                               | Predicate  | Direction |
+| ----------- | ------------------------------------------------------------- | ---------- | --------- |
+| inter-layer | `application.applicationcomponent.repair-cycle-event-handler` | `monitors` | outbound  |
 
 ### WebSocket Session Trace {#websocket-session-trace}
 
@@ -375,4 +493,4 @@ OTLP exporter configuration for Jaeger integration with sampling and resource at
 
 ---
 
-Generated: 2026-05-08T12:30:44.964Z | Model Version: 0.1.0
+Generated: 2026-05-09T09:27:22.725Z | Model Version: 0.1.0

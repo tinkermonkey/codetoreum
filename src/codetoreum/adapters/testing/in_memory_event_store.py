@@ -7,7 +7,7 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.ports.exceptions import (
     ConcurrencyConflictError,
     ResourceNotFoundError,
@@ -50,19 +50,19 @@ class InMemoryEventStore(IEventStore):
             clock: Optional SimulationClock for time manipulation
         """
         # Stream storage: stream_id -> list of events
-        self._streams: dict[str, list[DomainEvent]] = {}
+        self._streams: dict[str, list[CodetoreumEvent]] = {}
 
         # Snapshot storage: stream_id -> snapshot data
         self._snapshots: dict[str, dict[str, Any]] = {}
 
         # Global event list for cross-stream queries
-        self._all_events: list[DomainEvent] = []
+        self._all_events: list[CodetoreumEvent] = []
 
         # Event type index for fast lookups
-        self._events_by_type: dict[str, list[DomainEvent]] = {}
+        self._events_by_type: dict[str, list[CodetoreumEvent]] = {}
 
         # Correlation ID index
-        self._events_by_correlation: dict[str, list[DomainEvent]] = {}
+        self._events_by_correlation: dict[str, list[CodetoreumEvent]] = {}
 
         # Thread safety for concurrent test execution
         self._lock = threading.Lock()
@@ -74,7 +74,7 @@ class InMemoryEventStore(IEventStore):
     async def append(
         self,
         stream_id: str,
-        events: list[DomainEvent],
+        events: list[CodetoreumEvent],
         expected_version: int | None = None,
     ) -> None:
         """
@@ -128,8 +128,9 @@ class InMemoryEventStore(IEventStore):
                 self._all_events.append(event)
 
                 # Update indexes
-                # Handle both old DomainEvent (event_type) and new CodetoreumEvent (type)
                 event_type = getattr(event, "event_type", None) or getattr(event, "type", None)
+                if event_type is None:
+                    raise TypeError(f"InMemoryEventStore: event has no event_type: {type(event).__name__}")
                 if event_type:
                     if event_type not in self._events_by_type:
                         self._events_by_type[event_type] = []
@@ -151,7 +152,7 @@ class InMemoryEventStore(IEventStore):
         stream_id: str,
         from_version: int = 0,
         to_version: int | None = None,
-    ) -> list[DomainEvent]:
+    ) -> list[CodetoreumEvent]:
         """
         Get events from a stream.
 
@@ -190,7 +191,7 @@ class InMemoryEventStore(IEventStore):
         self,
         since: datetime,
         stream_id: str | None = None,
-    ) -> list[DomainEvent]:
+    ) -> list[CodetoreumEvent]:
         """
         Get events since a timestamp.
 
@@ -290,7 +291,7 @@ class InMemoryEventStore(IEventStore):
         self,
         stream_id: str | None = None,
         from_version: int = 0,
-    ) -> AsyncIterator[DomainEvent]:
+    ) -> AsyncIterator[CodetoreumEvent]:
         """
         Stream events in real-time.
 
@@ -457,7 +458,6 @@ class InMemoryEventStore(IEventStore):
                     self._all_events.remove(event)
 
                 # Remove from type index
-                # Handle both old DomainEvent (event_type) and new CodetoreumEvent (type)
                 event_type = getattr(event, "event_type", None) or getattr(event, "type", None)
                 if event_type and event_type in self._events_by_type:
                     if event in self._events_by_type[event_type]:
@@ -492,7 +492,11 @@ class InMemoryEventStore(IEventStore):
                 # Filter by aggregate type
                 stream_ids = []
                 for stream_id, events in self._streams.items():
-                    if events and events[0].aggregate_type == aggregate_type:
+                    if (
+                        events
+                        and getattr(events[0], "aggregate_type", type(events[0]).__name__.replace("Event", ""))
+                        == aggregate_type
+                    ):
                         stream_ids.append(stream_id)
                 return stream_ids
 
@@ -503,7 +507,7 @@ class InMemoryEventStore(IEventStore):
         event_type: str,
         since: datetime | None = None,
         limit: int = 1000,
-    ) -> list[DomainEvent]:
+    ) -> list[CodetoreumEvent]:
         """
         Get events by event type.
 
@@ -533,7 +537,7 @@ class InMemoryEventStore(IEventStore):
     async def get_events_by_correlation_id(
         self,
         correlation_id: str,
-    ) -> list[DomainEvent]:
+    ) -> list[CodetoreumEvent]:
         """
         Get all events with a specific correlation ID.
 
@@ -558,7 +562,7 @@ class InMemoryEventStore(IEventStore):
         stream_id: str,
         from_version: int = 0,
         to_version: int | None = None,
-    ) -> AsyncIterator[DomainEvent]:
+    ) -> AsyncIterator[CodetoreumEvent]:
         """
         Replay events from a stream for debugging/recovery.
 
@@ -677,7 +681,7 @@ class InMemoryEventStore(IEventStore):
         with self._lock:
             return len(self._streams)
 
-    def get_events_for_stream(self, stream_id: str) -> list[DomainEvent]:
+    def get_events_for_stream(self, stream_id: str) -> list[CodetoreumEvent]:
         """
         Get all events for a stream (synchronous, for testing).
 
@@ -690,7 +694,7 @@ class InMemoryEventStore(IEventStore):
         with self._lock:
             return self._streams.get(stream_id, []).copy()
 
-    def get_all_events_list(self) -> list[DomainEvent]:
+    def get_all_events_list(self) -> list[CodetoreumEvent]:
         """
         Get all events across all streams (for testing).
 
@@ -701,7 +705,7 @@ class InMemoryEventStore(IEventStore):
             return self._all_events.copy()
 
     @property
-    def events(self) -> list[DomainEvent]:
+    def events(self) -> list[CodetoreumEvent]:
         """
         Get all events across all streams (property for convenient test access).
 
@@ -755,16 +759,18 @@ class InMemoryEventStore(IEventStore):
                     continue
 
                 # Check if stream matches aggregate type
-                if events[0].aggregate_type != aggregate_type:
+                if (
+                    getattr(events[0], "aggregate_type", type(events[0]).__name__.replace("Event", ""))
+                    != aggregate_type
+                ):
                     continue
 
                 # Get latest event for this stream
                 latest_event = events[-1]
 
                 # Apply event type filters
-                # Handle both old DomainEvent (event_type) and new CodetoreumEvent (type)
                 if event_type_filters:
-                    latest_event_type = getattr(latest_event, "event_type", None) or getattr(latest_event, "type", None)
+                    latest_event_type = latest_event.event_type
                     if latest_event_type not in event_type_filters:
                         continue
 
@@ -779,8 +785,8 @@ class InMemoryEventStore(IEventStore):
                             # (e.g., project_id is in WorkflowCreated event, not necessarily latest)
                             event_value = None
                             for event in events:
-                                if field_name in event.payload:
-                                    event_value = event.payload[field_name]
+                                event_value = getattr(event, field_name, None)
+                                if event_value is not None:
                                     break
                         else:
                             event_value = getattr(latest_event, key, None)

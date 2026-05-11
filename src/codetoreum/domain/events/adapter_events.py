@@ -42,7 +42,7 @@ class CodetoreumEvent:
       (e.g., "workitem.column_changed"). Human-readable, hierarchical,
       used for event store queries and documentation.
     - `event_type` (property): Class name for EventBus subscription routing
-      (e.g., "WorkItemColumnChangedEvent"). Matches legacy DomainEvent
+      (e.g., "WorkItemColumnChangedEvent"). Matches legacy CodetoreumEvent
       routing behavior. When subscribing to events, use the class name,
       not the dot-notation type.
 
@@ -94,10 +94,20 @@ class CodetoreumEvent:
             raise ValueError(msg)
 
     @property
+    def occurred_at(self) -> datetime:
+        """Compatibility property — parses self.timestamp into a datetime.
+
+        Returns:
+            UTC datetime parsed from the ISO 8601 timestamp string.
+        """
+        ts = self.timestamp.replace("Z", "+00:00")
+        return datetime.fromisoformat(ts)
+
+    @property
     def event_type(self) -> str:
         """Get event type for EventBus routing.
 
-        Returns the class name for compatibility with legacy DomainEvent-based
+        Returns the class name for compatibility with legacy CodetoreumEvent-based
         EventBus routing. Subscriptions should use the class name (e.g.,
         "WorkItemColumnChangedEvent") to match events, not the dot-notation type.
 

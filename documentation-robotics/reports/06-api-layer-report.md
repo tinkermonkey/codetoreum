@@ -14,11 +14,11 @@ REST APIs, operations, endpoints, and API integrations.
 
 | Metric                    | Count |
 | ------------------------- | ----- |
-| Elements                  | 90    |
+| Elements                  | 110   |
 | Intra-Layer Relationships | 0     |
-| Inter-Layer Relationships | 126   |
+| Inter-Layer Relationships | 146   |
 | Inbound Relationships     | 19    |
-| Outbound Relationships    | 107   |
+| Outbound Relationships    | 127   |
 
 **Cross-Layer References**:
 
@@ -29,98 +29,118 @@ REST APIs, operations, endpoints, and API integrations.
 
 *This layer has >30 elements. Summary table shown instead of diagram.*
 
-| Element                                         | Type        | Relationships |
-| ----------------------------------------------- | ----------- | ------------- |
-| `api.operation.add-agent-capability`            | `operation` | 0             |
-| `api.operation.add-agent-mcp-server`            | `operation` | 0             |
-| `api.operation.add-environment-variable`        | `operation` | 0             |
-| `api.operation.advance-simulation-clock`        | `operation` | 0             |
-| `api.operation.cancel-workflow-execution`       | `operation` | 0             |
-| `api.operation.create-agent`                    | `operation` | 0             |
-| `api.operation.create-api-key`                  | `operation` | 0             |
-| `api.operation.create-board-workflow-template`  | `operation` | 0             |
-| `api.operation.create-simulation-issue`         | `operation` | 0             |
-| `api.operation.create-user`                     | `operation` | 0             |
-| `api.operation.create-work-item`                | `operation` | 0             |
-| `api.operation.create-workflow`                 | `operation` | 0             |
-| `api.operation.delete-agent`                    | `operation` | 0             |
-| `api.operation.delete-board-workflow-template`  | `operation` | 0             |
-| `api.operation.delete-user`                     | `operation` | 0             |
-| `api.operation.delete-work-item`                | `operation` | 0             |
-| `api.operation.delete-workflow`                 | `operation` | 0             |
-| `api.operation.get-agent`                       | `operation` | 0             |
-| `api.operation.get-agent-config`                | `operation` | 0             |
-| `api.operation.get-board-workflow-template`     | `operation` | 0             |
-| `api.operation.get-causal-chain`                | `operation` | 0             |
-| `api.operation.get-current-user`                | `operation` | 0             |
-| `api.operation.get-domain-events`               | `operation` | 0             |
-| `api.operation.get-event-statistics`            | `operation` | 0             |
-| `api.operation.get-execution`                   | `operation` | 0             |
-| `api.operation.get-execution-history`           | `operation` | 0             |
-| `api.operation.get-execution-logs`              | `operation` | 0             |
-| `api.operation.get-execution-queue`             | `operation` | 0             |
-| `api.operation.get-integration-status`          | `operation` | 0             |
-| `api.operation.get-performance-metrics`         | `operation` | 0             |
-| `api.operation.get-pipeline-config`             | `operation` | 0             |
-| `api.operation.get-project-config`              | `operation` | 0             |
-| `api.operation.get-project-config-history`      | `operation` | 0             |
-| `api.operation.get-queue-statistics`            | `operation` | 0             |
-| `api.operation.get-resilience-metrics`          | `operation` | 0             |
-| `api.operation.get-resource-usage-summary`      | `operation` | 0             |
-| `api.operation.get-simulation-board-state`      | `operation` | 0             |
-| `api.operation.get-simulation-clock-state`      | `operation` | 0             |
-| `api.operation.get-simulation-execution-status` | `operation` | 0             |
-| `api.operation.get-simulation-issue`            | `operation` | 0             |
-| `api.operation.get-system-health`               | `operation` | 0             |
-| `api.operation.get-user`                        | `operation` | 0             |
-| `api.operation.get-work-item`                   | `operation` | 0             |
-| `api.operation.get-workflow`                    | `operation` | 0             |
-| `api.operation.get-workflow-run`                | `operation` | 0             |
-| `api.operation.get-workflow-run-audit`          | `operation` | 0             |
-| `api.operation.get-workflow-run-events`         | `operation` | 0             |
-| `api.operation.get-workspace`                   | `operation` | 0             |
-| `api.operation.get-workspace-logs`              | `operation` | 0             |
-| `api.operation.list-active-workspaces`          | `operation` | 0             |
-| `api.operation.list-agents`                     | `operation` | 0             |
-| `api.operation.list-api-keys`                   | `operation` | 0             |
-| `api.operation.list-audit-events`               | `operation` | 0             |
-| `api.operation.list-board-workflow-templates`   | `operation` | 0             |
-| `api.operation.list-config-agents`              | `operation` | 0             |
-| `api.operation.list-executions`                 | `operation` | 0             |
-| `api.operation.list-pipeline-configs`           | `operation` | 0             |
-| `api.operation.list-projects`                   | `operation` | 0             |
-| `api.operation.list-simulation-issues`          | `operation` | 0             |
-| `api.operation.list-work-items`                 | `operation` | 0             |
-| `api.operation.list-workflow-runs`              | `operation` | 0             |
-| `api.operation.list-workflows`                  | `operation` | 0             |
-| `api.operation.list-workspaces`                 | `operation` | 0             |
-| `api.operation.login`                           | `operation` | 0             |
-| `api.operation.move-simulation-issue`           | `operation` | 0             |
-| `api.operation.pause-simulation-clock`          | `operation` | 0             |
-| `api.operation.pause-workflow-execution`        | `operation` | 0             |
-| `api.operation.refresh-token`                   | `operation` | 0             |
-| `api.operation.remove-agent-capability`         | `operation` | 0             |
-| `api.operation.remove-agent-mcp-server`         | `operation` | 0             |
-| `api.operation.remove-environment-variable`     | `operation` | 0             |
-| `api.operation.replay-events`                   | `operation` | 0             |
-| `api.operation.resume-simulation-clock`         | `operation` | 0             |
-| `api.operation.resume-workflow-execution`       | `operation` | 0             |
-| `api.operation.revoke-api-key`                  | `operation` | 0             |
-| `api.operation.search-configurations`           | `operation` | 0             |
-| `api.operation.start-workflow-execution`        | `operation` | 0             |
-| `api.operation.stream-simulation-events`        | `operation` | 0             |
-| `api.operation.terminate-execution`             | `operation` | 0             |
-| `api.operation.update-agent`                    | `operation` | 0             |
-| `api.operation.update-agent-capability`         | `operation` | 0             |
-| `api.operation.update-agent-config`             | `operation` | 0             |
-| `api.operation.update-board-workflow-template`  | `operation` | 0             |
-| `api.operation.update-pipeline-config`          | `operation` | 0             |
-| `api.operation.update-project-config`           | `operation` | 0             |
-| `api.operation.update-user`                     | `operation` | 0             |
-| `api.operation.update-work-item`                | `operation` | 0             |
-| `api.operation.update-workflow`                 | `operation` | 0             |
-| `api.operation.upload-configuration-file`       | `operation` | 0             |
-| `api.operation.validate-entry-conditions`       | `operation` | 0             |
+| Element                                           | Type        | Relationships |
+| ------------------------------------------------- | ----------- | ------------- |
+| `api.operation.add-agent-capability`              | `operation` | 0             |
+| `api.operation.add-agent-mcp-server`              | `operation` | 0             |
+| `api.operation.add-environment-variable`          | `operation` | 0             |
+| `api.operation.add-simulation-comment`            | `operation` | 0             |
+| `api.operation.advance-simulation-clock`          | `operation` | 0             |
+| `api.operation.cancel-workflow-execution`         | `operation` | 0             |
+| `api.operation.create-agent`                      | `operation` | 0             |
+| `api.operation.create-api-key`                    | `operation` | 0             |
+| `api.operation.create-board-workflow-template`    | `operation` | 0             |
+| `api.operation.create-simulation-issue`           | `operation` | 0             |
+| `api.operation.create-user`                       | `operation` | 0             |
+| `api.operation.create-work-item`                  | `operation` | 0             |
+| `api.operation.create-workflow`                   | `operation` | 0             |
+| `api.operation.delete-agent`                      | `operation` | 0             |
+| `api.operation.delete-board-workflow-template`    | `operation` | 0             |
+| `api.operation.delete-user`                       | `operation` | 0             |
+| `api.operation.delete-work-item`                  | `operation` | 0             |
+| `api.operation.delete-workflow`                   | `operation` | 0             |
+| `api.operation.get-active-agents`                 | `operation` | 0             |
+| `api.operation.get-agent`                         | `operation` | 0             |
+| `api.operation.get-agent-config`                  | `operation` | 0             |
+| `api.operation.get-agent-execution-metrics`       | `operation` | 0             |
+| `api.operation.get-api-usage`                     | `operation` | 0             |
+| `api.operation.get-board-workflow-template`       | `operation` | 0             |
+| `api.operation.get-causal-chain`                  | `operation` | 0             |
+| `api.operation.get-current-user`                  | `operation` | 0             |
+| `api.operation.get-domain-events`                 | `operation` | 0             |
+| `api.operation.get-endpoint-metrics`              | `operation` | 0             |
+| `api.operation.get-event-statistics`              | `operation` | 0             |
+| `api.operation.get-execution`                     | `operation` | 0             |
+| `api.operation.get-execution-history`             | `operation` | 0             |
+| `api.operation.get-execution-logs`                | `operation` | 0             |
+| `api.operation.get-execution-queue`               | `operation` | 0             |
+| `api.operation.get-integration-status`            | `operation` | 0             |
+| `api.operation.get-performance-metrics`           | `operation` | 0             |
+| `api.operation.get-pipeline-config`               | `operation` | 0             |
+| `api.operation.get-project-config`                | `operation` | 0             |
+| `api.operation.get-project-config-history`        | `operation` | 0             |
+| `api.operation.get-queue-statistics`              | `operation` | 0             |
+| `api.operation.get-repair-cycle-metrics`          | `operation` | 0             |
+| `api.operation.get-resilience-metrics`            | `operation` | 0             |
+| `api.operation.get-resource-usage-summary`        | `operation` | 0             |
+| `api.operation.get-simulation-board-history`      | `operation` | 0             |
+| `api.operation.get-simulation-board-state`        | `operation` | 0             |
+| `api.operation.get-simulation-clock-state`        | `operation` | 0             |
+| `api.operation.get-simulation-execution-status`   | `operation` | 0             |
+| `api.operation.get-simulation-issue`              | `operation` | 0             |
+| `api.operation.get-simulation-mode-info`          | `operation` | 0             |
+| `api.operation.get-system-health`                 | `operation` | 0             |
+| `api.operation.get-token-info`                    | `operation` | 0             |
+| `api.operation.get-user`                          | `operation` | 0             |
+| `api.operation.get-work-item`                     | `operation` | 0             |
+| `api.operation.get-workflow`                      | `operation` | 0             |
+| `api.operation.get-workflow-run`                  | `operation` | 0             |
+| `api.operation.get-workflow-run-audit`            | `operation` | 0             |
+| `api.operation.get-workflow-run-events`           | `operation` | 0             |
+| `api.operation.get-workflow-versions`             | `operation` | 0             |
+| `api.operation.get-workspace`                     | `operation` | 0             |
+| `api.operation.get-workspace-logs`                | `operation` | 0             |
+| `api.operation.health-check`                      | `operation` | 0             |
+| `api.operation.list-active-workspaces`            | `operation` | 0             |
+| `api.operation.list-agents`                       | `operation` | 0             |
+| `api.operation.list-api-keys`                     | `operation` | 0             |
+| `api.operation.list-audit-events`                 | `operation` | 0             |
+| `api.operation.list-board-workflow-templates`     | `operation` | 0             |
+| `api.operation.list-config-agents`                | `operation` | 0             |
+| `api.operation.list-config-agents-for-project`    | `operation` | 0             |
+| `api.operation.list-config-pipelines-for-project` | `operation` | 0             |
+| `api.operation.list-executions`                   | `operation` | 0             |
+| `api.operation.list-metric-names`                 | `operation` | 0             |
+| `api.operation.list-pipeline-configs`             | `operation` | 0             |
+| `api.operation.list-projects`                     | `operation` | 0             |
+| `api.operation.list-simulation-issues`            | `operation` | 0             |
+| `api.operation.list-work-items`                   | `operation` | 0             |
+| `api.operation.list-workflow-runs`                | `operation` | 0             |
+| `api.operation.list-workflows`                    | `operation` | 0             |
+| `api.operation.list-workspaces`                   | `operation` | 0             |
+| `api.operation.login`                             | `operation` | 0             |
+| `api.operation.logout`                            | `operation` | 0             |
+| `api.operation.move-simulation-issue`             | `operation` | 0             |
+| `api.operation.pause-simulation-clock`            | `operation` | 0             |
+| `api.operation.pause-workflow-execution`          | `operation` | 0             |
+| `api.operation.readiness-check`                   | `operation` | 0             |
+| `api.operation.receive-git-hub-webhook`           | `operation` | 0             |
+| `api.operation.refresh-token`                     | `operation` | 0             |
+| `api.operation.remove-agent-capability`           | `operation` | 0             |
+| `api.operation.remove-agent-mcp-server`           | `operation` | 0             |
+| `api.operation.remove-environment-variable`       | `operation` | 0             |
+| `api.operation.replay-events`                     | `operation` | 0             |
+| `api.operation.resume-simulation-clock`           | `operation` | 0             |
+| `api.operation.resume-workflow-execution`         | `operation` | 0             |
+| `api.operation.revoke-api-key`                    | `operation` | 0             |
+| `api.operation.search-configurations`             | `operation` | 0             |
+| `api.operation.start-workflow-execution`          | `operation` | 0             |
+| `api.operation.stream-simulation-events`          | `operation` | 0             |
+| `api.operation.terminate-execution`               | `operation` | 0             |
+| `api.operation.update-agent`                      | `operation` | 0             |
+| `api.operation.update-agent-capability`           | `operation` | 0             |
+| `api.operation.update-agent-config`               | `operation` | 0             |
+| `api.operation.update-board-workflow-template`    | `operation` | 0             |
+| `api.operation.update-pipeline-config`            | `operation` | 0             |
+| `api.operation.update-project-config`             | `operation` | 0             |
+| `api.operation.update-user`                       | `operation` | 0             |
+| `api.operation.update-work-item`                  | `operation` | 0             |
+| `api.operation.update-workflow`                   | `operation` | 0             |
+| `api.operation.upload-configuration-file`         | `operation` | 0             |
+| `api.operation.validate-entry-conditions`         | `operation` | 0             |
+| `api.operation.validate-workflow-definition`      | `operation` | 0             |
+| `api.operation.web-socket-event-stream`           | `operation` | 0             |
+| `api.operation.web-socket-event-stream-legacy`    | `operation` | 0             |
 
 ## Inter-Layer Dependencies
 
@@ -155,6 +175,7 @@ flowchart TB
 | `api.operation.references.application.applicationservice` | `api.operation.add-agent-capability`                | `application.applicationservice.configuration-service`       | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.add-agent-mcp-server`                | `application.applicationservice.configuration-service`       | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.add-environment-variable`            | `application.applicationservice.configuration-service`       | `application` | `references` | many-to-many | medium   |
+| `api.operation.references.application.applicationservice` | `api.operation.add-simulation-comment`              | `application.applicationservice.work-item-service`           | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.advance-simulation-clock`            | `application.applicationservice.simulation-service`          | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.cancel-workflow-execution`           | `application.applicationservice.workflow-orchestrator`       | `application` | `references` | many-to-many | medium   |
 | `api.operation.requires.security.securitypolicy`          | `api.operation.cancel-workflow-execution`           | `security.securitypolicy.role-based-access-control`          | `security`    | `requires`   | many-to-many | medium   |
@@ -171,14 +192,18 @@ flowchart TB
 | `api.operation.references.application.applicationservice` | `api.operation.delete-user`                         | `application.applicationservice.authentication-service`      | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.delete-work-item`                    | `application.applicationservice.work-item-service`           | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.delete-workflow`                     | `application.applicationservice.configuration-service`       | `application` | `references` | many-to-many | medium   |
+| `api.operation.references.application.applicationservice` | `api.operation.get-active-agents`                   | `application.applicationservice.metrics-service`             | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.get-agent-config`                    | `application.applicationservice.configuration-service`       | `application` | `references` | many-to-many | medium   |
+| `api.operation.references.application.applicationservice` | `api.operation.get-agent-execution-metrics`         | `application.applicationservice.metrics-service`             | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.get-agent`                           | `application.applicationservice.configuration-service`       | `application` | `references` | many-to-many | medium   |
+| `api.operation.references.application.applicationservice` | `api.operation.get-api-usage`                       | `application.applicationservice.metrics-service`             | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.get-board-workflow-template`         | `application.applicationservice.configuration-service`       | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.get-causal-chain`                    | `application.applicationservice.event-sequence-validator`    | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.get-current-user`                    | `application.applicationservice.authentication-service`      | `application` | `references` | many-to-many | medium   |
 | `api.operation.requires.security.securitypolicy`          | `api.operation.get-current-user`                    | `security.securitypolicy.jwt-bearer-authentication`          | `security`    | `requires`   | many-to-many | medium   |
 | `api.operation.realizes.motivation.goal`                  | `api.operation.get-domain-events`                   | `motivation.goal.complete-observability-via-event-sourcing`  | `motivation`  | `realizes`   | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.get-domain-events`                   | `application.applicationservice.workflow-run-query-service`  | `application` | `references` | many-to-many | medium   |
+| `api.operation.references.application.applicationservice` | `api.operation.get-endpoint-metrics`                | `application.applicationservice.metrics-service`             | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.get-event-statistics`                | `application.applicationservice.event-sequence-validator`    | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.get-execution-history`               | `application.applicationservice.execution-service`           | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.get-execution-logs`                  | `application.applicationservice.execution-service`           | `application` | `references` | many-to-many | medium   |
@@ -190,14 +215,18 @@ flowchart TB
 | `api.operation.references.application.applicationservice` | `api.operation.get-project-config-history`          | `application.applicationservice.configuration-service`       | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.get-project-config`                  | `application.applicationservice.configuration-service`       | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.get-queue-statistics`                | `application.applicationservice.agent-scheduler`             | `application` | `references` | many-to-many | medium   |
+| `api.operation.references.application.applicationservice` | `api.operation.get-repair-cycle-metrics`            | `application.applicationservice.metrics-service`             | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.get-resilience-metrics`              | `application.applicationservice.metrics-service`             | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.get-resource-usage-summary`          | `application.applicationservice.workspace-router`            | `application` | `references` | many-to-many | medium   |
+| `api.operation.references.application.applicationservice` | `api.operation.get-simulation-board-history`        | `application.applicationservice.board-polling-service`       | `application` | `references` | many-to-many | medium   |
 | `api.operation.realizes.motivation.goal`                  | `api.operation.get-simulation-board-state`          | `motivation.goal.full-testability-without-external-services` | `motivation`  | `realizes`   | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.get-simulation-board-state`          | `application.applicationservice.simulation-service`          | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.get-simulation-clock-state`          | `application.applicationservice.simulation-service`          | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.get-simulation-execution-status`     | `application.applicationservice.simulation-service`          | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.get-simulation-issue`                | `application.applicationservice.simulation-service`          | `application` | `references` | many-to-many | medium   |
+| `api.operation.references.application.applicationservice` | `api.operation.get-simulation-mode-info`            | `application.applicationservice.metrics-service`             | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.get-system-health`                   | `application.applicationservice.metrics-service`             | `application` | `references` | many-to-many | medium   |
+| `api.operation.references.application.applicationservice` | `api.operation.get-token-info`                      | `application.applicationservice.authentication-service`      | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.get-user`                            | `application.applicationservice.authentication-service`      | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.get-work-item`                       | `application.applicationservice.work-item-service`           | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.get-workflow`                        | `application.applicationservice.configuration-service`       | `application` | `references` | many-to-many | medium   |
@@ -206,16 +235,21 @@ flowchart TB
 | `api.operation.references.application.applicationservice` | `api.operation.get-workflow-run-events`             | `application.applicationservice.workflow-run-query-service`  | `application` | `references` | many-to-many | medium   |
 | `api.operation.realizes.motivation.goal`                  | `api.operation.get-workflow-run`                    | `motivation.goal.complete-observability-via-event-sourcing`  | `motivation`  | `realizes`   | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.get-workflow-run`                    | `application.applicationservice.workflow-run-query-service`  | `application` | `references` | many-to-many | medium   |
+| `api.operation.references.application.applicationservice` | `api.operation.get-workflow-versions`               | `application.applicationservice.workflow-run-query-service`  | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.get-workspace-logs`                  | `application.applicationservice.workspace-router`            | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.get-workspace`                       | `application.applicationservice.workspace-router`            | `application` | `references` | many-to-many | medium   |
+| `api.operation.references.application.applicationservice` | `api.operation.health-check`                        | `application.applicationservice.metrics-service`             | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.list-active-workspaces`              | `application.applicationservice.workspace-router`            | `application` | `references` | many-to-many | medium   |
 | `api.operation.realizes.motivation.goal`                  | `api.operation.list-agents`                         | `motivation.goal.plugin-extensibility`                       | `motivation`  | `realizes`   | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.list-agents`                         | `application.applicationservice.configuration-service`       | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.list-api-keys`                       | `application.applicationservice.authentication-service`      | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.list-audit-events`                   | `application.applicationservice.event-sequence-validator`    | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.list-board-workflow-templates`       | `application.applicationservice.configuration-service`       | `application` | `references` | many-to-many | medium   |
+| `api.operation.references.application.applicationservice` | `api.operation.list-config-agents-for-project`      | `application.applicationservice.configuration-service`       | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.list-config-agents`                  | `application.applicationservice.configuration-service`       | `application` | `references` | many-to-many | medium   |
+| `api.operation.references.application.applicationservice` | `api.operation.list-config-pipelines-for-project`   | `application.applicationservice.configuration-service`       | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.list-executions`                     | `application.applicationservice.execution-service`           | `application` | `references` | many-to-many | medium   |
+| `api.operation.references.application.applicationservice` | `api.operation.list-metric-names`                   | `application.applicationservice.metrics-service`             | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.list-pipeline-configs`               | `application.applicationservice.configuration-service`       | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.list-projects`                       | `application.applicationservice.configuration-service`       | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.list-simulation-issues`              | `application.applicationservice.simulation-service`          | `application` | `references` | many-to-many | medium   |
@@ -225,9 +259,12 @@ flowchart TB
 | `api.operation.references.application.applicationservice` | `api.operation.list-workspaces`                     | `application.applicationservice.workspace-router`            | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.login`                               | `application.applicationservice.authentication-service`      | `application` | `references` | many-to-many | medium   |
 | `api.operation.requires.security.securitypolicy`          | `api.operation.login`                               | `security.securitypolicy.jwt-bearer-authentication`          | `security`    | `requires`   | many-to-many | medium   |
+| `api.operation.references.application.applicationservice` | `api.operation.logout`                              | `application.applicationservice.authentication-service`      | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.move-simulation-issue`               | `application.applicationservice.simulation-service`          | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.pause-simulation-clock`              | `application.applicationservice.simulation-service`          | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.pause-workflow-execution`            | `application.applicationservice.workflow-orchestrator`       | `application` | `references` | many-to-many | medium   |
+| `api.operation.references.application.applicationservice` | `api.operation.readiness-check`                     | `application.applicationservice.metrics-service`             | `application` | `references` | many-to-many | medium   |
+| `api.operation.references.application.applicationservice` | `api.operation.receive-git-hub-webhook`             | `application.applicationservice.board-polling-service`       | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.refresh-token`                       | `application.applicationservice.authentication-service`      | `application` | `references` | many-to-many | medium   |
 | `api.operation.requires.security.securitypolicy`          | `api.operation.refresh-token`                       | `security.securitypolicy.jwt-bearer-authentication`          | `security`    | `requires`   | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.remove-agent-capability`             | `application.applicationservice.configuration-service`       | `application` | `references` | many-to-many | medium   |
@@ -259,6 +296,9 @@ flowchart TB
 | `api.operation.references.application.applicationservice` | `api.operation.update-workflow`                     | `application.applicationservice.configuration-service`       | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.upload-configuration-file`           | `application.applicationservice.configuration-service`       | `application` | `references` | many-to-many | medium   |
 | `api.operation.references.application.applicationservice` | `api.operation.validate-entry-conditions`           | `application.applicationservice.workflow-orchestrator`       | `application` | `references` | many-to-many | medium   |
+| `api.operation.references.application.applicationservice` | `api.operation.validate-workflow-definition`        | `application.applicationservice.workflow-orchestrator`       | `application` | `references` | many-to-many | medium   |
+| `api.operation.references.application.applicationservice` | `api.operation.web-socket-event-stream-legacy`      | `application.applicationservice.metrics-service`             | `application` | `references` | many-to-many | medium   |
+| `api.operation.references.application.applicationservice` | `api.operation.web-socket-event-stream`             | `application.applicationservice.metrics-service`             | `application` | `references` | many-to-many | medium   |
 | `apm.metricinstrument.monitors.api.operation`             | `apm.metricinstrument.agent-execution-duration`     | `api.operation.start-workflow-execution`                     | `api`         | `monitors`   | many-to-many | medium   |
 | `apm.metricinstrument.monitors.api.operation`             | `apm.metricinstrument.board-reconciliation-metrics` | `api.operation.get-workflow-run`                             | `api`         | `monitors`   | many-to-many | medium   |
 | `apm.span.monitors.api.operation`                         | `apm.span.agent-execution-trace`                    | `api.operation.get-execution`                                | `api`         | `monitors`   | many-to-many | medium   |
@@ -322,6 +362,26 @@ Adds or updates an environment variable for a project configuration
 | Type        | Related Element                                        | Predicate    | Direction |
 | ----------- | ------------------------------------------------------ | ------------ | --------- |
 | inter-layer | `application.applicationservice.configuration-service` | `references` | outbound  |
+
+### Add Simulation Comment {#add-simulation-comment}
+
+**ID**: `api.operation.add-simulation-comment`
+
+**Type**: `operation`
+
+#### Attributes
+
+| Name        | Value                               |
+| ----------- | ----------------------------------- |
+| operationId | addSimulationComment                |
+| summary     | Add a comment to a simulation issue |
+| tags        | simulation-ticketing                |
+
+#### Relationships
+
+| Type        | Related Element                                    | Predicate    | Direction |
+| ----------- | -------------------------------------------------- | ------------ | --------- |
+| inter-layer | `application.applicationservice.work-item-service` | `references` | outbound  |
 
 ### Advance Simulation Clock {#advance-simulation-clock}
 
@@ -523,6 +583,26 @@ Deletes a workflow definition from the system
 | ----------- | ------------------------------------------------------ | ------------ | --------- |
 | inter-layer | `application.applicationservice.configuration-service` | `references` | outbound  |
 
+### Get Active Agents {#get-active-agents}
+
+**ID**: `api.operation.get-active-agents`
+
+**Type**: `operation`
+
+#### Attributes
+
+| Name        | Value                       |
+| ----------- | --------------------------- |
+| operationId | getActiveAgents             |
+| summary     | Get currently active agents |
+| tags        | metrics                     |
+
+#### Relationships
+
+| Type        | Related Element                                  | Predicate    | Direction |
+| ----------- | ------------------------------------------------ | ------------ | --------- |
+| inter-layer | `application.applicationservice.metrics-service` | `references` | outbound  |
+
 ### Get Agent {#get-agent}
 
 **ID**: `api.operation.get-agent`
@@ -550,6 +630,46 @@ Returns the stored configuration for a specific agent
 | Type        | Related Element                                        | Predicate    | Direction |
 | ----------- | ------------------------------------------------------ | ------------ | --------- |
 | inter-layer | `application.applicationservice.configuration-service` | `references` | outbound  |
+
+### Get Agent Execution Metrics {#get-agent-execution-metrics}
+
+**ID**: `api.operation.get-agent-execution-metrics`
+
+**Type**: `operation`
+
+#### Attributes
+
+| Name        | Value                       |
+| ----------- | --------------------------- |
+| operationId | getAgentExecutionMetrics    |
+| summary     | Get agent execution metrics |
+| tags        | metrics                     |
+
+#### Relationships
+
+| Type        | Related Element                                  | Predicate    | Direction |
+| ----------- | ------------------------------------------------ | ------------ | --------- |
+| inter-layer | `application.applicationservice.metrics-service` | `references` | outbound  |
+
+### Get API Usage {#get-api-usage}
+
+**ID**: `api.operation.get-api-usage`
+
+**Type**: `operation`
+
+#### Attributes
+
+| Name        | Value                    |
+| ----------- | ------------------------ |
+| operationId | getApiUsage              |
+| summary     | Get API usage and quotas |
+| tags        | metrics                  |
+
+#### Relationships
+
+| Type        | Related Element                                  | Predicate    | Direction |
+| ----------- | ------------------------------------------------ | ------------ | --------- |
+| inter-layer | `application.applicationservice.metrics-service` | `references` | outbound  |
 
 ### Get Board Workflow Template {#get-board-workflow-template}
 
@@ -609,6 +729,26 @@ Queries and returns domain events from the event store with filtering options
 | inter-layer | `motivation.goal.complete-observability-via-event-sourcing` | `realizes`   | outbound  |
 | inter-layer | `application.applicationservice.workflow-run-query-service` | `references` | outbound  |
 | inter-layer | `apm.span.event-handler-trace`                              | `monitors`   | inbound   |
+
+### Get Endpoint Metrics {#get-endpoint-metrics}
+
+**ID**: `api.operation.get-endpoint-metrics`
+
+**Type**: `operation`
+
+#### Attributes
+
+| Name        | Value                        |
+| ----------- | ---------------------------- |
+| operationId | getEndpointMetrics           |
+| summary     | Get per-endpoint API metrics |
+| tags        | metrics                      |
+
+#### Relationships
+
+| Type        | Related Element                                  | Predicate    | Direction |
+| ----------- | ------------------------------------------------ | ------------ | --------- |
+| inter-layer | `application.applicationservice.metrics-service` | `references` | outbound  |
 
 ### Get Event Statistics {#get-event-statistics}
 
@@ -766,6 +906,26 @@ Returns statistics about the execution queue including throughput and wait times
 | ----------- | ------------------------------------------------ | ------------ | --------- |
 | inter-layer | `application.applicationservice.agent-scheduler` | `references` | outbound  |
 
+### Get Repair Cycle Metrics {#get-repair-cycle-metrics}
+
+**ID**: `api.operation.get-repair-cycle-metrics`
+
+**Type**: `operation`
+
+#### Attributes
+
+| Name        | Value                    |
+| ----------- | ------------------------ |
+| operationId | getRepairCycleMetrics    |
+| summary     | Get repair cycle metrics |
+| tags        | metrics                  |
+
+#### Relationships
+
+| Type        | Related Element                                  | Predicate    | Direction |
+| ----------- | ------------------------------------------------ | ------------ | --------- |
+| inter-layer | `application.applicationservice.metrics-service` | `references` | outbound  |
+
 ### Get Resilience Metrics {#get-resilience-metrics}
 
 **ID**: `api.operation.get-resilience-metrics`
@@ -793,6 +953,26 @@ Returns aggregate resource usage across all active workspaces
 | Type        | Related Element                                   | Predicate    | Direction |
 | ----------- | ------------------------------------------------- | ------------ | --------- |
 | inter-layer | `application.applicationservice.workspace-router` | `references` | outbound  |
+
+### Get Simulation Board History {#get-simulation-board-history}
+
+**ID**: `api.operation.get-simulation-board-history`
+
+**Type**: `operation`
+
+#### Attributes
+
+| Name        | Value                                     |
+| ----------- | ----------------------------------------- |
+| operationId | getSimulationBoardHistory                 |
+| summary     | Get board movement history for simulation |
+| tags        | simulation-ticketing                      |
+
+#### Relationships
+
+| Type        | Related Element                                        | Predicate    | Direction |
+| ----------- | ------------------------------------------------------ | ------------ | --------- |
+| inter-layer | `application.applicationservice.board-polling-service` | `references` | outbound  |
 
 ### Get Simulation Board State {#get-simulation-board-state}
 
@@ -851,6 +1031,26 @@ Returns a specific simulated issue by ID (simulation-only)
 | ----------- | --------------------------------------------------- | ------------ | --------- |
 | inter-layer | `application.applicationservice.simulation-service` | `references` | outbound  |
 
+### Get Simulation Mode Info {#get-simulation-mode-info}
+
+**ID**: `api.operation.get-simulation-mode-info`
+
+**Type**: `operation`
+
+#### Attributes
+
+| Name        | Value                                        |
+| ----------- | -------------------------------------------- |
+| operationId | getSimulationModeInfo                        |
+| summary     | Get simulation mode status and configuration |
+| tags        | metrics                                      |
+
+#### Relationships
+
+| Type        | Related Element                                  | Predicate    | Direction |
+| ----------- | ------------------------------------------------ | ------------ | --------- |
+| inter-layer | `application.applicationservice.metrics-service` | `references` | outbound  |
+
 ### Get System Health {#get-system-health}
 
 **ID**: `api.operation.get-system-health`
@@ -865,6 +1065,26 @@ Returns system health status including component availability and error rates
 | ----------- | ------------------------------------------------ | ------------ | --------- |
 | inter-layer | `application.applicationservice.metrics-service` | `references` | outbound  |
 | inter-layer | `ux.view.dashboard`                              | `accesses`   | inbound   |
+
+### Get Token Info {#get-token-info}
+
+**ID**: `api.operation.get-token-info`
+
+**Type**: `operation`
+
+#### Attributes
+
+| Name        | Value                                                  |
+| ----------- | ------------------------------------------------------ |
+| operationId | getTokenInfo                                           |
+| summary     | Get information about the current authentication token |
+| tags        | authentication                                         |
+
+#### Relationships
+
+| Type        | Related Element                                         | Predicate    | Direction |
+| ----------- | ------------------------------------------------------- | ------------ | --------- |
+| inter-layer | `application.applicationservice.authentication-service` | `references` | outbound  |
 
 ### Get User {#get-user}
 
@@ -956,6 +1176,26 @@ Returns the domain event stream for a specific workflow run
 | inter-layer | `application.applicationservice.workflow-run-query-service` | `references` | outbound  |
 | inter-layer | `ux.view.pipeline-run-details`                              | `accesses`   | inbound   |
 
+### Get Workflow Versions {#get-workflow-versions}
+
+**ID**: `api.operation.get-workflow-versions`
+
+**Type**: `operation`
+
+#### Attributes
+
+| Name        | Value                        |
+| ----------- | ---------------------------- |
+| operationId | getWorkflowVersions          |
+| summary     | Get workflow version history |
+| tags        | workflows                    |
+
+#### Relationships
+
+| Type        | Related Element                                             | Predicate    | Direction |
+| ----------- | ----------------------------------------------------------- | ------------ | --------- |
+| inter-layer | `application.applicationservice.workflow-run-query-service` | `references` | outbound  |
+
 ### Get Workspace {#get-workspace}
 
 **ID**: `api.operation.get-workspace`
@@ -983,6 +1223,26 @@ Returns execution logs from a specific workspace container
 | Type        | Related Element                                   | Predicate    | Direction |
 | ----------- | ------------------------------------------------- | ------------ | --------- |
 | inter-layer | `application.applicationservice.workspace-router` | `references` | outbound  |
+
+### Health Check {#health-check}
+
+**ID**: `api.operation.health-check`
+
+**Type**: `operation`
+
+#### Attributes
+
+| Name        | Value                                 |
+| ----------- | ------------------------------------- |
+| operationId | healthCheck                           |
+| summary     | Basic health check - no auth required |
+| tags        | health                                |
+
+#### Relationships
+
+| Type        | Related Element                                  | Predicate    | Direction |
+| ----------- | ------------------------------------------------ | ------------ | --------- |
+| inter-layer | `application.applicationservice.metrics-service` | `references` | outbound  |
 
 ### List Active Workspaces {#list-active-workspaces}
 
@@ -1071,6 +1331,46 @@ Returns all agent configurations from the configuration store
 | inter-layer | `application.applicationservice.configuration-service` | `references` | outbound  |
 | inter-layer | `ux.view.project-config`                               | `accesses`   | inbound   |
 
+### List Config Agents For Project {#list-config-agents-for-project}
+
+**ID**: `api.operation.list-config-agents-for-project`
+
+**Type**: `operation`
+
+#### Attributes
+
+| Name        | Value                              |
+| ----------- | ---------------------------------- |
+| operationId | listConfigAgentsForProject         |
+| summary     | List agents for a specific project |
+| tags        | configuration                      |
+
+#### Relationships
+
+| Type        | Related Element                                        | Predicate    | Direction |
+| ----------- | ------------------------------------------------------ | ------------ | --------- |
+| inter-layer | `application.applicationservice.configuration-service` | `references` | outbound  |
+
+### List Config Pipelines For Project {#list-config-pipelines-for-project}
+
+**ID**: `api.operation.list-config-pipelines-for-project`
+
+**Type**: `operation`
+
+#### Attributes
+
+| Name        | Value                                 |
+| ----------- | ------------------------------------- |
+| operationId | listConfigPipelinesForProject         |
+| summary     | List pipelines for a specific project |
+| tags        | configuration                         |
+
+#### Relationships
+
+| Type        | Related Element                                        | Predicate    | Direction |
+| ----------- | ------------------------------------------------------ | ------------ | --------- |
+| inter-layer | `application.applicationservice.configuration-service` | `references` | outbound  |
+
 ### List Executions {#list-executions}
 
 **ID**: `api.operation.list-executions`
@@ -1085,6 +1385,26 @@ Returns a paginated list of agent executions with optional filtering by status o
 | ----------- | -------------------------------------------------- | ------------ | --------- |
 | inter-layer | `application.applicationservice.execution-service` | `references` | outbound  |
 | inter-layer | `ux.view.dashboard`                                | `accesses`   | inbound   |
+
+### List Metric Names {#list-metric-names}
+
+**ID**: `api.operation.list-metric-names`
+
+**Type**: `operation`
+
+#### Attributes
+
+| Name        | Value                       |
+| ----------- | --------------------------- |
+| operationId | listMetricNames             |
+| summary     | List available metric names |
+| tags        | metrics                     |
+
+#### Relationships
+
+| Type        | Related Element                                  | Predicate    | Direction |
+| ----------- | ------------------------------------------------ | ------------ | --------- |
+| inter-layer | `application.applicationservice.metrics-service` | `references` | outbound  |
 
 ### List Pipeline Configs {#list-pipeline-configs}
 
@@ -1201,6 +1521,26 @@ Authenticates a user with credentials and returns a JWT access token
 | inter-layer | `application.applicationservice.authentication-service` | `references` | outbound  |
 | inter-layer | `security.securitypolicy.jwt-bearer-authentication`     | `requires`   | outbound  |
 
+### Logout {#logout}
+
+**ID**: `api.operation.logout`
+
+**Type**: `operation`
+
+#### Attributes
+
+| Name        | Value                                                 |
+| ----------- | ----------------------------------------------------- |
+| operationId | logout                                                |
+| summary     | Logout by clearing the httpOnly authentication cookie |
+| tags        | authentication                                        |
+
+#### Relationships
+
+| Type        | Related Element                                         | Predicate    | Direction |
+| ----------- | ------------------------------------------------------- | ------------ | --------- |
+| inter-layer | `application.applicationservice.authentication-service` | `references` | outbound  |
+
 ### Move Simulation Issue {#move-simulation-issue}
 
 **ID**: `api.operation.move-simulation-issue`
@@ -1242,6 +1582,46 @@ Pauses a running workflow execution
 | Type        | Related Element                                        | Predicate    | Direction |
 | ----------- | ------------------------------------------------------ | ------------ | --------- |
 | inter-layer | `application.applicationservice.workflow-orchestrator` | `references` | outbound  |
+
+### Readiness Check {#readiness-check}
+
+**ID**: `api.operation.readiness-check`
+
+**Type**: `operation`
+
+#### Attributes
+
+| Name        | Value                                          |
+| ----------- | ---------------------------------------------- |
+| operationId | readinessCheck                                 |
+| summary     | Readiness check with dependency health details |
+| tags        | health                                         |
+
+#### Relationships
+
+| Type        | Related Element                                  | Predicate    | Direction |
+| ----------- | ------------------------------------------------ | ------------ | --------- |
+| inter-layer | `application.applicationservice.metrics-service` | `references` | outbound  |
+
+### Receive GitHub Webhook {#receive-github-webhook}
+
+**ID**: `api.operation.receive-git-hub-webhook`
+
+**Type**: `operation`
+
+#### Attributes
+
+| Name        | Value                                     |
+| ----------- | ----------------------------------------- |
+| operationId | receiveGitHubWebhook                      |
+| summary     | Receive and process GitHub webhook events |
+| tags        | webhooks                                  |
+
+#### Relationships
+
+| Type        | Related Element                                        | Predicate    | Direction |
+| ----------- | ------------------------------------------------------ | ------------ | --------- |
+| inter-layer | `application.applicationservice.board-polling-service` | `references` | outbound  |
 
 ### Refresh Token {#refresh-token}
 
@@ -1577,6 +1957,67 @@ Validates whether entry conditions are met for a workflow stage transition
 | ----------- | ------------------------------------------------------ | ------------ | --------- |
 | inter-layer | `application.applicationservice.workflow-orchestrator` | `references` | outbound  |
 
+### Validate Workflow Definition {#validate-workflow-definition}
+
+**ID**: `api.operation.validate-workflow-definition`
+
+**Type**: `operation`
+
+#### Attributes
+
+| Name        | Value                                                         |
+| ----------- | ------------------------------------------------------------- |
+| operationId | validateWorkflowDefinition                                    |
+| summary     | Validate workflow definition correctness and entry conditions |
+| tags        | workflows                                                     |
+
+#### Relationships
+
+| Type        | Related Element                                        | Predicate    | Direction |
+| ----------- | ------------------------------------------------------ | ------------ | --------- |
+| inter-layer | `application.applicationservice.workflow-orchestrator` | `references` | outbound  |
+
+### WebSocket Event Stream {#websocket-event-stream}
+
+**ID**: `api.operation.web-socket-event-stream`
+
+**Type**: `operation`
+
+#### Attributes
+
+| Name        | Value                                                                        |
+| ----------- | ---------------------------------------------------------------------------- |
+| operationId | websocketEventStream                                                         |
+| summary     | WebSocket endpoint for real-time event streaming with subscription filtering |
+| tags        | events                                                                       |
+
+#### Relationships
+
+| Type        | Related Element                                  | Predicate    | Direction |
+| ----------- | ------------------------------------------------ | ------------ | --------- |
+| inter-layer | `application.applicationservice.metrics-service` | `references` | outbound  |
+
+### WebSocket Event Stream Legacy {#websocket-event-stream-legacy}
+
+**ID**: `api.operation.web-socket-event-stream-legacy`
+
+**Type**: `operation`
+
+#### Attributes
+
+| Name        | Value                                                |
+| ----------- | ---------------------------------------------------- |
+| deprecated  | true                                                 |
+| operationId | websocketEventStreamLegacy                           |
+| summary     | Legacy WebSocket endpoint for backward compatibility |
+| tags        | events                                               |
+
+#### Relationships
+
+| Type        | Related Element                                  | Predicate    | Direction |
+| ----------- | ------------------------------------------------ | ------------ | --------- |
+| inter-layer | `application.applicationservice.metrics-service` | `references` | outbound  |
+
 ---
 
-Generated: 2026-05-08T12:30:44.964Z | Model Version: 0.1.0
+Generated: 2026-05-09T09:28:54.064Z | Model Version: 0.1.0

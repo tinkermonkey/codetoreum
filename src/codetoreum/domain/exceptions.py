@@ -8,8 +8,7 @@ class DomainError(Exception):
         """
         Initialize domain error.
 
-        Args:
-            message: Error message describing the business rule violation
+        Args: message: Error message describing the business rule violation
         """
         self.message = message
         super().__init__(self.message)

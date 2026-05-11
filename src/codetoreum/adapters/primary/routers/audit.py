@@ -270,7 +270,7 @@ def create_audit_router(
             the index when count changes.
 
             Returns:
-                Dict mapping event_id -> DomainEvent
+                Dict mapping event_id -> CodetoreumEvent
             """
             async with cache_lock:
                 # Fast path: check if the event count has changed

@@ -10,7 +10,7 @@ All events are logged with structured fields for audit trail and metrics.
 
 import logging
 
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.domain.events.branch_events import (
     BranchResolutionCreatedEvent,
     BranchResolvedEvent,
@@ -82,7 +82,7 @@ class BranchResolutionEventHandler(EventHandler):
             "layer": "application",
         },
     )
-    async def handle(self, event: DomainEvent) -> None:
+    async def handle(self, event: CodetoreumEvent) -> None:
         """
         Handle branch resolution event and log with structured fields.
 

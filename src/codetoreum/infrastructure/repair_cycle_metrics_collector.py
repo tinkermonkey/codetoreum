@@ -16,13 +16,12 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.domain.events.repair_cycle_events import (
     RepairCycleMetricsBackendFailedEvent,
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.event_bus import EventBus
-from codetoreum.infrastructure.event_types import EventTypes
 from codetoreum.ports.output.metrics import IMetrics
 
 logger = logging.getLogger(__name__)
@@ -170,25 +169,25 @@ class RepairCycleMetricsCollector:
             return
 
         # Cycle lifecycle events
-        self.event_bus.subscribe(EventTypes.REPAIR_CYCLE_STARTED, self._on_repair_cycle_started)
-        self.event_bus.subscribe(EventTypes.REPAIR_CYCLE_COMPLETED, self._on_repair_cycle_completed)
-        self.event_bus.subscribe(EventTypes.REPAIR_CYCLE_FAST_FAIL, self._on_repair_cycle_fast_fail)
+        self.event_bus.subscribe("RepairCycleStartedEvent", self._on_repair_cycle_started)
+        self.event_bus.subscribe("RepairCycleCompletedEvent", self._on_repair_cycle_completed)
+        self.event_bus.subscribe("RepairCycleFastFailEvent", self._on_repair_cycle_fast_fail)
 
         # Test execution events
-        self.event_bus.subscribe(EventTypes.REPAIR_CYCLE_TEST_EXECUTION_STARTED, self._on_test_execution_started)
-        self.event_bus.subscribe(EventTypes.REPAIR_CYCLE_TEST_EXECUTION_COMPLETED, self._on_test_execution_completed)
+        self.event_bus.subscribe("RepairCycleTestExecutionStartedEvent", self._on_test_execution_started)
+        self.event_bus.subscribe("RepairCycleTestExecutionCompletedEvent", self._on_test_execution_completed)
 
         # File fixing events
-        self.event_bus.subscribe(EventTypes.REPAIR_CYCLE_FILE_FIX_STARTED, self._on_file_fix_started)
-        self.event_bus.subscribe(EventTypes.REPAIR_CYCLE_FILE_FIX_COMPLETED, self._on_file_fix_completed)
+        self.event_bus.subscribe("RepairCycleFileFixStartedEvent", self._on_file_fix_started)
+        self.event_bus.subscribe("RepairCycleFileFixCompletedEvent", self._on_file_fix_completed)
 
         # Warning review events
-        self.event_bus.subscribe(EventTypes.REPAIR_CYCLE_WARNING_REVIEW_STARTED, self._on_warning_review_started)
-        self.event_bus.subscribe(EventTypes.REPAIR_CYCLE_WARNING_REVIEW_COMPLETED, self._on_warning_review_completed)
+        self.event_bus.subscribe("RepairCycleWarningReviewStartedEvent", self._on_warning_review_started)
+        self.event_bus.subscribe("RepairCycleWarningReviewCompletedEvent", self._on_warning_review_completed)
 
         logger.info("RepairCycleMetricsCollector subscribed to events")
 
-    def _get_event_attribute(self, event: DomainEvent, attribute: str, default: Any = None) -> Any:
+    def _get_event_attribute(self, event: CodetoreumEvent, attribute: str, default: Any = None) -> Any:
         """Extract attribute from event."""
         if hasattr(event, attribute):
             return getattr(event, attribute, default)
@@ -245,7 +244,7 @@ class RepairCycleMetricsCollector:
         """Check if metrics backend is healthy (circuit closed)."""
         return not self._backend_circuit_open
 
-    async def _on_repair_cycle_started(self, event: DomainEvent) -> None:
+    async def _on_repair_cycle_started(self, event: CodetoreumEvent) -> None:
         """Record repair cycle started."""
         try:
             agent_name = self._get_event_attribute(event, "agent_name", "unknown")
@@ -286,7 +285,7 @@ class RepairCycleMetricsCollector:
                 },
             )
 
-    async def _on_repair_cycle_completed(self, event: DomainEvent) -> None:
+    async def _on_repair_cycle_completed(self, event: CodetoreumEvent) -> None:
         """Record repair cycle completed."""
         try:
             agent_name = self._get_event_attribute(event, "agent_name", "unknown")
@@ -360,7 +359,7 @@ class RepairCycleMetricsCollector:
                 },
             )
 
-    async def _on_repair_cycle_fast_fail(self, event: DomainEvent) -> None:
+    async def _on_repair_cycle_fast_fail(self, event: CodetoreumEvent) -> None:
         """Record repair cycle fast-fail."""
         try:
             agent_name = self._get_event_attribute(event, "agent_name", "unknown")
@@ -403,7 +402,7 @@ class RepairCycleMetricsCollector:
                 },
             )
 
-    async def _on_test_execution_started(self, event: DomainEvent) -> None:
+    async def _on_test_execution_started(self, event: CodetoreumEvent) -> None:
         """Record test execution started."""
         try:
             test_type = self._get_event_attribute(event, "test_type", "unknown")
@@ -426,7 +425,7 @@ class RepairCycleMetricsCollector:
                 },
             )
 
-    async def _on_test_execution_completed(self, event: DomainEvent) -> None:
+    async def _on_test_execution_completed(self, event: CodetoreumEvent) -> None:
         """Record test execution completed."""
         try:
             test_type = self._get_event_attribute(event, "test_type", "unknown")
@@ -489,7 +488,7 @@ class RepairCycleMetricsCollector:
                 },
             )
 
-    async def _on_file_fix_started(self, event: DomainEvent) -> None:
+    async def _on_file_fix_started(self, event: CodetoreumEvent) -> None:
         """Record file fix started."""
         try:
             file_path = self._get_event_attribute(event, "file_path", "unknown")
@@ -511,7 +510,7 @@ class RepairCycleMetricsCollector:
                 },
             )
 
-    async def _on_file_fix_completed(self, event: DomainEvent) -> None:
+    async def _on_file_fix_completed(self, event: CodetoreumEvent) -> None:
         """Record file fix completed."""
         try:
             file_path = self._get_event_attribute(event, "file_path", "unknown")
@@ -559,7 +558,7 @@ class RepairCycleMetricsCollector:
                 },
             )
 
-    async def _on_warning_review_started(self, event: DomainEvent) -> None:
+    async def _on_warning_review_started(self, event: CodetoreumEvent) -> None:
         """Record warning review started."""
         try:
             source_file = self._get_event_attribute(event, "source_file", "unknown")
@@ -581,7 +580,7 @@ class RepairCycleMetricsCollector:
                 },
             )
 
-    async def _on_warning_review_completed(self, event: DomainEvent) -> None:
+    async def _on_warning_review_completed(self, event: CodetoreumEvent) -> None:
         """Record warning review completed."""
         try:
             warnings_reviewed = self._get_event_attribute(event, "warnings_reviewed", 0)

@@ -28,13 +28,11 @@ class ISystemicAnalysisService(ABC):
     ) -> SystemicAnalysisResult:
         """Classify failures by root cause.
 
-        Args:
-            failures: List of test failures to classify.
+        Args: failures: List of test failures to classify.
             context: Context including work item id, iteration count,
                      and prior fix attempt history.
 
-        Returns:
-            SystemicAnalysisResult with classification, confidence,
+        Returns: SystemicAnalysisResult with classification, confidence,
             reasoning, affected files, and recommended action.
         """
         ...

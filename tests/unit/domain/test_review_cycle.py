@@ -5,16 +5,18 @@ from datetime import UTC, datetime
 
 import pytest
 
+from codetoreum.domain.events.review_cycle_events import (
+    ReviewCycleApprovedEvent,
+    ReviewCycleCreatedEvent,
+    ReviewCycleEscalatedToHumanEvent,
+    ReviewCycleFeedbackSubmittedEvent,
+    ReviewCycleIterationStartedEvent,
+)
 from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.review_cycle import (
     ReviewCycle,
-    ReviewCycleApproved,
-    ReviewCycleCreated,
-    ReviewCycleEscalated,
     ReviewDecision,
     ReviewFeedback,
-    ReviewFeedbackSubmitted,
-    ReviewIterationStarted,
     ReviewStatus,
 )
 
@@ -69,12 +71,11 @@ class TestReviewCycleCreation:
 
         events = cycle.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], ReviewCycleCreated)
-        assert events[0].aggregate_id == cycle.id
-        assert events[0].aggregate_type == "ReviewCycle"
-        assert events[0].payload["workflow_id"] == "wf-1"
-        assert events[0].payload["maker_agent_id"] == "maker-1"
-        assert events[0].payload["reviewer_agent_id"] == "reviewer-1"
+        assert isinstance(events[0], ReviewCycleCreatedEvent)
+        assert events[0].review_cycle_id == cycle.id
+        assert events[0].workflow_id == "wf-1"
+        assert events[0].maker_agent_id == "maker-1"
+        assert events[0].reviewer_agent_id == "reviewer-1"
 
     def test_create_with_same_maker_and_reviewer_raises_error(self):
         """Test that creating with same maker and reviewer raises error."""
@@ -139,9 +140,9 @@ class TestIterationManagement:
 
         events = cycle.get_pending_events()
         assert len(events) == 1
-        assert isinstance(events[0], ReviewIterationStarted)
-        assert events[0].payload["iteration_number"] == 1
-        assert events[0].payload["maker_execution_id"] == "exec-1"
+        assert isinstance(events[0], ReviewCycleIterationStartedEvent)
+        assert events[0].iteration_number == 1
+        assert events[0].maker_execution_id == "exec-1"
 
     def test_start_multiple_iterations(self):
         """Test starting multiple iterations."""
@@ -220,8 +221,8 @@ class TestReviewSubmission:
 
         events = cycle.get_pending_events()
         assert len(events) == 2  # ReviewFeedbackSubmitted + ReviewCycleApproved
-        assert isinstance(events[0], ReviewFeedbackSubmitted)
-        assert isinstance(events[1], ReviewCycleApproved)
+        assert isinstance(events[0], ReviewCycleFeedbackSubmittedEvent)
+        assert isinstance(events[1], ReviewCycleApprovedEvent)
 
     def test_submit_review_with_request_changes(self):
         """Test submitting review with request changes decision."""
@@ -254,7 +255,7 @@ class TestReviewSubmission:
 
         events = cycle.get_pending_events()
         assert len(events) == 1  # Only ReviewFeedbackSubmitted
-        assert isinstance(events[0], ReviewFeedbackSubmitted)
+        assert isinstance(events[0], ReviewCycleFeedbackSubmittedEvent)
 
     def test_submit_review_with_escalate(self):
         """Test submitting review with escalate decision."""
@@ -280,7 +281,7 @@ class TestReviewSubmission:
 
         events = cycle.get_pending_events()
         assert len(events) == 2  # ReviewFeedbackSubmitted + ReviewCycleEscalated
-        assert isinstance(events[1], ReviewCycleEscalated)
+        assert isinstance(events[1], ReviewCycleEscalatedToHumanEvent)
 
     def test_submit_review_without_issues_or_suggestions(self):
         """Test submitting review without issues or suggestions."""

@@ -115,7 +115,7 @@ class ReviewService:
             # Persist events
             events = review_cycle.get_pending_events()
             for event in events:
-                await self.event_store.append(event.aggregate_id, [event])
+                await self.event_store.append(review_cycle.id, [event])
             review_cycle.clear_events()
 
             logger.info(
@@ -178,7 +178,7 @@ class ReviewService:
             # Persist events
             events = review_cycle.get_pending_events()
             for event in events:
-                await self.event_store.append(event.aggregate_id, [event])
+                await self.event_store.append(review_cycle.id, [event])
             review_cycle.clear_events()
 
             logger.info(f"Started iteration {review_cycle.current_iteration} for review cycle {review_cycle.id}")
@@ -244,7 +244,7 @@ class ReviewService:
             # Persist events
             events = review_cycle.get_pending_events()
             for event in events:
-                await self.event_store.append(event.aggregate_id, [event])
+                await self.event_store.append(review_cycle.id, [event])
             review_cycle.clear_events()
 
             logger.info(
@@ -335,7 +335,7 @@ class ReviewService:
                     # Persist events
                     events = review_cycle.get_pending_events()
                     for event in events:
-                        await self.event_store.append(event.aggregate_id, [event])
+                        await self.event_store.append(review_cycle.id, [event])
                     review_cycle.clear_events()
 
                 logger.info(
@@ -366,7 +366,7 @@ class ReviewService:
                     # Persist events
                     events = review_cycle.get_pending_events()
                     for event in events:
-                        await self.event_store.append(event.aggregate_id, [event])
+                        await self.event_store.append(review_cycle.id, [event])
                     review_cycle.clear_events()
 
                     logger.warning(

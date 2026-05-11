@@ -417,9 +417,15 @@ class WorkItemService(IWorkItemCommandPort, IWorkItemQueryPort):
 
     def _event_to_dict(self, event: Any) -> dict:
         """Convert a domain event to a dictionary."""
+        base = event.to_dict() if hasattr(event, "to_dict") else {}
         return {
             "event_type": event.__class__.__name__,
-            "aggregate_id": event.aggregate_id,
-            "occurred_at": event.occurred_at.isoformat() if event.occurred_at else None,
-            "payload": event.payload,
+            "aggregate_id": getattr(event, "work_item_id", None)
+            or getattr(event, "workflow_id", None)
+            or getattr(event, "execution_id", None)
+            or getattr(event, "event_id", None),
+            "occurred_at": event.timestamp if hasattr(event, "timestamp") else None,
+            "payload": {
+                k: v for k, v in base.items() if k not in {"event_id", "type", "timestamp", "source", "correlation_id"}
+            },
         }

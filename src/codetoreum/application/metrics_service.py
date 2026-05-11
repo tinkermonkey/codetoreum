@@ -166,8 +166,9 @@ class MetricsService(IMetricsQueryPort):
         total_duration = 0.0
         duration_count = 0
         for event in completed_events:
-            if "duration_seconds" in event.payload:
-                total_duration += event.payload["duration_seconds"]
+            dur = getattr(event, "duration_seconds", None)
+            if dur is not None:
+                total_duration += dur
                 duration_count += 1
 
         avg_duration = total_duration / duration_count if duration_count > 0 else 0.0
@@ -225,11 +226,13 @@ class MetricsService(IMetricsQueryPort):
 
         # Count retry attempts and outcomes
         retry_attempts = len(retry_events)
-        retry_successes = sum(1 for e in retry_events if e.payload.get("success", False))
+        retry_successes = sum(1 for e in retry_events if getattr(e, "success", False))
         retry_failures = retry_attempts - retry_successes
 
         # Calculate timeout metrics
-        timeout_durations = [e.payload.get("duration_ms", 0) for e in timeout_events if "duration_ms" in e.payload]
+        timeout_durations = [
+            getattr(e, "duration_ms", 0) for e in timeout_events if getattr(e, "duration_ms", None) is not None
+        ]
         avg_timeout_duration = sum(timeout_durations) / len(timeout_durations) if timeout_durations else 0.0
 
         return ResilienceMetrics(
@@ -280,7 +283,7 @@ class MetricsService(IMetricsQueryPort):
             )
             if github_events:
                 # If we have recent GitHub events, assume it's connected
-                failed_events = [e for e in github_events if e.payload.get("success") is False]
+                failed_events = [e for e in github_events if getattr(e, "success", None) is False]
                 if failed_events:
                     github_webhook_health = ComponentHealth.DEGRADED
                 else:
@@ -307,8 +310,16 @@ class MetricsService(IMetricsQueryPort):
             if container_events or container_stopped:
                 docker_connected = True
                 # Track running containers by ID (containers may start/stop multiple times)
-                started_ids = {e.payload.get("container_id") for e in container_events if "container_id" in e.payload}
-                stopped_ids = {e.payload.get("container_id") for e in container_stopped if "container_id" in e.payload}
+                started_ids = {
+                    getattr(e, "container_id", None)
+                    for e in container_events
+                    if getattr(e, "container_id", None) is not None
+                }
+                stopped_ids = {
+                    getattr(e, "container_id", None)
+                    for e in container_stopped
+                    if getattr(e, "container_id", None) is not None
+                }
                 docker_containers_running = len(started_ids - stopped_ids)
         except Exception as e:
             logger.debug(f"Could not check Docker connectivity: {e}")
@@ -342,15 +353,15 @@ class MetricsService(IMetricsQueryPort):
                 limit=1,
             )
             if sim_events:
-                config = sim_events[0].payload
+                ev = sim_events[0]
                 return SimulationModeInfo(
-                    enabled=config.get("enabled", False),
-                    time_multiplier=config.get("time_multiplier", 1.0),
-                    deterministic_responses=config.get("deterministic_responses", False),
-                    mock_external_services=config.get("mock_external_services", False),
-                    event_replay_enabled=config.get("event_replay_enabled", False),
-                    current_simulation_time=config.get("current_simulation_time"),
-                    started_at=config.get("started_at"),
+                    enabled=getattr(ev, "enabled", False),
+                    time_multiplier=getattr(ev, "time_multiplier", 1.0),
+                    deterministic_responses=getattr(ev, "deterministic_responses", False),
+                    mock_external_services=getattr(ev, "mock_external_services", False),
+                    event_replay_enabled=getattr(ev, "event_replay_enabled", False),
+                    current_simulation_time=getattr(ev, "current_simulation_time", None),
+                    started_at=getattr(ev, "started_at", None),
                 )
         except Exception as e:
             logger.debug(f"Could not retrieve simulation config: {e}")
@@ -469,7 +480,9 @@ class MetricsService(IMetricsQueryPort):
                 ]
         elif calculation_type == "duration":
             durations = [
-                e.payload.get("duration_seconds", 0) for e in filtered_events if "duration_seconds" in e.payload
+                getattr(e, "duration_seconds", 0)
+                for e in filtered_events
+                if getattr(e, "duration_seconds", None) is not None
             ]
             if durations:
                 avg_duration = sum(durations) / len(durations)
@@ -546,7 +559,7 @@ class MetricsService(IMetricsQueryPort):
         endpoints: dict[str, dict[str, Any]] = {}
 
         for event in api_events:
-            ep = event.payload.get("endpoint_path", "unknown")
+            ep = getattr(event, "endpoint_path", "unknown") or "unknown"
 
             # Filter by endpoint if specified
             if endpoint_path and ep != endpoint_path:
@@ -562,10 +575,10 @@ class MetricsService(IMetricsQueryPort):
                 }
 
             endpoints[ep]["requests"] += 1
-            if event.payload.get("error"):
+            if getattr(event, "error", None):
                 endpoints[ep]["errors"] += 1
 
-            latency = event.payload.get("latency_ms", 0)
+            latency = getattr(event, "latency_ms", 0) or 0
             endpoints[ep]["total_latency_ms"] += latency
             if endpoints[ep]["min_latency_ms"] is None:
                 endpoints[ep]["min_latency_ms"] = latency
@@ -637,9 +650,9 @@ class MetricsService(IMetricsQueryPort):
 
         # Filter by agent name if specified
         if agent_name:
-            execution_events = [e for e in execution_events if e.payload.get("agent_name") == agent_name]
-            completed_events = [e for e in completed_events if e.payload.get("agent_name") == agent_name]
-            failed_events = [e for e in failed_events if e.payload.get("agent_name") == agent_name]
+            execution_events = [e for e in execution_events if getattr(e, "agent_name", None) == agent_name]
+            completed_events = [e for e in completed_events if getattr(e, "agent_name", None) == agent_name]
+            failed_events = [e for e in failed_events if getattr(e, "agent_name", None) == agent_name]
 
         # Calculate metrics
         total_executions = len(execution_events)
@@ -650,7 +663,7 @@ class MetricsService(IMetricsQueryPort):
         success_rate = total_completed / total_executions if total_executions > 0 else 0.0
 
         # Calculate duration stats from completed executions
-        durations = [e.payload["duration_seconds"] for e in completed_events if "duration_seconds" in e.payload]
+        durations = [d for e in completed_events for d in [getattr(e, "duration_seconds", None)] if d is not None]
 
         avg_duration = sum(durations) / len(durations) if durations else 0.0
         min_duration = min(durations) if durations else 0.0
@@ -703,13 +716,14 @@ class MetricsService(IMetricsQueryPort):
         # Build set of completed/failed execution IDs
         finished_ids = set()
         for event in completed_events + failed_events:
-            if "execution_id" in event.payload:
-                finished_ids.add(event.payload["execution_id"])
+            eid = getattr(event, "execution_id", None)
+            if eid is not None:
+                finished_ids.add(eid)
 
         # Filter to only active executions
         active_agents = []
         for event in execution_events:
-            execution_id = event.payload.get("execution_id")
+            execution_id = getattr(event, "execution_id", None)
             if execution_id and execution_id not in finished_ids:
                 # Normalize event.occurred_at to aware datetime if needed
                 occurred_at = (
@@ -718,8 +732,8 @@ class MetricsService(IMetricsQueryPort):
                 active_agents.append(
                     {
                         "execution_id": execution_id,
-                        "agent_name": event.payload.get("agent_name"),
-                        "work_item_id": event.payload.get("work_item_id"),
+                        "agent_name": getattr(event, "agent_name", None),
+                        "work_item_id": getattr(event, "work_item_id", None),
                         "started_at": occurred_at.isoformat(),
                         "duration_seconds": (datetime.now(UTC) - occurred_at).total_seconds(),
                     }
@@ -749,8 +763,8 @@ class MetricsService(IMetricsQueryPort):
         )
 
         # Calculate token usage
-        input_tokens_today = sum(e.payload.get("input_tokens", 0) for e in llm_events)
-        output_tokens_today = sum(e.payload.get("output_tokens", 0) for e in llm_events)
+        input_tokens_today = sum(getattr(e, "input_tokens", 0) or 0 for e in llm_events)
+        output_tokens_today = sum(getattr(e, "output_tokens", 0) or 0 for e in llm_events)
         total_tokens_today = input_tokens_today + output_tokens_today
 
         # Estimate cost based on configured rates
@@ -839,12 +853,12 @@ class MetricsService(IMetricsQueryPort):
 
         # Filter by agent if specified
         if agent_name:
-            started_events = [e for e in started_events if e.payload.get("agent_name") == agent_name]
-            completed_events = [e for e in completed_events if e.payload.get("agent_name") == agent_name]
-            test_execution_events = [e for e in test_execution_events if e.payload.get("agent_name") == agent_name]
-            file_fix_events = [e for e in file_fix_events if e.payload.get("agent_name") == agent_name]
-            warning_review_events = [e for e in warning_review_events if e.payload.get("agent_name") == agent_name]
-            fast_fail_events = [e for e in fast_fail_events if e.payload.get("agent_name") == agent_name]
+            started_events = [e for e in started_events if getattr(e, "agent_name", None) == agent_name]
+            completed_events = [e for e in completed_events if getattr(e, "agent_name", None) == agent_name]
+            test_execution_events = [e for e in test_execution_events if getattr(e, "agent_name", None) == agent_name]
+            file_fix_events = [e for e in file_fix_events if getattr(e, "agent_name", None) == agent_name]
+            warning_review_events = [e for e in warning_review_events if getattr(e, "agent_name", None) == agent_name]
+            fast_fail_events = [e for e in fast_fail_events if getattr(e, "agent_name", None) == agent_name]
 
         # Calculate basic counts
         cycles_started = len(started_events)
@@ -857,30 +871,30 @@ class MetricsService(IMetricsQueryPort):
         agent_calls = []
 
         for event in completed_events:
-            if event.payload.get("overall_success"):
+            if getattr(event, "overall_success", None):
                 cycles_successful += 1
             else:
                 cycles_failed += 1
 
-            duration = event.payload.get("duration_seconds", 0)
+            duration = getattr(event, "duration_seconds", 0) or 0
             if duration:
                 durations.append(duration)
 
-            agent_calls_count = event.payload.get("total_agent_calls", 0)
+            agent_calls_count = getattr(event, "total_agent_calls", 0) or 0
             if agent_calls_count:
                 agent_calls.append(agent_calls_count)
 
         # Calculate per-test-type metrics
         test_types: dict[str, dict[str, int]] = {}
         for event in test_execution_events:
-            test_type = event.payload.get("test_type", "unknown")
+            test_type = getattr(event, "test_type", "unknown") or "unknown"
             if test_type not in test_types:
                 test_types[test_type] = {"executions": 0, "iterations": 0}
             test_types[test_type]["executions"] += 1
 
         for event in completed_events:
             # Get total iterations from the completion event
-            total_iterations = event.payload.get("total_iterations", 0)
+            total_iterations = getattr(event, "total_iterations", 0) or 0
             # Distribute across test types (this is approximate)
             if total_iterations > 0 and test_types:
                 iterations_per_type = total_iterations // len(test_types)
@@ -891,18 +905,18 @@ class MetricsService(IMetricsQueryPort):
         files_fixed: dict[str, int] = {}
         files_fixed_total = 0
         for event in file_fix_events:
-            if event.payload.get("fixed"):
-                file_path = event.payload.get("file_path", "unknown")
+            if getattr(event, "fixed", None):
+                file_path = getattr(event, "file_path", "unknown") or "unknown"
                 files_fixed[file_path] = files_fixed.get(file_path, 0) + 1
                 files_fixed_total += 1
 
         # Calculate warning metrics
-        warnings_reviewed_total = sum(event.payload.get("warnings_reviewed", 0) for event in warning_review_events)
+        warnings_reviewed_total = sum(getattr(event, "warnings_reviewed", 0) or 0 for event in warning_review_events)
 
         # Calculate per-agent metrics
         agents: dict[str, dict[str, int]] = {}
         for event in started_events:
-            agent = event.payload.get("agent_name", "unknown")
+            agent = getattr(event, "agent_name", "unknown") or "unknown"
             if agent not in agents:
                 agents[agent] = {
                     "started": 0,
@@ -914,7 +928,7 @@ class MetricsService(IMetricsQueryPort):
             agents[agent]["started"] += 1
 
         for event in completed_events:
-            agent = event.payload.get("agent_name", "unknown")
+            agent = getattr(event, "agent_name", "unknown") or "unknown"
             if agent not in agents:
                 agents[agent] = {
                     "started": 0,
@@ -924,13 +938,13 @@ class MetricsService(IMetricsQueryPort):
                     "fast_failed": 0,
                 }
             agents[agent]["completed"] += 1
-            if event.payload.get("overall_success"):
+            if getattr(event, "overall_success", None):
                 agents[agent]["successful"] += 1
             else:
                 agents[agent]["failed"] += 1
 
         for event in fast_fail_events:
-            agent = event.payload.get("agent_name", "unknown")
+            agent = getattr(event, "agent_name", "unknown") or "unknown"
             if agent not in agents:
                 agents[agent] = {
                     "started": 0,

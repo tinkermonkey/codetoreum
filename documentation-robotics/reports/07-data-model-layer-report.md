@@ -14,8 +14,8 @@ Data entities, relationships, and data structure definitions.
 
 | Metric                    | Count |
 | ------------------------- | ----- |
-| Elements                  | 62    |
-| Intra-Layer Relationships | 48    |
+| Elements                  | 75    |
+| Intra-Layer Relationships | 55    |
 | Inter-Layer Relationships | 42    |
 | Inbound Relationships     | 21    |
 | Outbound Relationships    | 21    |
@@ -45,6 +45,7 @@ Data entities, relationships, and data structure definitions.
 | `data-model.objectschema.container-events`           | `objectschema`     | 1             |
 | `data-model.objectschema.container-recovery-events`  | `objectschema`     | 1             |
 | `data-model.objectschema.conversational-session`     | `objectschema`     | 1             |
+| `data-model.objectschema.cycle-result`               | `objectschema`     | 2             |
 | `data-model.objectschema.discussion-events`          | `objectschema`     | 1             |
 | `data-model.objectschema.execution-api-dtos`         | `objectschema`     | 1             |
 | `data-model.objectschema.execution-context`          | `objectschema`     | 4             |
@@ -61,14 +62,18 @@ Data entities, relationships, and data structure definitions.
 | `data-model.objectschema.queue-events`               | `objectschema`     | 1             |
 | `data-model.objectschema.repair-cycle-checkpoint`    | `objectschema`     | 1             |
 | `data-model.objectschema.repair-cycle-events`        | `objectschema`     | 1             |
-| `data-model.objectschema.repair-cycle-result`        | `objectschema`     | 4             |
+| `data-model.objectschema.repair-cycle-result`        | `objectschema`     | 5             |
+| `data-model.objectschema.repair-cycle-stage-config`  | `objectschema`     | 0             |
+| `data-model.objectschema.repair-test-result`         | `objectschema`     | 2             |
 | `data-model.objectschema.repository-events`          | `objectschema`     | 1             |
 | `data-model.objectschema.review-cycle`               | `objectschema`     | 4             |
 | `data-model.objectschema.review-cycle-events`        | `objectschema`     | 1             |
 | `data-model.objectschema.review-events`              | `objectschema`     | 1             |
 | `data-model.objectschema.storage-events`             | `objectschema`     | 1             |
+| `data-model.objectschema.systemic-analysis-result`   | `objectschema`     | 1             |
 | `data-model.objectschema.token-usage`                | `objectschema`     | 1             |
 | `data-model.objectschema.user`                       | `objectschema`     | 1             |
+| `data-model.objectschema.verification-result`        | `objectschema`     | 0             |
 | `data-model.objectschema.work-item`                  | `objectschema`     | 7             |
 | `data-model.objectschema.work-item-api-dtos`         | `objectschema`     | 1             |
 | `data-model.objectschema.work-item-events`           | `objectschema`     | 1             |
@@ -76,8 +81,12 @@ Data entities, relationships, and data structure definitions.
 | `data-model.objectschema.workflow-api-dtos`          | `objectschema`     | 1             |
 | `data-model.objectschema.workflow-template`          | `objectschema`     | 3             |
 | `data-model.objectschema.workspace-context`          | `objectschema`     | 2             |
+| `data-model.schemadefinition.agent-id`               | `schemadefinition` | 1             |
 | `data-model.schemadefinition.agent-type`             | `schemadefinition` | 1             |
+| `data-model.schemadefinition.branch-resolution`      | `schemadefinition` | 0             |
 | `data-model.schemadefinition.column-type`            | `schemadefinition` | 0             |
+| `data-model.schemadefinition.commit-policy`          | `schemadefinition` | 0             |
+| `data-model.schemadefinition.execution-id`           | `schemadefinition` | 1             |
 | `data-model.schemadefinition.execution-status`       | `schemadefinition` | 1             |
 | `data-model.schemadefinition.failure-classification` | `schemadefinition` | 0             |
 | `data-model.schemadefinition.permission`             | `schemadefinition` | 0             |
@@ -88,9 +97,13 @@ Data entities, relationships, and data structure definitions.
 | `data-model.schemadefinition.review-status`          | `schemadefinition` | 0             |
 | `data-model.schemadefinition.stage-status`           | `schemadefinition` | 0             |
 | `data-model.schemadefinition.stage-type`             | `schemadefinition` | 0             |
+| `data-model.schemadefinition.time-range`             | `schemadefinition` | 0             |
+| `data-model.schemadefinition.type-safe-id`           | `schemadefinition` | 4             |
 | `data-model.schemadefinition.user-role`              | `schemadefinition` | 0             |
+| `data-model.schemadefinition.work-item-id`           | `schemadefinition` | 1             |
 | `data-model.schemadefinition.work-item-priority`     | `schemadefinition` | 1             |
 | `data-model.schemadefinition.work-item-status`       | `schemadefinition` | 4             |
+| `data-model.schemadefinition.workflow-id`            | `schemadefinition` | 1             |
 | `data-model.schemadefinition.workflow-status`        | `schemadefinition` | 1             |
 | `data-model.schemadefinition.workspace-type`         | `schemadefinition` | 0             |
 
@@ -431,6 +444,27 @@ Multi-turn conversational session state for agent dialogue management
 | ----------- | ----------------------------------- | --------- | --------- |
 | intra-layer | `data-model.objectschema.work-item` | `extends` | outbound  |
 
+### CycleResult {#cycleresult}
+
+**ID**: `data-model.objectschema.cycle-result`
+
+**Type**: `objectschema`
+
+Immutable result of a single repair iteration cycle (test + fix attempt). Captures the RepairTestResult before fixing, whether a fix was attempted, repair agent output, and the RepairTestResult after fixing. Enables per-iteration analysis of repair effectiveness.
+
+#### Attributes
+
+| Name | Value  |
+| ---- | ------ |
+| type | object |
+
+#### Relationships
+
+| Type        | Related Element                                    | Predicate | Direction |
+| ----------- | -------------------------------------------------- | --------- | --------- |
+| intra-layer | `data-model.objectschema.repair-test-result`       | `extends` | outbound  |
+| intra-layer | `data-model.objectschema.systemic-analysis-result` | `extends` | inbound   |
+
 ### Discussion Events {#discussion-events}
 
 **ID**: `data-model.objectschema.discussion-events`
@@ -760,7 +794,43 @@ Result aggregate from a repair cycle including test results, failure classificat
 | intra-layer | `data-model.objectschema.container-recovery-events` | `extends` | inbound   |
 | intra-layer | `data-model.objectschema.repair-cycle-checkpoint`   | `extends` | inbound   |
 | intra-layer | `data-model.objectschema.repair-cycle-events`       | `extends` | inbound   |
+| intra-layer | `data-model.objectschema.repair-test-result`        | `extends` | outbound  |
 | intra-layer | `data-model.objectschema.work-item`                 | `extends` | outbound  |
+
+### RepairCycleStageConfig {#repaircyclestageconfig}
+
+**ID**: `data-model.objectschema.repair-cycle-stage-config`
+
+**Type**: `objectschema`
+
+Immutable configuration for a single repair cycle stage (UNIT/INTEGRATION/CI/E2E). Declares max_iterations, whether to review warnings, timeout_seconds, and circuit breaker thresholds. Controls per-stage repair behavior without coupling stage logic to orchestration policy.
+
+#### Attributes
+
+| Name | Value  |
+| ---- | ------ |
+| type | object |
+
+### RepairTestResult {#repairtestresult}
+
+**ID**: `data-model.objectschema.repair-test-result`
+
+**Type**: `objectschema`
+
+Immutable aggregated result of a single repair test execution (UNIT/INTEGRATION/CI/E2E). Carries test_type, iteration number, passed/failed/warnings counts, a tuple of RepairTestFailure objects, a tuple of RepairTestWarning objects, raw output string, and timestamp. Input to systemic analysis and repair cycle aggregation.
+
+#### Attributes
+
+| Name | Value  |
+| ---- | ------ |
+| type | object |
+
+#### Relationships
+
+| Type        | Related Element                               | Predicate | Direction |
+| ----------- | --------------------------------------------- | --------- | --------- |
+| intra-layer | `data-model.objectschema.cycle-result`        | `extends` | inbound   |
+| intra-layer | `data-model.objectschema.repair-cycle-result` | `extends` | inbound   |
 
 ### Repository Events {#repository-events}
 
@@ -865,6 +935,26 @@ Domain events for artifact storage operations: ArtifactUploadedEvent (key, size_
 | ----------- | ------------------------------------------- | --------- | --------- |
 | intra-layer | `data-model.objectschema.workspace-context` | `extends` | outbound  |
 
+### SystemicAnalysisResult {#systemicanalysisresult}
+
+**ID**: `data-model.objectschema.systemic-analysis-result`
+
+**Type**: `objectschema`
+
+Immutable result of systemic failure analysis across multiple RepairTestResult inputs. Carries FailureClassification (CODE_DEFECT/ENVIRONMENT_ISSUE/TRANSIENT/DEPENDENCY/CONFIGURATION), recommended fix strategy, confidence score, and affected file list. Used to dispatch repair to the correct handler path.
+
+#### Attributes
+
+| Name | Value  |
+| ---- | ------ |
+| type | object |
+
+#### Relationships
+
+| Type        | Related Element                        | Predicate | Direction |
+| ----------- | -------------------------------------- | --------- | --------- |
+| intra-layer | `data-model.objectschema.cycle-result` | `extends` | outbound  |
+
 ### TokenUsage {#tokenusage}
 
 **ID**: `data-model.objectschema.token-usage`
@@ -899,6 +989,20 @@ User identity with role-based permissions and API key support for authentication
 | Type        | Related Element                 | Predicate | Direction |
 | ----------- | ------------------------------- | --------- | --------- |
 | intra-layer | `data-model.objectschema.agent` | `extends` | outbound  |
+
+### VerificationResult {#verificationresult}
+
+**ID**: `data-model.objectschema.verification-result`
+
+**Type**: `objectschema`
+
+Immutable result of a post-fix verification run. Captures whether the fix was verified successfully, the RepairTestResult from the verification run, and any remaining failures. Used to decide whether the repair cycle should continue or terminate.
+
+#### Attributes
+
+| Name | Value  |
+| ---- | ------ |
+| type | object |
 
 ### WorkItem {#workitem}
 
@@ -1028,6 +1132,27 @@ Workspace context for agent container execution including volume mounts and file
 | intra-layer | `data-model.objectschema.storage-events` | `extends` | inbound   |
 | intra-layer | `data-model.objectschema.work-item`      | `extends` | outbound  |
 
+### AgentId {#agentid}
+
+**ID**: `data-model.schemadefinition.agent-id`
+
+**Type**: `schemadefinition`
+
+Type-safe identifier for Agent domain objects. Frozen dataclass inheriting TypeSafeId. Used in agent configuration, execution assignment, and capability negotiation to ensure agent references cannot be confused with work item or execution IDs.
+
+#### Attributes
+
+| Name  | Value   |
+| ----- | ------- |
+| title | AgentId |
+| type  | string  |
+
+#### Relationships
+
+| Type        | Related Element                            | Predicate     | Direction |
+| ----------- | ------------------------------------------ | ------------- | --------- |
+| intra-layer | `data-model.schemadefinition.type-safe-id` | `specializes` | outbound  |
+
 ### AgentType {#agenttype}
 
 **ID**: `data-model.schemadefinition.agent-type`
@@ -1042,6 +1167,21 @@ Enumeration of agent types including maker, reviewer, and specialized roles
 | ----------- | ---------------------------------------------- | ------------ | --------- |
 | inter-layer | `api.operation.create-agent`                   | `serves`     | outbound  |
 | intra-layer | `data-model.schemadefinition.work-item-status` | `references` | outbound  |
+
+### BranchResolution {#branchresolution}
+
+**ID**: `data-model.schemadefinition.branch-resolution`
+
+**Type**: `schemadefinition`
+
+Immutable value object representing a resolved branch assignment decision. Carries strategy (exact_match/parent_issue/sibling/fuzzy/new), the resolved branch name, and confidence score. Used by WorkspaceRouter and IBranchResolutionService to communicate branch selection outcomes across service boundaries.
+
+#### Attributes
+
+| Name  | Value            |
+| ----- | ---------------- |
+| title | BranchResolution |
+| type  | object           |
 
 ### ColumnType {#columntype}
 
@@ -1064,6 +1204,43 @@ Enum for board column automation mode: MANUAL (human-driven column, no agent aut
 | Type        | Related Element                                               | Predicate | Direction |
 | ----------- | ------------------------------------------------------------- | --------- | --------- |
 | inter-layer | `application.applicationcomponent.board-column-event-handler` | `serves`  | outbound  |
+
+### CommitPolicy {#commitpolicy}
+
+**ID**: `data-model.schemadefinition.commit-policy`
+
+**Type**: `schemadefinition`
+
+Enum declaring what an agent does with file changes it produces. NONE = analysis/comment-only agents that skip commit entirely. ON_SUCCESS = code-producing agents that commit and push only on container exit 0. ALWAYS = partial-progress agents that checkpoint even on failure. Controls ExecutionService commit behavior.
+
+#### Attributes
+
+| Name  | Value                      |
+| ----- | -------------------------- |
+| enum  | [none, on_success, always] |
+| title | CommitPolicy               |
+| type  | string                     |
+
+### ExecutionId {#executionid}
+
+**ID**: `data-model.schemadefinition.execution-id`
+
+**Type**: `schemadefinition`
+
+Type-safe identifier for AgentExecution domain objects. Frozen dataclass inheriting TypeSafeId. Used as primary key in all execution lifecycle events (started, completed, failed) and cross-service execution state references.
+
+#### Attributes
+
+| Name  | Value       |
+| ----- | ----------- |
+| title | ExecutionId |
+| type  | string      |
+
+#### Relationships
+
+| Type        | Related Element                            | Predicate     | Direction |
+| ----------- | ------------------------------------------ | ------------- | --------- |
+| intra-layer | `data-model.schemadefinition.type-safe-id` | `specializes` | outbound  |
 
 ### ExecutionStatus {#executionstatus}
 
@@ -1278,6 +1455,45 @@ Enum for pipeline stage execution pattern: SEQUENTIAL (stages run one after anot
 | ----------- | --------------------------------------------------------- | --------- | --------- |
 | inter-layer | `application.applicationcomponent.workflow-event-handler` | `serves`  | outbound  |
 
+### TimeRange {#timerange}
+
+**ID**: `data-model.schemadefinition.time-range`
+
+**Type**: `schemadefinition`
+
+Immutable temporal range value object with start and end datetime. Provides duration_seconds property, contains(timestamp) membership test, and overlaps(other) intersection check. Used for scheduling windows, execution time bounds, and audit queries.
+
+#### Attributes
+
+| Name  | Value     |
+| ----- | --------- |
+| title | TimeRange |
+| type  | object    |
+
+### TypeSafeId {#typesafeid}
+
+**ID**: `data-model.schemadefinition.type-safe-id`
+
+**Type**: `schemadefinition`
+
+Generic base class for type-safe domain identifiers. Wraps a non-empty string value with type-level discrimination to prevent passing wrong ID types (e.g., WorkItemId where AgentId is expected). Provides generate() and from_string() factory methods. All typed ID subclasses inherit from this base.
+
+#### Attributes
+
+| Name  | Value      |
+| ----- | ---------- |
+| title | TypeSafeId |
+| type  | object     |
+
+#### Relationships
+
+| Type        | Related Element                            | Predicate     | Direction |
+| ----------- | ------------------------------------------ | ------------- | --------- |
+| intra-layer | `data-model.schemadefinition.agent-id`     | `specializes` | inbound   |
+| intra-layer | `data-model.schemadefinition.execution-id` | `specializes` | inbound   |
+| intra-layer | `data-model.schemadefinition.work-item-id` | `specializes` | inbound   |
+| intra-layer | `data-model.schemadefinition.workflow-id`  | `specializes` | inbound   |
+
 ### UserRole {#userrole}
 
 **ID**: `data-model.schemadefinition.user-role`
@@ -1299,6 +1515,27 @@ Enum for user authorization roles: ADMIN (full system access), DEVELOPER (workfl
 | Type        | Related Element                                               | Predicate | Direction |
 | ----------- | ------------------------------------------------------------- | --------- | --------- |
 | inter-layer | `application.applicationcomponent.board-column-event-handler` | `serves`  | outbound  |
+
+### WorkItemId {#workitemid}
+
+**ID**: `data-model.schemadefinition.work-item-id`
+
+**Type**: `schemadefinition`
+
+Type-safe identifier for WorkItem domain objects. Frozen dataclass inheriting TypeSafeId, ensuring WorkItem IDs cannot be accidentally substituted for other ID types. Used as the primary key in all work item operations, events, and cross-service references.
+
+#### Attributes
+
+| Name  | Value      |
+| ----- | ---------- |
+| title | WorkItemId |
+| type  | string     |
+
+#### Relationships
+
+| Type        | Related Element                            | Predicate     | Direction |
+| ----------- | ------------------------------------------ | ------------- | --------- |
+| intra-layer | `data-model.schemadefinition.type-safe-id` | `specializes` | outbound  |
 
 ### WorkItemPriority {#workitempriority}
 
@@ -1332,6 +1569,27 @@ Enumeration of possible work item lifecycle states
 | intra-layer | `data-model.schemadefinition.execution-status`   | `references` | inbound   |
 | intra-layer | `data-model.schemadefinition.work-item-priority` | `references` | outbound  |
 | intra-layer | `data-model.schemadefinition.workflow-status`    | `references` | inbound   |
+
+### WorkflowId {#workflowid}
+
+**ID**: `data-model.schemadefinition.workflow-id`
+
+**Type**: `schemadefinition`
+
+Type-safe identifier for Workflow domain objects. Frozen dataclass inheriting TypeSafeId, ensuring Workflow IDs cannot be accidentally substituted for WorkItem or Agent IDs. Used as the primary key in all workflow operations and events.
+
+#### Attributes
+
+| Name  | Value      |
+| ----- | ---------- |
+| title | WorkflowId |
+| type  | string     |
+
+#### Relationships
+
+| Type        | Related Element                            | Predicate     | Direction |
+| ----------- | ------------------------------------------ | ------------- | --------- |
+| intra-layer | `data-model.schemadefinition.type-safe-id` | `specializes` | outbound  |
 
 ### WorkflowStatus {#workflowstatus}
 
@@ -1372,4 +1630,4 @@ Enum for agent workspace context type: ISSUE (issue-only context, no code change
 
 ---
 
-Generated: 2026-05-08T12:30:44.964Z | Model Version: 0.1.0
+Generated: 2026-05-09T09:28:54.064Z | Model Version: 0.1.0

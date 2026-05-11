@@ -21,12 +21,10 @@ async def security_headers_middleware(request: Request, call_next):
     - Strict-Transport-Security: Enforces HTTPS (if enabled)
     - Content-Security-Policy: Restricts resource loading
 
-    Args:
-        request: The incoming HTTP request
+    Args: request: The incoming HTTP request
         call_next: The next middleware or endpoint handler
 
-    Returns:
-        Response with security headers added
+    Returns: Response with security headers added
     """
     response = await call_next(request)
 

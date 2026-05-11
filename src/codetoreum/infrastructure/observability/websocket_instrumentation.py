@@ -24,7 +24,7 @@ except ImportError:
     OPENTELEMETRY_AVAILABLE = False
     SpanKind = None
 
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.infrastructure.observability.trace_context_propagation import (
     TraceContextData,
 )
@@ -390,7 +390,7 @@ class WebSocketMessageTracer:
     def link_to_event_trace_context(
         self,
         message_span: Any | None,
-        event: DomainEvent,
+        event: CodetoreumEvent,
     ) -> None:
         """
         Link a message span to an event's trace context.

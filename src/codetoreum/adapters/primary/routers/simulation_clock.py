@@ -79,11 +79,9 @@ def create_simulation_clock_router(engine: SimulationEngine) -> APIRouter:
     It takes the SimulationEngine directly (not port interfaces) because this is
     simulation infrastructure, not production code.
 
-    Args:
-        engine: SimulationEngine instance managing the simulation clock
+    Args: engine: SimulationEngine instance managing the simulation clock
 
-    Returns:
-        Configured APIRouter for simulation clock control
+    Returns: Configured APIRouter for simulation clock control
     """
     router = APIRouter(
         prefix="/api/v2/sim/clock",
@@ -99,8 +97,7 @@ def create_simulation_clock_router(engine: SimulationEngine) -> APIRouter:
         """
         Get current simulation clock state.
 
-        Returns:
-            Current time, speed multiplier, and auto-advance status
+        Returns: Current time, speed multiplier, and auto-advance status
         """
         return ClockStateResponse(
             current_time=engine.now(),
@@ -123,14 +120,11 @@ def create_simulation_clock_router(engine: SimulationEngine) -> APIRouter:
 
         Caller must pause auto-advance first with POST /pause.
 
-        Args:
-            request: Contains seconds to advance
+        Args: request: Contains seconds to advance
 
-        Returns:
-            Previous time, new time, and seconds advanced
+        Returns: Previous time, new time, and seconds advanced
 
-        Raises:
-            HTTPException(409): If auto-advance is currently active
+        Raises: HTTPException(409): If auto-advance is currently active
         """
         # Race condition prevention: reject manual advance while auto-advance is running
         if engine.is_auto_advancing():
@@ -166,8 +160,7 @@ def create_simulation_clock_router(engine: SimulationEngine) -> APIRouter:
         Stops the background task that automatically advances the simulation clock
         in real time. After pausing, manual advancement via POST /advance is allowed.
 
-        Returns:
-            Status and current time
+        Returns: Status and current time
         """
         await engine.stop_auto_advance()
         current_time = engine.now()
@@ -194,11 +187,9 @@ def create_simulation_clock_router(engine: SimulationEngine) -> APIRouter:
         Restarts the background task that automatically advances the simulation clock.
         Auto-advance will continue until paused again.
 
-        Returns:
-            Status and current time
+        Returns: Status and current time
 
-        Raises:
-            HTTPException(409): If auto-advance is already running
+        Raises: HTTPException(409): If auto-advance is already running
         """
         # Prevent attempting to resume when already running
         if engine.is_auto_advancing():

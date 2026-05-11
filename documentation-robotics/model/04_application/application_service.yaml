@@ -376,3 +376,27 @@ application.applicationservice.simulation-service:
     created_at: 2026-05-08T10:53:34.757Z
     updated_at: 2026-05-08T10:53:34.757Z
     version: 1
+application.applicationservice.event-bus-registry:
+  id: 8a957afd-430d-4bc0-b082-7cacd1a59f50
+  path: application.applicationservice.event-bus-registry
+  spec_node_id: application.applicationservice
+  type: applicationservice
+  layer_id: application
+  name: EventBusRegistry
+  description: Application service that wires the event bus to all domain event
+    handlers (WorkflowEventHandler, ExecutionEventHandler, ReviewEventHandler,
+    RepairCycleEventHandler, BranchResolutionEventHandler). Manages handler
+    registration lifecycle, service dependency injection, and event bus
+    statistics. Acts as the integration seam between the infrastructure event
+    bus and application-layer event handlers.
+  attributes:
+    serviceType: event-driven
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/application/event_bus_wiring.py
+        symbol: EventBusRegistry
+  metadata:
+    created_at: 2026-05-09T09:21:44.928Z
+    updated_at: 2026-05-09T09:21:44.928Z
+    version: 1

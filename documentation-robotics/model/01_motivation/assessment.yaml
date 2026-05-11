@@ -1,0 +1,51 @@
+motivation.assessment.simulation-framework-test-execution-speed:
+  id: b6a07bd2-f199-46ec-af79-6d3afbe10842
+  path: motivation.assessment.simulation-framework-test-execution-speed
+  spec_node_id: motivation.assessment
+  type: assessment
+  layer_id: motivation
+  name: Simulation Framework Test Execution Speed
+  description: The simulation framework enables 10-100x faster test execution
+    compared to real end-to-end execution against live services. A typical
+    scenario that would take 30+ minutes in production completes in under 30
+    seconds via SimulationClock time manipulation and deterministic mock
+    adapters.
+  attributes:
+    assessmentType: feasibility
+    documentation: Validated by SimulationConfig.create_fast_config() with
+      speed_multiplier=100.0 and SimulationClock.advance(). 13+ predefined
+      scenarios run in CI without external service dependencies.
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/infrastructure/simulation/simulation_config.py
+        symbol: create_fast_config
+  metadata:
+    created_at: 2026-05-08T20:45:09.984Z
+    updated_at: 2026-05-08T20:45:09.984Z
+    version: 1
+motivation.assessment.hexagonal-architecture-adapter-coupling:
+  id: 87b2317e-4c57-426b-80e2-9def5e382a6b
+  path: motivation.assessment.hexagonal-architecture-adapter-coupling
+  spec_node_id: motivation.assessment
+  type: assessment
+  layer_id: motivation
+  name: Hexagonal Architecture Adapter Coupling
+  description: "The hexagonal architecture design results in low coupling between
+    adapter implementations: fewer than 5% of code is shared between production
+    adapters (GitHub, Docker, Claude) and mock adapters. Port interfaces provide
+    the only shared contract, enabling independent adapter evolution."
+  attributes:
+    assessmentType: impact
+    documentation: 54 total adapters (35 in testing/, 19 input port mocks) share no
+      implementation code with the 5 production adapters. All coupling flows
+      through 59 port interface ABCs.
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: CLAUDE.md
+        symbol: Adapters
+  metadata:
+    created_at: 2026-05-08T20:45:15.857Z
+    updated_at: 2026-05-08T20:45:15.857Z
+    version: 1

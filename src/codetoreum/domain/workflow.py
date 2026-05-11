@@ -9,17 +9,16 @@ from uuid import uuid4
 if TYPE_CHECKING:
     from codetoreum.domain.workflow_template import WorkflowTemplate
 
-from codetoreum.domain.events import (
-    DomainEvent,
-    WorkflowCancelled,
-    WorkflowCompleted,
-    WorkflowCreated,
-    WorkflowFailed,
-    WorkflowPaused,
-    WorkflowResumed,
-    WorkflowStageAdvanced,
-    WorkflowStageStatusUpdated,
-    WorkflowStarted,
+from codetoreum.domain.events.workflow_events import (
+    WorkflowCancelledEvent,
+    WorkflowCompletedEvent,
+    WorkflowCreatedEvent,
+    WorkflowFailedEvent,
+    WorkflowPausedEvent,
+    WorkflowResumedEvent,
+    WorkflowStageAdvancedEvent,
+    WorkflowStageStatusUpdatedEvent,
+    WorkflowStartedEvent,
 )
 from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.pipeline_stage import PipelineStage
@@ -75,7 +74,7 @@ class Workflow:
     updated_at: datetime
 
     # Event tracking
-    _events: list[DomainEvent] = field(default_factory=list, init=False, repr=False)
+    _events: list = field(default_factory=list, init=False, repr=False)
     _version: int = field(default=0, init=False, repr=False)
     _skip_validation: bool = field(default=False, init=False, repr=False)
 
@@ -151,14 +150,14 @@ class Workflow:
         for stage in workflow.stages:
             stage.workflow_id = workflow.id
 
-        event = WorkflowCreated(
-            aggregate_id=workflow.id,
-            payload={
-                "work_item_id": work_item_id,
-                "template_id": template.id,
-                "project_id": project_id,
-                "stage_count": len(workflow.stages),
-            },
+        event = WorkflowCreatedEvent(
+            type="workflow.created",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="workflow",
+            workflow_id=workflow.id,
+            work_item_id=work_item_id,
+            pipeline_id=template.id,
+            stage_name=workflow.stages[0].name if workflow.stages else "",
         )
         workflow._add_event(event)
 
@@ -191,13 +190,13 @@ class Workflow:
         self.updated_at = self.started_at
         self._version += 1
 
-        event = WorkflowStarted(
-            aggregate_id=self.id,
-            payload={
-                "started_at": self.started_at.isoformat(),
-                "work_item_id": self.work_item_id,
-                "first_stage": self.stages[0].name,
-            },
+        event = WorkflowStartedEvent(
+            type="workflow.started",
+            timestamp=self.started_at.isoformat(),
+            source="workflow",
+            workflow_id=self.id,
+            work_item_id=self.work_item_id,
+            stage_name=self.stages[0].name,
         )
         self._add_event(event)
 
@@ -238,14 +237,14 @@ class Workflow:
         self.updated_at = datetime.now(UTC)
         self._version += 1
 
-        event = WorkflowStageAdvanced(
-            aggregate_id=self.id,
-            payload={
-                "from_stage": old_stage,
-                "to_stage": new_stage,
-                "stage_index": self.current_stage_index,
-                "advanced_at": self.updated_at.isoformat(),
-            },
+        event = WorkflowStageAdvancedEvent(
+            type="workflow.stage_advanced",
+            timestamp=self.updated_at.isoformat(),
+            source="workflow",
+            workflow_id=self.id,
+            work_item_id=self.work_item_id,
+            from_stage=old_stage,
+            to_stage=new_stage,
         )
         self._add_event(event)
 
@@ -277,13 +276,14 @@ class Workflow:
         self.updated_at = self.completed_at
         self._version += 1
 
-        event = WorkflowCompleted(
-            aggregate_id=self.id,
-            payload={
-                "completed_at": self.completed_at.isoformat(),
-                "work_item_id": self.work_item_id,
-                "duration_seconds": (self.completed_at - self.started_at).total_seconds() if self.started_at else 0.0,
-            },
+        event = WorkflowCompletedEvent(
+            type="workflow.completed",
+            timestamp=self.completed_at.isoformat(),
+            source="workflow",
+            workflow_id=self.id,
+            work_item_id=self.work_item_id,
+            final_stage=self.completed_stages[-1] if self.completed_stages else "",
+            completed_at=self.completed_at.isoformat(),
         )
         self._add_event(event)
 
@@ -308,14 +308,15 @@ class Workflow:
         self.updated_at = datetime.now(UTC)
         self._version += 1
 
-        event = WorkflowFailed(
-            aggregate_id=self.id,
-            payload={
-                "failed_at": self.updated_at.isoformat(),
-                "reason": reason,
-                "failed_stage": failed_stage or self.get_current_stage().name,
-                "completed_stages": self.completed_stages,
-            },
+        event = WorkflowFailedEvent(
+            type="workflow.failed",
+            timestamp=self.updated_at.isoformat(),
+            source="workflow",
+            workflow_id=self.id,
+            work_item_id=self.work_item_id,
+            failed_stage=failed_stage or self.get_current_stage().name,
+            reason=reason,
+            failed_at=self.updated_at.isoformat(),
         )
         self._add_event(event)
 
@@ -340,13 +341,14 @@ class Workflow:
         self.updated_at = self.paused_at
         self._version += 1
 
-        event = WorkflowPaused(
-            aggregate_id=self.id,
-            payload={
-                "paused_at": self.paused_at.isoformat(),
-                "reason": reason,
-                "current_stage": self.get_current_stage().name,
-            },
+        event = WorkflowPausedEvent(
+            type="workflow.paused",
+            timestamp=self.paused_at.isoformat(),
+            source="workflow",
+            workflow_id=self.id,
+            work_item_id=self.work_item_id,
+            paused_stage=self.get_current_stage().name,
+            paused_at=self.paused_at.isoformat(),
         )
         self._add_event(event)
 
@@ -367,12 +369,14 @@ class Workflow:
         self.updated_at = datetime.now(UTC)
         self._version += 1
 
-        event = WorkflowResumed(
-            aggregate_id=self.id,
-            payload={
-                "resumed_at": self.updated_at.isoformat(),
-                "current_stage": self.get_current_stage().name,
-            },
+        event = WorkflowResumedEvent(
+            type="workflow.resumed",
+            timestamp=self.updated_at.isoformat(),
+            source="workflow",
+            workflow_id=self.id,
+            work_item_id=self.work_item_id,
+            resumed_stage=self.get_current_stage().name,
+            resumed_at=self.updated_at.isoformat(),
         )
         self._add_event(event)
 
@@ -396,13 +400,14 @@ class Workflow:
         self.updated_at = datetime.now(UTC)
         self._version += 1
 
-        event = WorkflowCancelled(
-            aggregate_id=self.id,
-            payload={
-                "cancelled_at": self.updated_at.isoformat(),
-                "reason": reason,
-                "completed_stages": self.completed_stages,
-            },
+        event = WorkflowCancelledEvent(
+            type="workflow.cancelled",
+            timestamp=self.updated_at.isoformat(),
+            source="workflow",
+            workflow_id=self.id,
+            work_item_id=self.work_item_id,
+            cancelled_stage=self.get_current_stage().name if self.stages else "",
+            cancelled_at=self.updated_at.isoformat(),
         )
         self._add_event(event)
 
@@ -460,14 +465,15 @@ class Workflow:
         self.updated_at = datetime.now(UTC)
         self._version += 1
 
-        event = WorkflowStageStatusUpdated(
-            aggregate_id=self.id,
-            payload={
-                "stage_name": stage_name,
-                "old_status": old_status,
-                "new_status": status,
-                "updated_at": self.updated_at.isoformat(),
-            },
+        event = WorkflowStageStatusUpdatedEvent(
+            type="workflow.stage_status_updated",
+            timestamp=self.updated_at.isoformat(),
+            source="workflow",
+            workflow_id=self.id,
+            work_item_id=self.work_item_id,
+            stage_name=stage_name,
+            old_status=old_status,
+            new_status=status,
         )
         self._add_event(event)
 
@@ -583,7 +589,7 @@ class Workflow:
         return True
 
     # Event management
-    def _add_event(self, event: DomainEvent) -> None:
+    def _add_event(self, event: object) -> None:
         """
         Add event to pending events list.
 
@@ -592,7 +598,7 @@ class Workflow:
         """
         self._events.append(event)
 
-    def get_pending_events(self) -> list[DomainEvent]:
+    def get_pending_events(self) -> list:
         """
         Get all pending events.
 
@@ -607,7 +613,7 @@ class Workflow:
 
     # Event sourcing support
     @classmethod
-    def from_events(cls, events: list[DomainEvent]) -> "Workflow":
+    def from_events(cls, events: list) -> "Workflow":
         """
         Reconstruct workflow from event stream.
 
@@ -629,20 +635,18 @@ class Workflow:
             raise DomainError(msg)
 
         first_event = events[0]
-        if not isinstance(first_event, WorkflowCreated):
-            msg = "First event must be WorkflowCreated"
+        if not isinstance(first_event, WorkflowCreatedEvent):
+            msg = "First event must be WorkflowCreatedEvent"
             raise DomainError(msg)
 
         # This is simplified - actual implementation would need to
         # reconstruct stages from template or events
-        payload = first_event.payload
-
         # Create workflow with validation skipped (stages will be empty during reconstruction)
         workflow = cls._create_without_validation(
-            id=first_event.aggregate_id,
-            work_item_id=payload["work_item_id"],
-            template_id=payload["template_id"],
-            project_id=payload["project_id"],
+            id=first_event.workflow_id,
+            work_item_id=first_event.work_item_id,
+            template_id=first_event.pipeline_id,
+            project_id="",  # Not stored in modern event - reconstruct from context
             status=WorkflowStatus.PENDING,
             stages=[],  # Would be reconstructed from template or stored in events
             current_stage_index=0,
@@ -651,8 +655,8 @@ class Workflow:
             completed_at=None,
             paused_at=None,
             metadata={},
-            created_at=first_event.occurred_at,
-            updated_at=first_event.occurred_at,
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
 
         # Apply subsequent events
@@ -712,39 +716,47 @@ class Workflow:
         workflow._skip_validation = True
         return workflow
 
-    def _apply_event(self, event: DomainEvent) -> None:
+    def _apply_event(self, event: object) -> None:
         """
         Apply event to update state.
 
         Args:
             event: Domain event to apply
         """
-        if isinstance(event, WorkflowStarted):
-            self.status = WorkflowStatus.RUNNING
-            self.started_at = event.occurred_at
+        ts = getattr(event, "timestamp", None)
+        occurred = datetime.fromisoformat(ts) if ts else datetime.now(UTC)
 
-        elif isinstance(event, WorkflowStageAdvanced):
-            self.current_stage_index = event.payload["stage_index"]
-            # Reconstruct completed stages from previous + current
-            old_stage = event.payload["from_stage"]
+        if isinstance(event, WorkflowStartedEvent):
+            self.status = WorkflowStatus.RUNNING
+            self.started_at = occurred
+
+        elif isinstance(event, WorkflowStageAdvancedEvent):
+            # Reconstruct completed stages from previous stage
+            old_stage = event.from_stage
             if old_stage not in self.completed_stages:
                 self.completed_stages.append(old_stage)
+            # Advance stage index
+            new_stage = event.to_stage
+            for idx, stage in enumerate(self.stages):
+                if stage.name == new_stage:
+                    self.current_stage_index = idx
+                    break
 
-        elif isinstance(event, WorkflowCompleted):
+        elif isinstance(event, WorkflowCompletedEvent):
             self.status = WorkflowStatus.COMPLETED
-            self.completed_at = event.occurred_at
+            self.completed_at = occurred
 
-        elif isinstance(event, WorkflowFailed):
+        elif isinstance(event, WorkflowFailedEvent):
             self.status = WorkflowStatus.FAILED
 
-        elif isinstance(event, WorkflowPaused):
+        elif isinstance(event, WorkflowPausedEvent):
             self.status = WorkflowStatus.PAUSED
-            self.paused_at = event.occurred_at
+            self.paused_at = occurred
 
-        elif isinstance(event, WorkflowResumed):
+        elif isinstance(event, WorkflowResumedEvent):
             self.status = WorkflowStatus.RUNNING
 
-        elif isinstance(event, WorkflowCancelled):
+        elif isinstance(event, WorkflowCancelledEvent):
             self.status = WorkflowStatus.CANCELLED
 
-        self.updated_at = event.occurred_at
+        self.updated_at = occurred

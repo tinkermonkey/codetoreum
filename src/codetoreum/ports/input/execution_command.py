@@ -72,14 +72,11 @@ class IExecutionCommandPort(ABC):
         - Workspace cleanup
         - Domain event emission
 
-        Args:
-            command: TerminateExecutionCommand with execution ID and reason
+        Args: command: TerminateExecutionCommand with execution ID and reason
 
-        Returns:
-            ExecutionCommandResult with operation status
+        Returns: ExecutionCommandResult with operation status
 
-        Raises:
-            ExecutionNotFoundError: If execution doesn't exist
+        Raises: ExecutionNotFoundError: If execution doesn't exist
             InvalidStateError: If execution is already completed (409 Conflict)
         """
 
@@ -88,14 +85,11 @@ class IExecutionCommandPort(ABC):
         """
         Pause a running execution.
 
-        Args:
-            command: PauseExecutionCommand with execution ID
+        Args: command: PauseExecutionCommand with execution ID
 
-        Returns:
-            ExecutionCommandResult with operation status
+        Returns: ExecutionCommandResult with operation status
 
-        Raises:
-            ExecutionNotFoundError: If execution doesn't exist
+        Raises: ExecutionNotFoundError: If execution doesn't exist
             InvalidStateError: If execution cannot be paused
         """
 
@@ -104,13 +98,10 @@ class IExecutionCommandPort(ABC):
         """
         Resume a paused execution.
 
-        Args:
-            command: ResumeExecutionCommand with execution ID
+        Args: command: ResumeExecutionCommand with execution ID
 
-        Returns:
-            ExecutionCommandResult with operation status
+        Returns: ExecutionCommandResult with operation status
 
-        Raises:
-            ExecutionNotFoundError: If execution doesn't exist
+        Raises: ExecutionNotFoundError: If execution doesn't exist
             InvalidStateError: If execution is not paused
         """

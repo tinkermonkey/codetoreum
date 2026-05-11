@@ -7,7 +7,6 @@ from uuid import uuid4
 
 import pytest
 
-from codetoreum.domain.events import WorkItemCreated
 from codetoreum.infrastructure.event_persistence_worker import (
     EventPersistenceWorker,
     EventPersistenceWorkerError,

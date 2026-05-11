@@ -49,18 +49,15 @@ class IEnvironmentRepairService(ABC):
         ensuring all dependencies are properly installed/updated and
         configuration is applied correctly.
 
-        Args:
-            project: Project identifier/name
+        Args: project: Project identifier/name
             config: Test run configuration with timeout and other parameters
             context: Repair cycle execution context including work item,
                     workflow run, and iteration information
 
-        Returns:
-            RebuildResult with success status, actions taken, duration,
+        Returns: RebuildResult with success status, actions taken, duration,
             and optional error message if rebuild failed
 
-        Raises:
-            TimeoutError: When rebuild exceeds the configured timeout
+        Raises: TimeoutError: When rebuild exceeds the configured timeout
             Exception: For environment-specific errors (permission, disk space, etc.)
         """
         ...
@@ -78,18 +75,15 @@ class IEnvironmentRepairService(ABC):
         tools and dependencies are available, and the environment is
         in a healthy state ready for test execution.
 
-        Args:
-            project: Project identifier/name
+        Args: project: Project identifier/name
             config: Test run configuration with timeout and other parameters
             context: Repair cycle execution context including work item,
                     workflow run, and iteration information
 
-        Returns:
-            VerificationResult with healthy status, passed/failed checks,
+        Returns: VerificationResult with healthy status, passed/failed checks,
             and duration
 
-        Raises:
-            TimeoutError: When verification exceeds the configured timeout
+        Raises: TimeoutError: When verification exceeds the configured timeout
             Exception: For environment-specific errors
         """
         ...

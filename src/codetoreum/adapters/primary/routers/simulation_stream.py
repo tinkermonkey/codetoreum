@@ -24,7 +24,7 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 from starlette.responses import StreamingResponse
 
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.simulation.simulation_engine import SimulationEngine
 
@@ -88,7 +88,7 @@ def format_keepalive_comment() -> str:
 
 
 def event_matches_filters(
-    event: DomainEvent,
+    event: CodetoreumEvent,
     event_types: list[str] | None,
     work_item_id: str | None,
 ) -> bool:
@@ -111,8 +111,8 @@ def event_matches_filters(
 
     # Check work_item_id filter
     if work_item_id is not None:
-        # Extract work_item_id from payload
-        event_work_item_id = event.payload.get("work_item_id")
+        # Extract work_item_id from event fields (CodetoreumEvent has no .payload)
+        event_work_item_id = getattr(event, "work_item_id", None)
         if event_work_item_id != work_item_id:
             return False
 
@@ -180,10 +180,10 @@ def create_simulation_stream_router(
             event_types = [et.strip() for et in event_type.split(",") if et.strip()]
 
         # Create per-client queue for event buffering
-        queue: asyncio.Queue[DomainEvent | None] = asyncio.Queue(maxsize=SSE_QUEUE_MAXSIZE)
+        queue: asyncio.Queue[CodetoreumEvent | None] = asyncio.Queue(maxsize=SSE_QUEUE_MAXSIZE)
 
         # Define callback to enqueue events matching filters
-        async def event_callback(event: DomainEvent) -> None:
+        async def event_callback(event: CodetoreumEvent) -> None:
             """
             Callback invoked when event is published.
 
@@ -260,18 +260,20 @@ def create_simulation_stream_router(
 
                         try:
                             # Serialize event to SSE payload, excluding work_item_id and agent_id from details
-                            # to avoid redundancy (they appear as top-level fields)
-                            details_dict = dict(event.payload)
-                            details_dict.pop("work_item_id", None)
-                            details_dict.pop("agent_id", None)
+                            # to avoid redundancy (they appear as top-level fields).
+                            # CodetoreumEvent has no .payload dict — fields are direct attributes.
+                            event_dict = event.to_dict() if hasattr(event, "to_dict") else {}
+                            details_dict = {
+                                k: v for k, v in event_dict.items() if k not in {"work_item_id", "agent_id"}
+                            }
 
                             payload = SSEEventPayload(
                                 event_type=event.event_type,
                                 event_id=str(event.event_id),
                                 timestamp=event.occurred_at,
                                 simulation_time=clock.now(),
-                                work_item_id=event.payload.get("work_item_id"),
-                                agent_id=event.payload.get("agent_id"),
+                                work_item_id=getattr(event, "work_item_id", None),
+                                agent_id=getattr(event, "agent_id", None),
                                 details=details_dict,
                             )
 

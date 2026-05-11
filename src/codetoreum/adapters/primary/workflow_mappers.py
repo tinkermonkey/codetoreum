@@ -62,11 +62,9 @@ class WorkflowMapper:
         """
         Convert CreateWorkflowRequest DTO to CreateWorkflowDefinitionCommand.
 
-        Args:
-            dto: Request DTO from API
+        Args: dto: Request DTO from API
 
-        Returns:
-            Domain command object
+        Returns: Domain command object
         """
         # Convert stage DTOs to domain objects
         stages = [
@@ -110,12 +108,10 @@ class WorkflowMapper:
         """
         Convert UpdateWorkflowRequest DTO to UpdateWorkflowDefinitionCommand.
 
-        Args:
-            workflow_id: Workflow ID
+        Args: workflow_id: Workflow ID
             dto: Request DTO from API
 
-        Returns:
-            Domain command object
+        Returns: Domain command object
         """
         # Convert stages if provided
         stages = None
@@ -162,11 +158,9 @@ class WorkflowMapper:
         """
         Convert WorkflowDefinitionInfo to WorkflowResponse DTO.
 
-        Args:
-            workflow_info: Port-level workflow information
+        Args: workflow_info: Port-level workflow information
 
-        Returns:
-            Response DTO for API
+        Returns: Response DTO for API
         """
         # Convert stages
         stages = [
@@ -218,11 +212,9 @@ class WorkflowMapper:
         """
         Convert WorkflowSummaryInfo to WorkflowSummaryResponse DTO.
 
-        Args:
-            workflow_summary: Port-level workflow summary
+        Args: workflow_summary: Port-level workflow summary
 
-        Returns:
-            Summary response DTO for API
+        Returns: Summary response DTO for API
         """
         return WorkflowSummaryResponse(
             id=workflow_summary.id,
@@ -243,11 +235,9 @@ class WorkflowMapper:
         """
         Convert WorkflowListResult to WorkflowListResponse DTO.
 
-        Args:
-            workflow_list: Port-level workflow list result
+        Args: workflow_list: Port-level workflow list result
 
-        Returns:
-            List response DTO for API
+        Returns: List response DTO for API
         """
         workflows = [WorkflowMapper.to_summary_response(wf) for wf in workflow_list.workflows]
 
@@ -264,11 +254,9 @@ class WorkflowMapper:
         """
         Convert WorkflowDefinitionCommandResult to WorkflowCommandResult DTO.
 
-        Args:
-            result: Domain command result
+        Args: result: Domain command result
 
-        Returns:
-            Command result DTO for API
+        Returns: Command result DTO for API
         """
         return WorkflowCommandResult(
             success=result.success,
@@ -285,11 +273,9 @@ class WorkflowMapper:
         """
         Convert WorkflowVersionHistoryResult to WorkflowVersionListResponse DTO.
 
-        Args:
-            history: Port-level version history result
+        Args: history: Port-level version history result
 
-        Returns:
-            Version list response DTO for API
+        Returns: Version list response DTO for API
         """
         versions = [
             WorkflowVersionResponse(
@@ -312,11 +298,9 @@ class WorkflowMapper:
         """
         Convert WorkflowValidationResult to WorkflowValidationResponse DTO.
 
-        Args:
-            validation: Port-level validation result
+        Args: validation: Port-level validation result
 
-        Returns:
-            Validation response DTO for API
+        Returns: Validation response DTO for API
         """
         errors = [
             WorkflowValidationError(
@@ -343,11 +327,9 @@ class OrchestrationMapper:
         """
         Convert StartWorkflowExecutionRequest DTO to StartExecutionCommand.
 
-        Args:
-            dto: Request DTO from API
+        Args: dto: Request DTO from API
 
-        Returns:
-            Domain command object
+        Returns: Domain command object
         """
         # Parse priority
         priority = ExecutionPriority[dto.priority.upper()]
@@ -367,11 +349,9 @@ class OrchestrationMapper:
         """
         Convert OrchestrationCommandResult to StartWorkflowExecutionResponse DTO.
 
-        Args:
-            result: Domain command result
+        Args: result: Domain command result
 
-        Returns:
-            Start execution response DTO for API
+        Returns: Start execution response DTO for API
         """
         return StartWorkflowExecutionResponse(
             execution_id=result.execution_id,
@@ -386,11 +366,9 @@ class OrchestrationMapper:
         """
         Convert OrchestrationCommandResult to WorkflowExecutionResponse DTO.
 
-        Args:
-            result: Domain command result
+        Args: result: Domain command result
 
-        Returns:
-            Execution response DTO for API
+        Returns: Execution response DTO for API
         """
         return WorkflowExecutionResponse(
             execution_id=result.execution_id,
@@ -410,11 +388,9 @@ class OrchestrationMapper:
         """
         Convert EntryConditionCheckResult to EntryConditionValidationResponse DTO.
 
-        Args:
-            check_result: Port-level condition check result
+        Args: check_result: Port-level condition check result
 
-        Returns:
-            Validation response DTO for API
+        Returns: Validation response DTO for API
         """
         condition_results = [
             ConditionValidationResult(
@@ -438,12 +414,10 @@ class OrchestrationMapper:
         """
         Convert ExecutionListResult to ExecutionQueueResponse DTO.
 
-        Args:
-            execution_list: Port-level execution list
+        Args: execution_list: Port-level execution list
             queue_stats: Queue statistics
 
-        Returns:
-            Queue response DTO for API
+        Returns: Queue response DTO for API
         """
         executions = [
             QueuedExecutionInfo(

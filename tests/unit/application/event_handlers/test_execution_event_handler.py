@@ -1,6 +1,6 @@
 """Unit tests for ExecutionEventHandler."""
 
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import Mock
 
 import pytest
 
@@ -9,12 +9,76 @@ from codetoreum.application.event_handlers.execution_event_handler import (
 )
 from codetoreum.application.execution_service import ExecutionService
 from codetoreum.domain.events import (
-    ExecutionCompleted,
-    ExecutionFailed,
-    ExecutionInitialized,
-    ExecutionStarted,
-    ExecutionTimeout,
+    ExecutionCompletedEvent,
+    ExecutionFailedEvent,
+    ExecutionInitializedEvent,
+    ExecutionStartedEvent,
+    ExecutionTimedOutEvent,
 )
+from codetoreum.domain.events.adapter_events import now_iso
+
+
+def _initialized(exec_id: str, agent_id: str = "agent-1", work_item_id: str = "wi-1") -> ExecutionInitializedEvent:
+    return ExecutionInitializedEvent(
+        type="execution.initialized",
+        timestamp=now_iso(),
+        source="test",
+        execution_id=exec_id,
+        agent_id=agent_id,
+        work_item_id=work_item_id,
+        stage_name="Development",
+    )
+
+
+def _started(exec_id: str, work_item_id: str = "wi-1", agent_id: str = "agent-1") -> ExecutionStartedEvent:
+    return ExecutionStartedEvent(
+        type="execution.started",
+        timestamp=now_iso(),
+        source="test",
+        execution_id=exec_id,
+        work_item_id=work_item_id,
+        agent_id=agent_id,
+    )
+
+
+def _completed(exec_id: str, work_item_id: str = "wi-1", agent_id: str = "agent-1") -> ExecutionCompletedEvent:
+    return ExecutionCompletedEvent(
+        type="execution.completed",
+        timestamp=now_iso(),
+        source="test",
+        execution_id=exec_id,
+        work_item_id=work_item_id,
+        agent_id=agent_id,
+        input_tokens=100,
+        output_tokens=200,
+    )
+
+
+def _failed(
+    exec_id: str, error: str = "Test failed", work_item_id: str = "wi-1", agent_id: str = "agent-1"
+) -> ExecutionFailedEvent:
+    return ExecutionFailedEvent(
+        type="execution.failed",
+        timestamp=now_iso(),
+        source="test",
+        execution_id=exec_id,
+        work_item_id=work_item_id,
+        agent_id=agent_id,
+        error=error,
+        exit_code=1,
+    )
+
+
+def _timed_out(exec_id: str, work_item_id: str = "wi-1") -> ExecutionTimedOutEvent:
+    return ExecutionTimedOutEvent(
+        type="execution.timed_out",
+        timestamp=now_iso(),
+        source="test",
+        execution_id=exec_id,
+        work_item_id=work_item_id,
+        timeout_seconds=60,
+        started_at=now_iso(),
+    )
 
 
 class TestExecutionEventHandlerInitialization:
@@ -34,7 +98,6 @@ class TestExecutionEventHandlerInitialization:
             "timed_out_executions": 0,
         }
         assert handler._active_executions == {}
-        # Verify service mock is not called during initialization
         mock_service.assert_not_called()
 
     def test_handler_has_event_types(self):
@@ -42,13 +105,12 @@ class TestExecutionEventHandlerInitialization:
         mock_service = Mock(spec=ExecutionService)
         handler = ExecutionEventHandler(mock_service)
 
-        # Verify handler has get_event_types method set by decorator
         event_types = handler.get_event_types()
-        assert "ExecutionInitialized" in event_types
-        assert "ExecutionStarted" in event_types
-        assert "ExecutionCompleted" in event_types
-        assert "ExecutionFailed" in event_types
-        assert "ExecutionTimeout" in event_types
+        assert "ExecutionInitializedEvent" in event_types
+        assert "ExecutionStartedEvent" in event_types
+        assert "ExecutionCompletedEvent" in event_types
+        assert "ExecutionFailedEvent" in event_types
+        assert "ExecutionTimedOutEvent" in event_types
 
 
 @pytest.mark.asyncio
@@ -56,102 +118,66 @@ class TestExecutionEventHandlerMethods:
     """Test ExecutionEventHandler event handling methods."""
 
     async def test_handle_execution_initialized(self):
-        """Test handling ExecutionInitialized event."""
+        """Test handling ExecutionInitializedEvent."""
         mock_service = Mock(spec=ExecutionService)
         handler = ExecutionEventHandler(mock_service)
 
-        event = ExecutionInitialized(
-            aggregate_id="exec-1",
-            payload={
-                "agent_id": "agent-1",
-                "work_item_id": "wi-1",
-                "workflow_id": "wf-1",
-                "stage_name": "Development",
-            },
-        )
-
-        await handler.handle(event)
+        await handler.handle(_initialized("exec-1"))
 
         assert handler._metrics["total_executions"] == 1
         assert handler._metrics["active_executions"] == 0
 
     async def test_handle_execution_started(self):
-        """Test handling ExecutionStarted event."""
+        """Test handling ExecutionStartedEvent."""
         mock_service = Mock(spec=ExecutionService)
         handler = ExecutionEventHandler(mock_service)
 
-        event = ExecutionStarted(
-            aggregate_id="exec-1",
-            payload={"container_name": "container-1"},
-        )
-
-        await handler.handle(event)
+        await handler.handle(_started("exec-1"))
 
         assert handler._metrics["active_executions"] == 1
         assert "exec-1" in handler._active_executions
         assert handler._active_executions["exec-1"] == "exec-1"
 
     async def test_handle_execution_completed(self):
-        """Test handling ExecutionCompleted event."""
+        """Test handling ExecutionCompletedEvent."""
         mock_service = Mock(spec=ExecutionService)
         handler = ExecutionEventHandler(mock_service)
 
-        # Initialize and start execution
         handler._metrics["total_executions"] = 1
         handler._metrics["active_executions"] = 1
         handler._active_executions["exec-1"] = "exec-1"
 
-        event = ExecutionCompleted(
-            aggregate_id="exec-1",
-            payload={"input_tokens": 100, "output_tokens": 200},
-        )
-
-        await handler.handle(event)
+        await handler.handle(_completed("exec-1"))
 
         assert handler._metrics["completed_executions"] == 1
         assert handler._metrics["active_executions"] == 0
         assert "exec-1" not in handler._active_executions
 
     async def test_handle_execution_failed(self):
-        """Test handling ExecutionFailed event."""
+        """Test handling ExecutionFailedEvent."""
         mock_service = Mock(spec=ExecutionService)
         handler = ExecutionEventHandler(mock_service)
 
-        # Initialize and start execution
         handler._metrics["total_executions"] = 1
         handler._metrics["active_executions"] = 1
         handler._active_executions["exec-1"] = "exec-1"
 
-        event = ExecutionFailed(
-            aggregate_id="exec-1",
-            payload={
-                "error_message": "Test failed",
-                "exit_code": 1,
-            },
-        )
-
-        await handler.handle(event)
+        await handler.handle(_failed("exec-1", "Test failed"))
 
         assert handler._metrics["failed_executions"] == 1
         assert handler._metrics["active_executions"] == 0
         assert "exec-1" not in handler._active_executions
 
     async def test_handle_execution_timeout(self):
-        """Test handling ExecutionTimeout event."""
+        """Test handling ExecutionTimedOutEvent."""
         mock_service = Mock(spec=ExecutionService)
         handler = ExecutionEventHandler(mock_service)
 
-        # Initialize and start execution
         handler._metrics["total_executions"] = 1
         handler._metrics["active_executions"] = 1
         handler._active_executions["exec-1"] = "exec-1"
 
-        event = ExecutionTimeout(
-            aggregate_id="exec-1",
-            payload={},
-        )
-
-        await handler.handle(event)
+        await handler.handle(_timed_out("exec-1"))
 
         assert handler._metrics["timed_out_executions"] == 1
         assert handler._metrics["failed_executions"] == 1
@@ -163,11 +189,8 @@ class TestExecutionEventHandlerMethods:
         mock_service = Mock(spec=ExecutionService)
         handler = ExecutionEventHandler(mock_service)
 
-        # Create a mock event with unexpected type
         event = Mock()
         event.event_type = "UnexpectedEvent"
-
-        # Should not raise, just log warning
         await handler.handle(event)
 
         assert handler._metrics["total_executions"] == 0
@@ -231,9 +254,7 @@ class TestExecutionEventHandlerMetrics:
         mock_service = Mock(spec=ExecutionService)
         handler = ExecutionEventHandler(mock_service)
 
-        # Explicitly set total_executions to 0
         handler._metrics["total_executions"] = 0
-
         metrics = handler.get_metrics()
         assert metrics["success_rate"] == 0.0
         assert metrics["failure_rate"] == 0.0
@@ -249,9 +270,7 @@ class TestExecutionEventHandlerActiveExecutions:
         mock_service = Mock(spec=ExecutionService)
         handler = ExecutionEventHandler(mock_service)
 
-        active = handler.get_active_executions()
-
-        assert active == {}
+        assert handler.get_active_executions() == {}
 
     async def test_get_active_executions_populated(self):
         """Test get_active_executions returns tracking data."""
@@ -262,7 +281,6 @@ class TestExecutionEventHandlerActiveExecutions:
         handler._active_executions["exec-2"] = "exec-2"
 
         active = handler.get_active_executions()
-
         assert len(active) == 2
         assert "exec-1" in active
         assert "exec-2" in active
@@ -277,7 +295,6 @@ class TestExecutionEventHandlerActiveExecutions:
         active = handler.get_active_executions()
         active["exec-2"] = "exec-2"
 
-        # Original should not be modified
         assert len(handler._active_executions) == 1
         assert "exec-2" not in handler._active_executions
 
@@ -291,36 +308,13 @@ class TestExecutionEventHandlerWorkflow:
         mock_service = Mock(spec=ExecutionService)
         handler = ExecutionEventHandler(mock_service)
 
-        # Initialization event
-        init_event = ExecutionInitialized(
-            aggregate_id="exec-1",
-            payload={
-                "agent_id": "agent-1",
-                "work_item_id": "wi-1",
-                "workflow_id": "wf-1",
-                "stage_name": "Development",
-            },
-        )
-        await handler.handle(init_event)
-
+        await handler.handle(_initialized("exec-1"))
         assert handler._metrics["total_executions"] == 1
 
-        # Start event
-        start_event = ExecutionStarted(
-            aggregate_id="exec-1",
-            payload={"container_name": "container-1"},
-        )
-        await handler.handle(start_event)
-
+        await handler.handle(_started("exec-1"))
         assert handler._metrics["active_executions"] == 1
 
-        # Completion event
-        complete_event = ExecutionCompleted(
-            aggregate_id="exec-1",
-            payload={"input_tokens": 100, "output_tokens": 200},
-        )
-        await handler.handle(complete_event)
-
+        await handler.handle(_completed("exec-1"))
         assert handler._metrics["completed_executions"] == 1
         assert handler._metrics["active_executions"] == 0
         assert handler.get_metrics()["success_rate"] == 100.0
@@ -330,31 +324,16 @@ class TestExecutionEventHandlerWorkflow:
         mock_service = Mock(spec=ExecutionService)
         handler = ExecutionEventHandler(mock_service)
 
-        # Start multiple executions
         for i in range(5):
-            init_event = ExecutionInitialized(
-                aggregate_id=f"exec-{i}",
-                payload={"agent_id": f"agent-{i}"},
-            )
-            await handler.handle(init_event)
-
-            start_event = ExecutionStarted(
-                aggregate_id=f"exec-{i}",
-                payload={},
-            )
-            await handler.handle(start_event)
+            await handler.handle(_initialized(f"exec-{i}", agent_id=f"agent-{i}"))
+            await handler.handle(_started(f"exec-{i}"))
 
         assert handler._metrics["total_executions"] == 5
         assert handler._metrics["active_executions"] == 5
         assert len(handler.get_active_executions()) == 5
 
-        # Complete some executions
         for i in range(3):
-            complete_event = ExecutionCompleted(
-                aggregate_id=f"exec-{i}",
-                payload={},
-            )
-            await handler.handle(complete_event)
+            await handler.handle(_completed(f"exec-{i}"))
 
         assert handler._metrics["completed_executions"] == 3
         assert handler._metrics["active_executions"] == 2
@@ -365,25 +344,9 @@ class TestExecutionEventHandlerWorkflow:
         mock_service = Mock(spec=ExecutionService)
         handler = ExecutionEventHandler(mock_service)
 
-        # Initialize and start
-        init_event = ExecutionInitialized(
-            aggregate_id="exec-1",
-            payload={},
-        )
-        await handler.handle(init_event)
-
-        start_event = ExecutionStarted(
-            aggregate_id="exec-1",
-            payload={},
-        )
-        await handler.handle(start_event)
-
-        # Fail event
-        fail_event = ExecutionFailed(
-            aggregate_id="exec-1",
-            payload={"error_message": "Container crashed", "exit_code": 139},
-        )
-        await handler.handle(fail_event)
+        await handler.handle(_initialized("exec-1"))
+        await handler.handle(_started("exec-1"))
+        await handler.handle(_failed("exec-1", "Container crashed"))
 
         assert handler._metrics["failed_executions"] == 1
         assert handler._metrics["active_executions"] == 0
@@ -394,25 +357,9 @@ class TestExecutionEventHandlerWorkflow:
         mock_service = Mock(spec=ExecutionService)
         handler = ExecutionEventHandler(mock_service)
 
-        # Initialize and start
-        init_event = ExecutionInitialized(
-            aggregate_id="exec-1",
-            payload={},
-        )
-        await handler.handle(init_event)
-
-        start_event = ExecutionStarted(
-            aggregate_id="exec-1",
-            payload={},
-        )
-        await handler.handle(start_event)
-
-        # Timeout event
-        timeout_event = ExecutionTimeout(
-            aggregate_id="exec-1",
-            payload={},
-        )
-        await handler.handle(timeout_event)
+        await handler.handle(_initialized("exec-1"))
+        await handler.handle(_started("exec-1"))
+        await handler.handle(_timed_out("exec-1"))
 
         assert handler._metrics["timed_out_executions"] == 1
         assert handler._metrics["failed_executions"] == 1
@@ -424,54 +371,29 @@ class TestExecutionEventHandlerWorkflow:
         mock_service = Mock(spec=ExecutionService)
         handler = ExecutionEventHandler(mock_service)
 
-        # Create 10 total executions with mixed outcomes
-        # 6 successful, 2 failed, 2 timed out
-        execution_outcomes = [
-            ("exec-1", ExecutionCompleted),
-            ("exec-2", ExecutionCompleted),
-            ("exec-3", ExecutionCompleted),
-            ("exec-4", ExecutionCompleted),
-            ("exec-5", ExecutionCompleted),
-            ("exec-6", ExecutionCompleted),
-            ("exec-7", ExecutionFailed),
-            ("exec-8", ExecutionFailed),
-            ("exec-9", ExecutionTimeout),
-            ("exec-10", ExecutionTimeout),
+        outcomes = [
+            ("exec-1", "completed"),
+            ("exec-2", "completed"),
+            ("exec-3", "completed"),
+            ("exec-4", "completed"),
+            ("exec-5", "completed"),
+            ("exec-6", "completed"),
+            ("exec-7", "failed"),
+            ("exec-8", "failed"),
+            ("exec-9", "timed_out"),
+            ("exec-10", "timed_out"),
         ]
 
-        for exec_id, event_type in execution_outcomes:
-            # Initialize
-            init_event = ExecutionInitialized(
-                aggregate_id=exec_id,
-                payload={},
-            )
-            await handler.handle(init_event)
+        for exec_id, outcome in outcomes:
+            await handler.handle(_initialized(exec_id))
+            await handler.handle(_started(exec_id))
 
-            # Start
-            start_event = ExecutionStarted(
-                aggregate_id=exec_id,
-                payload={},
-            )
-            await handler.handle(start_event)
-
-            # Complete with specific outcome
-            if event_type == ExecutionCompleted:
-                complete_event = ExecutionCompleted(
-                    aggregate_id=exec_id,
-                    payload={},
-                )
-            elif event_type == ExecutionFailed:
-                complete_event = ExecutionFailed(
-                    aggregate_id=exec_id,
-                    payload={"error_message": "Failed"},
-                )
-            else:  # ExecutionTimeout
-                complete_event = ExecutionTimeout(
-                    aggregate_id=exec_id,
-                    payload={},
-                )
-
-            await handler.handle(complete_event)
+            if outcome == "completed":
+                await handler.handle(_completed(exec_id))
+            elif outcome == "failed":
+                await handler.handle(_failed(exec_id, "Failed"))
+            else:
+                await handler.handle(_timed_out(exec_id))
 
         metrics = handler.get_metrics()
         assert metrics["total_executions"] == 10

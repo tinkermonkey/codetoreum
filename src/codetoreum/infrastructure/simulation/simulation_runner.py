@@ -16,7 +16,7 @@ from codetoreum.adapters.testing.in_memory_metrics_adapter import (
 )
 from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
 from codetoreum.adapters.testing.mock_notifier_adapter import MockNotifierAdapter
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.infrastructure.simulation.mock_tracer import (
     MockTracer,
     SpanKind,
@@ -154,7 +154,7 @@ class SimulationRunner:
         self._configure_adapters()
 
         # Captured events
-        self.captured_events: list[DomainEvent] = []
+        self.captured_events: list[CodetoreumEvent] = []
 
         # Assertions
         self.assertions: list[AssertionResult] = []
@@ -250,7 +250,7 @@ class SimulationRunner:
             metadata=self.config.metadata,
         )
 
-    def capture_event(self, event: DomainEvent) -> None:
+    def capture_event(self, event: CodetoreumEvent) -> None:
         """
         Capture a domain event.
 
@@ -581,7 +581,7 @@ class SimulationRunner:
         else:
             await self.clock.advance_to(target_time)
 
-    def get_events_by_type(self, event_type: str) -> list[DomainEvent]:
+    def get_events_by_type(self, event_type: str) -> list[CodetoreumEvent]:
         """
         Get all captured events of a specific type.
 
@@ -593,7 +593,7 @@ class SimulationRunner:
         """
         return [e for e in self.captured_events if e.event_type == event_type]
 
-    def get_events_by_aggregate(self, aggregate_id: str) -> list[DomainEvent]:
+    def get_events_by_aggregate(self, aggregate_id: str) -> list[CodetoreumEvent]:
         """
         Get all captured events for a specific aggregate.
 

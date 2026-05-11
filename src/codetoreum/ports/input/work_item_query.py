@@ -98,14 +98,11 @@ class IWorkItemQueryPort(ABC):
         """
         Retrieves a single work item by ID.
 
-        Args:
-            work_item_id: Work item ID
+        Args: work_item_id: Work item ID
 
-        Returns:
-            Work item
+        Returns: Work item
 
-        Raises:
-            WorkItemNotFoundError: If work item doesn't exist
+        Raises: WorkItemNotFoundError: If work item doesn't exist
         """
 
     @abstractmethod
@@ -115,12 +112,10 @@ class IWorkItemQueryPort(ABC):
         """
         Lists work items with optional filtering and pagination.
 
-        Args:
-            filters: Optional filters to apply
+        Args: filters: Optional filters to apply
             pagination: Optional pagination parameters
 
-        Returns:
-            List result with work items and metadata
+        Returns: List result with work items and metadata
         """
 
     @abstractmethod
@@ -128,11 +123,9 @@ class IWorkItemQueryPort(ABC):
         """
         Searches work items by title and description.
 
-        Args:
-            search_params: Search parameters including query and filters
+        Args: search_params: Search parameters including query and filters
 
-        Returns:
-            List result with matching work items
+        Returns: List result with matching work items
         """
 
     @abstractmethod
@@ -140,15 +133,12 @@ class IWorkItemQueryPort(ABC):
         """
         Retrieves work item history including all events.
 
-        Args:
-            work_item_id: Work item ID
+        Args: work_item_id: Work item ID
             limit: Optional limit on number of events
 
-        Returns:
-            Work item history with events
+        Returns: Work item history with events
 
-        Raises:
-            WorkItemNotFoundError: If work item doesn't exist
+        Raises: WorkItemNotFoundError: If work item doesn't exist
         """
 
     @abstractmethod
@@ -156,9 +146,7 @@ class IWorkItemQueryPort(ABC):
         """
         Counts work items matching the given filters.
 
-        Args:
-            filters: Optional filters to apply
+        Args: filters: Optional filters to apply
 
-        Returns:
-            Count of matching work items
+        Returns: Count of matching work items
         """

@@ -51,8 +51,7 @@ class IConversationalLoopService(ABC):
     ) -> ConversationalSessionState:
         """Initialize a conversational loop when work item enters a conversational column.
 
-        This operation sets up a new feedback loop by:
-        1. Creating a unique session identifier
+        This operation sets up a new feedback loop by: 1. Creating a unique session identifier
         2. Initializing session state with provided configuration
         3. Starting the discussion adapter's monitoring (via IDiscussionAdapter.start_monitoring())
         4. Persisting session state to IEventStore
@@ -82,8 +81,7 @@ class IConversationalLoopService(ABC):
     async def handle_comment_event(self, event: CommentNeedsResponseEvent) -> None:
         """Handle a human comment requiring an agent response.
 
-        This operation processes a comment that needs a response by:
-        1. Loading session state from storage (via load_session_state())
+        This operation processes a comment that needs a response by: 1. Loading session state from storage (via load_session_state())
         2. Verifying session is active and matches the work item
         3. Building thread context:
             - Retrieving parent comment(s) if this is a reply
@@ -164,8 +162,7 @@ class IConversationalLoopService(ABC):
         """Clean up loop state due to error handling or manual termination.
 
         This operation performs cleanup when a conversational loop needs to be
-        terminated unexpectedly (e.g., agent errors, manual user request) by:
-        1. Loading current session state (if exists)
+        terminated unexpectedly (e.g., agent errors, manual user request) by: 1. Loading current session state (if exists)
         2. Stopping discussion monitoring (via IDiscussionAdapter.stop_monitoring())
         3. Marking session as terminated
         4. Persisting terminated session state

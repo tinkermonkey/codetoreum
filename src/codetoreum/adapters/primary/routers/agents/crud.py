@@ -26,8 +26,7 @@ def register_crud_endpoints(
     """
     Register agent CRUD endpoints on the given router.
 
-    Args:
-        router: APIRouter to register endpoints on
+    Args: router: APIRouter to register endpoints on
         command_port: Agent command port for mutations
         query_port: Agent query port for data access
     """

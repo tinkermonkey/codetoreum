@@ -17,8 +17,7 @@ class MockConfigServiceAdapter:
         """
         Initialize adapter with configuration service.
 
-        Args:
-            config_service: ConfigurationService instance to wrap
+        Args: config_service: ConfigurationService instance to wrap
         """
         self._config_service = config_service
 

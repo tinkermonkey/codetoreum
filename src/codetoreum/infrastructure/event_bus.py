@@ -14,7 +14,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.observability.trace_context_propagation import (
     extract_and_activate_trace_context,
@@ -55,7 +55,7 @@ class EventHandler:
     to the event bus.
     """
 
-    async def handle(self, event: DomainEvent) -> None:
+    async def handle(self, event: CodetoreumEvent) -> None:
         """
         Handle an event.
 
@@ -100,7 +100,7 @@ class EventBus:
         await bus.publish(WorkItemCreated(...))
 
         # Or subscribe with callback
-        async def my_callback(event: DomainEvent):
+        async def my_callback(event: CodetoreumEvent):
             print(f"Received: {event.event_type}")
 
         bus.subscribe("WorkItemCreated", my_callback)
@@ -207,7 +207,7 @@ class EventBus:
 
         logger.info(f"Unregistered handler: {handler.__class__.__name__}")
 
-    def subscribe(self, event_type: str | None, callback: Callable[[DomainEvent], Any]) -> None:
+    def subscribe(self, event_type: str | None, callback: Callable[[CodetoreumEvent], Any]) -> None:
         """
         Subscribe to events with a callback function.
 
@@ -244,7 +244,7 @@ class EventBus:
             message = f"Failed to subscribe callback: {e}"
             raise EventBusError(message) from e
 
-    def unsubscribe(self, event_type: str | None, callback: Callable[[DomainEvent], Any]) -> None:
+    def unsubscribe(self, event_type: str | None, callback: Callable[[CodetoreumEvent], Any]) -> None:
         """
         Unsubscribe a callback.
 
@@ -265,7 +265,7 @@ class EventBus:
 
         logger.info(f"Unsubscribed callback from event type: {event_type}")
 
-    async def publish(self, event: DomainEvent) -> None:
+    async def publish(self, event: CodetoreumEvent) -> None:
         """
         Publish an event to all registered handlers and callbacks.
 
@@ -385,7 +385,7 @@ class EventBus:
             message = f"Unexpected error publishing event: {e}"
             raise EventBusError(message) from e
 
-    async def publish_batch(self, events: list[DomainEvent]) -> None:
+    async def publish_batch(self, events: list[CodetoreumEvent]) -> None:
         """
         Publish multiple events.
 
@@ -398,7 +398,7 @@ class EventBus:
         for event in events:
             await self.publish(event)
 
-    def _get_handlers_for_event(self, event: DomainEvent) -> list[EventHandler]:
+    def _get_handlers_for_event(self, event: CodetoreumEvent) -> list[EventHandler]:
         """Get all handlers for a given event."""
         handlers = []
 
@@ -412,7 +412,7 @@ class EventBus:
 
         return handlers
 
-    def _get_callbacks_for_event(self, event: DomainEvent) -> list[Callable]:
+    def _get_callbacks_for_event(self, event: CodetoreumEvent) -> list[Callable]:
         """Get all callbacks for a given event."""
         callbacks = []
 
@@ -426,7 +426,7 @@ class EventBus:
 
         return callbacks
 
-    async def _dispatch_to_handler(self, handler: EventHandler, event: DomainEvent) -> None:
+    async def _dispatch_to_handler(self, handler: EventHandler, event: CodetoreumEvent) -> None:
         """
         Dispatch event to a handler with retry logic and trace context.
 
@@ -481,7 +481,7 @@ class EventBus:
         # All retries exhausted
         raise last_exception
 
-    async def _dispatch_to_callback(self, callback: Callable, event: DomainEvent) -> None:
+    async def _dispatch_to_callback(self, callback: Callable, event: CodetoreumEvent) -> None:
         """
         Dispatch event to a callback with retry logic and trace context.
 
@@ -538,7 +538,7 @@ class EventBus:
         # All retries exhausted
         raise last_exception
 
-    async def _persist_to_redis(self, event: DomainEvent) -> None:
+    async def _persist_to_redis(self, event: CodetoreumEvent) -> None:
         """
         Persist event to Redis Streams with INTERNAL span.
 
@@ -568,9 +568,9 @@ class EventBus:
                 name=stream_key,
                 fields={
                     "event_id": str(event.event_id),
-                    "aggregate_id": event.aggregate_id,
-                    "aggregate_type": event.aggregate_type,
-                    "timestamp": event.occurred_at.isoformat(),
+                    "event_type": event.event_type,
+                    "timestamp": event.timestamp,
+                    "source": event.source,
                     "payload": str(event_dict),
                 },
             )
@@ -647,7 +647,7 @@ def event_handler(*event_types: str):
     Usage:
         @event_handler("WorkItemCreated", "WorkItemCompleted")
         class MyHandler(EventHandler):
-            async def handle(self, event: DomainEvent):
+            async def handle(self, event: CodetoreumEvent):
                 # Process event
                 pass
 

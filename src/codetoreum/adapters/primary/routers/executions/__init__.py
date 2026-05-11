@@ -30,13 +30,11 @@ def create_executions_router(
     """
     Create the executions REST API router.
 
-    Args:
-        command_port: Execution command input port
+    Args: command_port: Execution command input port
         query_port: Execution query input port
         auth_deps: Optional authentication dependencies
 
-    Returns:
-        Configured APIRouter for executions
+    Returns: Configured APIRouter for executions
     """
     # Create router with authentication dependency if provided
     router_kwargs = {

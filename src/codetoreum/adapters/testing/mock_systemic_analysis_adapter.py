@@ -61,8 +61,7 @@ class MockSystemicAnalysisAdapter(ISystemicAnalysisService):
     def __init__(self, results: list[SystemicAnalysisResult] | None = None) -> None:
         """Initialize mock adapter with optional result sequence.
 
-        Args:
-            results: List of SystemicAnalysisResult objects to return in sequence.
+        Args: results: List of SystemicAnalysisResult objects to return in sequence.
                     If None or empty, all calls return the default result.
         """
         self._results: list[SystemicAnalysisResult] = list(results) if results else []
@@ -84,8 +83,7 @@ class MockSystemicAnalysisAdapter(ISystemicAnalysisService):
 
         Resets the call index to 0, allowing the same sequence to be replayed.
 
-        Args:
-            results: List of SystemicAnalysisResult objects to return in sequence.
+        Args: results: List of SystemicAnalysisResult objects to return in sequence.
         """
         self._results = list(results) if results else []
         self._call_index = 0
@@ -99,12 +97,10 @@ class MockSystemicAnalysisAdapter(ISystemicAnalysisService):
 
         Records all arguments for test inspection via call_count and calls properties.
 
-        Args:
-            failures: List of test failures to classify.
+        Args: failures: List of test failures to classify.
             context: Context including work item id, iteration count, etc.
 
-        Returns:
-            Next SystemicAnalysisResult in configured sequence, or DEFAULT_RESULT
+        Returns: Next SystemicAnalysisResult in configured sequence, or DEFAULT_RESULT
             if sequence is exhausted or empty.
         """
         self._calls.append((failures, context))

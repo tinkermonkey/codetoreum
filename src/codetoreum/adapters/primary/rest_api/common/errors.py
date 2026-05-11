@@ -41,14 +41,12 @@ def create_error_response(
     """
     Create a standardized HTTP exception with error response.
 
-    Args:
-        status_code: HTTP status code
+    Args: status_code: HTTP status code
         error_code: Machine-readable error code
         message: Human-readable error message
         details: Optional additional error details
 
-    Returns:
-        HTTPException with standardized error response
+    Returns: HTTPException with standardized error response
     """
     error_response = ErrorResponse(error_code=error_code, message=message, details=details)
     return HTTPException(status_code=status_code, detail=error_response.model_dump())

@@ -21,7 +21,7 @@ from typing import Any
 
 from redis import asyncio as aioredis
 
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.output.message_broker import IMessageBroker
 
@@ -205,7 +205,7 @@ class RedisPubSubAdapter(IMessageBroker):
                 extra={"error_id": ErrorRegistry.ERR_EVENT_BUS_ERROR},
             )
 
-    async def publish_event(self, event: DomainEvent) -> None:
+    async def publish_event(self, event: CodetoreumEvent) -> None:
         """
         Publish domain event to all server instances.
 

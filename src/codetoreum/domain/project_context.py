@@ -5,71 +5,14 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events.adapter_events import now_iso
+from codetoreum.domain.events.project_context_events import (
+    ProjectContextCreatedEvent,
+    ProjectDockerConfigUpdatedEvent,
+    ProjectTestConfigUpdatedEvent,
+    ProjectWorkflowMappingAddedEvent,
+)
 from codetoreum.domain.exceptions import DomainError
-
-# =============================================================================
-# Project Context Events
-# =============================================================================
-
-
-class ProjectContextCreated(DomainEvent):
-    """Emitted when project context is created."""
-
-    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize ProjectContextCreated event.
-
-        Required payload fields:
-        - name: str
-        - repository_url: str
-        - default_branch: str
-        """
-        super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectContext", payload=payload, **kwargs)
-
-
-class ProjectTestConfigUpdated(DomainEvent):
-    """Emitted when test configuration is updated."""
-
-    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize ProjectTestConfigUpdated event.
-
-        Required payload fields:
-        - test_command: str
-        - test_framework: Optional[str]
-        """
-        super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectContext", payload=payload, **kwargs)
-
-
-class ProjectDockerConfigUpdated(DomainEvent):
-    """Emitted when Docker configuration is updated."""
-
-    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize ProjectDockerConfigUpdated event.
-
-        Required payload fields:
-        - has_dockerfile: bool
-        - dockerfile_path: Optional[str]
-        - requires_dev_container: bool
-        """
-        super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectContext", payload=payload, **kwargs)
-
-
-class ProjectWorkflowMappingAdded(DomainEvent):
-    """Emitted when custom workflow mapping is added."""
-
-    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        """
-        Initialize ProjectWorkflowMappingAdded event.
-
-        Required payload fields:
-        - label: str
-        - template_id: str
-        """
-        super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectContext", payload=payload, **kwargs)
-
 
 # =============================================================================
 # Project Context Aggregate
@@ -129,7 +72,7 @@ class ProjectContext:
     updated_at: datetime
 
     # Event tracking
-    _events: list[DomainEvent] = field(default_factory=list, init=False, repr=False)
+    _events: list = field(default_factory=list, init=False, repr=False)
     _version: int = field(default=0, init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -217,15 +160,12 @@ class ProjectContext:
             updated_at=datetime.now(UTC),
         )
 
-        event = ProjectContextCreated(
-            aggregate_id=project.id,
-            payload={
-                "name": name,
-                "display_name": display_name,
-                "repository_url": repository_url,
-                "default_branch": default_branch,
-                "primary_language": primary_language,
-            },
+        event = ProjectContextCreatedEvent(
+            type="project_context.created",
+            timestamp=now_iso(),
+            source="domain",
+            project_id=project.id,
+            name=name,
         )
         project._add_event(event)
 
@@ -251,9 +191,12 @@ class ProjectContext:
         self.updated_at = datetime.now(UTC)
         self._version += 1
 
-        event = ProjectTestConfigUpdated(
-            aggregate_id=self.id,
-            payload={"test_command": test_command, "test_framework": test_framework},
+        event = ProjectTestConfigUpdatedEvent(
+            type="project_context.test_config_updated",
+            timestamp=now_iso(),
+            source="domain",
+            project_id=self.id,
+            test_command=test_command or "",
         )
         self._add_event(event)
 
@@ -286,13 +229,12 @@ class ProjectContext:
         self.updated_at = datetime.now(UTC)
         self._version += 1
 
-        event = ProjectDockerConfigUpdated(
-            aggregate_id=self.id,
-            payload={
-                "has_dockerfile": has_dockerfile,
-                "dockerfile_path": dockerfile_path,
-                "requires_dev_container": requires_dev_container,
-            },
+        event = ProjectDockerConfigUpdatedEvent(
+            type="project_context.docker_config_updated",
+            timestamp=now_iso(),
+            source="domain",
+            project_id=self.id,
+            image=dockerfile_path or "",
         )
         self._add_event(event)
 
@@ -321,7 +263,14 @@ class ProjectContext:
         self.updated_at = datetime.now(UTC)
         self._version += 1
 
-        event = ProjectWorkflowMappingAdded(aggregate_id=self.id, payload={"label": label, "template_id": template_id})
+        event = ProjectWorkflowMappingAddedEvent(
+            type="project_context.workflow_mapping_added",
+            timestamp=now_iso(),
+            source="domain",
+            project_id=self.id,
+            column_name=label,
+            workflow_stage=template_id,
+        )
         self._add_event(event)
 
     def get_workflow_template_for_labels(self, labels: list[str]) -> str:
@@ -343,7 +292,7 @@ class ProjectContext:
         return self.default_workflow_template_id
 
     # Event management
-    def _add_event(self, event: DomainEvent) -> None:
+    def _add_event(self, event: object) -> None:
         """
         Add event to pending events list.
 
@@ -352,7 +301,7 @@ class ProjectContext:
         """
         self._events.append(event)
 
-    def get_pending_events(self) -> list[DomainEvent]:
+    def get_pending_events(self) -> list:
         """
         Get all pending events.
 

@@ -21,7 +21,6 @@ try:
 except ImportError:
     OTEL_AVAILABLE = False
 
-from codetoreum.domain.events import DomainEvent
 from codetoreum.infrastructure.observability.trace_context_propagation import (
     EventBusTraceContext,
     TraceContextData,
@@ -29,6 +28,14 @@ from codetoreum.infrastructure.observability.trace_context_propagation import (
     extract_and_activate_trace_context,
     inject_current_trace_context_into_event,
 )
+
+
+def _make_event(metadata: dict | None = None) -> Mock:
+    """Create a mock event with optional metadata for trace context tests."""
+    event = Mock()
+    event.metadata = metadata or {}
+    event.event_type = "MockTestEvent"
+    return event
 
 
 class TestTraceContextData:
@@ -123,10 +130,7 @@ class TestTraceContextPropagator:
         event creation time, not injected after creation. This test verifies
         that the inject function handles immutable events gracefully.
         """
-        event = DomainEvent(
-            aggregate_id="test-123",
-            aggregate_type="TestAggregate",
-        )
+        event = _make_event()
 
         # Mock span context
         mock_span_context = Mock()
@@ -144,10 +148,7 @@ class TestTraceContextPropagator:
 
     def test_inject_trace_context_with_invalid_span(self):
         """Test that injection is skipped for invalid span context."""
-        event = DomainEvent(
-            aggregate_id="test-123",
-            aggregate_type="TestAggregate",
-        )
+        event = _make_event()
 
         mock_span_context = Mock()
         mock_span_context.is_valid = False
@@ -159,11 +160,7 @@ class TestTraceContextPropagator:
 
     def test_extract_trace_context_from_event(self):
         """Test extracting trace context from event metadata."""
-        event = DomainEvent(
-            aggregate_id="test-123",
-            aggregate_type="TestAggregate",
-            metadata={"traceparent": "00-0af7651916cd43dd8448eb211c80319c-b9c7c989f97918e1-01"},
-        )
+        event = _make_event(metadata={"traceparent": "00-0af7651916cd43dd8448eb211c80319c-b9c7c989f97918e1-01"})
 
         trace_data = TraceContextPropagator.extract_trace_context(event)
 
@@ -173,21 +170,14 @@ class TestTraceContextPropagator:
 
     def test_extract_trace_context_not_present(self):
         """Test that None is returned when trace context not present."""
-        event = DomainEvent(
-            aggregate_id="test-123",
-            aggregate_type="TestAggregate",
-        )
+        event = _make_event()
 
         trace_data = TraceContextPropagator.extract_trace_context(event)
         assert trace_data is None
 
     def test_extract_trace_context_with_empty_metadata(self):
         """Test that None is returned when metadata is empty."""
-        event = DomainEvent(
-            aggregate_id="test-123",
-            aggregate_type="TestAggregate",
-            metadata={},
-        )
+        event = _make_event(metadata={})
 
         trace_data = TraceContextPropagator.extract_trace_context(event)
         assert trace_data is None
@@ -242,11 +232,7 @@ class TestEventBusTraceContext:
 
     def test_from_event_with_trace_context(self):
         """Test creating EventBusTraceContext from event with trace context."""
-        event = DomainEvent(
-            aggregate_id="test-123",
-            aggregate_type="TestAggregate",
-            metadata={"traceparent": "00-0af7651916cd43dd8448eb211c80319c-b9c7c989f97918e1-01"},
-        )
+        event = _make_event(metadata={"traceparent": "00-0af7651916cd43dd8448eb211c80319c-b9c7c989f97918e1-01"})
 
         trace_ctx = EventBusTraceContext.from_event(event)
 
@@ -255,10 +241,7 @@ class TestEventBusTraceContext:
 
     def test_from_event_without_trace_context(self):
         """Test creating EventBusTraceContext from event without trace context."""
-        event = DomainEvent(
-            aggregate_id="test-123",
-            aggregate_type="TestAggregate",
-        )
+        event = _make_event()
 
         trace_ctx = EventBusTraceContext.from_event(event)
 
@@ -268,11 +251,7 @@ class TestEventBusTraceContext:
     @pytest.mark.skipif(not OTEL_AVAILABLE, reason="OpenTelemetry not available")
     def test_activate_with_trace_context(self):
         """Test activating EventBusTraceContext."""
-        event = DomainEvent(
-            aggregate_id="test-123",
-            aggregate_type="TestAggregate",
-            metadata={"traceparent": "00-0af7651916cd43dd8448eb211c80319c-b9c7c989f97918e1-01"},
-        )
+        event = _make_event(metadata={"traceparent": "00-0af7651916cd43dd8448eb211c80319c-b9c7c989f97918e1-01"})
 
         trace_ctx = EventBusTraceContext.from_event(event)
         ctx = trace_ctx.activate()
@@ -281,10 +260,7 @@ class TestEventBusTraceContext:
 
     def test_activate_without_trace_context(self):
         """Test activate returns None when no trace context."""
-        event = DomainEvent(
-            aggregate_id="test-123",
-            aggregate_type="TestAggregate",
-        )
+        event = _make_event()
 
         trace_ctx = EventBusTraceContext.from_event(event)
         ctx = trace_ctx.activate()
@@ -297,10 +273,7 @@ class TestConvenienceFunctions:
 
     def test_inject_current_trace_context_into_event(self):
         """Test convenience function for injecting trace context."""
-        event = DomainEvent(
-            aggregate_id="test-123",
-            aggregate_type="TestAggregate",
-        )
+        event = _make_event()
 
         # Mock the injector to verify it's called
         with patch.object(TraceContextPropagator, "inject_trace_context") as mock_inject:
@@ -309,11 +282,7 @@ class TestConvenienceFunctions:
 
     def test_extract_and_activate_trace_context_with_context(self):
         """Test convenience function for extracting and activating."""
-        event = DomainEvent(
-            aggregate_id="test-123",
-            aggregate_type="TestAggregate",
-            metadata={"traceparent": "00-0af7651916cd43dd8448eb211c80319c-b9c7c989f97918e1-01"},
-        )
+        event = _make_event(metadata={"traceparent": "00-0af7651916cd43dd8448eb211c80319c-b9c7c989f97918e1-01"})
 
         ctx = extract_and_activate_trace_context(event)
 
@@ -324,10 +293,7 @@ class TestConvenienceFunctions:
 
     def test_extract_and_activate_trace_context_without_context(self):
         """Test convenience function when no trace context."""
-        event = DomainEvent(
-            aggregate_id="test-123",
-            aggregate_type="TestAggregate",
-        )
+        event = _make_event()
 
         ctx = extract_and_activate_trace_context(event)
         assert ctx is None

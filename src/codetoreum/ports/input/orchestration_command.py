@@ -100,21 +100,17 @@ class IOrchestrationCommandPort(ABC):
         """
         Starts a new workflow execution for a work item.
 
-        This operation:
-        1. Validates workflow and work item exist
+        This operation: 1. Validates workflow and work item exist
         2. Checks entry conditions for the starting stage
         3. Creates a workflow run
         4. Queues the first agent execution
         5. Emits WorkflowStarted event
 
-        Args:
-            command: Command with execution parameters
+        Args: command: Command with execution parameters
 
-        Returns:
-            Result containing execution ID and initial status
+        Returns: Result containing execution ID and initial status
 
-        Raises:
-            WorkflowNotFoundError: If workflow doesn't exist
+        Raises: WorkflowNotFoundError: If workflow doesn't exist
             WorkItemNotFoundError: If work item doesn't exist
             EntryConditionNotMetError: If entry conditions not satisfied
             ValidationError: If command parameters invalid
@@ -134,14 +130,11 @@ class IOrchestrationCommandPort(ABC):
         - Current agent execution is terminated immediately
         - Cleanup tasks may not run
 
-        Args:
-            command: Command with cancellation parameters
+        Args: command: Command with cancellation parameters
 
-        Returns:
-            Result containing updated workflow status
+        Returns: Result containing updated workflow status
 
-        Raises:
-            WorkflowNotFoundError: If workflow run doesn't exist
+        Raises: WorkflowNotFoundError: If workflow run doesn't exist
         """
 
     @abstractmethod
@@ -152,14 +145,11 @@ class IOrchestrationCommandPort(ABC):
         Current agent execution completes, but no new executions are started
         until the workflow is resumed.
 
-        Args:
-            command: Command with pause parameters
+        Args: command: Command with pause parameters
 
-        Returns:
-            Result containing updated workflow status
+        Returns: Result containing updated workflow status
 
-        Raises:
-            WorkflowNotFoundError: If workflow run doesn't exist
+        Raises: WorkflowNotFoundError: If workflow run doesn't exist
             WorkflowNotActiveError: If workflow not in active state
         """
 
@@ -170,14 +160,11 @@ class IOrchestrationCommandPort(ABC):
 
         Workflow continues from the stage it was paused at (or a specified stage).
 
-        Args:
-            command: Command with resume parameters
+        Args: command: Command with resume parameters
 
-        Returns:
-            Result containing updated workflow status
+        Returns: Result containing updated workflow status
 
-        Raises:
-            WorkflowNotFoundError: If workflow run doesn't exist
+        Raises: WorkflowNotFoundError: If workflow run doesn't exist
             WorkflowNotPausedError: If workflow not in paused state
         """
 
@@ -191,15 +178,12 @@ class IOrchestrationCommandPort(ABC):
         This is called internally before starting a workflow, but can also
         be called externally to validate before attempting to start.
 
-        Args:
-            work_item_id: Work item to check
+        Args: work_item_id: Work item to check
             workflow_id: Workflow to check conditions for
             stage_name: Specific stage to check (defaults to first stage)
 
-        Returns:
-            Result indicating whether conditions are met and details
+        Returns: Result indicating whether conditions are met and details
 
-        Raises:
-            WorkflowNotFoundError: If workflow doesn't exist
+        Raises: WorkflowNotFoundError: If workflow doesn't exist
             WorkItemNotFoundError: If work item doesn't exist
         """

@@ -86,3 +86,28 @@ security.securitypolicy.security-headers-middleware:
     created_at: 2026-05-08T11:10:19.782Z
     updated_at: 2026-05-08T11:10:19.783Z
     version: 1
+security.securitypolicy.git-hub-webhook-hmac-signature:
+  id: 26eb918c-39cc-4ab5-b16f-59262ea4810b
+  path: security.securitypolicy.git-hub-webhook-hmac-signature
+  spec_node_id: security.securitypolicy
+  type: securitypolicy
+  layer_id: security
+  name: GitHub Webhook HMAC Signature
+  description: All incoming GitHub webhook payloads must include a valid
+    X-Hub-Signature-256 HMAC-SHA256 header. The /webhooks/github endpoint
+    rejects any request with a missing or invalid signature with 401
+    Unauthorized. The shared secret is configured per project.
+  attributes:
+    priority: 1
+    target: endpoint
+    enabled: true
+    requirementLevel: mandatory
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/fastapi_app.py
+        symbol: github_webhook
+  metadata:
+    created_at: 2026-05-08T20:43:39.981Z
+    updated_at: 2026-05-08T20:43:39.981Z
+    version: 1

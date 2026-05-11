@@ -38,8 +38,7 @@ class RepairCycleContext(Protocol):
     Protocol defining the execution context passed to repair cycle operations.
     Provides configuration and state information for the repair cycle.
 
-    Attributes:
-        stage_name: Name of the workflow stage (e.g., "fix_failures")
+    Attributes: stage_name: Name of the workflow stage (e.g., "fix_failures")
         workflow_run_id: Unique identifier for the workflow run
         work_item_id: Unique identifier for the work item being repaired (issue/task)
         test_configs: Tuple of RepairTestRunConfig for each test type
@@ -81,16 +80,14 @@ class IRepairCycle(Protocol):
     configured repair cycle stage of the SDLC workflow. It executes test types sequentially
     (UNIT → INTEGRATION → E2E) with fast-fail behavior.
 
-    For each test type:
-    1. Run tests
+    For each test type: 1. Run tests
     2. Group failures by file
     3. Fix each file
     4. Re-run tests
     5. Repeat until tests pass or max iterations reached
     6. Optionally review warnings after success
 
-    Raises:
-        CircuitBreakerOpenError: When max_total_agent_calls exceeded
+    Raises: CircuitBreakerOpenError: When max_total_agent_calls exceeded
         TimeoutError: When test execution exceeds timeout
         JSONParseError: When agent returns invalid JSON (after retries)
     """
@@ -103,14 +100,11 @@ class IRepairCycle(Protocol):
         tests, analyzes failures, coordinates fixes via agent, and validates
         until tests pass or circuit breaker triggers.
 
-        Args:
-            context: Repair cycle execution context with configuration
+        Args: context: Repair cycle execution context with configuration
 
-        Returns:
-            RepairCycleResult with overall success status and per-test-type results
+        Returns: RepairCycleResult with overall success status and per-test-type results
 
-        Raises:
-            CircuitBreakerOpenError: When circuit breaker is open
+        Raises: CircuitBreakerOpenError: When circuit breaker is open
         """
         ...
 
@@ -124,15 +118,12 @@ class IRepairCycle(Protocol):
         Runs the test framework (pytest, jest, etc.) for the specified test type,
         collecting pass/fail counts, failure details, and warnings.
 
-        Args:
-            config: Test run configuration (timeout, max iterations, etc.)
+        Args: config: Test run configuration (timeout, max iterations, etc.)
             context: Repair cycle context
 
-        Returns:
-            RepairTestResult with pass/fail counts and failure details
+        Returns: RepairTestResult with pass/fail counts and failure details
 
-        Raises:
-            TimeoutError: When test execution exceeds timeout
+        Raises: TimeoutError: When test execution exceeds timeout
             JSONParseError: When agent returns invalid JSON (after retries)
         """
         ...
@@ -149,16 +140,13 @@ class IRepairCycle(Protocol):
         for each file. Agents analyze failure details and implement fixes,
         then tests are re-run to validate.
 
-        Args:
-            grouped_failures: Map of test file name to failures in that file
+        Args: grouped_failures: Map of test file name to failures in that file
             config: Test run configuration
             context: Repair cycle context
 
-        Returns:
-            Number of files fixed (may be less than input if some fail)
+        Returns: Number of files fixed (may be less than input if some fail)
 
-        Raises:
-            CircuitBreakerOpenError: When circuit breaker is open
+        Raises: CircuitBreakerOpenError: When circuit breaker is open
         """
         ...
 
@@ -177,16 +165,13 @@ class IRepairCycle(Protocol):
 
         Coordinates with agent to review and address warnings.
 
-        Args:
-            test_result: Test result containing warnings
+        Args: test_result: Test result containing warnings
             config: Test run configuration
             context: Repair cycle context
 
-        Returns:
-            Number of warning files reviewed
+        Returns: Number of warning files reviewed
 
-        Raises:
-            CircuitBreakerOpenError: When circuit breaker is open
+        Raises: CircuitBreakerOpenError: When circuit breaker is open
         """
         ...
 
@@ -201,16 +186,13 @@ class IRepairCycle(Protocol):
         Classifies test failures to identify systemic patterns that affect
         multiple tests or require cross-cutting fixes.
 
-        Args:
-            test_result: Test result containing failures to analyze
+        Args: test_result: Test result containing failures to analyze
             config: Test run configuration
             context: Repair cycle context
 
-        Returns:
-            Analysis summary from the agent
+        Returns: Analysis summary from the agent
 
-        Raises:
-            CircuitBreakerOpenError: When circuit breaker is open
+        Raises: CircuitBreakerOpenError: When circuit breaker is open
         """
         ...
 
@@ -227,17 +209,14 @@ class IRepairCycle(Protocol):
         affecting multiple tests. These are broader fixes beyond file-level
         changes, such as architecture adjustments or dependency updates.
 
-        Args:
-            analysis_summary: Summary from systemic analysis
+        Args: analysis_summary: Summary from systemic analysis
             test_result: Test result that triggered the analysis
             config: Test run configuration
             context: Repair cycle context
 
-        Returns:
-            True if fixes were successfully applied
+        Returns: True if fixes were successfully applied
 
-        Raises:
-            CircuitBreakerOpenError: When circuit breaker is open
+        Raises: CircuitBreakerOpenError: When circuit breaker is open
         """
         ...
 
@@ -254,18 +233,15 @@ class IRepairCycle(Protocol):
         presenting all failures together with the root cause context from systemic analysis.
         Use when analysis_result.cross_cutting is True.
 
-        Args:
-            failures: Immutable tuple of test failures to address
+        Args: failures: Immutable tuple of test failures to address
             analysis_result: Systemic analysis result with root cause and affected files
             config: Test run configuration
             context: Repair cycle context
 
-        Returns:
-            SystemicFixResult indicating whether the holistic fix succeeded and which
+        Returns: SystemicFixResult indicating whether the holistic fix succeeded and which
             files were modified
 
-        Raises:
-            CircuitBreakerOpenError: When circuit breaker is open
+        Raises: CircuitBreakerOpenError: When circuit breaker is open
         """
         ...
 
@@ -280,15 +256,12 @@ class IRepairCycle(Protocol):
         after systemic fixes, ensuring dependencies and configuration are
         properly updated.
 
-        Args:
-            config: Test run configuration
+        Args: config: Test run configuration
             context: Repair cycle context
 
-        Returns:
-            True if environment was successfully rebuilt
+        Returns: True if environment was successfully rebuilt
 
-        Raises:
-            CircuitBreakerOpenError: When circuit breaker is open
+        Raises: CircuitBreakerOpenError: When circuit breaker is open
         """
         ...
 
@@ -302,15 +275,12 @@ class IRepairCycle(Protocol):
         Coordinates with the env_verification agent to verify that the
         rebuilt environment is properly configured and ready for test execution.
 
-        Args:
-            config: Test run configuration
+        Args: config: Test run configuration
             context: Repair cycle context
 
-        Returns:
-            True if environment verification passed
+        Returns: True if environment verification passed
 
-        Raises:
-            CircuitBreakerOpenError: When circuit breaker is open
+        Raises: CircuitBreakerOpenError: When circuit breaker is open
         """
         ...
 
@@ -325,12 +295,10 @@ class IRepairCycle(Protocol):
         Called at checkpoint_interval iterations (e.g., every 5 iterations).
         Saves sufficient state to resume from this point if cycle is interrupted.
 
-        Args:
-            test_type: Current test type being executed
+        Args: test_type: Current test type being executed
             iteration: Current iteration number
             context: Repair cycle context
 
-        Returns:
-            True if checkpoint saved successfully, False otherwise
+        Returns: True if checkpoint saved successfully, False otherwise
         """
         ...

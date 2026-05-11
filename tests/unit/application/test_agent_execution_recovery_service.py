@@ -108,7 +108,7 @@ class TestAgentExecutionRecoveryService:
         assert call_args[0][0] == run_id
         events = call_args[0][1]
         assert len(events) == 1
-        assert events[0].payload["work_item_id"] == work_item_id
+        assert events[0].work_item_id == work_item_id
 
     @pytest.mark.asyncio
     async def test_agent_execution_failure_fails_workflow_run(self, recovery_service):
@@ -141,7 +141,7 @@ class TestAgentExecutionRecoveryService:
         assert call_args[0][0] == run_id
         events = call_args[0][1]
         assert len(events) == 1
-        assert events[0].payload["work_item_id"] == work_item_id
+        assert events[0].work_item_id == work_item_id
 
     @pytest.mark.asyncio
     async def test_get_stuck_work_items_returns_dlq_items(self, recovery_service):
@@ -328,7 +328,7 @@ class TestAgentExecutionRecoveryService:
         events = call_args[0][1]
         # Should contain WorkflowFailed event only (not DLQ event) because success=False skips DLQ
         assert len(events) == 1
-        assert events[0].payload["work_item_id"] == work_item_id
+        assert events[0].work_item_id == work_item_id
 
     @pytest.mark.asyncio
     async def test_completion_callback_failure_with_success_true_queues_dlq(self, recovery_service):

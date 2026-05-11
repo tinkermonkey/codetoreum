@@ -83,10 +83,8 @@ class IAuditQueryPort(ABC):
         """
         Query audit events with optional filtering and pagination.
 
-        Args:
-            filters: Optional filters to apply to the query
+        Args: filters: Optional filters to apply to the query
             pagination: Optional pagination parameters
 
-        Returns:
-            AuditEventQueryResult with matching events and pagination info
+        Returns: AuditEventQueryResult with matching events and pagination info
         """

@@ -5,18 +5,11 @@ Tests that callbacks can be properly unsubscribed after being wrapped
 for instrumentation, preventing memory leaks.
 """
 
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.observability.event_bus_instrumentation import (
     InstrumentedEventBus,
 )
-
-
-class DummyEvent(DomainEvent):
-    """Test event."""
-
-    event_type = "dummy.created"
-    aggregate_type = "dummy"
 
 
 class TestInstrumentedEventBusUnsubscribe:
@@ -31,7 +24,7 @@ class TestInstrumentedEventBusUnsubscribe:
         # Create a callback
         callback_called = []
 
-        async def my_callback(event: DomainEvent) -> None:
+        async def my_callback(event: CodetoreumEvent) -> None:
             callback_called.append(event)
 
         # Subscribe the callback (will be wrapped)
@@ -53,7 +46,7 @@ class TestInstrumentedEventBusUnsubscribe:
 
         callback_called = []
 
-        async def my_callback(event: DomainEvent) -> None:
+        async def my_callback(event: CodetoreumEvent) -> None:
             callback_called.append(event)
 
         event_type = "dummy.created"
@@ -77,10 +70,10 @@ class TestInstrumentedEventBusUnsubscribe:
         event_bus = EventBus()
         instrumented_bus = InstrumentedEventBus(event_bus)
 
-        async def callback1(event: DomainEvent) -> None:
+        async def callback1(event: CodetoreumEvent) -> None:
             pass
 
-        async def callback2(event: DomainEvent) -> None:
+        async def callback2(event: CodetoreumEvent) -> None:
             pass
 
         # Subscribe callback1
@@ -95,10 +88,10 @@ class TestInstrumentedEventBusUnsubscribe:
         event_bus = EventBus()
         instrumented_bus = InstrumentedEventBus(event_bus)
 
-        async def callback1(event: DomainEvent) -> None:
+        async def callback1(event: CodetoreumEvent) -> None:
             pass
 
-        async def callback2(event: DomainEvent) -> None:
+        async def callback2(event: CodetoreumEvent) -> None:
             pass
 
         # Subscribe both callbacks
@@ -125,10 +118,10 @@ class TestInstrumentedEventBusUnsubscribe:
         event_bus = EventBus()
         instrumented_bus = InstrumentedEventBus(event_bus)
 
-        async def callback1(event: DomainEvent) -> None:
+        async def callback1(event: CodetoreumEvent) -> None:
             pass
 
-        async def callback2(event: DomainEvent) -> None:
+        async def callback2(event: CodetoreumEvent) -> None:
             pass
 
         event_type_1 = "event.type.1"
@@ -159,10 +152,10 @@ class TestInstrumentedEventBusUnsubscribe:
         event_bus = EventBus()
         instrumented_bus = InstrumentedEventBus(event_bus)
 
-        async def wildcard_callback(event: DomainEvent) -> None:
+        async def wildcard_callback(event: CodetoreumEvent) -> None:
             pass
 
-        async def specific_callback(event: DomainEvent) -> None:
+        async def specific_callback(event: CodetoreumEvent) -> None:
             pass
 
         event_type = "dummy.created"
@@ -187,7 +180,7 @@ class TestInstrumentedEventBusUnsubscribe:
         event_bus = EventBus()
         instrumented_bus = InstrumentedEventBus(event_bus)
 
-        async def original_callback(event: DomainEvent) -> None:
+        async def original_callback(event: CodetoreumEvent) -> None:
             pass
 
         # Subscribe
@@ -205,7 +198,7 @@ class TestInstrumentedEventBusUnsubscribe:
         event_bus = EventBus()
         instrumented_bus = InstrumentedEventBus(event_bus)
 
-        async def callback(event: DomainEvent) -> None:
+        async def callback(event: CodetoreumEvent) -> None:
             pass
 
         # Subscribe
@@ -227,15 +220,12 @@ class TestInstrumentedEventBusUnsubscribe:
 
         invoked = []
 
-        async def callback(event: DomainEvent) -> None:
+        async def callback(event: CodetoreumEvent) -> None:
             invoked.append(event)
 
         # Subscribe and then unsubscribe
         instrumented_bus.subscribe(None, callback)
         instrumented_bus.unsubscribe(None, callback)
-
-        # Create and publish event
-        event = DummyEvent(aggregate_id="123", aggregate_type="dummy")
 
         # Manually trigger handler execution (since we can't await publish in this context)
         # This tests that the callback was actually removed from the bus

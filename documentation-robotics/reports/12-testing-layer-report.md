@@ -14,7 +14,7 @@ Test strategies, test cases, test data, and test coverage.
 
 | Metric                    | Count |
 | ------------------------- | ----- |
-| Elements                  | 71    |
+| Elements                  | 87    |
 | Intra-Layer Relationships | 82    |
 | Inter-Layer Relationships | 93    |
 | Inbound Relationships     | 0     |
@@ -75,28 +75,44 @@ Test strategies, test cases, test data, and test coverage.
 | `testing.testcoveragemodel.rest-api-adapter-tests`                         | `testcoveragemodel`   | 0             |
 | `testing.testcoveragemodel.simulation-framework`                           | `testcoveragemodel`   | 4             |
 | `testing.testcoveragemodel.simulation-scenario-tests`                      | `testcoveragemodel`   | 0             |
+| `testing.testcoveragetarget.capturing-mock-event-emitter`                  | `testcoveragetarget`  | 0             |
+| `testing.testcoveragetarget.execution-service-agent-executor`              | `testcoveragetarget`  | 0             |
 | `testing.testcoveragetarget.fake-container-adapter`                        | `testcoveragetarget`  | 2             |
+| `testing.testcoveragetarget.in-memory-active-workflow-run-registry`        | `testcoveragetarget`  | 0             |
 | `testing.testcoveragetarget.in-memory-agent-repository`                    | `testcoveragetarget`  | 2             |
+| `testing.testcoveragetarget.in-memory-checkpoint-store`                    | `testcoveragetarget`  | 0             |
 | `testing.testcoveragetarget.in-memory-code-review-adapter`                 | `testcoveragetarget`  | 2             |
 | `testing.testcoveragetarget.in-memory-config-store`                        | `testcoveragetarget`  | 2             |
 | `testing.testcoveragetarget.in-memory-event-store`                         | `testcoveragetarget`  | 2             |
+| `testing.testcoveragetarget.in-memory-failed-event-store`                  | `testcoveragetarget`  | 0             |
+| `testing.testcoveragetarget.in-memory-message-broker`                      | `testcoveragetarget`  | 0             |
 | `testing.testcoveragetarget.in-memory-metrics-adapter`                     | `testcoveragetarget`  | 2             |
 | `testing.testcoveragetarget.in-memory-queue-service`                       | `testcoveragetarget`  | 2             |
+| `testing.testcoveragetarget.in-memory-repository-adapter`                  | `testcoveragetarget`  | 0             |
 | `testing.testcoveragetarget.in-memory-storage-adapter`                     | `testcoveragetarget`  | 2             |
 | `testing.testcoveragetarget.in-memory-ticket-adapter`                      | `testcoveragetarget`  | 2             |
+| `testing.testcoveragetarget.in-memory-tracer`                              | `testcoveragetarget`  | 0             |
 | `testing.testcoveragetarget.in-memory-version-control-service`             | `testcoveragetarget`  | 2             |
+| `testing.testcoveragetarget.in-memory-work-item-branch-tracker`            | `testcoveragetarget`  | 0             |
 | `testing.testcoveragetarget.in-memory-workflow-config-service`             | `testcoveragetarget`  | 2             |
 | `testing.testcoveragetarget.input-port-mock-adapters`                      | `testcoveragetarget`  | 2             |
 | `testing.testcoveragetarget.mock-agent-executor`                           | `testcoveragetarget`  | 2             |
 | `testing.testcoveragetarget.mock-board-adapter`                            | `testcoveragetarget`  | 2             |
+| `testing.testcoveragetarget.mock-branch-resolution-adapter`                | `testcoveragetarget`  | 0             |
+| `testing.testcoveragetarget.mock-cipipeline-adapter`                       | `testcoveragetarget`  | 0             |
 | `testing.testcoveragetarget.mock-container-recovery-adapter`               | `testcoveragetarget`  | 2             |
+| `testing.testcoveragetarget.mock-discussion-adapter`                       | `testcoveragetarget`  | 0             |
 | `testing.testcoveragetarget.mock-environment-repair-adapter`               | `testcoveragetarget`  | 2             |
 | `testing.testcoveragetarget.mock-event-emitter`                            | `testcoveragetarget`  | 2             |
 | `testing.testcoveragetarget.mock-llmadapter`                               | `testcoveragetarget`  | 2             |
 | `testing.testcoveragetarget.mock-notifier-adapter`                         | `testcoveragetarget`  | 2             |
+| `testing.testcoveragetarget.mock-project-manager-adapter`                  | `testcoveragetarget`  | 0             |
 | `testing.testcoveragetarget.mock-prreview-cycle-adapter`                   | `testcoveragetarget`  | 2             |
 | `testing.testcoveragetarget.mock-repair-cycle-adapter`                     | `testcoveragetarget`  | 2             |
 | `testing.testcoveragetarget.mock-review-cycle-adapter`                     | `testcoveragetarget`  | 2             |
+| `testing.testcoveragetarget.mock-systemic-analysis-adapter`                | `testcoveragetarget`  | 0             |
+| `testing.testcoveragetarget.mock-work-item-service`                        | `testcoveragetarget`  | 0             |
+| `testing.testcoveragetarget.simple-encryption-adapter`                     | `testcoveragetarget`  | 0             |
 | `testing.testcoveragetarget.simulation-application-bootstrap`              | `testcoveragetarget`  | 2             |
 | `testing.testcoveragetarget.simulation-clock`                              | `testcoveragetarget`  | 2             |
 | `testing.testcoveragetarget.simulation-config`                             | `testcoveragetarget`  | 2             |
@@ -1252,6 +1268,34 @@ Full end-to-end simulation tests using deterministic mock adapters for workflow 
 | inter-layer | `motivation.goal.full-testability-without-external-services` | `supports-goals` | outbound  |
 | inter-layer | `technology.systemsoftware.pytest`                           | `tests`          | outbound  |
 
+### CapturingMockEventEmitter {#capturingmockeventemitter}
+
+**ID**: `testing.testcoveragetarget.capturing-mock-event-emitter`
+
+**Type**: `testcoveragetarget`
+
+Mock event emitter that captures all emitted events for assertion in integration tests. Extends the basic mock with an ordered event capture list, enabling tests to verify which domain events were emitted and in what sequence.
+
+#### Attributes
+
+| Name       | Value            |
+| ---------- | ---------------- |
+| targetType | integration-flow |
+
+### ExecutionServiceAgentExecutor {#executionserviceagentexecutor}
+
+**ID**: `testing.testcoveragetarget.execution-service-agent-executor`
+
+**Type**: `testcoveragetarget`
+
+Mock agent executor wired directly to ExecutionService for integration tests. Provides deterministic execution results and completion callbacks without spawning real containers, enabling fast pipeline integration testing.
+
+#### Attributes
+
+| Name       | Value            |
+| ---------- | ---------------- |
+| targetType | integration-flow |
+
 ### FakeContainerAdapter {#fakecontaineradapter}
 
 **ID**: `testing.testcoveragetarget.fake-container-adapter`
@@ -1274,6 +1318,20 @@ Fake container adapter replacing DockerContainerAdapter; simulates container lif
 | intra-layer | `testing.testcoveragemodel.application-service-integration-tests` | `aggregates` | inbound   |
 | intra-layer | `testing.coveragerequirement.application-service-90-coverage`     | `flows-to`   | outbound  |
 
+### InMemoryActiveWorkflowRunRegistry {#inmemoryactiveworkflowrunregistry}
+
+**ID**: `testing.testcoveragetarget.in-memory-active-workflow-run-registry`
+
+**Type**: `testcoveragetarget`
+
+In-memory implementation of the active workflow run registry. Tracks currently executing workflow runs without Redis, enabling fast isolation of workflow state management in integration tests.
+
+#### Attributes
+
+| Name       | Value            |
+| ---------- | ---------------- |
+| targetType | integration-flow |
+
 ### InMemoryAgentRepository {#inmemoryagentrepository}
 
 **ID**: `testing.testcoveragetarget.in-memory-agent-repository`
@@ -1295,6 +1353,20 @@ In-memory agent repository adapter; stores and retrieves Agent domain objects wi
 | ----------- | ------------------------------------------------------------- | ------------ | --------- |
 | intra-layer | `testing.testcoveragemodel.adapter-unit-tests`                | `aggregates` | inbound   |
 | intra-layer | `testing.coveragerequirement.application-service-90-coverage` | `flows-to`   | outbound  |
+
+### InMemoryCheckpointStore {#inmemorycheckpointstore}
+
+**ID**: `testing.testcoveragetarget.in-memory-checkpoint-store`
+
+**Type**: `testcoveragetarget`
+
+In-memory implementation of the repair cycle checkpoint store. Persists checkpoint data between repair iterations without a real database, enabling deterministic repair cycle integration tests with checkpoint verification.
+
+#### Attributes
+
+| Name       | Value            |
+| ---------- | ---------------- |
+| targetType | integration-flow |
 
 ### InMemoryCodeReviewAdapter {#inmemorycodereviewadapter}
 
@@ -1362,6 +1434,34 @@ In-memory Redis-backed event store replacement; stores all domain events for aud
 | intra-layer | `testing.testcoveragemodel.application-service-integration-tests` | `aggregates` | inbound   |
 | intra-layer | `testing.coveragerequirement.application-service-90-coverage`     | `flows-to`   | outbound  |
 
+### InMemoryFailedEventStore {#inmemoryfailedeventstore}
+
+**ID**: `testing.testcoveragetarget.in-memory-failed-event-store`
+
+**Type**: `testcoveragetarget`
+
+In-memory store for failed events that could not be processed. Replaces the Redis-backed dead letter storage in tests, enabling verification of dead letter queue behavior and failed event recovery scenarios.
+
+#### Attributes
+
+| Name       | Value            |
+| ---------- | ---------------- |
+| targetType | integration-flow |
+
+### InMemoryMessageBroker {#inmemorymessagebroker}
+
+**ID**: `testing.testcoveragetarget.in-memory-message-broker`
+
+**Type**: `testcoveragetarget`
+
+In-memory message broker for integration tests. Provides pub/sub semantics without an external message queue (e.g. Redis Streams), enabling testing of event-driven workflows in isolation.
+
+#### Attributes
+
+| Name       | Value            |
+| ---------- | ---------------- |
+| targetType | integration-flow |
+
 ### InMemoryMetricsAdapter {#inmemorymetricsadapter}
 
 **ID**: `testing.testcoveragetarget.in-memory-metrics-adapter`
@@ -1405,6 +1505,20 @@ In-memory queue service adapter; simulates pipeline lock queue ordering for scen
 | ----------- | ------------------------------------------------------------- | ------------ | --------- |
 | intra-layer | `testing.testcoveragemodel.adapter-unit-tests`                | `aggregates` | inbound   |
 | intra-layer | `testing.coveragerequirement.application-service-90-coverage` | `flows-to`   | outbound  |
+
+### InMemoryRepositoryAdapter {#inmemoryrepositoryadapter}
+
+**ID**: `testing.testcoveragetarget.in-memory-repository-adapter`
+
+**Type**: `testcoveragetarget`
+
+In-memory repository adapter replacing the GitHub repository adapter in tests. Provides deterministic version control operations (clone, commit, push, branch) without network calls.
+
+#### Attributes
+
+| Name       | Value            |
+| ---------- | ---------------- |
+| targetType | integration-flow |
 
 ### InMemoryStorageAdapter {#inmemorystorageadapter}
 
@@ -1450,6 +1564,20 @@ In-memory GitHub ticket adapter; simulates issue creation, updates, and comment 
 | intra-layer | `testing.testcoveragemodel.adapter-unit-tests`                | `aggregates` | inbound   |
 | intra-layer | `testing.coveragerequirement.application-service-90-coverage` | `flows-to`   | outbound  |
 
+### InMemoryTracer {#inmemorytracer}
+
+**ID**: `testing.testcoveragetarget.in-memory-tracer`
+
+**Type**: `testcoveragetarget`
+
+In-memory OpenTelemetry tracer replacing the production Jaeger exporter in tests. Captures all spans in memory for assertion, enabling verification of distributed tracing instrumentation without a real tracing backend.
+
+#### Attributes
+
+| Name       | Value            |
+| ---------- | ---------------- |
+| targetType | integration-flow |
+
 ### InMemoryVersionControlService {#inmemoryversioncontrolservice}
 
 **ID**: `testing.testcoveragetarget.in-memory-version-control-service`
@@ -1471,6 +1599,20 @@ In-memory version control adapter; simulates git clone, commit, push operations 
 | ----------- | ------------------------------------------------------------- | ------------ | --------- |
 | intra-layer | `testing.testcoveragemodel.adapter-unit-tests`                | `aggregates` | inbound   |
 | intra-layer | `testing.coveragerequirement.application-service-90-coverage` | `flows-to`   | outbound  |
+
+### InMemoryWorkItemBranchTracker {#inmemoryworkitembranchtracker}
+
+**ID**: `testing.testcoveragetarget.in-memory-work-item-branch-tracker`
+
+**Type**: `testcoveragetarget`
+
+In-memory work item to branch mapping tracker. Replaces Redis-backed branch tracking in tests, enabling verification of branch assignment and resolution logic across work item lifecycle events.
+
+#### Attributes
+
+| Name       | Value            |
+| ---------- | ---------------- |
+| targetType | integration-flow |
 
 ### InMemoryWorkflowConfigService {#inmemoryworkflowconfigservice}
 
@@ -1560,6 +1702,34 @@ In-memory board adapter replacing GitHubBoardAdapter; supports create_board, add
 | intra-layer | `testing.testcoveragemodel.application-service-integration-tests` | `aggregates` | inbound   |
 | intra-layer | `testing.coveragerequirement.application-service-90-coverage`     | `flows-to`   | outbound  |
 
+### MockBranchResolutionAdapter {#mockbranchresolutionadapter}
+
+**ID**: `testing.testcoveragetarget.mock-branch-resolution-adapter`
+
+**Type**: `testcoveragetarget`
+
+Mock branch resolution adapter for integration tests. Returns configurable BranchResolution outcomes (exact_match, parent_issue, sibling, fuzzy, new) enabling verification of branch selection logic across all strategy paths.
+
+#### Attributes
+
+| Name       | Value            |
+| ---------- | ---------------- |
+| targetType | integration-flow |
+
+### MockCIPipelineAdapter {#mockcipipelineadapter}
+
+**ID**: `testing.testcoveragetarget.mock-cipipeline-adapter`
+
+**Type**: `testcoveragetarget`
+
+Mock CI pipeline adapter for integration tests. Provides configurable CIRunResult responses (pass/fail/skip per check), enabling repair cycle and CI integration testing without triggering real CI pipelines.
+
+#### Attributes
+
+| Name       | Value            |
+| ---------- | ---------------- |
+| targetType | integration-flow |
+
 ### MockContainerRecoveryAdapter {#mockcontainerrecoveryadapter}
 
 **ID**: `testing.testcoveragetarget.mock-container-recovery-adapter`
@@ -1581,6 +1751,20 @@ Mock adapter for container recovery port; simulates container failure and recove
 | ----------- | ------------------------------------------------------------- | ------------ | --------- |
 | intra-layer | `testing.testcoveragemodel.adapter-unit-tests`                | `aggregates` | inbound   |
 | intra-layer | `testing.coveragerequirement.application-service-90-coverage` | `flows-to`   | outbound  |
+
+### MockDiscussionAdapter {#mockdiscussionadapter}
+
+**ID**: `testing.testcoveragetarget.mock-discussion-adapter`
+
+**Type**: `testcoveragetarget`
+
+Mock discussion adapter for integration tests. Simulates discussion thread creation and comment operations (used in code review and PR feedback flows) without real GitHub API calls.
+
+#### Attributes
+
+| Name       | Value            |
+| ---------- | ---------------- |
+| targetType | integration-flow |
 
 ### MockEnvironmentRepairAdapter {#mockenvironmentrepairadapter}
 
@@ -1670,6 +1854,20 @@ Mock notification adapter; captures sent notifications for assert_notification_s
 | intra-layer | `testing.testcoveragemodel.adapter-unit-tests`                | `aggregates` | inbound   |
 | intra-layer | `testing.coveragerequirement.application-service-90-coverage` | `flows-to`   | outbound  |
 
+### MockProjectManagerAdapter {#mockprojectmanageradapter}
+
+**ID**: `testing.testcoveragetarget.mock-project-manager-adapter`
+
+**Type**: `testcoveragetarget`
+
+Mock project manager adapter for integration tests. Provides configurable project listing, configuration lookup, and project state responses without database or configuration file access.
+
+#### Attributes
+
+| Name       | Value            |
+| ---------- | ---------------- |
+| targetType | integration-flow |
+
 ### MockPRReviewCycleAdapter {#mockprreviewcycleadapter}
 
 **ID**: `testing.testcoveragetarget.mock-prreview-cycle-adapter`
@@ -1735,6 +1933,48 @@ Mock adapter for review cycle port; simulates maker-checker review process with 
 | ----------- | ------------------------------------------------------------- | ------------ | --------- |
 | intra-layer | `testing.testcoveragemodel.adapter-unit-tests`                | `aggregates` | inbound   |
 | intra-layer | `testing.coveragerequirement.application-service-90-coverage` | `flows-to`   | outbound  |
+
+### MockSystemicAnalysisAdapter {#mocksystemicanalysisadapter}
+
+**ID**: `testing.testcoveragetarget.mock-systemic-analysis-adapter`
+
+**Type**: `testcoveragetarget`
+
+Mock systemic analysis adapter for integration tests. Returns configurable SystemicAnalysisResult with failure classifications and recommended fix strategies, enabling repair cycle systemic analysis branch testing without agent calls.
+
+#### Attributes
+
+| Name       | Value            |
+| ---------- | ---------------- |
+| targetType | integration-flow |
+
+### MockWorkItemService {#mockworkitemservice}
+
+**ID**: `testing.testcoveragetarget.mock-work-item-service`
+
+**Type**: `testcoveragetarget`
+
+Mock work item service for integration tests. Provides in-memory work item CRUD, state transitions, and assignment operations without database or ticket system access. Used in application service tests that depend on work item state.
+
+#### Attributes
+
+| Name       | Value            |
+| ---------- | ---------------- |
+| targetType | integration-flow |
+
+### SimpleEncryptionAdapter {#simpleencryptionadapter}
+
+**ID**: `testing.testcoveragetarget.simple-encryption-adapter`
+
+**Type**: `testcoveragetarget`
+
+Simple reversible encryption adapter for integration tests. Provides encrypt/decrypt operations with a deterministic algorithm (not production-strength), enabling testing of encrypted data flows and secret management paths without real key management infrastructure.
+
+#### Attributes
+
+| Name       | Value            |
+| ---------- | ---------------- |
+| targetType | integration-flow |
 
 ### SimulationApplicationBootstrap {#simulationapplicationbootstrap}
 
@@ -1826,4 +2066,4 @@ Orchestrates test scenarios with assertion helpers (assert_event_occurred, asser
 
 ---
 
-Generated: 2026-05-08T12:30:44.964Z | Model Version: 0.1.0
+Generated: 2026-05-09T09:28:54.064Z | Model Version: 0.1.0

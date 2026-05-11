@@ -929,12 +929,10 @@ class TestErrorHandling:
         caplog,
     ):
         """Should log when receiving unexpected event type."""
-        from codetoreum.domain.events import WorkItemCreated
+        from unittest.mock import MagicMock
 
-        event = WorkItemCreated(
-            aggregate_id="item-1",
-            payload={"title": "Test"},
-        )
+        event = MagicMock()
+        event.event_type = "UnexpectedEventType"
 
         # Act
         await handler.handle(event)
@@ -1007,13 +1005,13 @@ class TestWorkflowLifecycleEventPersistence:
         workflow_started_found = False
         run_id = None
         for evt in all_events:
-            if evt.event_type == "WorkflowCreated":
-                assert evt.payload.get("work_item_id") == work_item_id
-                run_id = evt.aggregate_id
+            if evt.event_type == "WorkflowCreatedEvent":
+                assert evt.work_item_id == work_item_id
+                run_id = evt.workflow_id
                 workflow_created_found = True
-            elif evt.event_type == "WorkflowStarted":
+            elif evt.event_type == "WorkflowStartedEvent":
                 if run_id:
-                    assert evt.aggregate_id == run_id
+                    assert evt.workflow_id == run_id
                 workflow_started_found = True
 
         assert workflow_created_found, "WorkflowCreated event not persisted to event store"
@@ -1052,9 +1050,9 @@ class TestWorkflowLifecycleEventPersistence:
         all_events = event_store.get_all_events_list()
         workflow_stage_found = False
         for evt in all_events:
-            if evt.event_type == "WorkflowStageAdvanced":
-                assert evt.aggregate_id == run_id
-                assert evt.payload.get("to_stage") == "Review"
+            if evt.event_type == "WorkflowStageAdvancedEvent":
+                assert evt.workflow_id == run_id
+                assert evt.to_stage == "Review"
                 workflow_stage_found = True
                 break
         assert workflow_stage_found, "WorkflowStageAdvanced event not persisted to event store"
@@ -1091,9 +1089,9 @@ class TestWorkflowLifecycleEventPersistence:
         all_events = event_store.get_all_events_list()
         workflow_completed_found = False
         for evt in all_events:
-            if evt.event_type == "WorkflowCompleted":
-                assert evt.aggregate_id == run_id
-                assert evt.payload.get("exit_column") == "Done"
+            if evt.event_type == "WorkflowCompletedEvent":
+                assert evt.workflow_id == run_id
+                assert evt.final_stage == "Done"
                 workflow_completed_found = True
                 break
         assert workflow_completed_found, "WorkflowCompleted event not persisted to event store"
@@ -1131,9 +1129,9 @@ class TestWorkflowLifecycleEventPersistence:
         all_events = event_store.get_all_events_list()
         workflow_failed_found = False
         for evt in all_events:
-            if evt.event_type == "WorkflowFailed":
-                assert evt.aggregate_id == run_id
-                assert evt.payload.get("reason") == reason
+            if evt.event_type == "WorkflowFailedEvent":
+                assert evt.workflow_id == run_id
+                assert evt.reason == reason
                 workflow_failed_found = True
                 break
         assert workflow_failed_found, "WorkflowFailed event not persisted to event store"
@@ -1436,182 +1434,3 @@ class TestPRReviewCycleExclusion:
         mock_agent_executor.execute.assert_called_once_with(
             work_item_id="item-1", agent_id="agent-review", board_id="board-1"
         )
-
-
-class TestLegacyWorkItemColumnChangedEventHandling:
-    """Tests for legacy WorkItemColumnChanged event support in BoardColumnEventHandler."""
-
-    @pytest.mark.asyncio
-    async def test_handles_legacy_event_with_valid_payload(
-        self,
-        handler,
-        mock_workflow_config,
-        mock_lock_service,
-        mock_agent_executor,
-        sample_workflow_config,
-    ):
-        """Should handle legacy WorkItemColumnChanged event with valid payload."""
-        from codetoreum.domain.events import WorkItemColumnChanged
-
-        # Setup
-        mock_workflow_config.get_board_workflow_template.return_value = sample_workflow_config
-        mock_lock_service.try_acquire_lock.return_value = LockAcquisitionResult(
-            status=LockStatus.ACQUIRED,
-            work_item_id="item-1",
-            queue_length=0,
-        )
-
-        # Create legacy event with payload dict
-        legacy_event = WorkItemColumnChanged(
-            aggregate_id="legacy-id",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "from_column": "Backlog",
-                "to_column": "In Development",
-                "moved_by": "human",
-            },
-        )
-
-        # Act
-        await handler.handle_column_change(legacy_event)
-
-        # Assert
-        mock_lock_service.try_acquire_lock.assert_called_once_with(
-            project_id="proj-1",
-            board_id="board-1",
-            work_item_id="item-1",
-            board_position=0,
-        )
-        mock_agent_executor.execute.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_raises_on_legacy_event_missing_work_item_id(
-        self,
-        handler,
-        mock_workflow_config,
-        caplog,
-    ):
-        """Should raise ValueError when legacy event missing work_item_id."""
-        from codetoreum.domain.events import WorkItemColumnChanged
-
-        # Setup
-        caplog.set_level(logging.ERROR)
-        legacy_event = WorkItemColumnChanged(
-            aggregate_id="legacy-id",
-            payload={
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "to_column": "In Development",
-                # Missing work_item_id
-            },
-        )
-
-        # Act & Assert
-        with pytest.raises(ValueError, match="missing required key: work_item_id"):
-            await handler.handle_column_change(legacy_event)
-
-        # Verify error is logged with proper message
-        assert "Legacy WorkItemColumnChanged event missing required key: work_item_id" in caplog.text
-
-    @pytest.mark.asyncio
-    async def test_raises_on_legacy_event_missing_board_id(
-        self,
-        handler,
-        caplog,
-    ):
-        """Should raise ValueError when legacy event missing board_id."""
-        from codetoreum.domain.events import WorkItemColumnChanged
-
-        caplog.set_level(logging.ERROR)
-        legacy_event = WorkItemColumnChanged(
-            aggregate_id="legacy-id",
-            payload={
-                "work_item_id": "item-1",
-                "project_id": "proj-1",
-                "to_column": "In Development",
-                # Missing board_id
-            },
-        )
-
-        with pytest.raises(ValueError, match="missing required key: board_id"):
-            await handler.handle_column_change(legacy_event)
-
-        assert "Legacy WorkItemColumnChanged event missing required key: board_id" in caplog.text
-
-    @pytest.mark.asyncio
-    async def test_raises_on_legacy_event_missing_project_id(
-        self,
-        handler,
-        caplog,
-    ):
-        """Should raise ValueError when legacy event missing project_id."""
-        from codetoreum.domain.events import WorkItemColumnChanged
-
-        caplog.set_level(logging.ERROR)
-        legacy_event = WorkItemColumnChanged(
-            aggregate_id="legacy-id",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "to_column": "In Development",
-                # Missing project_id
-            },
-        )
-
-        with pytest.raises(ValueError, match="missing required key: project_id"):
-            await handler.handle_column_change(legacy_event)
-
-        assert "Legacy WorkItemColumnChanged event missing required key: project_id" in caplog.text
-
-    @pytest.mark.asyncio
-    async def test_raises_on_legacy_event_missing_to_column(
-        self,
-        handler,
-        caplog,
-    ):
-        """Should raise ValueError when legacy event missing to_column."""
-        from codetoreum.domain.events import WorkItemColumnChanged
-
-        caplog.set_level(logging.ERROR)
-        legacy_event = WorkItemColumnChanged(
-            aggregate_id="legacy-id",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                # Missing to_column
-            },
-        )
-
-        with pytest.raises(ValueError, match="missing required key: to_column"):
-            await handler.handle_column_change(legacy_event)
-
-        assert "Legacy WorkItemColumnChanged event missing required key: to_column" in caplog.text
-
-    @pytest.mark.asyncio
-    async def test_handle_method_propagates_legacy_event_error(
-        self,
-        handler,
-        caplog,
-    ):
-        """Should propagate ValueError from handle_column_change through handle method."""
-        from codetoreum.domain.events import WorkItemColumnChanged
-
-        caplog.set_level(logging.ERROR)
-        legacy_event = WorkItemColumnChanged(
-            aggregate_id="legacy-id",
-            payload={
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "to_column": "In Development",
-                # Missing work_item_id
-            },
-        )
-
-        with pytest.raises(ValueError, match="missing required key"):
-            await handler.handle(legacy_event)
-
-        # Verify error is logged by handle method too
-        assert "Error handling column change" in caplog.text
