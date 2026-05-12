@@ -15,6 +15,7 @@ from codetoreum.config import (
     EVENTS_DEFAULT_PAGE_SIZE,
     EVENTS_MAX_PAGE_SIZE,
 )
+from codetoreum.infrastructure.event_serialization import infer_aggregate_id_and_type
 from codetoreum.ports.output.event_store import IEventStore
 
 # ============================================================================
@@ -175,7 +176,7 @@ def create_events_router(
 
             # Filter by aggregate type if specified
             if aggregate_type:
-                domain_events = [e for e in domain_events if getattr(e, "aggregate_type", None) == aggregate_type]
+                domain_events = [e for e in domain_events if infer_aggregate_id_and_type(e)[1] == aggregate_type]
 
             # Filter by time range
             if end_time:
@@ -188,13 +189,14 @@ def create_events_router(
             # Convert to DTOs
             for event in domain_events:
                 event_dict = event.to_dict() if hasattr(event, "to_dict") else event.__dict__
+                inferred_aggregate_id, inferred_aggregate_type = infer_aggregate_id_and_type(event)
                 events.append(
                     EventDTO(
                         event_id=str(event_dict.get("event_id", "")),
                         event_type=event_dict.get("event_type", type(event).__name__),
                         event_version=event_dict.get("event_version", 1),
-                        aggregate_id=event_dict.get("aggregate_id", ""),
-                        aggregate_type=event_dict.get("aggregate_type", ""),
+                        aggregate_id=str(inferred_aggregate_id),
+                        aggregate_type=inferred_aggregate_type,
                         occurred_at=event_dict.get("occurred_at", datetime.now(UTC)),
                         correlation_id=(
                             str(event_dict.get("correlation_id")) if event_dict.get("correlation_id") else None
