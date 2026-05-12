@@ -365,7 +365,14 @@ class RedisEventBuffer:
             try:
                 groups_info = await self.redis.xinfo_groups(self.stream_name)
                 consumer_count = len(groups_info) if groups_info else 0
-            except aioredis.ResponseError:
+            except aioredis.ResponseError as e:
+                logger.error(
+                    f"Failed to retrieve consumer group info for stream '{self.stream_name}': {e}. "
+                    f"This could indicate authentication failures, wrong data type at the key, or Redis misconfiguration. "
+                    f"Defaulting consumer_count to 0.",
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_REDIS_ERROR},
+                )
                 consumer_count = 0
 
             return {
