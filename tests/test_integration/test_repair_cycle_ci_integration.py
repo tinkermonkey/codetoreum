@@ -18,7 +18,7 @@ from codetoreum.application.repair_cycle_ci_integration import (
     convert_ci_run_result_to_repair_test_result,
 )
 from codetoreum.domain.board_workflow_template import BoardWorkflowTemplate, ColumnTemplate, ColumnType
-from codetoreum.domain.events import WorkItemColumnChanged
+from codetoreum.domain.events import WorkItemColumnChangedEvent
 from codetoreum.domain.repair_cycle_types import (
     CycleResult,
     RepairCycleAgentConfig,
@@ -457,16 +457,16 @@ class TestRepairCycleEventHandlerCIRouting:
             ci_pipeline_service=ci_service,
         )
 
-        event = WorkItemColumnChanged(
-            aggregate_id="item-1",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "from_column": "Code Review",
-                "to_column": "Testing",
-                "moved_by": "system",
-            },
+        event = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp="2024-01-01T00:00:00Z",
+            source="test",
+            work_item_id="item-1",
+            board_id="board-1",
+            project_id="proj-1",
+            from_column="Code Review",
+            to_column="Testing",
+            moved_by="unknown",
         )
 
         # Execute handler
@@ -499,16 +499,16 @@ class TestRepairCycleEventHandlerCIRouting:
             ci_pipeline_service=ci_service,
         )
 
-        event = WorkItemColumnChanged(
-            aggregate_id="item-1",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "from_column": "Code Review",
-                "to_column": "Testing",
-                "moved_by": "system",
-            },
+        event = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp="2024-01-01T00:00:00Z",
+            source="test",
+            work_item_id="item-1",
+            board_id="board-1",
+            project_id="proj-1",
+            from_column="Code Review",
+            to_column="Testing",
+            moved_by="unknown",
         )
 
         # Execute handler
@@ -534,16 +534,16 @@ class TestRepairCycleEventHandlerCIRouting:
             ci_pipeline_service=ci_service,
         )
 
-        event = WorkItemColumnChanged(
-            aggregate_id="item-1",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "from_column": "Code Review",
-                "to_column": "Testing",
-                "moved_by": "system",
-            },
+        event = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp="2024-01-01T00:00:00Z",
+            source="test",
+            work_item_id="item-1",
+            board_id="board-1",
+            project_id="proj-1",
+            from_column="Code Review",
+            to_column="Testing",
+            moved_by="unknown",
         )
 
         # Execute handler

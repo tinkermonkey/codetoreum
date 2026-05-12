@@ -176,7 +176,7 @@ def sample_workflow_template():
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_save_and_get_project_config(config_storage, sample_project_config):
+async def test_save_and_get_project_config(config_storage, sample_project_config, es_client):
     """Test saving and retrieving a project configuration."""
     # Save project config
     await config_storage.save_project_config(sample_project_config)
@@ -199,7 +199,7 @@ async def test_save_and_get_project_config(config_storage, sample_project_config
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_get_project_config_by_name(config_storage, sample_project_config):
+async def test_get_project_config_by_name(config_storage, sample_project_config, es_client):
     """Test retrieving a project configuration by name."""
     # Save project config
     await config_storage.save_project_config(sample_project_config)
@@ -216,7 +216,7 @@ async def test_get_project_config_by_name(config_storage, sample_project_config)
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_update_project_config_versioning(config_storage, sample_project_config):
+async def test_update_project_config_versioning(config_storage, sample_project_config, es_client):
     """Test that updating a project config increments version."""
     # Save initial version
     await config_storage.save_project_config(sample_project_config)
@@ -253,7 +253,7 @@ async def test_get_nonexistent_project_raises_error(config_storage):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_save_and_get_agent_config(config_storage, sample_agent_config):
+async def test_save_and_get_agent_config(config_storage, sample_agent_config, es_client):
     """Test saving and retrieving an agent configuration."""
     # Save agent config
     await config_storage.save_agent_config(sample_agent_config)
@@ -275,7 +275,7 @@ async def test_save_and_get_agent_config(config_storage, sample_agent_config):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_save_and_get_pipeline_config(config_storage, sample_pipeline_config):
+async def test_save_and_get_pipeline_config(config_storage, sample_pipeline_config, es_client):
     """Test saving and retrieving a pipeline configuration."""
     # Save pipeline config
     await config_storage.save_pipeline_config(sample_pipeline_config)
@@ -296,7 +296,7 @@ async def test_save_and_get_pipeline_config(config_storage, sample_pipeline_conf
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_save_and_get_workflow_template(config_storage, sample_workflow_template):
+async def test_save_and_get_workflow_template(config_storage, sample_workflow_template, es_client):
     """Test saving and retrieving a workflow template."""
     # Save workflow template
     await config_storage.save_workflow_template(sample_workflow_template)
@@ -316,7 +316,7 @@ async def test_save_and_get_workflow_template(config_storage, sample_workflow_te
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_list_projects(config_storage, sample_project_config):
+async def test_list_projects(config_storage, sample_project_config, es_client):
     """Test listing all projects."""
     # Save multiple projects
     project1 = sample_project_config
@@ -344,7 +344,7 @@ async def test_list_projects(config_storage, sample_project_config):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_list_agents(config_storage, sample_agent_config):
+async def test_list_agents(config_storage, sample_agent_config, es_client):
     """Test listing agents for a project."""
     # Save multiple agents for same project
     agent1 = sample_agent_config
@@ -374,7 +374,7 @@ async def test_list_agents(config_storage, sample_agent_config):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_search_configs(config_storage, sample_project_config):
+async def test_search_configs(config_storage, sample_project_config, es_client):
     """Test searching configurations."""
     # Create a project with unique name
     unique_name = f"Unique Project Name {uuid4().hex[:8]}"
@@ -393,7 +393,7 @@ async def test_search_configs(config_storage, sample_project_config):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_config_version_history(config_storage, sample_project_config):
+async def test_config_version_history(config_storage, sample_project_config, es_client):
     """Test configuration version history tracking."""
     # Save initial version
     await config_storage.save_project_config(sample_project_config)
@@ -421,7 +421,7 @@ async def test_config_version_history(config_storage, sample_project_config):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_get_specific_config_version(config_storage, sample_project_config):
+async def test_get_specific_config_version(config_storage, sample_project_config, es_client):
     """Test retrieving a specific version of a configuration."""
     # Save initial version
     await config_storage.save_project_config(sample_project_config)
@@ -446,7 +446,7 @@ async def test_get_specific_config_version(config_storage, sample_project_config
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_delete_project_config(config_storage, sample_project_config):
+async def test_delete_project_config(config_storage, sample_project_config, es_client):
     """Test deleting a project configuration."""
     # Save project
     await config_storage.save_project_config(sample_project_config)
@@ -469,7 +469,7 @@ async def test_delete_project_config(config_storage, sample_project_config):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_delete_agent_config(config_storage, sample_agent_config):
+async def test_delete_agent_config(config_storage, sample_agent_config, es_client):
     """Test deleting an agent configuration."""
     # Save agent
     await config_storage.save_agent_config(sample_agent_config)
@@ -486,7 +486,7 @@ async def test_delete_agent_config(config_storage, sample_agent_config):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_exists_returns_true_for_existing_project(config_storage, sample_project_config):
+async def test_exists_returns_true_for_existing_project(config_storage, sample_project_config, es_client):
     """Test that exists() returns True for existing project."""
     # Save project
     await config_storage.save_project_config(sample_project_config)
@@ -505,7 +505,7 @@ async def test_exists_returns_false_for_nonexistent_project(config_storage):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_concurrent_updates_increment_versions(config_storage, sample_project_config):
+async def test_concurrent_updates_increment_versions(config_storage, sample_project_config, es_client):
     """Test that concurrent updates properly increment versions."""
     # Save initial version
     await config_storage.save_project_config(sample_project_config)
