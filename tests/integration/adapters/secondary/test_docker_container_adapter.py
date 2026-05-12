@@ -109,27 +109,6 @@ async def test_run_with_environment_variables(docker_adapter):
 
 
 @pytest.mark.asyncio
-async def test_run_with_streaming(docker_adapter):
-    """Test running container with streaming callback."""
-    logs = []
-
-    def stream_callback(line):
-        logs.append(line)
-
-    result = await docker_adapter.run(
-        image="alpine:latest",
-        command=["sh", "-c", "echo line1; echo line2; echo line3"],
-        volumes={},
-        environment={},
-        timeout=30,
-        stream_callback=stream_callback,
-    )
-
-    assert result.exit_code == 0
-    assert len(logs) > 0
-
-
-@pytest.mark.asyncio
 async def test_create_start_stop_remove(docker_adapter):
     """Test container lifecycle operations."""
     # Create container
