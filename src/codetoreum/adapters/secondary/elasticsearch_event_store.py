@@ -929,7 +929,7 @@ class ElasticsearchEventStore(IEventStore):
                         "correlation_id": {"type": "keyword"},
                         "causation_id": {"type": "keyword"},
                         "user_id": {"type": "keyword"},
-                        "data": {"type": "object", "enabled": True, "dynamic": False},
+                        "data": {"type": "object", "enabled": True, "dynamic": True},
                         "metadata": {
                             "type": "object",
                             "enabled": True,
