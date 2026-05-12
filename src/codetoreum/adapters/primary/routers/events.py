@@ -238,6 +238,8 @@ def create_events_router(
                 has_next=(offset + limit) < total_count,
             )
 
+        except HTTPException:
+            raise
         except ValueError as ve:
             logger.warning(
                 "Validation error in events query: %s",
