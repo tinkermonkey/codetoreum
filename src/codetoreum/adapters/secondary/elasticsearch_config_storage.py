@@ -138,32 +138,41 @@ class ElasticsearchConfigStorage(IConfigStore):
 
             if not exists:
                 # Create index with mappings and settings
-                await self.client.indices.create(
-                    index=index_name,
-                    body={
-                        "settings": {
-                            "number_of_shards": self.shard_count,
-                            "number_of_replicas": self.replica_count,
-                            "analysis": {
-                                "analyzer": {
-                                    "config_analyzer": {
-                                        "type": "custom",
-                                        "tokenizer": "standard",
-                                        "filter": [
-                                            "lowercase",
-                                            "asciifolding",
-                                            "word_delimiter",
-                                        ],
+                # For elasticsearch-py 8.x, settings and mappings are passed in body parameter
+                try:
+                    await self.client.indices.create(
+                        index=index_name,
+                        body={
+                            "settings": {
+                                "number_of_shards": self.shard_count,
+                                "number_of_replicas": self.replica_count,
+                                "analysis": {
+                                    "analyzer": {
+                                        "config_analyzer": {
+                                            "type": "custom",
+                                            "tokenizer": "standard",
+                                            "filter": [
+                                                "lowercase",
+                                                "asciifolding",
+                                                "word_delimiter",
+                                            ],
+                                        }
                                     }
-                                }
+                                },
                             },
+                            "mappings": mappings,
                         },
-                        "mappings": mappings,
-                    },
-                )
-                logger.info(f"Created index: {index_name}")
+                    )
+                    logger.info(f"Created index: {index_name}")
+                except Exception as create_err:
+                    # Check if it's an "already exists" error (idempotent)
+                    if "already exists" in str(create_err) or "resource_already_exists" in str(create_err):
+                        logger.info(f"Index {index_name} already exists, skipping creation")
+                    else:
+                        raise
             else:
                 # Update mappings if index already exists
+                # For elasticsearch-py 8.x, pass mappings in body parameter
                 await self.client.indices.put_mapping(index=index_name, body=mappings)
                 logger.info(f"Updated mappings for index: {index_name}")
 
