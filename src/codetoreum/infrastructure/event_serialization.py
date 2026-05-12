@@ -257,15 +257,15 @@ def infer_aggregate_id_and_type(event: CodetoreumEvent) -> tuple[Any, str]:
         Tuple of (aggregate_id, aggregate_type)
     """
     if getattr(event, "workflow_id", None):
-        return getattr(event, "workflow_id"), "Workflow"
+        return event.workflow_id, "Workflow"
     if getattr(event, "execution_id", None):
-        return getattr(event, "execution_id"), "AgentExecution"
+        return event.execution_id, "AgentExecution"
     if getattr(event, "review_cycle_id", None):
-        return getattr(event, "review_cycle_id"), "ReviewCycle"
+        return event.review_cycle_id, "ReviewCycle"
     if getattr(event, "work_item_id", None):
-        return getattr(event, "work_item_id"), "WorkItem"
+        return event.work_item_id, "WorkItem"
     if getattr(event, "repair_cycle_id", None):
-        return getattr(event, "repair_cycle_id"), "RepairCycle"
+        return event.repair_cycle_id, "RepairCycle"
 
     return event.event_id, type(event).__name__.replace("Event", "")
 
