@@ -90,15 +90,20 @@ class InMemoryEventStore(IEventStore):
         Returns:
             Inferred aggregate type
         """
-        if getattr(event, "workflow_id", None):
+        workflow_id = getattr(event, "workflow_id", None)
+        if workflow_id is not None and workflow_id:
             return "Workflow"
-        if getattr(event, "execution_id", None):
+        execution_id = getattr(event, "execution_id", None)
+        if execution_id is not None and execution_id:
             return "AgentExecution"
-        if getattr(event, "review_cycle_id", None):
+        review_cycle_id = getattr(event, "review_cycle_id", None)
+        if review_cycle_id is not None and review_cycle_id:
             return "ReviewCycle"
-        if getattr(event, "work_item_id", None):
+        work_item_id = getattr(event, "work_item_id", None)
+        if work_item_id is not None and work_item_id:
             return "WorkItem"
-        if getattr(event, "repair_cycle_id", None):
+        repair_cycle_id = getattr(event, "repair_cycle_id", None)
+        if repair_cycle_id is not None and repair_cycle_id:
             return "RepairCycle"
 
         # Fallback: infer from class name

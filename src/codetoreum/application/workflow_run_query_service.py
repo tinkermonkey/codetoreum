@@ -18,6 +18,7 @@ from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.domain.pipeline_stage import StageStatus
 from codetoreum.domain.types import WorkItemId
 from codetoreum.domain.workflow import Workflow, WorkflowStatus
+from codetoreum.infrastructure.event_serialization import infer_aggregate_id_and_type
 from codetoreum.ports.exceptions import ResourceNotFoundError, WorkItemNotFoundError
 from codetoreum.ports.input.workflow_run_query import (
     IWorkflowRunQueryPort,
@@ -879,30 +880,8 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         """
         base = event.to_dict()
 
-        # Determine aggregate_id and aggregate_type based on event fields
-        # Priority: workflow_id > execution_id > review_cycle_id > work_item_id > repair_cycle_id > event_id
-        aggregate_id = (
-            getattr(event, "workflow_id", None)
-            or getattr(event, "execution_id", None)
-            or getattr(event, "review_cycle_id", None)
-            or getattr(event, "work_item_id", None)
-            or getattr(event, "repair_cycle_id", None)
-            or event.event_id
-        )
-
-        # Infer aggregate_type from the aggregate_id field
-        if getattr(event, "workflow_id", None):
-            aggregate_type = "Workflow"
-        elif getattr(event, "execution_id", None):
-            aggregate_type = "AgentExecution"
-        elif getattr(event, "review_cycle_id", None):
-            aggregate_type = "ReviewCycle"
-        elif getattr(event, "work_item_id", None):
-            aggregate_type = "WorkItem"
-        elif getattr(event, "repair_cycle_id", None):
-            aggregate_type = "RepairCycle"
-        else:
-            aggregate_type = type(event).__name__.replace("Event", "")
+        # Use canonical aggregate inference logic
+        aggregate_id, aggregate_type = infer_aggregate_id_and_type(event)
 
         return {
             "id": str(event.event_id),

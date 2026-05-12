@@ -256,16 +256,21 @@ def infer_aggregate_id_and_type(event: CodetoreumEvent) -> tuple[Any, str]:
     Returns:
         Tuple of (aggregate_id, aggregate_type)
     """
-    if getattr(event, "workflow_id", None):
-        return event.workflow_id, "Workflow"
-    if getattr(event, "execution_id", None):
-        return event.execution_id, "AgentExecution"
-    if getattr(event, "review_cycle_id", None):
-        return event.review_cycle_id, "ReviewCycle"
-    if getattr(event, "work_item_id", None):
-        return event.work_item_id, "WorkItem"
-    if getattr(event, "repair_cycle_id", None):
-        return event.repair_cycle_id, "RepairCycle"
+    workflow_id = getattr(event, "workflow_id", None)
+    if workflow_id is not None and workflow_id:
+        return workflow_id, "Workflow"
+    execution_id = getattr(event, "execution_id", None)
+    if execution_id is not None and execution_id:
+        return execution_id, "AgentExecution"
+    review_cycle_id = getattr(event, "review_cycle_id", None)
+    if review_cycle_id is not None and review_cycle_id:
+        return review_cycle_id, "ReviewCycle"
+    work_item_id = getattr(event, "work_item_id", None)
+    if work_item_id is not None and work_item_id:
+        return work_item_id, "WorkItem"
+    repair_cycle_id = getattr(event, "repair_cycle_id", None)
+    if repair_cycle_id is not None and repair_cycle_id:
+        return repair_cycle_id, "RepairCycle"
 
     return event.event_id, type(event).__name__.replace("Event", "")
 

@@ -1,9 +1,10 @@
 """Unit tests for aggregate inference logic in event store and query service.
 
 Tests coverage for:
+- infer_aggregate_id_and_type() canonical function - all 6 branches, aggregate_id values
 - InMemoryEventStore._infer_aggregate_type() - all 6 branches
 - WorkflowRunQueryService._event_to_dict() - all aggregate type branches
-- Consistency verification between the two implementations
+- Consistency verification between all implementations
 """
 
 from dataclasses import dataclass
@@ -14,6 +15,7 @@ import pytest
 from codetoreum.adapters.testing import InMemoryEventStore
 from codetoreum.application.workflow_run_query_service import WorkflowRunQueryService
 from codetoreum.domain.events import CodetoreumEvent, now_iso
+from codetoreum.infrastructure.event_serialization import infer_aggregate_id_and_type
 
 
 @dataclass(frozen=True)
@@ -463,3 +465,283 @@ class TestAggregateInferenceConsistency:
         # When both fields present, workflow_id should win for both type and ID
         assert event_dict["aggregate_type"] == "Workflow"
         assert event_dict["aggregate_id"] == "workflow-123"
+
+
+class TestCanonicalInferAggregateIdAndType:
+    """Tests for the canonical infer_aggregate_id_and_type() function.
+
+    This is the production canonical implementation used by RedisEventBuffer.
+    Tests cover both aggregate_id and aggregate_type return values.
+    """
+
+    def test_infer_workflow_id_branch(self):
+        """Test inferring from workflow_id field."""
+        event = create_event_with_id(WorkflowTestEvent, "workflow-123")
+        aggregate_id, aggregate_type = infer_aggregate_id_and_type(event)
+
+        assert aggregate_id == "workflow-123"
+        assert aggregate_type == "Workflow"
+
+    def test_infer_execution_id_branch(self):
+        """Test inferring from execution_id field."""
+        event = create_event_with_id(ExecutionTestEvent, "execution-456")
+        aggregate_id, aggregate_type = infer_aggregate_id_and_type(event)
+
+        assert aggregate_id == "execution-456"
+        assert aggregate_type == "AgentExecution"
+
+    def test_infer_review_cycle_id_branch(self):
+        """Test inferring from review_cycle_id field."""
+        event = create_event_with_id(ReviewCycleTestEvent, "review-789")
+        aggregate_id, aggregate_type = infer_aggregate_id_and_type(event)
+
+        assert aggregate_id == "review-789"
+        assert aggregate_type == "ReviewCycle"
+
+    def test_infer_work_item_id_branch(self):
+        """Test inferring from work_item_id field."""
+        event = create_event_with_id(WorkItemTestEvent, "work-item-111")
+        aggregate_id, aggregate_type = infer_aggregate_id_and_type(event)
+
+        assert aggregate_id == "work-item-111"
+        assert aggregate_type == "WorkItem"
+
+    def test_infer_repair_cycle_id_branch(self):
+        """Test inferring from repair_cycle_id field."""
+        event = create_event_with_id(RepairCycleTestEvent, "repair-222")
+        aggregate_id, aggregate_type = infer_aggregate_id_and_type(event)
+
+        assert aggregate_id == "repair-222"
+        assert aggregate_type == "RepairCycle"
+
+    def test_infer_fallback_from_event_id(self):
+        """Test fallback: use event_id and class name."""
+        event = create_event_with_id(FallbackTestEvent, "")
+        aggregate_id, aggregate_type = infer_aggregate_id_and_type(event)
+
+        # aggregate_id should be the event_id
+        assert aggregate_id == event.event_id
+        # aggregate_type should be inferred from class name
+        assert aggregate_type == "FallbackTest"
+
+    def test_priority_workflow_over_execution(self):
+        """Test that workflow_id takes priority over execution_id."""
+
+        @dataclass(frozen=True)
+        class MultiIdEvent(CodetoreumEvent):
+            workflow_id: str = ""
+            execution_id: str = ""
+
+        event = MultiIdEvent(
+            type="test.multievent",
+            timestamp=now_iso(),
+            source="test",
+            workflow_id="workflow-1",
+            execution_id="execution-1",
+        )
+        aggregate_id, aggregate_type = infer_aggregate_id_and_type(event)
+
+        assert aggregate_id == "workflow-1"
+        assert aggregate_type == "Workflow"
+
+    def test_priority_execution_over_review(self):
+        """Test that execution_id takes priority over review_cycle_id."""
+
+        @dataclass(frozen=True)
+        class MultiIdEvent(CodetoreumEvent):
+            execution_id: str = ""
+            review_cycle_id: str = ""
+
+        event = MultiIdEvent(
+            type="test.multievent",
+            timestamp=now_iso(),
+            source="test",
+            execution_id="execution-1",
+            review_cycle_id="review-1",
+        )
+        aggregate_id, aggregate_type = infer_aggregate_id_and_type(event)
+
+        assert aggregate_id == "execution-1"
+        assert aggregate_type == "AgentExecution"
+
+    def test_priority_review_over_work_item(self):
+        """Test that review_cycle_id takes priority over work_item_id."""
+
+        @dataclass(frozen=True)
+        class MultiIdEvent(CodetoreumEvent):
+            review_cycle_id: str = ""
+            work_item_id: str = ""
+
+        event = MultiIdEvent(
+            type="test.multievent",
+            timestamp=now_iso(),
+            source="test",
+            review_cycle_id="review-1",
+            work_item_id="work-item-1",
+        )
+        aggregate_id, aggregate_type = infer_aggregate_id_and_type(event)
+
+        assert aggregate_id == "review-1"
+        assert aggregate_type == "ReviewCycle"
+
+    def test_priority_work_item_over_repair(self):
+        """Test that work_item_id takes priority over repair_cycle_id."""
+
+        @dataclass(frozen=True)
+        class MultiIdEvent(CodetoreumEvent):
+            work_item_id: str = ""
+            repair_cycle_id: str = ""
+
+        event = MultiIdEvent(
+            type="test.multievent",
+            timestamp=now_iso(),
+            source="test",
+            work_item_id="work-item-1",
+            repair_cycle_id="repair-1",
+        )
+        aggregate_id, aggregate_type = infer_aggregate_id_and_type(event)
+
+        assert aggregate_id == "work-item-1"
+        assert aggregate_type == "WorkItem"
+
+    def test_empty_string_field_not_treated_as_id(self):
+        """Test that empty string field values are skipped (with is not None and truthiness check)."""
+
+        @dataclass(frozen=True)
+        class MultiIdEvent(CodetoreumEvent):
+            workflow_id: str = ""
+            work_item_id: str = ""
+
+        event = MultiIdEvent(
+            type="test.multievent",
+            timestamp=now_iso(),
+            source="test",
+            workflow_id="",  # Empty string should be skipped (is not None but falsy)
+            work_item_id="work-item-1",
+        )
+        aggregate_id, aggregate_type = infer_aggregate_id_and_type(event)
+
+        # Empty workflow_id should be skipped, work_item_id should be used
+        assert aggregate_id == "work-item-1"
+        assert aggregate_type == "WorkItem"
+
+    def test_none_field_not_treated_as_id(self):
+        """Test that None field values are skipped."""
+
+        @dataclass(frozen=True)
+        class MultiIdEvent(CodetoreumEvent):
+            execution_id: str | None = None
+            work_item_id: str = ""
+
+        event = MultiIdEvent(
+            type="test.multievent",
+            timestamp=now_iso(),
+            source="test",
+            execution_id=None,
+            work_item_id="work-item-1",
+        )
+        aggregate_id, aggregate_type = infer_aggregate_id_and_type(event)
+
+        assert aggregate_id == "work-item-1"
+        assert aggregate_type == "WorkItem"
+
+    def test_all_ids_present_uses_highest_priority(self):
+        """Test with all ID fields present - should use workflow_id."""
+
+        @dataclass(frozen=True)
+        class MultiIdEvent(CodetoreumEvent):
+            workflow_id: str = ""
+            execution_id: str = ""
+            review_cycle_id: str = ""
+            work_item_id: str = ""
+            repair_cycle_id: str = ""
+
+        event = MultiIdEvent(
+            type="test.multievent",
+            timestamp=now_iso(),
+            source="test",
+            workflow_id="workflow-1",
+            execution_id="execution-1",
+            review_cycle_id="review-1",
+            work_item_id="work-item-1",
+            repair_cycle_id="repair-1",
+        )
+        aggregate_id, aggregate_type = infer_aggregate_id_and_type(event)
+
+        # Highest priority should win
+        assert aggregate_id == "workflow-1"
+        assert aggregate_type == "Workflow"
+
+    def test_returns_tuple(self):
+        """Test that the function returns a tuple of (aggregate_id, aggregate_type)."""
+        event = create_event_with_id(WorkflowTestEvent, "workflow-123")
+        result = infer_aggregate_id_and_type(event)
+
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+        aggregate_id, aggregate_type = result
+        assert isinstance(aggregate_id, str)
+        assert isinstance(aggregate_type, str)
+
+
+class TestConsistencyWithCanonical:
+    """Tests for consistency between canonical function and other implementations."""
+
+    def test_consistency_canonical_and_infer_aggregate_type_workflow(self):
+        """Test canonical and _infer_aggregate_type agree on workflow_id."""
+        event = create_event_with_id(WorkflowTestEvent, "workflow-123")
+
+        canonical_id, canonical_type = infer_aggregate_id_and_type(event)
+        inferred_type = InMemoryEventStore._infer_aggregate_type(event)
+
+        assert canonical_type == inferred_type
+        assert canonical_type == "Workflow"
+
+    def test_consistency_canonical_and_event_to_dict_workflow(self, query_service):
+        """Test canonical and _event_to_dict agree on workflow_id."""
+        event = create_event_with_id(WorkflowTestEvent, "workflow-123")
+
+        canonical_id, canonical_type = infer_aggregate_id_and_type(event)
+        event_dict = query_service._event_to_dict(event)
+
+        assert canonical_id == event_dict["aggregate_id"]
+        assert canonical_type == event_dict["aggregate_type"]
+
+    def test_consistency_all_three_implementations_execution(self, query_service):
+        """Test all three implementations agree on execution_id."""
+        event = create_event_with_id(ExecutionTestEvent, "execution-456")
+
+        canonical_id, canonical_type = infer_aggregate_id_and_type(event)
+        inferred_type = InMemoryEventStore._infer_aggregate_type(event)
+        event_dict = query_service._event_to_dict(event)
+
+        assert canonical_type == inferred_type
+        assert canonical_type == event_dict["aggregate_type"]
+        assert canonical_id == event_dict["aggregate_id"]
+        assert canonical_id == "execution-456"
+
+    def test_consistency_all_three_implementations_with_priority(self, query_service):
+        """Test consistency across all three when multiple IDs present."""
+
+        @dataclass(frozen=True)
+        class MultiIdEvent(CodetoreumEvent):
+            workflow_id: str = ""
+            execution_id: str = ""
+
+        event = MultiIdEvent(
+            type="test.multievent",
+            timestamp=now_iso(),
+            source="test",
+            workflow_id="workflow-1",
+            execution_id="execution-1",
+        )
+
+        canonical_id, canonical_type = infer_aggregate_id_and_type(event)
+        inferred_type = InMemoryEventStore._infer_aggregate_type(event)
+        event_dict = query_service._event_to_dict(event)
+
+        assert canonical_type == inferred_type
+        assert canonical_type == event_dict["aggregate_type"]
+        assert canonical_id == event_dict["aggregate_id"]
+        assert canonical_id == "workflow-1"
+        assert canonical_type == "Workflow"
