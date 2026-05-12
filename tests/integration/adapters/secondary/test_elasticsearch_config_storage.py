@@ -533,3 +533,54 @@ async def test_concurrent_updates_increment_versions(config_storage, sample_proj
     # Check final version
     final = await config_storage.get_project_config(sample_project_config.id)
     assert final.version >= 4  # Initial + 3 updates
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_initialize_with_existing_indices_is_idempotent(es_client):
+    """Test that initializing with existing indices doesn't fail (idempotent behavior)."""
+    # Create and initialize first storage instance
+    storage1 = ElasticsearchConfigStorage(
+        es_client=es_client,
+        create_index_templates=True,
+        shard_count=1,
+        replica_count=0,
+    )
+    await storage1.initialize()
+
+    # Wait for indices to be ready
+    async def indices_ready():
+        try:
+            health = await es_client.cluster.health()
+            return health.get("active_shards", 0) > 0
+        except Exception:
+            return False
+
+    await wait_for_condition(indices_ready, timeout=10.0)
+
+    # Create and initialize a second storage instance with the same indices
+    # This should not fail even though indices already exist
+    storage2 = ElasticsearchConfigStorage(
+        es_client=es_client,
+        create_index_templates=True,
+        shard_count=1,
+        replica_count=0,
+    )
+
+    # This should succeed without raising any errors
+    await storage2.initialize()
+
+    # Verify indices exist and are accessible
+    indices_exist = await es_client.indices.exists(
+        index=[
+            storage2.INDEX_PROJECTS,
+            storage2.INDEX_AGENTS,
+            storage2.INDEX_PIPELINES,
+            storage2.INDEX_WORKFLOWS,
+            storage2.INDEX_HISTORY,
+        ]
+    )
+    assert indices_exist
+
+    await storage1.close()
+    await storage2.close()

@@ -5,7 +5,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from elasticsearch import AsyncElasticsearch, NotFoundError
+from elasticsearch import AsyncElasticsearch, BadRequestError, NotFoundError
 
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.output.config_store import (
@@ -162,9 +162,11 @@ class ElasticsearchConfigStorage(IConfigStore):
                         mappings=mappings,
                     )
                     logger.info(f"Created index: {index_name}")
-                except Exception as create_err:
-                    # Check if it's an "already exists" error (idempotent)
-                    if "already exists" in str(create_err) or "resource_already_exists" in str(create_err):
+                except BadRequestError as create_err:
+                    error_info = create_err.body.get("error", {}) if isinstance(create_err.body, dict) else {}
+                    error_type = error_info.get("type", "")
+
+                    if error_type == "resource_already_exists_exception":
                         logger.info(f"Index {index_name} already exists, skipping creation")
                     else:
                         raise
