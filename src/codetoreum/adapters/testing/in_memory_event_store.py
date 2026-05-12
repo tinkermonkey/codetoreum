@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from codetoreum.domain.events.adapter_events import CodetoreumEvent
+from codetoreum.infrastructure.event_serialization import infer_aggregate_id_and_type
 from codetoreum.ports.exceptions import (
     ConcurrencyConflictError,
     ResourceNotFoundError,
@@ -70,6 +71,12 @@ class InMemoryEventStore(IEventStore):
         # Configuration for fidelity-aware timing
         self._config = config
         self._clock = clock
+
+    @staticmethod
+    def _infer_aggregate_type(event: CodetoreumEvent) -> str:
+        """Infer the aggregate type from an event."""
+        _, aggregate_type = infer_aggregate_id_and_type(event)
+        return aggregate_type
 
     async def append(
         self,
@@ -489,14 +496,10 @@ class InMemoryEventStore(IEventStore):
         """
         with self._lock:
             if aggregate_type:
-                # Filter by aggregate type
+                # Filter by aggregate type using canonical inference logic
                 stream_ids = []
                 for stream_id, events in self._streams.items():
-                    if (
-                        events
-                        and getattr(events[0], "aggregate_type", type(events[0]).__name__.replace("Event", ""))
-                        == aggregate_type
-                    ):
+                    if events and self._infer_aggregate_type(events[0]) == aggregate_type:
                         stream_ids.append(stream_id)
                 return stream_ids
 
@@ -759,10 +762,8 @@ class InMemoryEventStore(IEventStore):
                     continue
 
                 # Check if stream matches aggregate type
-                if (
-                    getattr(events[0], "aggregate_type", type(events[0]).__name__.replace("Event", ""))
-                    != aggregate_type
-                ):
+                inferred_type = self._infer_aggregate_type(events[0])
+                if inferred_type != aggregate_type:
                     continue
 
                 # Get latest event for this stream

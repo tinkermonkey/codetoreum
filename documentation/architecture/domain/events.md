@@ -11,7 +11,7 @@ applies_to: "documentation/architecture/domain/events.md"
 
 ## Overview
 
-Domain events are immutable records of significant state changes in the system. The system defines **91 modern event classes** (frozen dataclasses) across **18 files** in the `domain/events/` directory, organized into **18 bounded contexts**. The system also includes **74 legacy event classes** in `legacy_domain_events.py` for backward compatibility.
+Domain events are immutable records of significant state changes in the system. The system defines **151 CodetoreumEvent subclasses** (frozen dataclasses) across 22 files in the `domain/events/` directory.
 
 Events are frozen dataclasses (`@dataclass(frozen=True)`), making them immutable once created—a critical requirement for maintaining an audit trail and enabling event sourcing.
 
@@ -2403,84 +2403,6 @@ graph TB
 
 ---
 
----
-
-## Legacy Events (Deprecated)
-
-**Status**: These events are deprecated and should not be used for new features. They exist for backward compatibility with older code paths.
-
-### Legacy DomainEvent Base Class
-
-The system contains **74 legacy event classes** using the older `DomainEvent` base class pattern (located in `legacy_domain_events.py`). These events follow a different design pattern than the modern frozen dataclass events:
-
-```python
-# Legacy pattern (deprecated - do NOT use for new events)
-class DomainEvent:
-    """Base class for legacy events (deprecated pattern)."""
-    def __init__(self, aggregate_id: str, aggregate_type: str, payload: dict, **kwargs):
-        self.aggregate_id = aggregate_id
-        self.aggregate_type = aggregate_type
-        self.payload = payload
-        # ... additional initialization
-
-# Example: WorkItemCreated (legacy - from legacy_domain_events.py)
-class WorkItemCreated(DomainEvent):
-    """Emitted when a work item is created (DEPRECATED)."""
-    def __init__(self, aggregate_id: str, payload: dict, **kwargs):
-        super().__init__(aggregate_id=aggregate_id, aggregate_type="WorkItem", payload=payload, **kwargs)
-```
-
-**Legacy Event Classes** (74 total):
-- WorkItemCreated, AgentAssigned, ExecutionStarted, WorkflowAttached, etc.
-- ExecutionFailed, ExecutionTimedOut, ReviewStarted, ReviewApproved, etc.
-- And ~59 more legacy-style events
-
-### Transition to Modern Events
-
-New events **MUST** use the modern frozen dataclass pattern:
-
-```python
-# Modern pattern (use this for all new events)
-@dataclass(frozen=True)
-class WorkItemCreatedEvent(CodetoreumEvent):
-    """Emitted when a work item is created (MODERN pattern)."""
-    work_item_id: str = ""
-    project_id: str = ""
-    title: str = ""
-```
-
-**Differences**:
-| Aspect | Legacy | Modern |
-|--------|--------|---------|
-| Base Class | `DomainEvent` | `CodetoreumEvent` |
-| Immutability | Not enforced | `@dataclass(frozen=True)` |
-| Fields | Dict-based payload | Typed dataclass fields |
-| Serialization | Manual | Automatic via dataclass |
-| Validation | __post_init__ not used | Full __post_init__ support |
-
-### Project Context Legacy Events
-
-Additionally, **4 events** in `project_context.py` use the legacy pattern:
-- ProjectContextCreated
-- ProjectTestConfigUpdated
-- ProjectDockerConfigUpdated
-- ProjectWorkflowMappingAdded
-
-These should be migrated to modern pattern when ProjectContext is refactored.
-
-### Migration Path
-
-If you encounter legacy events in the codebase:
-1. Identify events inheriting from `DomainEvent` (not `CodetoreumEvent`)
-2. Convert to modern frozen dataclass pattern
-3. Update event handlers to use typed fields
-4. Add tests for the migrated events
-5. Remove old legacy event class
-
-For now, legacy events are supported for backward compatibility, but **all new code should use the modern frozen dataclass pattern**.
-
----
-
 ## Event-Flow Diagrams
 
 ### Work Item → Board → Execution Flow
@@ -2620,7 +2542,7 @@ event.work_item_id = "WI-456"  # Raises: FrozenInstanceError
 
 ## Summary
 
-The 165 domain events (91 modern + 74 legacy) across 18 bounded contexts form a complete audit trail of system behavior. Each event represents an immutable fact about state changes. Event handlers subscribe to events and trigger reactions—calling output ports, updating read models, or emitting new events.
+The 151 CodetoreumEvent subclasses form a complete audit trail of system behavior. Each event represents an immutable fact about state changes. Event handlers subscribe to events and trigger reactions—calling output ports, updating read models, or emitting new events.
 
 Events enable decoupled communication between layers, complete observability through event sourcing, and the ability to replay history for debugging or temporal queries.
 

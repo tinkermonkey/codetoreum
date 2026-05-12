@@ -158,6 +158,7 @@ class Workflow:
             work_item_id=work_item_id,
             pipeline_id=template.id,
             stage_name=workflow.stages[0].name if workflow.stages else "",
+            project_id=project_id,
         )
         workflow._add_event(event)
 
@@ -646,7 +647,7 @@ class Workflow:
             id=first_event.workflow_id,
             work_item_id=first_event.work_item_id,
             template_id=first_event.pipeline_id,
-            project_id="",  # Not stored in modern event - reconstruct from context
+            project_id=getattr(first_event, "project_id", ""),
             status=WorkflowStatus.PENDING,
             stages=[],  # Would be reconstructed from template or stored in events
             current_stage_index=0,

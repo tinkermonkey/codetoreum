@@ -1007,6 +1007,7 @@ class TestWorkflowLifecycleEventPersistence:
         for evt in all_events:
             if evt.event_type == "WorkflowCreatedEvent":
                 assert evt.work_item_id == work_item_id
+                assert evt.project_id == project_id
                 run_id = evt.workflow_id
                 workflow_created_found = True
             elif evt.event_type == "WorkflowStartedEvent":

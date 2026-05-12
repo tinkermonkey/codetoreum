@@ -73,7 +73,7 @@ def parallel_failing_workflow():
 @pytest.mark.asyncio
 async def test_pipeline_stops_on_sequential_stage_failure(pipeline_manager, mock_event_store):
     """Test that pipeline stops when sequential stage fails."""
-    from codetoreum.domain.events import PipelineFailed
+    from codetoreum.domain.events import PipelineFailedEvent
 
     template = WorkflowTemplate.create("test-workflow", "Test Workflow")
     template.add_stage("failing_stage", "agent1")
@@ -116,7 +116,7 @@ async def test_pipeline_stops_on_sequential_stage_failure(pipeline_manager, mock
 
     # Should emit failure event
     events = mock_event_store.get_all_events_list()
-    failed_events = [e for e in events if isinstance(e, PipelineFailed)]
+    failed_events = [e for e in events if isinstance(e, PipelineFailedEvent)]
     assert len(failed_events) >= 1
 
 

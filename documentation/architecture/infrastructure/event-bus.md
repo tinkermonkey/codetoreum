@@ -33,7 +33,7 @@ The event bus serves as the single source of truth for all state changes in the 
 - `IFailedEventStore` — Track persistently failed events in dead letter queue
 
 **Domain Dependencies**:
-- `DomainEvent` — All domain events (immutable, frozen dataclasses)
+- `CodetoreumEvent` — All domain events (immutable, frozen dataclasses)
 - `EventHandler` — Base class for all event subscribers
 
 **Infrastructure Dependencies**:
@@ -74,22 +74,22 @@ class EventBus:
     def subscribe(
         self,
         event_type: str | None,
-        callback: Callable[[DomainEvent], Any],
+        callback: Callable[[CodetoreumEvent], Any],
     ) -> None:
         """Subscribe to events with a callback function (async or sync)."""
 
     def unsubscribe(
         self,
         event_type: str | None,
-        callback: Callable[[DomainEvent], Any],
+        callback: Callable[[CodetoreumEvent], Any],
     ) -> None:
         """Unsubscribe a callback."""
 
     # Event Publishing
-    async def publish(self, event: DomainEvent) -> None:
+    async def publish(self, event: CodetoreumEvent) -> None:
         """Publish event to all handlers and callbacks."""
 
-    async def publish_batch(self, events: list[DomainEvent]) -> None:
+    async def publish_batch(self, events: list[CodetoreumEvent]) -> None:
         """Publish multiple events sequentially."""
 
     # Statistics & Monitoring
@@ -106,8 +106,8 @@ class EventBus:
 | `unregister_handler()` | `EventHandler` | `None` | Unsubscribe handler |
 | `subscribe()` | `event_type`, `callback` | `None` | Subscribe callback function |
 | `unsubscribe()` | `event_type`, `callback` | `None` | Unsubscribe callback |
-| `publish()` | `DomainEvent` | `None` (async) | Distribute event to handlers |
-| `publish_batch()` | `list[DomainEvent]` | `None` (async) | Batch publish events |
+| `publish()` | `CodetoreumEvent` | `None` (async) | Distribute event to handlers |
+| `publish_batch()` | `list[CodetoreumEvent]` | `None` (async) | Batch publish events |
 | `get_statistics()` | `None` | `dict` with stats | Query bus metrics |
 | `reset_statistics()` | `None` | `None` | Clear metrics |
 
@@ -117,7 +117,7 @@ class EventBus:
 class EventHandler:
     """Base class for all event handlers."""
 
-    async def handle(self, event: DomainEvent) -> None:
+    async def handle(self, event: CodetoreumEvent) -> None:
         """
         Handle an event.
 
@@ -139,7 +139,7 @@ class EventHandler:
 class MyEventHandler(EventHandler):
     """Decorator automatically sets up get_event_types()."""
 
-    async def handle(self, event: DomainEvent) -> None:
+    async def handle(self, event: CodetoreumEvent) -> None:
         """Handle the event."""
 ```
 
@@ -256,7 +256,7 @@ Event Handler
 
 ```mermaid
 flowchart TD
-    A["Service publishes<br/>DomainEvent"] -->|await bus.publish| B["EventBus.publish()"]
+    A["Service publishes<br/>CodetoreumEvent"] -->|await bus.publish| B["EventBus.publish()"]
     B --> C["Increment<br/>events_published"]
     C --> D["Inject Trace Context"]
     D --> E{"Redis<br/>configured?"}

@@ -19,18 +19,19 @@ from codetoreum.application.execution_service import ExecutionService
 from codetoreum.application.review_service import ReviewService
 from codetoreum.application.workflow_orchestrator import WorkflowOrchestrator
 from codetoreum.domain.events import (
-    ExecutionCompleted,
-    ExecutionFailed,
-    ExecutionInitialized,
-    ExecutionStarted,
-    ExecutionTimeout,
-    ReviewCycleApproved,
-    ReviewCycleCreated,
-    ReviewCycleEscalated,
-    ReviewCycleRejected,
-    ReviewFeedbackSubmitted,
-    ReviewIterationStarted,
-    WorkItemCreated,
+    ExecutionCompletedEvent,
+    ExecutionFailedEvent,
+    ExecutionInitializedEvent,
+    ExecutionStartedEvent,
+    ExecutionTimedOutEvent,
+    ReviewCycleApprovedEvent,
+    ReviewCycleCreatedEvent,
+    ReviewCycleEscalatedToHumanEvent,
+    ReviewCycleFeedbackSubmittedEvent,
+    ReviewCycleIterationStartedEvent,
+    ReviewCycleRejectedEvent,
+    WorkItemCreatedEvent,
+    now_iso,
 )
 from codetoreum.domain.review_cycle import ReviewDecision
 from codetoreum.domain.work_item import WorkItemPriority
@@ -278,15 +279,14 @@ class TestExecutionEventHandling:
 
     async def test_execution_initialized_event(self, event_registry):
         """Test handling ExecutionInitialized event."""
-        event = ExecutionInitialized(
-            aggregate_id="exec-123",
-            payload={
-                "agent_id": "agent-456",
-                "work_item_id": "work-789",
-                "workflow_id": "workflow-001",
-                "stage_name": "implementation",
-                "model": "claude-3-5-sonnet-20241022",
-            },
+        event = ExecutionInitializedEvent(
+            type="execution.initialized",
+            timestamp=now_iso(),
+            source="agent_execution_service",
+            execution_id="exec-123",
+            agent_id="agent-456",
+            work_item_id="work-789",
+            stage_name="implementation",
         )
 
         await event_registry.event_bus.publish(event)
@@ -301,25 +301,26 @@ class TestExecutionEventHandling:
     async def test_execution_started_event(self, event_registry):
         """Test handling ExecutionStarted event."""
         # First initialize
-        init_event = ExecutionInitialized(
-            aggregate_id="exec-123",
-            payload={
-                "agent_id": "agent-456",
-                "work_item_id": "work-789",
-                "workflow_id": "workflow-001",
-                "stage_name": "implementation",
-                "model": "claude-3-5-sonnet-20241022",
-            },
+        init_event = ExecutionInitializedEvent(
+            type="execution.initialized",
+            timestamp=now_iso(),
+            source="agent_execution_service",
+            execution_id="exec-123",
+            agent_id="agent-456",
+            work_item_id="work-789",
+            stage_name="implementation",
         )
         await event_registry.event_bus.publish(init_event)
 
         # Then start
-        start_event = ExecutionStarted(
-            aggregate_id="exec-123",
-            payload={
-                "started_at": datetime.now(UTC).isoformat(),
-                "container_name": "test-container",
-            },
+        start_event = ExecutionStartedEvent(
+            type="execution.started",
+            timestamp=now_iso(),
+            source="agent_execution_service",
+            execution_id="exec-123",
+            work_item_id="work-789",
+            agent_id="agent-456",
+            container_name="test-container",
         )
         await event_registry.event_bus.publish(start_event)
 
@@ -330,39 +331,41 @@ class TestExecutionEventHandling:
         assert "exec-123" in execution_handler.get_active_executions()
 
     async def test_execution_completed_event(self, event_registry):
-        """Test handling ExecutionCompleted event."""
+        """Test handling ExecutionCompletedEvent event."""
         # Initialize and start
-        init_event = ExecutionInitialized(
-            aggregate_id="exec-123",
-            payload={
-                "agent_id": "agent-456",
-                "work_item_id": "work-789",
-                "workflow_id": "workflow-001",
-                "stage_name": "implementation",
-                "model": "claude-3-5-sonnet-20241022",
-            },
+        init_event = ExecutionInitializedEvent(
+            type="execution.initialized",
+            timestamp=now_iso(),
+            source="agent_execution_service",
+            execution_id="exec-123",
+            agent_id="agent-456",
+            work_item_id="work-789",
+            stage_name="implementation",
         )
         await event_registry.event_bus.publish(init_event)
 
-        start_event = ExecutionStarted(
-            aggregate_id="exec-123",
-            payload={
-                "started_at": datetime.now(UTC).isoformat(),
-                "container_name": "test-container",
-            },
+        start_event = ExecutionStartedEvent(
+            type="execution.started",
+            timestamp=now_iso(),
+            source="agent_execution_service",
+            execution_id="exec-123",
+            work_item_id="work-789",
+            agent_id="agent-456",
+            container_name="test-container",
         )
         await event_registry.event_bus.publish(start_event)
 
         # Complete
-        complete_event = ExecutionCompleted(
-            aggregate_id="exec-123",
-            payload={
-                "completed_at": datetime.now(UTC).isoformat(),
-                "input_tokens": 100,
-                "output_tokens": 200,
-                "duration_seconds": 10.5,
-                "session_id": "session-123",
-            },
+        complete_event = ExecutionCompletedEvent(
+            type="execution.completed",
+            timestamp=now_iso(),
+            source="agent_execution_service",
+            execution_id="exec-123",
+            work_item_id="work-789",
+            agent_id="agent-456",
+            output="Test output",
+            input_tokens=100,
+            output_tokens=200,
         )
         await event_registry.event_bus.publish(complete_event)
 
@@ -377,36 +380,38 @@ class TestExecutionEventHandling:
     async def test_execution_failed_event(self, event_registry):
         """Test handling ExecutionFailed event."""
         # Initialize and start
-        init_event = ExecutionInitialized(
-            aggregate_id="exec-123",
-            payload={
-                "agent_id": "agent-456",
-                "work_item_id": "work-789",
-                "workflow_id": "workflow-001",
-                "stage_name": "implementation",
-                "model": "claude-3-5-sonnet-20241022",
-            },
+        init_event = ExecutionInitializedEvent(
+            type="execution.initialized",
+            timestamp=now_iso(),
+            source="agent_execution_service",
+            execution_id="exec-123",
+            agent_id="agent-456",
+            work_item_id="work-789",
+            stage_name="implementation",
         )
         await event_registry.event_bus.publish(init_event)
 
-        start_event = ExecutionStarted(
-            aggregate_id="exec-123",
-            payload={
-                "started_at": datetime.now(UTC).isoformat(),
-                "container_name": "test-container",
-            },
+        start_event = ExecutionStartedEvent(
+            type="execution.started",
+            timestamp=now_iso(),
+            source="agent_execution_service",
+            execution_id="exec-123",
+            work_item_id="work-789",
+            agent_id="agent-456",
+            container_name="test-container",
         )
         await event_registry.event_bus.publish(start_event)
 
         # Fail
-        fail_event = ExecutionFailed(
-            aggregate_id="exec-123",
-            payload={
-                "failed_at": datetime.now(UTC).isoformat(),
-                "error_message": "Test error",
-                "exit_code": 1,
-                "duration_seconds": 5.0,
-            },
+        fail_event = ExecutionFailedEvent(
+            type="execution.failed",
+            timestamp=now_iso(),
+            source="agent_execution_service",
+            execution_id="exec-123",
+            work_item_id="work-789",
+            agent_id="agent-456",
+            error_message="Test error",
+            exit_code=1,
         )
         await event_registry.event_bus.publish(fail_event)
 
@@ -418,36 +423,39 @@ class TestExecutionEventHandling:
         assert metrics["failure_rate"] == 100.0
 
     async def test_execution_timeout_event(self, event_registry):
-        """Test handling ExecutionTimeout event."""
+        """Test handling ExecutionTimedOutEvent event."""
         # Initialize and start
-        init_event = ExecutionInitialized(
-            aggregate_id="exec-123",
-            payload={
-                "agent_id": "agent-456",
-                "work_item_id": "work-789",
-                "workflow_id": "workflow-001",
-                "stage_name": "implementation",
-                "model": "claude-3-5-sonnet-20241022",
-            },
+        init_event = ExecutionInitializedEvent(
+            type="execution.initialized",
+            timestamp=now_iso(),
+            source="agent_execution_service",
+            execution_id="exec-123",
+            agent_id="agent-456",
+            work_item_id="work-789",
+            stage_name="implementation",
         )
         await event_registry.event_bus.publish(init_event)
 
-        start_event = ExecutionStarted(
-            aggregate_id="exec-123",
-            payload={
-                "started_at": datetime.now(UTC).isoformat(),
-                "container_name": "test-container",
-            },
+        start_event = ExecutionStartedEvent(
+            type="execution.started",
+            timestamp=now_iso(),
+            source="agent_execution_service",
+            execution_id="exec-123",
+            work_item_id="work-789",
+            agent_id="agent-456",
+            container_name="test-container",
         )
         await event_registry.event_bus.publish(start_event)
 
         # Timeout
-        timeout_event = ExecutionTimeout(
-            aggregate_id="exec-123",
-            payload={
-                "timeout_at": datetime.now(UTC).isoformat(),
-                "duration_seconds": 120.0,
-            },
+        timeout_event = ExecutionTimedOutEvent(
+            type="execution.timed_out",
+            timestamp=now_iso(),
+            source="execution_timeout_watchdog",
+            execution_id="exec-123",
+            work_item_id="work-789",
+            timeout_seconds=120,
+            started_at=now_iso(),
         )
         await event_registry.event_bus.publish(timeout_event)
 
@@ -465,15 +473,16 @@ class TestReviewEventHandling:
 
     async def test_review_cycle_created_event(self, event_registry):
         """Test handling ReviewCycleCreated event."""
-        event = ReviewCycleCreated(
-            aggregate_id="review-123",
-            payload={
-                "workflow_id": "workflow-001",
-                "stage_name": "implementation",
-                "maker_agent_id": "agent-maker",
-                "reviewer_agent_id": "agent-reviewer",
-                "max_iterations": 3,
-            },
+        event = ReviewCycleCreatedEvent(
+            type="review_cycle.created",
+            timestamp=now_iso(),
+            source="review_service",
+            review_cycle_id="review-123",
+            workflow_id="workflow-001",
+            stage_name="implementation",
+            maker_agent_id="agent-maker",
+            reviewer_agent_id="agent-reviewer",
+            max_iterations=3,
         )
 
         await event_registry.event_bus.publish(event)
@@ -488,25 +497,27 @@ class TestReviewEventHandling:
     async def test_review_iteration_started_event(self, event_registry):
         """Test handling ReviewIterationStarted event."""
         # Create review first
-        create_event = ReviewCycleCreated(
-            aggregate_id="review-123",
-            payload={
-                "workflow_id": "workflow-001",
-                "stage_name": "implementation",
-                "maker_agent_id": "agent-maker",
-                "reviewer_agent_id": "agent-reviewer",
-                "max_iterations": 3,
-            },
+        create_event = ReviewCycleCreatedEvent(
+            type="review_cycle.created",
+            timestamp=now_iso(),
+            source="review_service",
+            review_cycle_id="review-123",
+            workflow_id="workflow-001",
+            stage_name="implementation",
+            maker_agent_id="agent-maker",
+            reviewer_agent_id="agent-reviewer",
+            max_iterations=3,
         )
         await event_registry.event_bus.publish(create_event)
 
         # Start iteration
-        iteration_event = ReviewIterationStarted(
-            aggregate_id="review-123",
-            payload={
-                "iteration_number": 1,
-                "maker_execution_id": "exec-123",
-            },
+        iteration_event = ReviewCycleIterationStartedEvent(
+            type="review_cycle.iteration_started",
+            timestamp=now_iso(),
+            source="review_service",
+            review_cycle_id="review-123",
+            iteration_number=1,
+            maker_execution_id="exec-123",
         )
         await event_registry.event_bus.publish(iteration_event)
 
@@ -518,25 +529,27 @@ class TestReviewEventHandling:
     async def test_review_cycle_approved_event(self, event_registry):
         """Test handling ReviewCycleApproved event."""
         # Create review
-        create_event = ReviewCycleCreated(
-            aggregate_id="review-123",
-            payload={
-                "workflow_id": "workflow-001",
-                "stage_name": "implementation",
-                "maker_agent_id": "agent-maker",
-                "reviewer_agent_id": "agent-reviewer",
-                "max_iterations": 3,
-            },
+        create_event = ReviewCycleCreatedEvent(
+            type="review_cycle.created",
+            timestamp=now_iso(),
+            source="review_service",
+            review_cycle_id="review-123",
+            workflow_id="workflow-001",
+            stage_name="implementation",
+            maker_agent_id="agent-maker",
+            reviewer_agent_id="agent-reviewer",
+            max_iterations=3,
         )
         await event_registry.event_bus.publish(create_event)
 
         # Approve
-        approve_event = ReviewCycleApproved(
-            aggregate_id="review-123",
-            payload={
-                "total_iterations": 2,
-                "approved_at": datetime.now(UTC).isoformat(),
-            },
+        approve_event = ReviewCycleApprovedEvent(
+            type="review_cycle.approved",
+            timestamp=now_iso(),
+            source="review_service",
+            review_cycle_id="review-123",
+            work_item_id="work-item-123",
+            total_iterations=2,
         )
         await event_registry.event_bus.publish(approve_event)
 
@@ -551,27 +564,27 @@ class TestReviewEventHandling:
     async def test_review_cycle_rejected_event(self, event_registry):
         """Test handling ReviewCycleRejected event."""
         # Create review
-        create_event = ReviewCycleCreated(
-            aggregate_id="review-123",
-            payload={
-                "workflow_id": "workflow-001",
-                "stage_name": "implementation",
-                "maker_agent_id": "agent-maker",
-                "reviewer_agent_id": "agent-reviewer",
-                "max_iterations": 3,
-            },
+        create_event = ReviewCycleCreatedEvent(
+            type="review_cycle.created",
+            timestamp=now_iso(),
+            source="review_service",
+            review_cycle_id="review-123",
+            workflow_id="workflow-001",
+            stage_name="implementation",
+            maker_agent_id="agent-maker",
+            reviewer_agent_id="agent-reviewer",
+            max_iterations=3,
         )
         await event_registry.event_bus.publish(create_event)
 
         # Reject (max iterations reached)
-        reject_event = ReviewCycleRejected(
-            aggregate_id="review-123",
-            payload={
-                "rejected_at": datetime.now(UTC).isoformat(),
-                "final_iteration": 3,
-                "reviewer_id": "agent-reviewer",
-                "rejection_reason": "Max iterations reached",
-            },
+        reject_event = ReviewCycleRejectedEvent(
+            type="review_cycle.rejected",
+            timestamp=now_iso(),
+            source="review_service",
+            review_cycle_id="review-123",
+            final_iteration=3,
+            rejection_reason="Max iterations reached",
         )
         await event_registry.event_bus.publish(reject_event)
 
@@ -584,26 +597,29 @@ class TestReviewEventHandling:
     async def test_review_cycle_escalated_event(self, event_registry):
         """Test handling ReviewCycleEscalated event."""
         # Create review
-        create_event = ReviewCycleCreated(
-            aggregate_id="review-123",
-            payload={
-                "workflow_id": "workflow-001",
-                "stage_name": "implementation",
-                "maker_agent_id": "agent-maker",
-                "reviewer_agent_id": "agent-reviewer",
-                "max_iterations": 3,
-            },
+        create_event = ReviewCycleCreatedEvent(
+            type="review_cycle.created",
+            timestamp=now_iso(),
+            source="review_service",
+            review_cycle_id="review-123",
+            workflow_id="workflow-001",
+            stage_name="implementation",
+            maker_agent_id="agent-maker",
+            reviewer_agent_id="agent-reviewer",
+            max_iterations=3,
         )
         await event_registry.event_bus.publish(create_event)
 
         # Escalate
-        escalate_event = ReviewCycleEscalated(
-            aggregate_id="review-123",
-            payload={
-                "reason": "Reviewer requested human review",
-                "total_iterations": 2,
-                "escalated_at": datetime.now(UTC).isoformat(),
-            },
+        escalate_event = ReviewCycleEscalatedToHumanEvent(
+            type="review_cycle.escalated_to_human",
+            timestamp=now_iso(),
+            source="review_service",
+            review_cycle_id="review-123",
+            work_item_id="work-item-123",
+            iteration=2,
+            blocking_count=1,
+            escalation_reason="BLOCKED",
         )
         await event_registry.event_bus.publish(escalate_event)
 
@@ -621,53 +637,56 @@ class TestEndToEndEventFlow:
     async def test_full_execution_cycle(self, event_registry):
         """Test complete execution lifecycle event flow."""
         # Work item created
-        work_item_event = WorkItemCreated(
-            aggregate_id="work-123",
-            payload={
-                "title": "Test work item",
-                "description": "Test description",
-                "project_id": "test/repo",
-                "labels": ["feature"],
-                "priority": WorkItemPriority.MEDIUM.value,
-                "external_id": "42",
-                "external_url": "https://github.com/test/repo/issues/42",
-            },
+        work_item_event = WorkItemCreatedEvent(
+            type="workitem.created",
+            timestamp=now_iso(),
+            source="github",
+            work_item_id="work-123",
+            title="Test work item",
+            description="Test description",
+            project_id="test/repo",
+            labels=("feature",),
+            priority=WorkItemPriority.MEDIUM.value,
+            external_id="42",
+            external_url="https://github.com/test/repo/issues/42",
         )
         await event_registry.event_bus.publish(work_item_event)
 
         # Execution initialized
-        init_event = ExecutionInitialized(
-            aggregate_id="exec-123",
-            payload={
-                "agent_id": "agent-456",
-                "work_item_id": "work-123",
-                "workflow_id": "workflow-001",
-                "stage_name": "implementation",
-                "model": "claude-3-5-sonnet-20241022",
-            },
+        init_event = ExecutionInitializedEvent(
+            type="execution.initialized",
+            timestamp=now_iso(),
+            source="agent_execution_service",
+            execution_id="exec-123",
+            agent_id="agent-456",
+            work_item_id="work-123",
+            stage_name="implementation",
         )
         await event_registry.event_bus.publish(init_event)
 
         # Execution started
-        start_event = ExecutionStarted(
-            aggregate_id="exec-123",
-            payload={
-                "started_at": datetime.now(UTC).isoformat(),
-                "container_name": "test-container",
-            },
+        start_event = ExecutionStartedEvent(
+            type="execution.started",
+            timestamp=now_iso(),
+            source="agent_execution_service",
+            execution_id="exec-123",
+            work_item_id="work-123",
+            agent_id="agent-456",
+            container_name="test-container",
         )
         await event_registry.event_bus.publish(start_event)
 
         # Execution completed
-        complete_event = ExecutionCompleted(
-            aggregate_id="exec-123",
-            payload={
-                "completed_at": datetime.now(UTC).isoformat(),
-                "input_tokens": 100,
-                "output_tokens": 200,
-                "duration_seconds": 10.5,
-                "session_id": "session-123",
-            },
+        complete_event = ExecutionCompletedEvent(
+            type="execution.completed",
+            timestamp=now_iso(),
+            source="agent_execution_service",
+            execution_id="exec-123",
+            work_item_id="work-123",
+            agent_id="agent-456",
+            output="Test output",
+            input_tokens=100,
+            output_tokens=200,
         )
         await event_registry.event_bus.publish(complete_event)
 
@@ -683,49 +702,51 @@ class TestEndToEndEventFlow:
     async def test_full_review_cycle_approved(self, event_registry):
         """Test complete review cycle ending in approval."""
         # Review created
-        create_event = ReviewCycleCreated(
-            aggregate_id="review-123",
-            payload={
-                "workflow_id": "workflow-001",
-                "stage_name": "implementation",
-                "maker_agent_id": "agent-maker",
-                "reviewer_agent_id": "agent-reviewer",
-                "max_iterations": 3,
-            },
+        create_event = ReviewCycleCreatedEvent(
+            type="review_cycle.created",
+            timestamp=now_iso(),
+            source="review_service",
+            review_cycle_id="review-123",
+            workflow_id="workflow-001",
+            stage_name="implementation",
+            maker_agent_id="agent-maker",
+            reviewer_agent_id="agent-reviewer",
+            max_iterations=3,
         )
         await event_registry.event_bus.publish(create_event)
 
         # First iteration
-        iteration_event = ReviewIterationStarted(
-            aggregate_id="review-123",
-            payload={
-                "iteration_number": 1,
-                "maker_execution_id": "exec-123",
-            },
+        iteration_event = ReviewCycleIterationStartedEvent(
+            type="review_cycle.iteration_started",
+            timestamp=now_iso(),
+            source="review_service",
+            review_cycle_id="review-123",
+            iteration_number=1,
+            maker_execution_id="exec-123",
         )
         await event_registry.event_bus.publish(iteration_event)
 
         # Feedback submitted
-        feedback_event = ReviewFeedbackSubmitted(
-            aggregate_id="review-123",
-            payload={
-                "iteration_number": 1,
-                "submitted_at": datetime.now(UTC).isoformat(),
-                "feedback": "Looks good!",
-                "decision": ReviewDecision.APPROVE.value,
-                "reviewer_id": "exec-456",
-                "issues_found": [],
-            },
+        feedback_event = ReviewCycleFeedbackSubmittedEvent(
+            type="review_cycle.feedback_submitted",
+            timestamp=now_iso(),
+            source="review_service",
+            review_cycle_id="review-123",
+            iteration_number=1,
+            decision="approve",
+            reviewer_execution_id="exec-456",
+            issues_count=0,
         )
         await event_registry.event_bus.publish(feedback_event)
 
         # Approved
-        approve_event = ReviewCycleApproved(
-            aggregate_id="review-123",
-            payload={
-                "total_iterations": 1,
-                "approved_at": datetime.now(UTC).isoformat(),
-            },
+        approve_event = ReviewCycleApprovedEvent(
+            type="review_cycle.approved",
+            timestamp=now_iso(),
+            source="review_service",
+            review_cycle_id="review-123",
+            work_item_id="work-item-123",
+            total_iterations=1,
         )
         await event_registry.event_bus.publish(approve_event)
 
@@ -742,70 +763,72 @@ class TestEndToEndEventFlow:
     async def test_full_review_cycle_with_revisions(self, event_registry):
         """Test review cycle with multiple iterations."""
         # Review created
-        create_event = ReviewCycleCreated(
-            aggregate_id="review-123",
-            payload={
-                "workflow_id": "workflow-001",
-                "stage_name": "implementation",
-                "maker_agent_id": "agent-maker",
-                "reviewer_agent_id": "agent-reviewer",
-                "max_iterations": 3,
-            },
+        create_event = ReviewCycleCreatedEvent(
+            type="review_cycle.created",
+            timestamp=now_iso(),
+            source="review_service",
+            review_cycle_id="review-123",
+            workflow_id="workflow-001",
+            stage_name="implementation",
+            maker_agent_id="agent-maker",
+            reviewer_agent_id="agent-reviewer",
+            max_iterations=3,
         )
         await event_registry.event_bus.publish(create_event)
 
         # Iteration 1 - rejected
-        iteration_1 = ReviewIterationStarted(
-            aggregate_id="review-123",
-            payload={
-                "iteration_number": 1,
-                "maker_execution_id": "exec-123",
-            },
+        iteration_1 = ReviewCycleIterationStartedEvent(
+            type="review_cycle.iteration_started",
+            timestamp=now_iso(),
+            source="review_service",
+            review_cycle_id="review-123",
+            iteration_number=1,
+            maker_execution_id="exec-123",
         )
         await event_registry.event_bus.publish(iteration_1)
 
-        feedback_1 = ReviewFeedbackSubmitted(
-            aggregate_id="review-123",
-            payload={
-                "iteration_number": 1,
-                "submitted_at": datetime.now(UTC).isoformat(),
-                "feedback": "Needs improvement",
-                "decision": ReviewDecision.REQUEST_CHANGES.value,
-                "reviewer_id": "exec-456",
-                "issues_found": [{"issue": "Issue 1"}, {"issue": "Issue 2"}],
-            },
+        feedback_1 = ReviewCycleFeedbackSubmittedEvent(
+            type="review_cycle.feedback_submitted",
+            timestamp=now_iso(),
+            source="review_service",
+            review_cycle_id="review-123",
+            iteration_number=1,
+            decision="request_changes",
+            reviewer_execution_id="exec-456",
+            issues_count=2,
         )
         await event_registry.event_bus.publish(feedback_1)
 
         # Iteration 2 - approved
-        iteration_2 = ReviewIterationStarted(
-            aggregate_id="review-123",
-            payload={
-                "iteration_number": 2,
-                "maker_execution_id": "exec-789",
-            },
+        iteration_2 = ReviewCycleIterationStartedEvent(
+            type="review_cycle.iteration_started",
+            timestamp=now_iso(),
+            source="review_service",
+            review_cycle_id="review-123",
+            iteration_number=2,
+            maker_execution_id="exec-789",
         )
         await event_registry.event_bus.publish(iteration_2)
 
-        feedback_2 = ReviewFeedbackSubmitted(
-            aggregate_id="review-123",
-            payload={
-                "iteration_number": 2,
-                "submitted_at": datetime.now(UTC).isoformat(),
-                "feedback": "Much better!",
-                "decision": ReviewDecision.APPROVE.value,
-                "reviewer_id": "exec-012",
-                "issues_found": [],
-            },
+        feedback_2 = ReviewCycleFeedbackSubmittedEvent(
+            type="review_cycle.feedback_submitted",
+            timestamp=now_iso(),
+            source="review_service",
+            review_cycle_id="review-123",
+            iteration_number=2,
+            decision="approve",
+            reviewer_execution_id="exec-012",
+            issues_count=0,
         )
         await event_registry.event_bus.publish(feedback_2)
 
-        approve_event = ReviewCycleApproved(
-            aggregate_id="review-123",
-            payload={
-                "total_iterations": 2,
-                "approved_at": datetime.now(UTC).isoformat(),
-            },
+        approve_event = ReviewCycleApprovedEvent(
+            type="review_cycle.approved",
+            timestamp=now_iso(),
+            source="review_service",
+            review_cycle_id="review-123",
+            work_item_id="work-item-123",
+            total_iterations=2,
         )
         await event_registry.event_bus.publish(approve_event)
 
@@ -822,37 +845,38 @@ class TestEndToEndEventFlow:
         """Test that event bus tracks statistics correctly."""
         # Publish multiple events
         events = [
-            WorkItemCreated(
-                aggregate_id="work-1",
-                payload={
-                    "title": "Test 1",
-                    "description": "Desc 1",
-                    "project_id": "test/repo",
-                    "labels": [],
-                    "priority": WorkItemPriority.HIGH.value,
-                    "external_id": "1",
-                    "external_url": "https://github.com/test/repo/issues/1",
-                },
+            WorkItemCreatedEvent(
+                type="workitem.created",
+                timestamp=now_iso(),
+                source="github",
+                work_item_id="work-1",
+                title="Test 1",
+                description="Desc 1",
+                project_id="test/repo",
+                labels=(),
+                priority=WorkItemPriority.HIGH.value,
+                external_id="1",
+                external_url="https://github.com/test/repo/issues/1",
             ),
-            ExecutionInitialized(
-                aggregate_id="exec-1",
-                payload={
-                    "agent_id": "agent-1",
-                    "work_item_id": "work-1",
-                    "workflow_id": "wf-1",
-                    "stage_name": "test",
-                    "model": "claude-3-5-sonnet-20241022",
-                },
+            ExecutionInitializedEvent(
+                type="execution.initialized",
+                timestamp=now_iso(),
+                source="agent_execution_service",
+                execution_id="exec-1",
+                agent_id="agent-1",
+                work_item_id="work-1",
+                stage_name="test",
             ),
-            ReviewCycleCreated(
-                aggregate_id="review-1",
-                payload={
-                    "workflow_id": "wf-1",
-                    "stage_name": "test",
-                    "maker_agent_id": "agent-1",
-                    "reviewer_agent_id": "agent-2",
-                    "max_iterations": 3,
-                },
+            ReviewCycleCreatedEvent(
+                type="review_cycle.created",
+                timestamp=now_iso(),
+                source="review_service",
+                review_cycle_id="review-1",
+                workflow_id="wf-1",
+                stage_name="test",
+                maker_agent_id="agent-1",
+                reviewer_agent_id="agent-2",
+                max_iterations=3,
             ),
         ]
 
@@ -884,22 +908,23 @@ class TestEventHandlerErrorHandling:
                 # Succeed on 3rd attempt
 
             def get_event_types(self):
-                return ["WorkItemCreated"]
+                return ["WorkItemCreatedEvent"]
 
         handler = FailingHandler()
         event_bus.register_handler(handler)
 
-        event = WorkItemCreated(
-            aggregate_id="work-1",
-            payload={
-                "title": "Test",
-                "description": "Desc",
-                "project_id": "test/repo",
-                "labels": [],
-                "priority": WorkItemPriority.MEDIUM.value,
-                "external_id": "1",
-                "external_url": "https://github.com/test/repo/issues/1",
-            },
+        event = WorkItemCreatedEvent(
+            type="workitem.created",
+            timestamp=now_iso(),
+            source="github",
+            work_item_id="work-1",
+            title="Test",
+            description="Desc",
+            project_id="test/repo",
+            labels=(),
+            priority=WorkItemPriority.MEDIUM.value,
+            external_id="1",
+            external_url="https://github.com/test/repo/issues/1",
         )
 
         await event_bus.publish(event)
@@ -924,22 +949,23 @@ class TestEventHandlerErrorHandling:
                 raise Exception("Always fails")
 
             def get_event_types(self):
-                return ["WorkItemCreated"]
+                return ["WorkItemCreatedEvent"]
 
         handler = AlwaysFailingHandler()
         event_bus.register_handler(handler)
 
-        event = WorkItemCreated(
-            aggregate_id="work-1",
-            payload={
-                "title": "Test",
-                "description": "Desc",
-                "project_id": "test/repo",
-                "labels": [],
-                "priority": WorkItemPriority.MEDIUM.value,
-                "external_id": "1",
-                "external_url": "https://github.com/test/repo/issues/1",
-            },
+        event = WorkItemCreatedEvent(
+            type="workitem.created",
+            timestamp=now_iso(),
+            source="github",
+            work_item_id="work-1",
+            title="Test",
+            description="Desc",
+            project_id="test/repo",
+            labels=(),
+            priority=WorkItemPriority.MEDIUM.value,
+            external_id="1",
+            external_url="https://github.com/test/repo/issues/1",
         )
 
         await event_bus.publish(event)

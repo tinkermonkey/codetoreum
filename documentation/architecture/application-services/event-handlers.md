@@ -116,7 +116,7 @@ async def _complete_workflow_run(
 **Handler Responsibilities**:
 
 ```python
-async def handle(self, event: DomainEvent) -> None:
+async def handle(self, event: CodetoreumEvent) -> None:
     """Dispatch to specific handler."""
 
 async def _handle_execution_initialized(
@@ -193,7 +193,7 @@ def get_active_executions(self) -> list[ExecutionInfo]:
 **Handler Responsibilities**:
 
 ```python
-async def handle(self, event: DomainEvent) -> None:
+async def handle(self, event: CodetoreumEvent) -> None:
     """Dispatch to specific handler."""
 
 async def _handle_review_cycle_created(
@@ -278,7 +278,7 @@ def get_active_reviews(self) -> list[ReviewInfo]:
 **Handler Responsibilities**:
 
 ```python
-async def handle(self, event: DomainEvent) -> None:
+async def handle(self, event: CodetoreumEvent) -> None:
     """Dispatch to specific handler."""
 
 async def _handle_work_item_created(
@@ -343,7 +343,7 @@ async def _handle_review_escalated(
 **Handler Responsibilities**:
 
 ```python
-async def handle(self, event: DomainEvent) -> None:
+async def handle(self, event: CodetoreumEvent) -> None:
     """Dispatch to specific handler."""
 
 async def handle_column_change(
@@ -382,7 +382,7 @@ async def handle_column_change(
 **Handler Responsibilities**:
 
 ```python
-async def handle(self, event: DomainEvent) -> None:
+async def handle(self, event: CodetoreumEvent) -> None:
     """Dispatch to specific handler."""
 
 async def _handle_branch_resolved(
@@ -436,7 +436,7 @@ async def _handle_branch_created(
 **Handler Responsibilities**:
 
 ```python
-async def handle(self, event: DomainEvent) -> None:
+async def handle(self, event: CodetoreumEvent) -> None:
     """Dispatch to specific handler."""
 
 async def handle_cycle_outcome(
@@ -472,7 +472,7 @@ async def handle_cycle_outcome(
 **Handler Responsibilities**:
 
 ```python
-async def handle(self, event: DomainEvent) -> None:
+async def handle(self, event: CodetoreumEvent) -> None:
     """Dispatch to specific handler."""
 
 async def handle_pr_review_column_change(
@@ -911,7 +911,7 @@ Handler A
   ↓ invokes service
 Service A
   ↓ emits event
-DomainEvent
+CodetoreumEvent
   ↓ published to bus
 Handler B
   ↓ subscribes and reacts

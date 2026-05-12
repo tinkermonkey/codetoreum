@@ -539,6 +539,7 @@ class BoardColumnEventHandler(EventHandler):
             work_item_id=work_item_id,
             pipeline_id=workflow_config.id,
             stage_name=column_config.name,
+            project_id=project_id,
         )
         started = WorkflowStartedEvent(
             type="workflow.started",

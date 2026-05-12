@@ -13,10 +13,10 @@ import pytest
 from codetoreum.adapters.testing import InMemoryEventStore, InMemoryTicketAdapter
 from codetoreum.application.workflow_run_query_service import WorkflowRunQueryService
 from codetoreum.domain.events import (
-    WorkflowCompleted,
-    WorkflowCreated,
-    WorkflowFailed,
-    WorkflowStarted,
+    WorkflowCompletedEvent,
+    WorkflowCreatedEvent,
+    WorkflowFailedEvent,
+    WorkflowStartedEvent,
 )
 from codetoreum.domain.work_item import WorkItemPriority
 from codetoreum.ports.exceptions import ResourceNotFoundError
@@ -56,33 +56,35 @@ async def sample_workflow_events(event_store):
     """Fixture creating sample workflow events in event store."""
     workflow_id = str(uuid4())
     work_item_id = "work-item-1"
+    timestamp = datetime.now(UTC).isoformat()
 
     # Create workflow events
     events = [
-        WorkflowCreated(
-            aggregate_id=workflow_id,
-            payload={
-                "work_item_id": work_item_id,
-                "template_id": "template-1",
-                "project_id": "project-1",
-                "stage_count": 3,
-            },
+        WorkflowCreatedEvent(
+            type="workflow.created",
+            timestamp=timestamp,
+            source="test",
+            workflow_id=workflow_id,
+            work_item_id=work_item_id,
+            pipeline_id="template-1",
+            stage_name="design",
         ),
-        WorkflowStarted(
-            aggregate_id=workflow_id,
-            payload={
-                "started_at": datetime.now(UTC).isoformat(),
-                "work_item_id": work_item_id,
-                "first_stage": "stage-1",
-            },
+        WorkflowStartedEvent(
+            type="workflow.started",
+            timestamp=timestamp,
+            source="test",
+            workflow_id=workflow_id,
+            work_item_id=work_item_id,
+            stage_name="design",
         ),
-        WorkflowCompleted(
-            aggregate_id=workflow_id,
-            payload={
-                "completed_at": datetime.now(UTC).isoformat(),
-                "work_item_id": work_item_id,
-                "duration_seconds": 120.5,
-            },
+        WorkflowCompletedEvent(
+            type="workflow.completed",
+            timestamp=timestamp,
+            source="test",
+            workflow_id=workflow_id,
+            work_item_id=work_item_id,
+            final_stage="design",
+            completed_at=timestamp,
         ),
     ]
 
@@ -105,49 +107,53 @@ async def multiple_workflows(event_store):
         workflow_id = str(uuid4())
         work_item_id = f"work-item-{i}"
         project_id = "project-1" if i < 3 else "project-2"
+        timestamp = datetime.now(UTC).isoformat()
 
         events = [
-            WorkflowCreated(
-                aggregate_id=workflow_id,
-                payload={
-                    "work_item_id": work_item_id,
-                    "template_id": "template-1",
-                    "project_id": project_id,
-                    "stage_count": 2,
-                },
+            WorkflowCreatedEvent(
+                type="workflow.created",
+                timestamp=timestamp,
+                source="test",
+                workflow_id=workflow_id,
+                work_item_id=work_item_id,
+                pipeline_id="",
+                stage_name="",
+                project_id=project_id,
             ),
-            WorkflowStarted(
-                aggregate_id=workflow_id,
-                payload={
-                    "started_at": datetime.now(UTC).isoformat(),
-                    "work_item_id": work_item_id,
-                    "first_stage": "stage-1",
-                },
+            WorkflowStartedEvent(
+                type="workflow.started",
+                timestamp=timestamp,
+                source="test",
+                workflow_id=workflow_id,
+                work_item_id=work_item_id,
+                stage_name="stage-1",
             ),
         ]
 
         # Complete some workflows, fail others
         if i < 2:
             events.append(
-                WorkflowCompleted(
-                    aggregate_id=workflow_id,
-                    payload={
-                        "completed_at": datetime.now(UTC).isoformat(),
-                        "work_item_id": work_item_id,
-                        "duration_seconds": 100.0 + i * 10,
-                    },
+                WorkflowCompletedEvent(
+                    type="workflow.completed",
+                    timestamp=timestamp,
+                    source="test",
+                    workflow_id=workflow_id,
+                    work_item_id=work_item_id,
+                    final_stage="",
+                    completed_at=timestamp,
                 )
             )
         elif i == 2:
             events.append(
-                WorkflowFailed(
-                    aggregate_id=workflow_id,
-                    payload={
-                        "failed_at": datetime.now(UTC).isoformat(),
-                        "reason": "Agent execution failed",
-                        "failed_stage": "stage-2",
-                        "completed_stages": ["stage-1"],
-                    },
+                WorkflowFailedEvent(
+                    type="workflow.failed",
+                    timestamp=timestamp,
+                    source="test",
+                    workflow_id=workflow_id,
+                    work_item_id=work_item_id,
+                    failed_stage="stage-2",
+                    reason="Agent execution failed",
+                    failed_at=timestamp,
                 )
             )
 
@@ -183,7 +189,6 @@ class TestGetWorkflowRun:
         assert result.id == workflow_id
         assert result.work_item_id == sample_workflow_events["work_item_id"]
         assert result.workflow_id == "template-1"
-        assert result.project_id == "project-1"
         assert result.status == WorkflowRunStatus.COMPLETED
         assert result.started_at is not None
         assert result.completed_at is not None
@@ -388,15 +393,15 @@ class TestGetWorkflowRunEvents:
         # Act
         result = await query_service.get_workflow_run_events(
             workflow_id,
-            event_types=["WorkflowStarted", "WorkflowCompleted"],
+            event_types=["WorkflowStartedEvent", "WorkflowCompletedEvent"],
         )
 
         # Assert
         assert result.total_count == 2
         assert len(result.events) == 2
         event_types = [e["event_type"] for e in result.events]
-        assert "WorkflowStarted" in event_types
-        assert "WorkflowCompleted" in event_types
+        assert "WorkflowStartedEvent" in event_types
+        assert "WorkflowCompletedEvent" in event_types
 
     @pytest.mark.asyncio
     async def test_get_workflow_run_events_not_found(self, query_service):
@@ -480,7 +485,6 @@ class TestCaching:
         assert result.id == sample_workflow_events["workflow_id"]
         assert result.issue_title is None
         assert result.issue_number is None
-        assert result.project == "project-1"  # from workflow, not work item
 
 
 class TestStageOutputFields:

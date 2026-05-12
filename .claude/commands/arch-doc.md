@@ -165,7 +165,7 @@ Agent:
   1. Introspects event handlers in src/codetoreum/application/event_handlers/
   2. Traces event types and handler chains
   3. Generates Mermaid flowchart showing:
-     DomainEvent → EventBus → Handlers → SideEffects
+     CodetoreumEvent → EventBus → Handlers → SideEffects
   4. Adds to documentation/architecture/infrastructure/event-sourcing.md
   5. Commits: "Add event flow diagram to event sourcing documentation"
 ```

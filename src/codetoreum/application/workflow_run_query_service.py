@@ -18,6 +18,7 @@ from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.domain.pipeline_stage import StageStatus
 from codetoreum.domain.types import WorkItemId
 from codetoreum.domain.workflow import Workflow, WorkflowStatus
+from codetoreum.infrastructure.event_serialization import infer_aggregate_id_and_type
 from codetoreum.ports.exceptions import ResourceNotFoundError, WorkItemNotFoundError
 from codetoreum.ports.input.workflow_run_query import (
     IWorkflowRunQueryPort,
@@ -878,14 +879,15 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
             Dictionary with event data
         """
         base = event.to_dict()
+
+        # Use canonical aggregate inference logic
+        aggregate_id, aggregate_type = infer_aggregate_id_and_type(event)
+
         return {
             "id": str(event.event_id),
             "event_type": event.event_type,
-            "aggregate_id": getattr(event, "work_item_id", None)
-            or getattr(event, "workflow_id", None)
-            or getattr(event, "execution_id", None)
-            or event.event_id,
-            "aggregate_type": type(event).__name__.replace("Event", ""),
+            "aggregate_id": aggregate_id,
+            "aggregate_type": aggregate_type,
             "timestamp": event.timestamp,
             "data": {
                 k: v for k, v in base.items() if k not in {"event_id", "type", "timestamp", "source", "correlation_id"}

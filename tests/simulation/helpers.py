@@ -1,64 +1,20 @@
 """Test helpers and utilities for simulation testing."""
 
 import asyncio
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
 from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events import CodetoreumEvent, now_iso
 from codetoreum.infrastructure.simulation import SimulationRunner
 
 
-class EventBuilder:
-    """Builder for creating domain events in tests."""
+@dataclass(frozen=True)
+class SimTestEvent(CodetoreumEvent):
+    """Test event for simulation testing."""
 
-    def __init__(self):
-        """Initialize event builder."""
-        self.aggregate_id = "test-aggregate"
-        self.aggregate_type = "TestAggregate"
-        self.event_type = "TestEvent"
-        self.payload: dict[str, Any] = {}
-
-    def with_aggregate_id(self, aggregate_id: str) -> "EventBuilder":
-        """Set aggregate ID."""
-        self.aggregate_id = aggregate_id
-        return self
-
-    def with_aggregate_type(self, aggregate_type: str) -> "EventBuilder":
-        """Set aggregate type."""
-        self.aggregate_type = aggregate_type
-        return self
-
-    def with_event_type(self, event_type: str) -> "EventBuilder":
-        """Set event type."""
-        self.event_type = event_type
-        return self
-
-    def with_payload(self, payload: dict[str, Any]) -> "EventBuilder":
-        """Set payload."""
-        self.payload = payload
-        return self
-
-    def with_payload_item(self, key: str, value: Any) -> "EventBuilder":
-        """Add item to payload."""
-        self.payload[key] = value
-        return self
-
-    def build(self) -> DomainEvent:
-        """Build the event."""
-        # Create a dynamic subclass with the desired event_type name
-        # This ensures the event_type is set correctly during initialization
-        EventClass = type(
-            self.event_type,
-            (DomainEvent,),
-            {},
-        )
-        event = EventClass(
-            aggregate_id=self.aggregate_id,
-            aggregate_type=self.aggregate_type,
-            payload=self.payload,
-        )
-        return event
+    detail: str = ""
 
 
 class AssertionHelpers:
@@ -208,125 +164,22 @@ class AssertionHelpers:
 
 
 class ScenarioHelpers:
-    """Helper methods for common scenario patterns."""
+    """Helper methods for common scenario patterns.
 
-    @staticmethod
-    async def simulate_workflow_execution(
-        runner: SimulationRunner,
-        work_item_id: str,
-        stages: list[dict[str, Any]],
-    ) -> None:
-        """
-        Simulate a complete workflow execution.
+    NOTE: simulate_workflow_execution() and simulate_review_cycle() were
+    removed in the transition from DomainEvent to CodetoreumEvent. These
+    methods used EventBuilder which is incompatible with immutable frozen
+    dataclasses. They can be rewritten using real domain events from the
+    catalog (e.g., WorkflowStartedEvent, ExecutionCompletedEvent) if needed.
+    """
 
-        Args:
-            runner: Simulation runner
-            work_item_id: Work item ID
-            stages: List of stage configurations
-                    Each stage: {"agent_id": str, "duration_minutes": int}
-        """
-        # Start workflow
-        event = (
-            EventBuilder()
-            .with_aggregate_id(work_item_id)
-            .with_aggregate_type("WorkItem")
-            .with_event_type("WorkflowStarted")
-            .with_payload_item("workflow_id", "test-workflow")
-            .build()
-        )
-        runner.capture_event(event)
-
-        # Execute each stage
-        for i, stage in enumerate(stages):
-            agent_id = stage["agent_id"]
-            duration = timedelta(minutes=stage.get("duration_minutes", 5))
-
-            # Start execution
-            await runner.advance_time(timedelta(minutes=1))
-
-            exec_id = f"exec-{i + 1}"
-            event = (
-                EventBuilder()
-                .with_aggregate_id(exec_id)
-                .with_aggregate_type("AgentExecution")
-                .with_event_type("AgentExecutionStarted")
-                .with_payload_item("agent_id", agent_id)
-                .with_payload_item("work_item_id", work_item_id)
-                .build()
-            )
-            runner.capture_event(event)
-
-            # Complete execution
-            await runner.advance_time(duration)
-
-            event = (
-                EventBuilder()
-                .with_aggregate_id(exec_id)
-                .with_aggregate_type("AgentExecution")
-                .with_event_type("AgentExecutionCompleted")
-                .with_payload_item("agent_id", agent_id)
-                .with_payload_item("status", "completed")
-                .build()
-            )
-            runner.capture_event(event)
-
-        # Complete workflow
-        event = (
-            EventBuilder()
-            .with_aggregate_id(work_item_id)
-            .with_aggregate_type("WorkItem")
-            .with_event_type("WorkflowCompleted")
-            .with_payload_item("total_stages", len(stages))
-            .build()
-        )
-        runner.capture_event(event)
-
-    @staticmethod
-    async def simulate_review_cycle(
-        runner: SimulationRunner,
-        work_item_id: str,
-        review_id: str,
-        approved: bool,
-        feedback: str | None = None,
-    ) -> None:
-        """
-        Simulate a review cycle.
-
-        Args:
-            runner: Simulation runner
-            work_item_id: Work item ID
-            review_id: Review ID
-            approved: Whether review is approved
-            feedback: Optional feedback message
-        """
-        await runner.advance_time(timedelta(minutes=2))
-
-        event_type = "ReviewApproved" if approved else "ReviewRejected"
-        payload = {
-            "work_item_id": work_item_id,
-            "decision": "approved" if approved else "rejected",
-        }
-
-        if feedback:
-            payload["feedback"] = feedback
-
-        event = (
-            EventBuilder()
-            .with_aggregate_id(review_id)
-            .with_aggregate_type("ReviewCycle")
-            .with_event_type(event_type)
-            .with_payload(payload)
-            .build()
-        )
-
-        runner.capture_event(event)
 
 
 def print_event_timeline(runner: SimulationRunner) -> None:
     """
     Print a timeline of captured events.
 
-    Supports both DomainEvent (with occurred_at) and CodetoreumEvent (with timestamp).
+    Supports CodetoreumEvent instances with timestamp field.
 
     Args:
         runner: Simulation runner

@@ -4,6 +4,8 @@ These tests use testcontainers to spin up a real Elasticsearch instance.
 """
 
 import asyncio
+import dataclasses
+from types import MappingProxyType
 from uuid import uuid4
 
 import pytest
@@ -174,7 +176,7 @@ def sample_workflow_template():
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_save_and_get_project_config(config_storage, sample_project_config):
+async def test_save_and_get_project_config(config_storage, sample_project_config, es_client):
     """Test saving and retrieving a project configuration."""
     # Save project config
     await config_storage.save_project_config(sample_project_config)
@@ -197,7 +199,7 @@ async def test_save_and_get_project_config(config_storage, sample_project_config
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_get_project_config_by_name(config_storage, sample_project_config):
+async def test_get_project_config_by_name(config_storage, sample_project_config, es_client):
     """Test retrieving a project configuration by name."""
     # Save project config
     await config_storage.save_project_config(sample_project_config)
@@ -214,7 +216,7 @@ async def test_get_project_config_by_name(config_storage, sample_project_config)
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_update_project_config_versioning(config_storage, sample_project_config):
+async def test_update_project_config_versioning(config_storage, sample_project_config, es_client):
     """Test that updating a project config increments version."""
     # Save initial version
     await config_storage.save_project_config(sample_project_config)
@@ -222,9 +224,14 @@ async def test_update_project_config_versioning(config_storage, sample_project_c
     # Wait for indexing
     await wait_for_elasticsearch_indexing(es_client)
 
-    # Update config
-    sample_project_config.tech_stacks["typescript"] = "5.0"
-    await config_storage.save_project_config(sample_project_config)
+    # Update config with new tech_stacks
+    updated_tech_stacks = dict(sample_project_config.tech_stacks)
+    updated_tech_stacks["typescript"] = "5.0"
+    updated_config = dataclasses.replace(
+        sample_project_config,
+        tech_stacks=MappingProxyType(updated_tech_stacks),
+    )
+    await config_storage.save_project_config(updated_config)
 
     # Wait for indexing
     await wait_for_elasticsearch_indexing(es_client)
@@ -246,7 +253,7 @@ async def test_get_nonexistent_project_raises_error(config_storage):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_save_and_get_agent_config(config_storage, sample_agent_config):
+async def test_save_and_get_agent_config(config_storage, sample_agent_config, es_client):
     """Test saving and retrieving an agent configuration."""
     # Save agent config
     await config_storage.save_agent_config(sample_agent_config)
@@ -268,7 +275,7 @@ async def test_save_and_get_agent_config(config_storage, sample_agent_config):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_save_and_get_pipeline_config(config_storage, sample_pipeline_config):
+async def test_save_and_get_pipeline_config(config_storage, sample_pipeline_config, es_client):
     """Test saving and retrieving a pipeline configuration."""
     # Save pipeline config
     await config_storage.save_pipeline_config(sample_pipeline_config)
@@ -289,7 +296,7 @@ async def test_save_and_get_pipeline_config(config_storage, sample_pipeline_conf
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_save_and_get_workflow_template(config_storage, sample_workflow_template):
+async def test_save_and_get_workflow_template(config_storage, sample_workflow_template, es_client):
     """Test saving and retrieving a workflow template."""
     # Save workflow template
     await config_storage.save_workflow_template(sample_workflow_template)
@@ -309,7 +316,7 @@ async def test_save_and_get_workflow_template(config_storage, sample_workflow_te
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_list_projects(config_storage, sample_project_config):
+async def test_list_projects(config_storage, sample_project_config, es_client):
     """Test listing all projects."""
     # Save multiple projects
     project1 = sample_project_config
@@ -337,7 +344,7 @@ async def test_list_projects(config_storage, sample_project_config):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_list_agents(config_storage, sample_agent_config):
+async def test_list_agents(config_storage, sample_agent_config, es_client):
     """Test listing agents for a project."""
     # Save multiple agents for same project
     agent1 = sample_agent_config
@@ -367,11 +374,11 @@ async def test_list_agents(config_storage, sample_agent_config):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_search_configs(config_storage, sample_project_config):
+async def test_search_configs(config_storage, sample_project_config, es_client):
     """Test searching configurations."""
-    # Save a project with unique name
-    project = sample_project_config
-    project.name = f"Unique Project Name {uuid4().hex[:8]}"
+    # Create a project with unique name
+    unique_name = f"Unique Project Name {uuid4().hex[:8]}"
+    project = dataclasses.replace(sample_project_config, name=unique_name)
     await config_storage.save_project_config(project)
 
     # Wait for indexing
@@ -386,16 +393,22 @@ async def test_search_configs(config_storage, sample_project_config):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_config_version_history(config_storage, sample_project_config):
+async def test_config_version_history(config_storage, sample_project_config, es_client):
     """Test configuration version history tracking."""
     # Save initial version
     await config_storage.save_project_config(sample_project_config)
     await wait_for_elasticsearch_indexing(es_client)
 
     # Update config multiple times
+    current_config = sample_project_config
     for i in range(3):
-        sample_project_config.tech_stacks[f"tool{i}"] = f"v{i}"
-        await config_storage.save_project_config(sample_project_config)
+        updated_tech_stacks = dict(current_config.tech_stacks)
+        updated_tech_stacks[f"tool{i}"] = f"v{i}"
+        current_config = dataclasses.replace(
+            current_config,
+            tech_stacks=MappingProxyType(updated_tech_stacks),
+        )
+        await config_storage.save_project_config(current_config)
         await wait_for_elasticsearch_indexing(es_client)
 
     # Get version history
@@ -408,15 +421,20 @@ async def test_config_version_history(config_storage, sample_project_config):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_get_specific_config_version(config_storage, sample_project_config):
+async def test_get_specific_config_version(config_storage, sample_project_config, es_client):
     """Test retrieving a specific version of a configuration."""
     # Save initial version
     await config_storage.save_project_config(sample_project_config)
     await wait_for_elasticsearch_indexing(es_client)
 
     # Update config
-    sample_project_config.tech_stacks["new_tool"] = "1.0"
-    await config_storage.save_project_config(sample_project_config)
+    updated_tech_stacks = dict(sample_project_config.tech_stacks)
+    updated_tech_stacks["new_tool"] = "1.0"
+    updated_config = dataclasses.replace(
+        sample_project_config,
+        tech_stacks=MappingProxyType(updated_tech_stacks),
+    )
+    await config_storage.save_project_config(updated_config)
     await wait_for_elasticsearch_indexing(es_client)
 
     # Get version 1
@@ -428,7 +446,7 @@ async def test_get_specific_config_version(config_storage, sample_project_config
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_delete_project_config(config_storage, sample_project_config):
+async def test_delete_project_config(config_storage, sample_project_config, es_client):
     """Test deleting a project configuration."""
     # Save project
     await config_storage.save_project_config(sample_project_config)
@@ -451,7 +469,7 @@ async def test_delete_project_config(config_storage, sample_project_config):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_delete_agent_config(config_storage, sample_agent_config):
+async def test_delete_agent_config(config_storage, sample_agent_config, es_client):
     """Test deleting an agent configuration."""
     # Save agent
     await config_storage.save_agent_config(sample_agent_config)
@@ -468,7 +486,7 @@ async def test_delete_agent_config(config_storage, sample_agent_config):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_exists_returns_true_for_existing_project(config_storage, sample_project_config):
+async def test_exists_returns_true_for_existing_project(config_storage, sample_project_config, es_client):
     """Test that exists() returns True for existing project."""
     # Save project
     await config_storage.save_project_config(sample_project_config)
@@ -487,7 +505,7 @@ async def test_exists_returns_false_for_nonexistent_project(config_storage):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_concurrent_updates_increment_versions(config_storage, sample_project_config):
+async def test_concurrent_updates_increment_versions(config_storage, sample_project_config, es_client):
     """Test that concurrent updates properly increment versions."""
     # Save initial version
     await config_storage.save_project_config(sample_project_config)
@@ -496,8 +514,13 @@ async def test_concurrent_updates_increment_versions(config_storage, sample_proj
     # Perform multiple updates
     async def update_config(field_name: str):
         config = await config_storage.get_project_config(sample_project_config.id)
-        config.tech_stacks[field_name] = "1.0"
-        await config_storage.save_project_config(config)
+        updated_tech_stacks = dict(config.tech_stacks)
+        updated_tech_stacks[field_name] = "1.0"
+        updated_config = dataclasses.replace(
+            config,
+            tech_stacks=MappingProxyType(updated_tech_stacks),
+        )
+        await config_storage.save_project_config(updated_config)
 
     # Run updates sequentially (concurrent updates would need optimistic locking)
     await update_config("tool1")
@@ -510,3 +533,54 @@ async def test_concurrent_updates_increment_versions(config_storage, sample_proj
     # Check final version
     final = await config_storage.get_project_config(sample_project_config.id)
     assert final.version >= 4  # Initial + 3 updates
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_initialize_with_existing_indices_is_idempotent(es_client):
+    """Test that initializing with existing indices doesn't fail (idempotent behavior)."""
+    # Create and initialize first storage instance
+    storage1 = ElasticsearchConfigStorage(
+        es_client=es_client,
+        create_index_templates=True,
+        shard_count=1,
+        replica_count=0,
+    )
+    await storage1.initialize()
+
+    # Wait for indices to be ready
+    async def indices_ready():
+        try:
+            health = await es_client.cluster.health()
+            return health.get("active_shards", 0) > 0
+        except Exception:
+            return False
+
+    await wait_for_condition(indices_ready, timeout=10.0)
+
+    # Create and initialize a second storage instance with the same indices
+    # This should not fail even though indices already exist
+    storage2 = ElasticsearchConfigStorage(
+        es_client=es_client,
+        create_index_templates=True,
+        shard_count=1,
+        replica_count=0,
+    )
+
+    # This should succeed without raising any errors
+    await storage2.initialize()
+
+    # Verify indices exist and are accessible
+    indices_exist = await es_client.indices.exists(
+        index=[
+            storage2.INDEX_PROJECTS,
+            storage2.INDEX_AGENTS,
+            storage2.INDEX_PIPELINES,
+            storage2.INDEX_WORKFLOWS,
+            storage2.INDEX_HISTORY,
+        ]
+    )
+    assert indices_exist
+
+    await storage1.close()
+    await storage2.close()

@@ -873,25 +873,31 @@ The Repair Cycle context provides types and value objects for automated test-fix
 The Project Context provides project-level configuration and state management.
 
 ```python
-class ProjectContextCreated(DomainEvent):
+@dataclass(frozen=True)
+class ProjectContextCreatedEvent(CodetoreumEvent):
     """Emitted when project context is created."""
-    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectContext", payload=payload, **kwargs)
+    project_id: str = ""
+    name: str = ""
 
-class ProjectTestConfigUpdated(DomainEvent):
+@dataclass(frozen=True)
+class ProjectTestConfigUpdatedEvent(CodetoreumEvent):
     """Emitted when test configuration is updated."""
-    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectContext", payload=payload, **kwargs)
+    project_id: str = ""
+    test_command: str = ""
+    test_timeout: int = 0
 
-class ProjectDockerConfigUpdated(DomainEvent):
+@dataclass(frozen=True)
+class ProjectDockerConfigUpdatedEvent(CodetoreumEvent):
     """Emitted when Docker configuration is updated."""
-    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectContext", payload=payload, **kwargs)
+    project_id: str = ""
+    image: str = ""
 
-class ProjectWorkflowMappingAdded(DomainEvent):
+@dataclass(frozen=True)
+class ProjectWorkflowMappingAddedEvent(CodetoreumEvent):
     """Emitted when workflow mapping is added."""
-    def __init__(self, aggregate_id: str, payload: dict[str, Any], **kwargs: Any):
-        super().__init__(aggregate_id=aggregate_id, aggregate_type="ProjectContext", payload=payload, **kwargs)
+    project_id: str = ""
+    column_name: str = ""
+    workflow_stage: str = ""
 
 @dataclass
 class ProjectContext:

@@ -16,8 +16,9 @@ from codetoreum.adapters.primary.websocket_adapter import (
     WebSocketConfig,
 )
 from codetoreum.domain.events import (
-    ExecutionStarted,
-    WorkItemCreated,
+    ExecutionStartedEvent,
+    WorkItemCreatedEvent,
+    now_iso,
 )
 from codetoreum.infrastructure.observability.websocket_instrumentation import (
     WebSocketMessageTracer,
@@ -349,10 +350,14 @@ def test_message_tracer_link_to_event_trace_context():
             metadata["traceparent"] = trace_data.to_traceparent()
 
     # Create event with trace context in metadata
-    event = ExecutionStarted(
-        aggregate_id="exec-123",
-        payload={"started_at": "2024-01-01T00:00:00Z"},
-        metadata=metadata if metadata else None,
+    event = ExecutionStartedEvent(
+        type="execution.started",
+        timestamp="2024-01-01T00:00:00Z",
+        source="test",
+        correlation_id=metadata.get("traceparent") if metadata else None,
+        execution_id="exec-123",
+        work_item_id="work-item-1",
+        agent_id="agent-1",
     )
 
     # Start and link message span
@@ -401,9 +406,13 @@ def test_websocket_adapter_subscription_matches_event_no_filters():
     )
 
     # Any event should match
-    event = ExecutionStarted(
-        aggregate_id="exec-1",
-        payload={"started_at": "2024-01-01T00:00:00Z"},
+    event = ExecutionStartedEvent(
+        type="execution.started",
+        timestamp="2024-01-01T00:00:00Z",
+        source="test",
+        execution_id="exec-1",
+        work_item_id="work-item-1",
+        agent_id="agent-1",
     )
 
     assert adapter._subscription_matches_event(subscription, event)
@@ -416,43 +425,33 @@ def test_websocket_adapter_subscription_matches_event_by_type():
     # Create subscription with event type filter
     subscription = EventFilter(
         subscription_type=SubscriptionType.ALL_EVENTS,
-        event_types=["ExecutionStarted", "ExecutionCompleted"],
+        event_types=["ExecutionStartedEvent", "ExecutionCompletedEvent"],
     )
 
     # Matching event
-    event1 = ExecutionStarted(
-        aggregate_id="exec-1",
-        payload={"started_at": "2024-01-01T00:00:00Z"},
+    event1 = ExecutionStartedEvent(
+        type="execution.started",
+        timestamp="2024-01-01T00:00:00Z",
+        source="test",
+        execution_id="exec-1",
+        work_item_id="work-item-1",
+        agent_id="agent-1",
     )
 
     assert adapter._subscription_matches_event(subscription, event1)
 
     # Non-matching event
-    event2 = WorkItemCreated(
-        aggregate_id="item-1",
-        payload={"url": "https://github.com/org/repo/issues/1"},
+    event2 = WorkItemCreatedEvent(
+        type="workitem.created",
+        timestamp="2024-01-01T00:00:00Z",
+        source="test",
+        work_item_id="item-1",
+        project_id="proj-1",
+        title="Issue #1",
+        external_url="https://github.com/org/repo/issues/1",
     )
 
     assert not adapter._subscription_matches_event(subscription, event2)
-
-
-def test_websocket_adapter_subscription_matches_event_by_work_item():
-    """Test subscription matching by work item ID."""
-    adapter = WebSocketAdapter()
-
-    # Create subscription filtered by work item
-    subscription = EventFilter(
-        subscription_type=SubscriptionType.ALL_EVENTS,
-        work_item_id="item-999",
-    )
-
-    # Event that doesn't have work_item_id attribute - should match (no filter contradiction)
-    event1 = ExecutionStarted(
-        aggregate_id="exec-1",
-        payload={"started_at": "2024-01-01T00:00:00Z"},
-    )
-
-    assert adapter._subscription_matches_event(subscription, event1)
 
 
 def test_websocket_adapter_subscription_matches_event_combined_filters():
@@ -462,21 +461,30 @@ def test_websocket_adapter_subscription_matches_event_combined_filters():
     # Create subscription with multiple filters
     subscription = EventFilter(
         subscription_type=SubscriptionType.ALL_EVENTS,
-        event_types=["ExecutionStarted"],
+        event_types=["ExecutionStartedEvent"],
     )
 
     # Event matching event type filter
-    event1 = ExecutionStarted(
-        aggregate_id="exec-1",
-        payload={"started_at": "2024-01-01T00:00:00Z"},
+    event1 = ExecutionStartedEvent(
+        type="execution.started",
+        timestamp="2024-01-01T00:00:00Z",
+        source="test",
+        execution_id="exec-1",
+        work_item_id="work-item-1",
+        agent_id="agent-1",
     )
 
     assert adapter._subscription_matches_event(subscription, event1)
 
     # Event with wrong event type (WorkItemCreated)
-    event2 = WorkItemCreated(
-        aggregate_id="item-1",
-        payload={"url": "https://github.com/org/repo/issues/1"},
+    event2 = WorkItemCreatedEvent(
+        type="workitem.created",
+        timestamp="2024-01-01T00:00:00Z",
+        source="test",
+        work_item_id="item-1",
+        project_id="proj-1",
+        title="Issue #1",
+        external_url="https://github.com/org/repo/issues/1",
     )
 
     assert not adapter._subscription_matches_event(subscription, event2)
@@ -524,9 +532,13 @@ async def test_websocket_instrumentation_end_to_end():
     message_tracer.end_message_span(sub_span, success=True)
 
     # Simulate event delivery
-    event = ExecutionStarted(
-        aggregate_id="exec-1",
-        payload={"started_at": "2024-01-01T00:00:00Z"},
+    event = ExecutionStartedEvent(
+        type="execution.started",
+        timestamp="2024-01-01T00:00:00Z",
+        source="test",
+        execution_id="exec-1",
+        work_item_id="work-item-1",
+        agent_id="agent-1",
     )
 
     event_span = message_tracer.start_event_delivery_span(

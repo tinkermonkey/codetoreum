@@ -7,9 +7,6 @@ from typing import Any
 
 from codetoreum.domain.events.adapter_events import CodetoreumEvent
 
-# Union type accepted by event store methods
-AnyDomainEvent = CodetoreumEvent | CodetoreumEvent
-
 # ============================================================================
 # Port Interface
 # ============================================================================

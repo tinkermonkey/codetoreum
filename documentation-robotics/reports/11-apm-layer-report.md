@@ -493,4 +493,4 @@ OTLP exporter configuration for Jaeger integration with sampling and resource at
 
 ---
 
-Generated: 2026-05-09T09:27:22.725Z | Model Version: 0.1.0
+Generated: 2026-05-11T22:29:46.171Z | Model Version: 0.1.0

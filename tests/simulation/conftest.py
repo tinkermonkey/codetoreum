@@ -13,7 +13,7 @@ from codetoreum.adapters.testing.in_memory_metrics_adapter import (
 )
 from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
 from codetoreum.adapters.testing.mock_notifier_adapter import MockNotifierAdapter
-from codetoreum.domain.events import WorkItemColumnChanged
+from codetoreum.domain.events import WorkItemColumnChangedEvent, now_iso
 from codetoreum.infrastructure.simulation import (
     SimulationClock,
     SimulationConfig,
@@ -127,8 +127,8 @@ def create_column_changed_event(
     from_column: str,
     to_column: str,
     moved_by: str = "human",
-) -> WorkItemColumnChanged:
-    """Helper to create a column changed event with proper payload dict.
+) -> WorkItemColumnChangedEvent:
+    """Helper to create a column changed event.
 
     Args:
         work_item_id: ID of the work item
@@ -139,18 +139,18 @@ def create_column_changed_event(
         moved_by: Who moved the item (default: "human")
 
     Returns:
-        WorkItemColumnChanged event with proper payload
+        WorkItemColumnChangedEvent with proper fields
     """
-    return WorkItemColumnChanged(
-        aggregate_id=work_item_id,
-        payload={
-            "work_item_id": work_item_id,
-            "project_id": project_id,
-            "board_id": board_id,
-            "from_column": from_column,
-            "to_column": to_column,
-            "moved_by": moved_by,
-        },
+    return WorkItemColumnChangedEvent(
+        type="workitem.column_changed",
+        timestamp=now_iso(),
+        source="test",
+        work_item_id=work_item_id,
+        project_id=project_id,
+        board_id=board_id,
+        from_column=from_column,
+        to_column=to_column,
+        moved_by=moved_by,
     )
 
 

@@ -4,6 +4,7 @@ Events REST API Router
 Provides REST endpoints for historical event queries and event replay.
 """
 
+import logging
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -15,7 +16,10 @@ from codetoreum.config import (
     EVENTS_DEFAULT_PAGE_SIZE,
     EVENTS_MAX_PAGE_SIZE,
 )
+from codetoreum.infrastructure.event_serialization import infer_aggregate_id_and_type
 from codetoreum.ports.output.event_store import IEventStore
+
+logger = logging.getLogger(__name__)
 
 # ============================================================================
 # DTOs (Data Transfer Objects)
@@ -175,11 +179,30 @@ def create_events_router(
 
             # Filter by aggregate type if specified
             if aggregate_type:
-                domain_events = [e for e in domain_events if getattr(e, "aggregate_type", None) == aggregate_type]
+                domain_events = [e for e in domain_events if infer_aggregate_id_and_type(e)[1] == aggregate_type]
 
             # Filter by time range
             if end_time:
-                domain_events = [e for e in domain_events if getattr(e, "occurred_at", None) <= end_time]
+                filtered_events = []
+                for e in domain_events:
+                    occurred_at = getattr(e, "occurred_at", None)
+                    if occurred_at is not None:
+                        try:
+                            if occurred_at <= end_time:
+                                filtered_events.append(e)
+                        except TypeError as te:
+                            logger.warning(
+                                "Failed to compare timestamp for event %s: %s",
+                                getattr(e, "event_id", "unknown"),
+                                te,
+                                exc_info=True,
+                            )
+                    else:
+                        logger.debug(
+                            "Event %s has no occurred_at timestamp, skipping end_time filter",
+                            getattr(e, "event_id", "unknown"),
+                        )
+                domain_events = filtered_events
 
             # Apply pagination
             total_count = len(domain_events)
@@ -188,13 +211,14 @@ def create_events_router(
             # Convert to DTOs
             for event in domain_events:
                 event_dict = event.to_dict() if hasattr(event, "to_dict") else event.__dict__
+                inferred_aggregate_id, inferred_aggregate_type = infer_aggregate_id_and_type(event)
                 events.append(
                     EventDTO(
                         event_id=str(event_dict.get("event_id", "")),
                         event_type=event_dict.get("event_type", type(event).__name__),
                         event_version=event_dict.get("event_version", 1),
-                        aggregate_id=event_dict.get("aggregate_id", ""),
-                        aggregate_type=event_dict.get("aggregate_type", ""),
+                        aggregate_id=str(inferred_aggregate_id),
+                        aggregate_type=inferred_aggregate_type,
                         occurred_at=event_dict.get("occurred_at", datetime.now(UTC)),
                         correlation_id=(
                             str(event_dict.get("correlation_id")) if event_dict.get("correlation_id") else None
@@ -214,10 +238,36 @@ def create_events_router(
                 has_next=(offset + limit) < total_count,
             )
 
+        except HTTPException:
+            raise
+        except ValueError as ve:
+            logger.warning(
+                "Validation error in events query: %s",
+                ve,
+                exc_info=True,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid query parameters: {ve!s}",
+            )
+        except KeyError as ke:
+            logger.warning(
+                "Missing required field in event query: %s",
+                ke,
+                exc_info=True,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Missing required field: {ke!s}",
+            )
         except Exception as e:
+            logger.error(
+                "Unexpected error querying events",
+                exc_info=True,
+            )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to query events: {e!s}",
+                detail="Failed to query events",
             )
 
     @router.post(

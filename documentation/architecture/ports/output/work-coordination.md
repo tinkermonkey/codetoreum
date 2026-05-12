@@ -54,7 +54,7 @@ class IWorkItemService(ABC):
         pass
 
     @abstractmethod
-    async def emit_work_item_event(self, event: DomainEvent) -> None:
+    async def emit_work_item_event(self, event: CodetoreumEvent) -> None:
         """Emit domain event for work item state change."""
         pass
 ```
@@ -116,7 +116,7 @@ class IBranchResolutionService(ABC):
 | `change_status()` | `item_id, new_status` | `WorkItem` | Change work item status |
 | `assign_to_agent()` | `item_id, agent_id` | `WorkItem` | Assign to agent |
 | `add_label()` | `item_id, label` | `WorkItem` | Add label |
-| `emit_work_item_event()` | `event: DomainEvent` | `None` | Emit event |
+| `emit_work_item_event()` | `event: CodetoreumEvent` | `None` | Emit event |
 
 ### IBranchResolutionService Methods
 

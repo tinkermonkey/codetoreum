@@ -11,9 +11,9 @@ motivation.constraint.domain-layer-zero-external-dependencies:
     this boundary breaks the hexagonal architecture guarantee."
   attributes:
     constraintType: technical
-    documentation: Enforced by architecture review. ~95 domain model classes and 165
-      event classes must remain dependency-free. External interactions only via
-      port interfaces in ports/output/.
+    documentation: Enforced by architecture review. ~95 domain model classes and 151
+      CodetoreumEvent subclasses must remain dependency-free. External
+      interactions only via port interfaces in ports/output/.
   source_reference:
     provenance: extracted
     locations:
@@ -61,13 +61,14 @@ motivation.constraint.domain-events-must-be-immutable:
     occurred."
   attributes:
     constraintType: technical
-    documentation: Enforced via @dataclass(frozen=True) on all 165 event classes in
-      domain/events/. Serialization support is provided without mutation.
+    documentation: Enforced via @dataclass(frozen=True) on all 151 CodetoreumEvent
+      subclasses in domain/events/. Serialization support is provided without
+      mutation.
   source_reference:
     provenance: extracted
     locations:
       - file: src/codetoreum/domain/events/
-        symbol: DomainEvent
+        symbol: CodetoreumEvent
   metadata:
     created_at: 2026-05-08T20:44:43.357Z
     updated_at: 2026-05-08T20:44:43.357Z

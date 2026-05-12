@@ -8,7 +8,7 @@ from codetoreum.application.review_service import (
 )
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType
 from codetoreum.domain.agent_execution import AgentExecution
-from codetoreum.domain.events import DomainEvent
+from codetoreum.domain.events import CodetoreumEvent
 from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.review_cycle import ReviewDecision, ReviewStatus
 from codetoreum.ports.exceptions import EventStoreError
@@ -123,7 +123,7 @@ async def test_create_review_cycle(review_service, maker_agent, reviewer_agent, 
 
     # Verify events were persisted
     assert event_store.get_total_event_count() == 1
-    assert event_store.get_all_events_list()[0].aggregate_type == "ReviewCycle"
+    assert event_store.get_all_events_list()[0].event_type == "ReviewCycleCreatedEvent"
 
 
 @pytest.mark.asyncio
@@ -541,7 +541,7 @@ class FailingEventStore(InMemoryEventStore):
         self.call_count = 0
         self.fail_on_call = fail_on_call
 
-    async def append(self, stream_id: str, events: list[DomainEvent], expected_version=None) -> None:
+    async def append(self, stream_id: str, events: list[CodetoreumEvent], expected_version=None) -> None:
         """Append event to store, failing on specified call."""
         self.call_count += 1
         if self.call_count == self.fail_on_call:

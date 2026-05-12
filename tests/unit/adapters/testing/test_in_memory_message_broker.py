@@ -6,36 +6,32 @@ dispatch, statistics tracking, and subscription management.
 """
 
 import asyncio
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
 
 from codetoreum.adapters.testing.in_memory_message_broker import InMemoryMessageBroker
+from codetoreum.domain.events import CodetoreumEvent, now_iso
 
 
-class DomainEvent:
-    def __init__(self, aggregate_id="", aggregate_type="", payload=None, **kwargs):
-        self.aggregate_id = aggregate_id
-        self.aggregate_type = aggregate_type
-        self.payload = payload or {}
-        self.event_id = str(uuid4())
-        self.occurred_at = datetime.now(UTC)
-        self.correlation_id = None
+@dataclass(frozen=True)
+class SampleEvent(CodetoreumEvent):
+    """Sample event for message broker testing."""
 
-    @property
-    def event_type(self):
-        return self.__class__.__name__
+    detail: str = ""
 
 
 def create_test_event(event_type: str = "TestEvent", payload: dict | None = None):
     """Helper to create test domain events."""
     if payload is None:
         payload = {"test": "data"}
-    return DomainEvent(
-        aggregate_id="test-aggregate",
-        aggregate_type="TestAggregate",
-        payload=payload,
+    return SampleEvent(
+        type="test.event",
+        timestamp=now_iso(),
+        source="test",
+        detail=event_type,
     )
 
 

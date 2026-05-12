@@ -328,7 +328,7 @@ All 23 application services and event handlers must achieve 90% code coverage us
 
 **Type**: `coveragerequirement`
 
-All domain model classes (95+), domain events (165 classes), and domain services must achieve 100% code coverage; no external dependencies allowed in domain layer
+All domain model classes (95+), domain events (151 CodetoreumEvent subclasses), and domain services must achieve 100% code coverage; no external dependencies allowed in domain layer
 
 #### Attributes
 
@@ -1062,7 +1062,7 @@ Simulation tests for board-driven workflow automation scenarios A, B, C, and D
 
 **Type**: `testcoveragemodel`
 
-Coverage model for domain layer: pure business logic (WorkItem, Agent, AgentExecution, Workflow, PipelineStage, ReviewCycle), domain events (165 classes), and domain services; targets 100% code coverage
+Coverage model for domain layer: pure business logic (WorkItem, Agent, AgentExecution, Workflow, PipelineStage, ReviewCycle), domain events (151 CodetoreumEvent subclasses), and domain services; targets 100% code coverage
 
 #### Attributes
 
@@ -2066,4 +2066,4 @@ Orchestrates test scenarios with assertion helpers (assert_event_occurred, asser
 
 ---
 
-Generated: 2026-05-09T09:28:54.064Z | Model Version: 0.1.0
+Generated: 2026-05-11T22:29:46.171Z | Model Version: 0.1.0

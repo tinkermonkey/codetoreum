@@ -243,7 +243,7 @@ testing.testcoveragemodel.domain-layer-unit-tests:
   name: Domain Layer Unit Tests
   description: "Coverage model for domain layer: pure business logic (WorkItem,
     Agent, AgentExecution, Workflow, PipelineStage, ReviewCycle), domain events
-    (165 classes), and domain services; targets 100% code coverage"
+    (151 CodetoreumEvent subclasses), and domain services; targets 100% code coverage"
   attributes:
     version: "1.0"
     application: codetoreum

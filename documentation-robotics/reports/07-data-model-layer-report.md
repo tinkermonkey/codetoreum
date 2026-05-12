@@ -267,7 +267,7 @@ Instance of an agent working on a work item, tracking execution lifecycle, logs,
 
 **Type**: `objectschema`
 
-Domain events for board and work item column transitions: WorkItemColumnChangedEvent (work_item_id, project_id, board_id, from_column, to_column, moved_by), WorkItemPositionChangedEvent (column_name, old_position, new_position), BoardReconciledEvent (columns_added, columns_removed, items_moved), ColumnSLAExceededEvent (column_name, elapsed_seconds, sla_threshold_seconds, entered_at). All extend BaseDomainEvent with event_id and occurred_at.
+Domain events for board and work item column transitions: WorkItemColumnChangedEvent (work_item_id, project_id, board_id, from_column, to_column, moved_by), WorkItemPositionChangedEvent (column_name, old_position, new_position), BoardReconciledEvent (columns_added, columns_removed, items_moved), ColumnSLAExceededEvent (column_name, elapsed_seconds, sla_threshold_seconds, entered_at). All extend CodetoreumEvent with event_id and occurred_at.
 
 #### Attributes
 
@@ -302,7 +302,7 @@ Board-level workflow template associating columns to pipeline stages with reconc
 
 **Type**: `objectschema`
 
-Domain events for branch resolution lifecycle: BranchResolvedEvent (project_id, issue_id, action, branch_name, confidence, reason, parent_issue_id, resolution_strategy), BranchReusedEvent (same fields for branch reuse decisions), BranchResolutionCreatedEvent (branch creation confirmation). All frozen dataclasses extending BaseDomainEvent.
+Domain events for branch resolution lifecycle: BranchResolvedEvent (project_id, issue_id, action, branch_name, confidence, reason, parent_issue_id, resolution_strategy), BranchReusedEvent (same fields for branch reuse decisions), BranchResolutionCreatedEvent (branch creation confirmation). All frozen dataclasses extending CodetoreumEvent.
 
 #### Attributes
 
@@ -1630,4 +1630,4 @@ Enum for agent workspace context type: ISSUE (issue-only context, no code change
 
 ---
 
-Generated: 2026-05-09T09:28:54.064Z | Model Version: 0.1.0
+Generated: 2026-05-11T22:29:46.171Z | Model Version: 0.1.0

@@ -57,7 +57,7 @@ class EventSerializer:
 
         raise ValueError(
             f"Cannot register {event_type_name}: not a CodetoreumEvent subclass. "
-            "Legacy DomainEvent classes are no longer supported."
+            "Only CodetoreumEvent subclasses can be registered."
         )
 
     @classmethod
@@ -65,11 +65,10 @@ class EventSerializer:
         """
         Serialize event to JSON string.
 
-        Handles both CodetoreumEvent (legacy) and CodetoreumEvent (modern) instances.
-        For CodetoreumEvent instances, delegates to event.to_dict().
+        Serializes CodetoreumEvent instances using their to_dict() method.
 
         Args:
-            event: Domain event to serialize (CodetoreumEvent or CodetoreumEvent)
+            event: Domain event to serialize (CodetoreumEvent subclass)
 
         Returns:
             JSON string representation
@@ -79,7 +78,6 @@ class EventSerializer:
         """
         try:
             if isinstance(event, CodetoreumEvent):
-                # Modern CodetoreumEvent: use its to_dict() method
                 data = {
                     "schema_version": cls.SCHEMA_VERSION,
                     "event_class": "CodetoreumEvent",
@@ -90,7 +88,7 @@ class EventSerializer:
 
             raise EventSerializationError(
                 f"serialize() requires CodetoreumEvent, got {type(event).__name__}. "
-                "Legacy DomainEvent objects are no longer supported."
+                "Only CodetoreumEvent instances can be serialized."
             )
 
         except EventSerializationError:
@@ -238,6 +236,43 @@ class _EventJSONDecoder(json.JSONDecoder):
         """Hook to process objects during decoding."""
         # Future: Handle custom type reconstruction
         return obj
+
+
+def infer_aggregate_id_and_type(event: CodetoreumEvent) -> tuple[Any, str]:
+    """
+    Infer aggregate_id and aggregate_type from an event.
+
+    Priority order for identifying the aggregate root:
+    - If has workflow_id -> (workflow_id, "Workflow")
+    - If has execution_id -> (execution_id, "AgentExecution")
+    - If has review_cycle_id -> (review_cycle_id, "ReviewCycle")
+    - If has work_item_id -> (work_item_id, "WorkItem")
+    - If has repair_cycle_id -> (repair_cycle_id, "RepairCycle")
+    - Otherwise -> (event_id, class_name without "Event" suffix)
+
+    Args:
+        event: Domain event
+
+    Returns:
+        Tuple of (aggregate_id, aggregate_type)
+    """
+    workflow_id = getattr(event, "workflow_id", None)
+    if workflow_id is not None and workflow_id:
+        return workflow_id, "Workflow"
+    execution_id = getattr(event, "execution_id", None)
+    if execution_id is not None and execution_id:
+        return execution_id, "AgentExecution"
+    review_cycle_id = getattr(event, "review_cycle_id", None)
+    if review_cycle_id is not None and review_cycle_id:
+        return review_cycle_id, "ReviewCycle"
+    work_item_id = getattr(event, "work_item_id", None)
+    if work_item_id is not None and work_item_id:
+        return work_item_id, "WorkItem"
+    repair_cycle_id = getattr(event, "repair_cycle_id", None)
+    if repair_cycle_id is not None and repair_cycle_id:
+        return repair_cycle_id, "RepairCycle"
+
+    return event.event_id, type(event).__name__.replace("Event", "")
 
 
 def auto_register_event_types() -> None:

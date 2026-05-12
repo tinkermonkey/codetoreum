@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from codetoreum.domain.events import BoardReconciled, WorkItemColumnChanged
+from codetoreum.domain.events import BoardReconciledEvent, WorkItemColumnChangedEvent, now_iso
 from codetoreum.infrastructure.dead_letter_queue import DeadLetterQueue, FailureReason
 from codetoreum.infrastructure.event_bus import EventBus, EventBusError
 
@@ -36,16 +36,16 @@ class TestEventBridgeErrorHandling:
         event_bus.publish = AsyncMock(side_effect=Exception("Network error"))
 
         # Create domain event
-        domain_event = WorkItemColumnChanged(
-            aggregate_id="work-item-1",
-            payload={
-                "work_item_id": "work-item-1",
-                "board_id": "board-1",
-                "project_id": "project-1",
-                "from_column": "Backlog",
-                "to_column": "In Progress",
-                "moved_by": "user-1",
-            },
+        domain_event = WorkItemColumnChangedEvent(
+            type="workitem.column_changed",
+            timestamp=now_iso(),
+            source="github",
+            work_item_id="work-item-1",
+            board_id="board-1",
+            project_id="project-1",
+            from_column="Backlog",
+            to_column="In Progress",
+            moved_by="human",
         )
 
         # Simulate the bridge's error handling
@@ -55,7 +55,7 @@ class TestEventBridgeErrorHandling:
             # This is what the bridge does: capture error and queue to DLQ
             event_id = await dead_letter_queue.add_failed_event(
                 event_type=domain_event.event_type,
-                event_data=domain_event.payload,
+                event_data=domain_event.to_dict(),
                 failure_reason=FailureReason.PROCESSING_ERROR,
                 error_message=str(e),
                 metadata={
@@ -155,15 +155,15 @@ class TestEventBridgeErrorHandling:
     async def test_board_reconciled_event_publishing_failure_is_queued(self, event_bus, dead_letter_queue):
         """Test that BoardReconciled event publishing failures are captured."""
         # Create board reconciled event
-        domain_event = BoardReconciled(
-            aggregate_id="board-1",
-            payload={
-                "board_id": "board-1",
-                "project_id": "project-1",
-                "columns_added": ["New Column"],
-                "columns_removed": [],
-                "orphaned_items": [],
-            },
+        domain_event = BoardReconciledEvent(
+            type="board.reconciled",
+            timestamp=now_iso(),
+            source="github",
+            board_id="board-1",
+            project_id="project-1",
+            columns_added=("New Column",),
+            columns_removed=(),
+            items_moved=0,
         )
 
         # Simulate publishing failure
@@ -175,7 +175,7 @@ class TestEventBridgeErrorHandling:
             # Simulate bridge's error handling
             await dead_letter_queue.add_failed_event(
                 event_type=domain_event.event_type,
-                event_data=domain_event.payload,
+                event_data=domain_event.to_dict(),
                 failure_reason=FailureReason.TRANSIENT_ERROR,
                 error_message=str(e),
                 metadata={"board_id": "board-1"},
@@ -186,7 +186,7 @@ class TestEventBridgeErrorHandling:
         assert stats.total_failed_events == 1
         events = dead_letter_queue.list_events()
         assert len(events) == 1
-        assert events[0].event_type == "BoardReconciled"
+        assert events[0].event_type == domain_event.event_type
 
     @pytest.mark.asyncio
     async def test_failed_events_preserve_metadata_for_debugging(self, dead_letter_queue):
@@ -319,8 +319,8 @@ class TestBridgeIntegration:
             assert len(events) >= 1
 
             # Find the WorkItemColumnChanged event
-            work_item_event = next((e for e in events if e.event_type == "WorkItemColumnChanged"), None)
-            assert work_item_event is not None, "WorkItemColumnChanged not found in DLQ"
+            work_item_event = next((e for e in events if e.event_type == "WorkItemColumnChangedEvent"), None)
+            assert work_item_event is not None, f"WorkItemColumnChangedEvent not found in DLQ. Available events: {[e.event_type for e in events]}"
             assert work_item_event.event_data["work_item_id"] == work_item_id
 
             # Verify error was classified as transient (bridge logic checks for ConnectionError)

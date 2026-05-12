@@ -5,7 +5,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from elasticsearch import AsyncElasticsearch, NotFoundError
+from elasticsearch import AsyncElasticsearch, BadRequestError, NotFoundError
 
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.output.config_store import (
@@ -138,10 +138,11 @@ class ElasticsearchConfigStorage(IConfigStore):
 
             if not exists:
                 # Create index with mappings and settings
-                await self.client.indices.create(
-                    index=index_name,
-                    body={
-                        "settings": {
+                # For elasticsearch-py 8.x, settings and mappings are passed as separate parameters
+                try:
+                    await self.client.indices.create(
+                        index=index_name,
+                        settings={
                             "number_of_shards": self.shard_count,
                             "number_of_replicas": self.replica_count,
                             "analysis": {
@@ -158,13 +159,21 @@ class ElasticsearchConfigStorage(IConfigStore):
                                 }
                             },
                         },
-                        "mappings": mappings,
-                    },
-                )
-                logger.info(f"Created index: {index_name}")
+                        mappings=mappings,
+                    )
+                    logger.info(f"Created index: {index_name}")
+                except BadRequestError as create_err:
+                    error_info = create_err.body.get("error", {}) if isinstance(create_err.body, dict) else {}
+                    error_type = error_info.get("type", "")
+
+                    if error_type == "resource_already_exists_exception":
+                        logger.info(f"Index {index_name} already exists, skipping creation")
+                    else:
+                        raise
             else:
                 # Update mappings if index already exists
-                await self.client.indices.put_mapping(index=index_name, body=mappings)
+                # For elasticsearch-py 8.x, pass mappings as direct parameter
+                await self.client.indices.put_mapping(index=index_name, properties=mappings.get("properties", {}))
                 logger.info(f"Updated mappings for index: {index_name}")
 
         except Exception as e:
@@ -187,16 +196,24 @@ class ElasticsearchConfigStorage(IConfigStore):
                 },
                 "github_org": {"type": "keyword"},
                 "github_repo": {"type": "keyword"},
-                "tech_stacks": {"type": "object", "enabled": True},
-                "pipelines": {"type": "nested"},
-                "testing": {"type": "object", "enabled": True},
-                "environment_variables": {"type": "object", "enabled": True},
-                "mounted_commands": {"type": "object", "enabled": True},
-                "mounted_subagents": {"type": "object", "enabled": True},
+                "tech_stacks": {"type": "object", "enabled": True, "dynamic": False},
+                "pipelines": {
+                    "type": "nested",
+                    "enabled": True,
+                    "dynamic": False,
+                    "properties": {
+                        "name": {"type": "keyword"},
+                        "stages": {"type": "keyword"},
+                    },
+                },
+                "testing": {"type": "object", "enabled": True, "dynamic": False},
+                "environment_variables": {"type": "object", "enabled": True, "dynamic": False},
+                "mounted_commands": {"type": "object", "enabled": True, "dynamic": False},
+                "mounted_subagents": {"type": "object", "enabled": True, "dynamic": False},
                 "created_at": {"type": "date"},
                 "updated_at": {"type": "date"},
                 "version": {"type": "integer"},
-                "metadata": {"type": "object", "enabled": True},
+                "metadata": {"type": "object", "enabled": True, "dynamic": False},
             }
         }
 
@@ -216,11 +233,11 @@ class ElasticsearchConfigStorage(IConfigStore):
                 "makes_code_changes": {"type": "boolean"},
                 "mcp_servers": {"type": "keyword"},
                 "capabilities": {"type": "keyword"},
-                "constraints": {"type": "object", "enabled": True},
+                "constraints": {"type": "object", "enabled": True, "dynamic": False},
                 "version": {"type": "integer"},
                 "created_at": {"type": "date"},
                 "updated_at": {"type": "date"},
-                "metadata": {"type": "object", "enabled": True},
+                "metadata": {"type": "object", "enabled": True, "dynamic": False},
             }
         }
 
@@ -235,12 +252,20 @@ class ElasticsearchConfigStorage(IConfigStore):
                     "analyzer": "config_analyzer",
                     "fields": {"keyword": {"type": "keyword"}},
                 },
-                "stages": {"type": "nested"},
+                "stages": {
+                    "type": "nested",
+                    "enabled": True,
+                    "dynamic": False,
+                    "properties": {
+                        "name": {"type": "keyword"},
+                        "agent": {"type": "keyword"},
+                    },
+                },
                 "triggers": {"type": "keyword"},
                 "version": {"type": "integer"},
                 "created_at": {"type": "date"},
                 "updated_at": {"type": "date"},
-                "metadata": {"type": "object", "enabled": True},
+                "metadata": {"type": "object", "enabled": True, "dynamic": False},
             }
         }
 
@@ -255,11 +280,19 @@ class ElasticsearchConfigStorage(IConfigStore):
                     "fields": {"keyword": {"type": "keyword"}},
                 },
                 "description": {"type": "text", "analyzer": "config_analyzer"},
-                "stages": {"type": "nested"},
+                "stages": {
+                    "type": "nested",
+                    "enabled": True,
+                    "dynamic": False,
+                    "properties": {
+                        "name": {"type": "keyword"},
+                        "agent": {"type": "keyword"},
+                    },
+                },
                 "version": {"type": "integer"},
                 "created_at": {"type": "date"},
                 "updated_at": {"type": "date"},
-                "metadata": {"type": "object", "enabled": True},
+                "metadata": {"type": "object", "enabled": True, "dynamic": False},
             }
         }
 
@@ -273,9 +306,9 @@ class ElasticsearchConfigStorage(IConfigStore):
                 "changed_at": {"type": "date"},
                 "changed_by": {"type": "keyword"},
                 "change_type": {"type": "keyword"},
-                "changes": {"type": "object", "enabled": True},
+                "changes": {"type": "object", "enabled": True, "dynamic": False},
                 "reason": {"type": "text"},
-                "snapshot": {"type": "object", "enabled": True},
+                "snapshot": {"type": "object", "enabled": True, "dynamic": False},
             }
         }
 
@@ -330,10 +363,8 @@ class ElasticsearchConfigStorage(IConfigStore):
         try:
             result = await self.client.search(
                 index=self.INDEX_PROJECTS,
-                body={
-                    "query": {"term": {"name.keyword": project_name}},
-                    "size": 1,
-                },
+                query={"term": {"name.keyword": project_name}},
+                size=1,
             )
 
             hits = result["hits"]["hits"]
@@ -408,7 +439,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             await self.client.index(
                 index=self.INDEX_PROJECTS,
                 id=config.id,
-                body=doc,
+                document=doc,
                 refresh=True,
             )
 
@@ -512,7 +543,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             await self.client.index(
                 index=self.INDEX_AGENTS,
                 id=doc_id,
-                body=doc,
+                document=doc,
                 refresh=True,
             )
 
@@ -546,17 +577,15 @@ class ElasticsearchConfigStorage(IConfigStore):
         try:
             result = await self.client.search(
                 index=self.INDEX_PIPELINES,
-                body={
-                    "query": {
-                        "bool": {
-                            "must": [
-                                {"term": {"project_id": project_id}},
-                                {"term": {"name.keyword": pipeline_name}},
-                            ]
-                        }
-                    },
-                    "size": 1,
+                query={
+                    "bool": {
+                        "must": [
+                            {"term": {"project_id": project_id}},
+                            {"term": {"name.keyword": pipeline_name}},
+                        ]
+                    }
                 },
+                size=1,
             )
 
             hits = result["hits"]["hits"]
@@ -629,7 +658,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             await self.client.index(
                 index=self.INDEX_PIPELINES,
                 id=config.id,
-                body=doc,
+                document=doc,
                 refresh=True,
             )
 
@@ -662,10 +691,8 @@ class ElasticsearchConfigStorage(IConfigStore):
         try:
             result = await self.client.search(
                 index=self.INDEX_WORKFLOWS,
-                body={
-                    "query": {"term": {"name.keyword": template_name}},
-                    "size": 1,
-                },
+                query={"term": {"name.keyword": template_name}},
+                size=1,
             )
 
             hits = result["hits"]["hits"]
@@ -698,25 +725,26 @@ class ElasticsearchConfigStorage(IConfigStore):
         try:
             # Set timestamps
             now = datetime.now(UTC)
-            if template.created_at is None:
-                template.created_at = now
-            template.updated_at = now
-
-            # Serialize template
-            doc = self._serialize_workflow(template)
+            created_at = template.created_at if template.created_at is not None else now
 
             # Try to get existing document to check version
             try:
                 existing = await self.client.get(index=self.INDEX_WORKFLOWS, id=template.id)
                 old_version = existing["_source"].get("version", 1)
-                template.version = old_version + 1
-                doc["version"] = template.version
+                new_version = old_version + 1
+                template = dataclasses.replace(
+                    template,
+                    created_at=created_at,
+                    updated_at=now,
+                    version=new_version,
+                )
+                doc = self._serialize_workflow(template)
 
                 # Save history
                 await self._save_history(
                     config_id=template.id,
                     config_type="workflow",
-                    version=template.version,
+                    version=new_version,
                     changed_by="system",
                     change_type="update",
                     changes={"updated_at": now.isoformat()},
@@ -725,8 +753,13 @@ class ElasticsearchConfigStorage(IConfigStore):
 
             except NotFoundError:
                 # New template
-                template.version = 1
-                doc["version"] = 1
+                template = dataclasses.replace(
+                    template,
+                    created_at=created_at,
+                    updated_at=now,
+                    version=1,
+                )
+                doc = self._serialize_workflow(template)
 
                 # Save history
                 await self._save_history(
@@ -743,7 +776,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             await self.client.index(
                 index=self.INDEX_WORKFLOWS,
                 id=template.id,
-                body=doc,
+                document=doc,
                 refresh=True,
             )
 
@@ -770,7 +803,8 @@ class ElasticsearchConfigStorage(IConfigStore):
         try:
             result = await self.client.search(
                 index=self.INDEX_PROJECTS,
-                body={"query": {"match_all": {}}, "size": 1000},
+                query={"match_all": {}},
+                size=1000,
             )
 
             projects = []
@@ -803,10 +837,8 @@ class ElasticsearchConfigStorage(IConfigStore):
         try:
             result = await self.client.search(
                 index=self.INDEX_AGENTS,
-                body={
-                    "query": {"term": {"project_id": project_id}},
-                    "size": 1000,
-                },
+                query={"term": {"project_id": project_id}},
+                size=1000,
             )
 
             agents = []
@@ -839,10 +871,8 @@ class ElasticsearchConfigStorage(IConfigStore):
         try:
             result = await self.client.search(
                 index=self.INDEX_PIPELINES,
-                body={
-                    "query": {"term": {"project_id": project_id}},
-                    "size": 1000,
-                },
+                query={"term": {"project_id": project_id}},
+                size=1000,
             )
 
             pipelines = []
@@ -949,7 +979,8 @@ class ElasticsearchConfigStorage(IConfigStore):
 
             result = await self.client.search(
                 index=",".join(indices),
-                body={"query": search_query, "size": 100},
+                query=search_query,
+                size=100,
             )
 
             configs = []
@@ -989,17 +1020,15 @@ class ElasticsearchConfigStorage(IConfigStore):
         try:
             result = await self.client.search(
                 index=self.INDEX_HISTORY,
-                body={
-                    "query": {
-                        "bool": {
-                            "must": [
-                                {"term": {"config_id": config_id}},
-                                {"term": {"version": version}},
-                            ]
-                        }
-                    },
-                    "size": 1,
+                query={
+                    "bool": {
+                        "must": [
+                            {"term": {"config_id": config_id}},
+                            {"term": {"version": version}},
+                        ]
+                    }
                 },
+                size=1,
             )
 
             hits = result["hits"]["hits"]
@@ -1036,11 +1065,9 @@ class ElasticsearchConfigStorage(IConfigStore):
         try:
             result = await self.client.search(
                 index=self.INDEX_HISTORY,
-                body={
-                    "query": {"term": {"config_id": config_id}},
-                    "sort": [{"changed_at": {"order": "desc"}}],
-                    "size": limit,
-                },
+                query={"term": {"config_id": config_id}},
+                sort=[{"changed_at": {"order": "desc"}}],
+                size=limit,
             )
 
             versions = []
@@ -1195,7 +1222,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             await self.client.index(
                 index=self.INDEX_HISTORY,
                 id=history_id,
-                body=doc,
+                document=doc,
                 refresh=True,
             )
 

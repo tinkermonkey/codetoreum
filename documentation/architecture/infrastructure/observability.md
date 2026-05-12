@@ -175,7 +175,7 @@ async def record_audit_event(
 
 ```python
 async def handle_failed_event(
-    event: DomainEvent,
+    event: CodetoreumEvent,
     handler_name: str,
     error: Exception,
     attempt_count: int,
