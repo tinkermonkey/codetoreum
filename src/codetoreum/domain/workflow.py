@@ -158,6 +158,7 @@ class Workflow:
             work_item_id=work_item_id,
             pipeline_id=template.id,
             stage_name=workflow.stages[0].name if workflow.stages else "",
+            project_id=project_id,
         )
         workflow._add_event(event)
 
