@@ -75,7 +75,6 @@ class RepairCycleTestEvent(CodetoreumEvent):
 class FallbackTestEvent(CodetoreumEvent):
     """Test event with no specific aggregate ID field (fallback case)."""
 
-    pass
 
 
 @pytest.fixture
