@@ -181,7 +181,7 @@ class ElasticsearchEventStore(IEventStore):
                 bulk_body.append(doc)
 
             # Execute bulk insert
-            response = await self.client.bulk(body=bulk_body, refresh=False)
+            response = await self.client.bulk(operations=bulk_body, refresh=False)
 
             # Check for errors
             if response.get("errors"):
@@ -947,7 +947,11 @@ class ElasticsearchEventStore(IEventStore):
 
         # Create template
         try:
-            await self.client.indices.put_index_template(name=template_name, body=template)
+            await self.client.indices.put_index_template(
+                name=template_name,
+                index_patterns=template["index_patterns"],
+                template=template["template"]
+            )
         except (ConnectionError, ConnectionTimeout, AuthenticationException) as e:
             # Infrastructure failure - propagate as EventStoreError
             msg = f"Failed to create index template: {e}"
