@@ -7,16 +7,13 @@ Tests coverage for:
 """
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
-from uuid import uuid4
+from datetime import datetime
 
 import pytest
 
 from codetoreum.adapters.testing import InMemoryEventStore
 from codetoreum.application.workflow_run_query_service import WorkflowRunQueryService
 from codetoreum.domain.events import CodetoreumEvent, now_iso
-from codetoreum.ports.output.event_store import IEventStore
-from codetoreum.ports.output.ticket_system import ITicketSystem
 
 
 @dataclass(frozen=True)
@@ -25,12 +22,20 @@ class WorkflowTestEvent(CodetoreumEvent):
 
     workflow_id: str = ""
 
+    def to_dict(self) -> dict:
+        base = super().to_dict()
+        return {**base, "workflow_id": self.workflow_id}
+
 
 @dataclass(frozen=True)
 class ExecutionTestEvent(CodetoreumEvent):
     """Test event with execution_id."""
 
     execution_id: str = ""
+
+    def to_dict(self) -> dict:
+        base = super().to_dict()
+        return {**base, "execution_id": self.execution_id}
 
 
 @dataclass(frozen=True)
@@ -39,12 +44,20 @@ class ReviewCycleTestEvent(CodetoreumEvent):
 
     review_cycle_id: str = ""
 
+    def to_dict(self) -> dict:
+        base = super().to_dict()
+        return {**base, "review_cycle_id": self.review_cycle_id}
+
 
 @dataclass(frozen=True)
 class WorkItemTestEvent(CodetoreumEvent):
     """Test event with work_item_id only."""
 
     work_item_id: str = ""
+
+    def to_dict(self) -> dict:
+        base = super().to_dict()
+        return {**base, "work_item_id": self.work_item_id}
 
 
 @dataclass(frozen=True)
@@ -53,12 +66,23 @@ class RepairCycleTestEvent(CodetoreumEvent):
 
     repair_cycle_id: str = ""
 
+    def to_dict(self) -> dict:
+        base = super().to_dict()
+        return {**base, "repair_cycle_id": self.repair_cycle_id}
+
 
 @dataclass(frozen=True)
 class FallbackTestEvent(CodetoreumEvent):
     """Test event with no specific aggregate ID field (fallback case)."""
 
     pass
+
+
+@pytest.fixture
+def query_service():
+    """Create a WorkflowRunQueryService instance with InMemoryEventStore and no ticket system."""
+    event_store = InMemoryEventStore()
+    return WorkflowRunQueryService(event_store, ticket_system=None)
 
 
 def create_event_with_id(event_class, aggregate_id: str, **kwargs):
@@ -244,60 +268,6 @@ class TestEventToDict:
     Also tests consistency with InMemoryEventStore._infer_aggregate_type()
     """
 
-    @pytest.fixture
-    def mock_ticket_system(self):
-        """Create a mock ticket system."""
-
-        class MockTicketSystem:
-            async def get_board(self, project_id: str):
-                pass
-
-            async def search_work_items(self, query: str):
-                pass
-
-        return MockTicketSystem()
-
-    @pytest.fixture
-    def mock_event_store(self):
-        """Create a mock event store."""
-
-        class MockEventStore:
-            async def get_events(self, stream_id: str, from_version: int = 0, to_version: int | None = None):
-                return []
-
-            async def get_events_since(self, since: datetime, stream_id: str | None = None):
-                return []
-
-            async def get_all_stream_ids(self, aggregate_type: str | None = None):
-                return []
-
-            async def get_events_by_type(
-                self, event_type: str, since: datetime | None = None, limit: int = 1000
-            ):
-                return []
-
-            async def get_events_by_correlation_id(self, correlation_id: str):
-                return []
-
-            async def query_streams_by_latest_event(
-                self,
-                aggregate_type: str,
-                event_type_filters: list[str] | None = None,
-                event_data_filters: dict | None = None,
-                sort_by: str = "timestamp",
-                sort_order: str = "desc",
-                offset: int = 0,
-                limit: int = 100,
-            ):
-                return [], 0
-
-        return MockEventStore()
-
-    @pytest.fixture
-    def query_service(self, mock_event_store, mock_ticket_system):
-        """Create a WorkflowRunQueryService instance."""
-        return WorkflowRunQueryService(mock_event_store, mock_ticket_system)
-
     def test_event_to_dict_workflow_id_branch(self, query_service):
         """Test converting event with workflow_id to dict."""
         event = create_event_with_id(WorkflowTestEvent, "workflow-123")
@@ -363,12 +333,16 @@ class TestEventToDict:
         assert "correlation_id" in result
         assert isinstance(result["data"], dict)
 
-    def test_event_to_dict_excludes_internal_fields(self, query_service):
-        """Test that internal fields are excluded from data dict."""
+    def test_event_to_dict_excludes_internal_fields_includes_custom_fields(self, query_service):
+        """Test that internal fields are excluded from data dict but custom fields are included."""
         event = create_event_with_id(WorkflowTestEvent, "workflow-123")
         result = query_service._event_to_dict(event)
 
-        # These fields should not be in the data section
+        # Custom fields should be in the data section
+        assert "workflow_id" in result["data"]
+        assert result["data"]["workflow_id"] == "workflow-123"
+
+        # Internal fields should not be in the data section
         assert "event_id" not in result["data"]
         assert "type" not in result["data"]
         assert "timestamp" not in result["data"]
@@ -378,57 +352,6 @@ class TestEventToDict:
 
 class TestAggregateInferenceConsistency:
     """Tests for consistency between _infer_aggregate_type() and _event_to_dict()."""
-
-    @pytest.fixture
-    def mock_ticket_system(self):
-        """Create a mock ticket system."""
-
-        class MockTicketSystem:
-            async def get_board(self, project_id: str):
-                pass
-
-        return MockTicketSystem()
-
-    @pytest.fixture
-    def mock_event_store(self):
-        """Create a mock event store."""
-
-        class MockEventStore:
-            async def get_events(self, stream_id: str, from_version: int = 0, to_version: int | None = None):
-                return []
-
-            async def get_events_since(self, since: datetime, stream_id: str | None = None):
-                return []
-
-            async def get_all_stream_ids(self, aggregate_type: str | None = None):
-                return []
-
-            async def get_events_by_type(
-                self, event_type: str, since: datetime | None = None, limit: int = 1000
-            ):
-                return []
-
-            async def get_events_by_correlation_id(self, correlation_id: str):
-                return []
-
-            async def query_streams_by_latest_event(
-                self,
-                aggregate_type: str,
-                event_type_filters: list[str] | None = None,
-                event_data_filters: dict | None = None,
-                sort_by: str = "timestamp",
-                sort_order: str = "desc",
-                offset: int = 0,
-                limit: int = 100,
-            ):
-                return [], 0
-
-        return MockEventStore()
-
-    @pytest.fixture
-    def query_service(self, mock_event_store, mock_ticket_system):
-        """Create a WorkflowRunQueryService instance."""
-        return WorkflowRunQueryService(mock_event_store, mock_ticket_system)
 
     def test_consistency_workflow_id(self, query_service):
         """Test that both methods agree on workflow_id inference."""
