@@ -58,7 +58,7 @@ async def test_full_workflow_event_audit_trail(
         event_store = adapters.event_store
         all_events = event_store.get_all_events_list()
         # Wait for WorkflowCompleted event
-        return any(e.event_type == "WorkflowCompleted" for e in all_events if e.aggregate_type == "Workflow")
+        return any(e.event_type == "WorkflowCompletedEvent" for e in all_events if e.aggregate_type == "Workflow")
 
     await assert_condition(
         workflow_events_ready, timeout=2.0, poll_interval=0.05, message="WorkflowCompleted event should be recorded"
@@ -92,9 +92,9 @@ async def test_full_workflow_event_audit_trail(
 
     # Must have all lifecycle events
     assert "WorkflowCreated" in event_types_in_order, f"WorkflowCreated missing. Events found: {event_types_in_order}"
-    assert "WorkflowStarted" in event_types_in_order, f"WorkflowStarted missing. Events found: {event_types_in_order}"
+    assert "WorkflowStartedEvent" in event_types_in_order, f"WorkflowStarted missing. Events found: {event_types_in_order}"
     assert (
-        "WorkflowCompleted" in event_types_in_order
+        "WorkflowCompletedEvent" in event_types_in_order
     ), f"WorkflowCompleted missing. Events found: {event_types_in_order}"
 
     # Stage advances — one per agent (architect, coder, tester = 3)
@@ -119,7 +119,7 @@ async def test_full_workflow_event_audit_trail(
     )
 
     # WorkflowCompleted must be last
-    assert event_types_in_order[-1] == "WorkflowCompleted", (
+    assert event_types_in_order[-1] == "WorkflowCompletedEvent", (
         f"Expected WorkflowCompleted as last event, got {event_types_in_order[-1]}. "
         f"Full sequence: {event_types_in_order}"
     )

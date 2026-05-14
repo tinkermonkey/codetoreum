@@ -36,14 +36,14 @@ class AssertionHelpers:
         """
         # Check workflow started
         runner.assert_event_occurred(
-            "WorkflowStarted",
+            "WorkflowStartedEvent",
             work_item_id,
             f"workflow_{work_item_id}_started",
         )
 
         # Check workflow completed
         runner.assert_event_occurred(
-            "WorkflowCompleted",
+            "WorkflowCompletedEvent",
             work_item_id,
             f"workflow_{work_item_id}_completed",
         )
@@ -52,7 +52,7 @@ class AssertionHelpers:
         if expected_stages is not None:
             events = runner.get_events_by_aggregate(work_item_id)
             execution_events = [
-                e for e in events if e.event_type in ["AgentExecutionStarted", "AgentExecutionCompleted"]
+                e for e in events if e.event_type in ["ExecutionStartedEvent", "ExecutionCompletedEvent"]
             ]
             runner.assert_true(
                 len(execution_events) >= expected_stages,
@@ -74,7 +74,7 @@ class AssertionHelpers:
             agent_id: Agent ID
             work_item_id: Work item ID (optional filter)
         """
-        events = runner.get_events_by_type("AgentExecutionCompleted")
+        events = runner.get_events_by_type("ExecutionCompletedEvent")
 
         matching = [
             e

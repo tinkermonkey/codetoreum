@@ -5,6 +5,7 @@
 The Simulation Implementation is a complete, working system that demonstrates all architecture tier port contracts using deterministic mock adapters and in-memory services. It is NOT a test harness or simplified version — it exercises the full work coordination pipeline with real domain logic, real application services, and real event flows.
 
 **Key characteristics:**
+
 - 54 total mock adapters (36 output port + 18 input port) implementing the same contracts as production
 - Domain layer, application services, and event flows identical to production
 - Deterministic responses (no randomness, configurable via YAML)
@@ -20,6 +21,7 @@ For comprehensive usage, implementation details, and testing guidance, refer to 
 📖 **[`tests/simulation/README.md`](../../../tests/simulation/README.md)** — Complete framework reference
 
 This file covers:
+
 - Framework overview and key features
 - Execution model (all services always active)
 - Bootstrap phases (6-phase wiring sequence)

@@ -15,7 +15,7 @@ from codetoreum.adapters.testing.mock_review_cycle_adapter import MockReviewCycl
 from codetoreum.application.event_handlers.repair_cycle_event_handler import (
     RepairCycleEventContext,
 )
-from codetoreum.domain.events import WorkItemColumnChanged
+from tests.simulation.test_event_helpers import WorkItemColumnChanged
 from codetoreum.domain.repair_cycle_types import (
     RepairTestRunConfig,
     RepairTestType,

@@ -23,8 +23,8 @@ import asyncio
 import logging
 from typing import cast
 
+import httpx
 import pytest
-from fastapi.testclient import TestClient
 
 from codetoreum.infrastructure.simulation.bootstrap import (
     SimulationApplicationBootstrap,
@@ -38,9 +38,9 @@ from codetoreum.ports.input.workflow_run_query import (
     WorkflowRunListResult,
     WorkflowRunPaginationParams,
     WorkflowRunSortField,
+    WorkflowRunStatus,
 )
 from codetoreum.ports.output.board_service import MovedByType
-from tests.simulation.e2e_client import SimulationE2EClient
 
 # ============================================================================
 # Fixtures
@@ -94,14 +94,24 @@ async def simulation_env():
 
 
 @pytest.fixture
-def e2e_client(simulation_env):
-    """Provide E2E test client with simulation capabilities."""
-    app = simulation_env["app"]
-    bootstrap = simulation_env["bootstrap"]
+async def simulation_bootstrap(simulation_env):
+    """Override conftest's simulation_bootstrap to reuse simulation_env's bootstrap.
 
-    client = SimulationE2EClient(app, bootstrap)
-    yield client
-    client.close()
+    Prevents the scenarios/conftest.py autouse seed_standard_agents fixture from
+    creating a second independent bootstrap, which would double background tasks
+    and cause teardown to hang.
+    """
+    return simulation_env["bootstrap"]
+
+
+@pytest.fixture
+async def http_client(simulation_env):
+    """Provide async HTTP test client."""
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=simulation_env["app"]),
+        base_url="http://test",
+    ) as client:
+        yield client
 
 
 # ============================================================================
@@ -109,37 +119,31 @@ def e2e_client(simulation_env):
 # ============================================================================
 
 
-async def _wait_for_completion(client: SimulationE2EClient, work_item_id: str, timeout: float = 10.0) -> bool:
-    """
-    Poll work item status until workflow completes or timeout.
-
-    Args:
-        client: E2E test client
-        work_item_id: Work item ID to monitor
-        timeout: Timeout in seconds
-
-    Returns:
-        True if workflow completed, False if timeout
-    """
+async def _wait_for_completion(query_service: IWorkflowRunQueryPort, work_item_id: str, timeout: float = 15.0) -> bool:
+    """Poll workflow runs until a completed run exists for the work item or timeout."""
     elapsed = 0.0
     interval = 0.1
+    pagination = WorkflowRunPaginationParams(
+        offset=0,
+        limit=10,
+        sort_by=WorkflowRunSortField.STARTED_AT,
+        sort_order=SortOrder.DESC,
+    )
 
     while elapsed < timeout:
         await asyncio.sleep(interval)
         elapsed += interval
 
         try:
-            work_item = client.get_work_item(work_item_id)
-            status = work_item.get("status", "")
-
-            # Workflow completed if work item reached final column
-            # Status can be lowercase or uppercase depending on the system
-            if status.upper() in ["DONE", "COMPLETED"]:
+            filters = WorkflowRunFilters(
+                work_item_id=work_item_id,
+                status=(WorkflowRunStatus.COMPLETED,),
+            )
+            result = await query_service.list_workflow_runs(filters, pagination)
+            if result.total_count > 0:
                 return True
         except Exception as e:
-            # Continue polling even if individual check fails
-            # This can happen if work item is temporarily unavailable
-            logging.debug(f"Failed to check work item status during polling: {e}")
+            logging.debug(f"Failed to check workflow run status during polling: {e}")
 
     return False
 
@@ -172,7 +176,7 @@ async def _get_workflow_run_id(query_service: IWorkflowRunQueryPort, work_item_i
 
 
 @pytest.mark.asyncio
-async def test_audit_endpoint_basic_smoke(e2e_client, simulation_env):
+async def test_audit_endpoint_basic_smoke(http_client, simulation_env):
     """
     Basic smoke test for audit endpoint.
 
@@ -194,60 +198,58 @@ async def test_audit_endpoint_basic_smoke(e2e_client, simulation_env):
     await _move_to_ready(board, work_item_id)
 
     # Wait for workflow to complete
-    completed = await _wait_for_completion(e2e_client, work_item_id, timeout=10.0)
+    completed = await _wait_for_completion(query_service, work_item_id)
     assert completed, "Workflow did not complete within timeout"
 
     # Get workflow run ID
     workflow_run_id = await _get_workflow_run_id(query_service, work_item_id)
 
-    # Call audit endpoint via REST client
-    with TestClient(simulation_env["app"]) as client:
-        response = client.get(f"/api/v2/workflows/runs/{workflow_run_id}/audit")
+    # Call audit endpoint
+    response = await http_client.get(f"/api/v2/workflows/runs/{workflow_run_id}/audit")
 
-        # Validate response
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+    # Validate response
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
 
-        audit_data = response.json()
+    audit_data = response.json()
 
-        # Verify all required fields are present
-        assert "workflowRun" in audit_data, "Missing 'workflowRun' field"
-        assert "events" in audit_data, "Missing 'events' field"
-        assert "stages" in audit_data, "Missing 'stages' field"
-        assert "validation" in audit_data, "Missing 'validation' field"
-        assert "totalEventCount" in audit_data, "Missing 'totalEventCount' field"
-        assert "offset" in audit_data, "Missing 'offset' field"
-        assert "limit" in audit_data, "Missing 'limit' field"
-        assert "hasNext" in audit_data, "Missing 'hasNext' field"
+    # Verify all required fields are present
+    assert "workflowRun" in audit_data, "Missing 'workflowRun' field"
+    assert "events" in audit_data, "Missing 'events' field"
+    assert "stages" in audit_data, "Missing 'stages' field"
+    assert "validation" in audit_data, "Missing 'validation' field"
+    assert "totalEventCount" in audit_data, "Missing 'totalEventCount' field"
+    assert "offset" in audit_data, "Missing 'offset' field"
+    assert "limit" in audit_data, "Missing 'limit' field"
+    assert "hasNext" in audit_data, "Missing 'hasNext' field"
 
-        # Verify workflow run summary
-        workflow_run = audit_data["workflowRun"]
-        assert workflow_run["id"] == workflow_run_id
-        # Note: workItemId may differ in mock adapter, just verify it exists
-        assert "workItemId" in workflow_run
-        assert workflow_run["workItemId"] is not None
+    # Verify workflow run summary
+    workflow_run = audit_data["workflowRun"]
+    assert workflow_run["id"] == workflow_run_id
+    assert "workItemId" in workflow_run
+    assert workflow_run["workItemId"] is not None
 
-        # Verify events are populated
-        assert audit_data["totalEventCount"] > 0, "No events in audit data"
-        assert len(audit_data["events"]) > 0, "Empty events list"
+    # Verify events are populated
+    assert audit_data["totalEventCount"] > 0, "No events in audit data"
+    assert len(audit_data["events"]) > 0, "Empty events list"
 
-        # Verify event structure
-        first_event = audit_data["events"][0]
-        assert "id" in first_event
-        assert "eventType" in first_event
-        assert "timestamp" in first_event
-        assert "data" in first_event
+    # Verify event structure
+    first_event = audit_data["events"][0]
+    assert "id" in first_event
+    assert "eventType" in first_event
+    assert "timestamp" in first_event
+    assert "data" in first_event
 
-        # Verify validation passed for successful workflow
-        assert audit_data["validation"]["sequenceValid"] is True, (
-            f"Validation failed for successful workflow:\n"
-            f"Missing: {audit_data['validation'].get('missingEvents', [])}\n"
-            f"Unexpected: {audit_data['validation'].get('unexpectedEvents', [])}\n"
-            f"Out of order: {audit_data['validation'].get('outOfOrderEvents', [])}"
-        )
+    # Verify validation passed for successful workflow
+    assert audit_data["validation"]["sequenceValid"] is True, (
+        f"Validation failed for successful workflow:\n"
+        f"Missing: {audit_data['validation'].get('missingEvents', [])}\n"
+        f"Unexpected: {audit_data['validation'].get('unexpectedEvents', [])}\n"
+        f"Out of order: {audit_data['validation'].get('outOfOrderEvents', [])}"
+    )
 
 
 @pytest.mark.asyncio
-async def test_audit_endpoint_pagination(e2e_client, simulation_env):
+async def test_audit_endpoint_pagination(http_client, simulation_env):
     """
     Test audit endpoint pagination functionality.
 
@@ -267,48 +269,48 @@ async def test_audit_endpoint_pagination(e2e_client, simulation_env):
     await _move_to_ready(board, work_item_id)
 
     # Wait for completion
-    completed = await _wait_for_completion(e2e_client, work_item_id, timeout=10.0)
+    completed = await _wait_for_completion(query_service, work_item_id)
     assert completed, "Workflow did not complete"
 
     # Get workflow run ID
     workflow_run_id = await _get_workflow_run_id(query_service, work_item_id)
 
-    # Test pagination
-    with TestClient(simulation_env["app"]) as client:
-        # First page
-        response1 = client.get(f"/api/v2/workflows/runs/{workflow_run_id}/audit", params={"offset": 0, "limit": 5})
-        assert response1.status_code == 200
-        data1 = response1.json()
+    # First page
+    response1 = await http_client.get(
+        f"/api/v2/workflows/runs/{workflow_run_id}/audit", params={"offset": 0, "limit": 5}
+    )
+    assert response1.status_code == 200
+    data1 = response1.json()
 
-        total_events = data1["totalEventCount"]
-        assert total_events > 0
+    total_events = data1["totalEventCount"]
+    assert total_events > 0
 
-        # Verify first page
-        assert data1["offset"] == 0
-        assert data1["limit"] == 5
-        assert len(data1["events"]) <= 5
+    # Verify first page
+    assert data1["offset"] == 0
+    assert data1["limit"] == 5
+    assert len(data1["events"]) <= 5
 
-        if total_events > 5:
-            assert data1["hasNext"] is True
+    if total_events > 5:
+        assert data1["hasNext"] is True
 
-            # Second page
-            response2 = client.get(f"/api/v2/workflows/runs/{workflow_run_id}/audit", params={"offset": 5, "limit": 5})
-            assert response2.status_code == 200
-            data2 = response2.json()
+        # Second page
+        response2 = await http_client.get(
+            f"/api/v2/workflows/runs/{workflow_run_id}/audit", params={"offset": 5, "limit": 5}
+        )
+        assert response2.status_code == 200
+        data2 = response2.json()
 
-            # Verify second page
-            assert data2["offset"] == 5
-            assert data2["limit"] == 5
-            assert data2["totalEventCount"] == total_events  # Consistent total
+        assert data2["offset"] == 5
+        assert data2["limit"] == 5
+        assert data2["totalEventCount"] == total_events
 
-            # Verify events are different
-            first_event_page1 = data1["events"][0]["id"]
-            first_event_page2 = data2["events"][0]["id"]
-            assert first_event_page1 != first_event_page2, "Pages should have different events"
+        first_event_page1 = data1["events"][0]["id"]
+        first_event_page2 = data2["events"][0]["id"]
+        assert first_event_page1 != first_event_page2, "Pages should have different events"
 
 
 @pytest.mark.asyncio
-async def test_audit_endpoint_validation_structure(e2e_client, simulation_env):
+async def test_audit_endpoint_validation_structure(http_client, simulation_env):
     """
     Test audit endpoint event sequence validation structure.
 
@@ -328,42 +330,40 @@ async def test_audit_endpoint_validation_structure(e2e_client, simulation_env):
     await _move_to_ready(board, work_item_id)
 
     # Wait for completion
-    completed = await _wait_for_completion(e2e_client, work_item_id, timeout=10.0)
+    completed = await _wait_for_completion(query_service, work_item_id)
     assert completed, "Workflow did not complete"
 
     # Get workflow run ID
     workflow_run_id = await _get_workflow_run_id(query_service, work_item_id)
 
     # Call audit endpoint
-    with TestClient(simulation_env["app"]) as client:
-        response = client.get(f"/api/v2/workflows/runs/{workflow_run_id}/audit")
-        assert response.status_code == 200
+    response = await http_client.get(f"/api/v2/workflows/runs/{workflow_run_id}/audit")
+    assert response.status_code == 200
 
-        audit_data = response.json()
-        validation = audit_data["validation"]
+    audit_data = response.json()
+    validation = audit_data["validation"]
 
-        # Verify validation structure
-        assert "sequenceValid" in validation
-        assert isinstance(validation["sequenceValid"], bool)
+    assert "sequenceValid" in validation
+    assert isinstance(validation["sequenceValid"], bool)
 
-        assert "expectedSequence" in validation
-        assert isinstance(validation["expectedSequence"], list)
+    assert "expectedSequence" in validation
+    assert isinstance(validation["expectedSequence"], list)
 
-        assert "actualSequence" in validation
-        assert isinstance(validation["actualSequence"], list)
+    assert "actualSequence" in validation
+    assert isinstance(validation["actualSequence"], list)
 
-        assert "missingEvents" in validation
-        assert isinstance(validation["missingEvents"], list)
+    assert "missingEvents" in validation
+    assert isinstance(validation["missingEvents"], list)
 
-        assert "unexpectedEvents" in validation
-        assert isinstance(validation["unexpectedEvents"], list)
+    assert "unexpectedEvents" in validation
+    assert isinstance(validation["unexpectedEvents"], list)
 
-        assert "outOfOrderEvents" in validation
-        assert isinstance(validation["outOfOrderEvents"], list)
+    assert "outOfOrderEvents" in validation
+    assert isinstance(validation["outOfOrderEvents"], list)
 
 
 @pytest.mark.asyncio
-async def test_audit_endpoint_stage_grouping(e2e_client, simulation_env):
+async def test_audit_endpoint_stage_grouping(http_client, simulation_env):
     """
     Test audit endpoint stage grouping functionality.
 
@@ -383,36 +383,33 @@ async def test_audit_endpoint_stage_grouping(e2e_client, simulation_env):
     await _move_to_ready(board, work_item_id)
 
     # Wait for completion
-    completed = await _wait_for_completion(e2e_client, work_item_id, timeout=10.0)
+    completed = await _wait_for_completion(query_service, work_item_id)
     assert completed, "Workflow did not complete"
 
     # Get workflow run ID
     workflow_run_id = await _get_workflow_run_id(query_service, work_item_id)
 
     # Call audit endpoint
-    with TestClient(simulation_env["app"]) as client:
-        response = client.get(f"/api/v2/workflows/runs/{workflow_run_id}/audit")
-        assert response.status_code == 200
+    response = await http_client.get(f"/api/v2/workflows/runs/{workflow_run_id}/audit")
+    assert response.status_code == 200
 
-        audit_data = response.json()
-        stages = audit_data["stages"]
+    audit_data = response.json()
+    stages = audit_data["stages"]
 
-        # Verify stages structure
-        assert isinstance(stages, list)
+    assert isinstance(stages, list)
 
-        # If stages exist, verify structure
-        for stage in stages:
-            assert "name" in stage
-            assert "status" in stage
-            assert "startedAt" in stage or stage.get("startedAt") is None
-            assert "completedAt" in stage or stage.get("completedAt") is None
-            assert "durationSeconds" in stage or stage.get("durationSeconds") is None
-            assert "events" in stage
-            assert isinstance(stage["events"], list)
+    for stage in stages:
+        assert "name" in stage
+        assert "status" in stage
+        assert "startedAt" in stage or stage.get("startedAt") is None
+        assert "completedAt" in stage or stage.get("completedAt") is None
+        assert "durationSeconds" in stage or stage.get("durationSeconds") is None
+        assert "events" in stage
+        assert isinstance(stage["events"], list)
 
 
 @pytest.mark.asyncio
-async def test_audit_endpoint_validation_disabled(e2e_client, simulation_env):
+async def test_audit_endpoint_validation_disabled(http_client, simulation_env):
     """
     Test audit endpoint with validation disabled.
 
@@ -431,18 +428,17 @@ async def test_audit_endpoint_validation_disabled(e2e_client, simulation_env):
     await _move_to_ready(board, work_item_id)
 
     # Wait for completion
-    completed = await _wait_for_completion(e2e_client, work_item_id, timeout=10.0)
+    completed = await _wait_for_completion(query_service, work_item_id)
     assert completed, "Workflow did not complete"
 
     # Get workflow run ID
     workflow_run_id = await _get_workflow_run_id(query_service, work_item_id)
 
     # Call audit endpoint with validation disabled
-    with TestClient(simulation_env["app"]) as client:
-        response = client.get(f"/api/v2/workflows/runs/{workflow_run_id}/audit", params={"include_validation": False})
-        assert response.status_code == 200
+    response = await http_client.get(
+        f"/api/v2/workflows/runs/{workflow_run_id}/audit", params={"include_validation": False}
+    )
+    assert response.status_code == 200
 
-        audit_data = response.json()
-
-        # Validation field should still be present
-        assert "validation" in audit_data
+    audit_data = response.json()
+    assert "validation" in audit_data

@@ -5,8 +5,6 @@ git operations (clone, pull, checkout, commit, push) without actual filesystem o
 git operations. Useful for testing orchestration logic without external dependencies.
 """
 
-from __future__ import annotations
-
 import hashlib
 import threading
 from collections.abc import Callable

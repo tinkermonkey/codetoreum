@@ -12,8 +12,8 @@ Tests for:
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
+import httpx
 import pytest
-from fastapi.testclient import TestClient
 
 from codetoreum.domain.events import (
     WorkflowCompletedEvent,
@@ -42,8 +42,12 @@ async def bootstrap():
 
 @pytest.fixture
 async def client(bootstrap):
-    """Create a test client."""
-    return TestClient(bootstrap.app)
+    """Create an async test client."""
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=bootstrap.app),
+        base_url="http://test",
+    ) as client:
+        yield client
 
 
 async def _create_test_causal_chain(event_store):
@@ -77,6 +81,7 @@ async def _create_test_causal_chain(event_store):
         timestamp=(base_time + timedelta(seconds=10)).isoformat(),
         source="test",
         correlation_id=correlation_id,
+        causation_id=str(root_event_id),
         workflow_id="WF-001",
         work_item_id="WI-001",
     )
@@ -89,9 +94,10 @@ async def _create_test_causal_chain(event_store):
         timestamp=(base_time + timedelta(seconds=30)).isoformat(),
         source="test",
         correlation_id=correlation_id,
+        causation_id=str(middle_event_id),
         workflow_id="WF-001",
         work_item_id="WI-001",
-        completion_status="success",
+        final_stage="validation",
     )
     await event_store.append("WF-001", [leaf_event])
     leaf_event_id = leaf_event.event_id
@@ -111,7 +117,7 @@ async def test_causal_chain_full_chain(bootstrap, client):
     root_id, middle_id, leaf_id, base_time = await _create_test_causal_chain(event_store)
 
     # Query causal chain for the leaf event
-    response = client.get(f"/api/v2/audit/events/{leaf_id}/causal-chain")
+    response = await client.get(f"/api/v2/audit/events/{leaf_id}/causal-chain")
 
     assert response.status_code == 200
     data = response.json()
@@ -140,7 +146,7 @@ async def test_causal_chain_middle_event(bootstrap, client):
     root_id, middle_id, leaf_id, base_time = await _create_test_causal_chain(event_store)
 
     # Query causal chain for the middle event
-    response = client.get(f"/api/v2/audit/events/{middle_id}/causal-chain")
+    response = await client.get(f"/api/v2/audit/events/{middle_id}/causal-chain")
 
     assert response.status_code == 200
     data = response.json()
@@ -160,7 +166,7 @@ async def test_causal_chain_root_event(bootstrap, client):
     root_id, middle_id, leaf_id, base_time = await _create_test_causal_chain(event_store)
 
     # Query causal chain for the root event
-    response = client.get(f"/api/v2/audit/events/{root_id}/causal-chain")
+    response = await client.get(f"/api/v2/audit/events/{root_id}/causal-chain")
 
     assert response.status_code == 200
     data = response.json()
@@ -175,7 +181,7 @@ async def test_causal_chain_root_event(bootstrap, client):
 @pytest.mark.asyncio
 async def test_causal_chain_nonexistent_event(bootstrap, client):
     """Test causal chain endpoint returns 404 for non-existent event."""
-    response = client.get(f"/api/v2/audit/events/{uuid4()}/causal-chain")
+    response = await client.get(f"/api/v2/audit/events/{uuid4()}/causal-chain")
 
     assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
@@ -187,7 +193,7 @@ async def test_causal_chain_payload_summary(bootstrap, client):
     event_store = bootstrap.adapters.event_store
     root_id, middle_id, leaf_id, base_time = await _create_test_causal_chain(event_store)
 
-    response = client.get(f"/api/v2/audit/events/{leaf_id}/causal-chain")
+    response = await client.get(f"/api/v2/audit/events/{leaf_id}/causal-chain")
 
     assert response.status_code == 200
     data = response.json()
@@ -207,9 +213,10 @@ async def test_causal_chain_truncation(bootstrap, client):
     event_store = bootstrap.adapters.event_store
     base_time = datetime(2026, 3, 20, 10, 0, 0, tzinfo=UTC)
 
-    # Create a long chain of events (>100)
-    first_event_id = None
-    prev_causation_id = None
+    # Create a long chain of 105 events, each caused by the previous
+    chain_correlation_id = str(uuid4())
+    prev_event_id = None
+    last_event_id = None
 
     for i in range(105):
         event = WorkItemColumnChangedEvent(
@@ -219,19 +226,18 @@ async def test_causal_chain_truncation(bootstrap, client):
             work_item_id=f"WI-{i}",
             project_id="test-project",
             board_id="test-board",
-            from_column=f"stage-{i-1}" if i > 0 else None,
+            from_column=f"stage-{i-1}" if i > 0 else "start",
             to_column=f"stage-{i}",
             moved_by="system",
-            correlation_id=str(uuid4()),
+            correlation_id=chain_correlation_id,
+            causation_id=str(prev_event_id) if prev_event_id else None,
         )
         await event_store.append(f"WI-{i}", [event])
+        prev_event_id = event.event_id
+        last_event_id = event.event_id
 
-        if i == 0:
-            first_event_id = event.event_id
-        prev_causation_id = event.event_id
-
-    # Query the leaf event
-    response = client.get(f"/api/v2/audit/events/{prev_causation_id}/causal-chain")
+    # Query the leaf event (last in chain)
+    response = await client.get(f"/api/v2/audit/events/{last_event_id}/causal-chain")
 
     assert response.status_code == 200
     data = response.json()
@@ -324,7 +330,7 @@ async def test_causal_chain_response_structure(bootstrap, client):
     event_store = bootstrap.adapters.event_store
     root_id, middle_id, leaf_id, base_time = await _create_test_causal_chain(event_store)
 
-    response = client.get(f"/api/v2/audit/events/{leaf_id}/causal-chain")
+    response = await client.get(f"/api/v2/audit/events/{leaf_id}/causal-chain")
 
     assert response.status_code == 200
     data = response.json()
@@ -350,7 +356,7 @@ async def test_causal_chain_chain_ordering(bootstrap, client):
     event_store = bootstrap.adapters.event_store
     root_id, middle_id, leaf_id, base_time = await _create_test_causal_chain(event_store)
 
-    response = client.get(f"/api/v2/audit/events/{leaf_id}/causal-chain")
+    response = await client.get(f"/api/v2/audit/events/{leaf_id}/causal-chain")
 
     assert response.status_code == 200
     data = response.json()
@@ -369,7 +375,7 @@ async def test_causal_chain_causation_links(bootstrap, client):
     event_store = bootstrap.adapters.event_store
     root_id, middle_id, leaf_id, base_time = await _create_test_causal_chain(event_store)
 
-    response = client.get(f"/api/v2/audit/events/{leaf_id}/causal-chain")
+    response = await client.get(f"/api/v2/audit/events/{leaf_id}/causal-chain")
 
     assert response.status_code == 200
     data = response.json()
@@ -456,7 +462,7 @@ async def test_audit_events_since_filter(bootstrap, client):
     await _seed_audit_events_for_filters(bootstrap)
 
     # Query without any filters to get baseline
-    response = client.get("/api/v2/audit/events")
+    response = await client.get("/api/v2/audit/events")
     assert response.status_code == 200
     events = response.json()["events"]
     initial_count = len(events)
@@ -469,7 +475,7 @@ async def test_audit_events_since_filter(bootstrap, client):
     future_time = datetime.now(UTC) + timedelta(hours=1)
     future_iso = future_time.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    response = client.get(f"/api/v2/audit/events?since={future_iso}")
+    response = await client.get(f"/api/v2/audit/events?since={future_iso}")
     assert response.status_code == 200
     future_events = response.json()["events"]
 
@@ -480,7 +486,7 @@ async def test_audit_events_since_filter(bootstrap, client):
     since_time = first_event_time + timedelta(seconds=3)
     since_iso = since_time.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    response = client.get(f"/api/v2/audit/events?since={since_iso}")
+    response = await client.get(f"/api/v2/audit/events?since={since_iso}")
     assert response.status_code == 200
     since_events = response.json()["events"]
 
@@ -491,7 +497,7 @@ async def test_audit_events_since_filter(bootstrap, client):
     past_time = datetime(2020, 1, 1, tzinfo=UTC)
     past_iso = past_time.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    response = client.get(f"/api/v2/audit/events?since={past_iso}")
+    response = await client.get(f"/api/v2/audit/events?since={past_iso}")
     assert response.status_code == 200
     past_events = response.json()["events"]
 
@@ -506,7 +512,7 @@ async def test_audit_events_work_item_id_filter(bootstrap, client):
     await _seed_audit_events_for_filters(bootstrap)
 
     # Query for WI-001 (should return 2 events: work_item_created + workflow_started)
-    response = client.get("/api/v2/audit/events?workItemId=WI-001")
+    response = await client.get("/api/v2/audit/events?workItemId=WI-001")
     assert response.status_code == 200
     events_wi001 = response.json()["events"]
 
@@ -523,7 +529,7 @@ async def test_audit_events_work_item_id_filter(bootstrap, client):
         ), f"Event {event['id']} should be related to WI-001"
 
     # Query for WI-002 (should return 2 events)
-    response = client.get("/api/v2/audit/events?workItemId=WI-002")
+    response = await client.get("/api/v2/audit/events?workItemId=WI-002")
     assert response.status_code == 200
     events_wi002 = response.json()["events"]
 
@@ -548,7 +554,7 @@ async def test_audit_events_since_and_start_time_conflict(bootstrap, client):
     iso_time = past_time.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     # Try to provide both since and startTime
-    response = client.get(f"/api/v2/audit/events?since={iso_time}&startTime={iso_time}")
+    response = await client.get(f"/api/v2/audit/events?since={iso_time}&startTime={iso_time}")
 
     # Should return 400 Bad Request
     assert response.status_code == 400

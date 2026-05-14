@@ -12,9 +12,47 @@ import pytest
 from httpx import AsyncClient
 
 from codetoreum.adapters.testing import InMemoryActiveWorkflowRunRegistry, InMemoryEventStore
-from codetoreum.domain.events import AgentExecutionStarted, WorkflowCompleted
+from codetoreum.domain.events import ExecutionStartedEvent, WorkflowCompletedEvent
 from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
+
+
+def _make_workflow_completed(
+    work_item_id: str = "item-1",
+    workflow_id: str = "run-1",
+    *,
+    occurred_at=None,
+    correlation_id: str | None = None,
+) -> WorkflowCompletedEvent:
+    ts = occurred_at.isoformat() if occurred_at is not None else datetime.now(UTC).isoformat()
+    return WorkflowCompletedEvent(
+        type="workflow.completed",
+        timestamp=ts,
+        source="test",
+        correlation_id=correlation_id,
+        workflow_id=workflow_id,
+        work_item_id=work_item_id,
+    )
+
+
+def _make_execution_started(
+    work_item_id: str = "item-1",
+    execution_id: str = "exec-1",
+    agent_id: str = "test-agent",
+    *,
+    occurred_at=None,
+    correlation_id: str | None = None,
+) -> ExecutionStartedEvent:
+    ts = occurred_at.isoformat() if occurred_at is not None else datetime.now(UTC).isoformat()
+    return ExecutionStartedEvent(
+        type="execution.started",
+        timestamp=ts,
+        source="test",
+        correlation_id=correlation_id,
+        execution_id=execution_id,
+        work_item_id=work_item_id,
+        agent_id=agent_id,
+    )
 
 
 @pytest.mark.asyncio
@@ -161,11 +199,11 @@ class TestSimulationExecutionsRouter:
         )
 
         # Add a completed event to verify it's excluded when filtering by active
-        workflow_completed = WorkflowCompleted(
-            aggregate_id="item-completed-filter",
-            payload={"run_id": "run-completed-filter", "work_item_id": "item-completed-filter"},
+        workflow_completed = _make_workflow_completed(
+            work_item_id="item-completed-filter",
+            workflow_id="run-completed-filter",
+            occurred_at=clock.now() - timedelta(minutes=5),
         )
-        object.__setattr__(workflow_completed, "occurred_at", clock.now() - timedelta(minutes=5))
         await event_store.append("workflow-stream", [workflow_completed])
 
         async with AsyncClient(app=app, base_url="http://test", follow_redirects=True) as client:
@@ -185,10 +223,7 @@ class TestSimulationExecutionsRouter:
     async def test_executions_status_filter_completed_only(self, app, event_store, clock):
         """Test status=completed filter returns only completed executions."""
         # Add a completed event
-        workflow_completed = WorkflowCompleted(
-            aggregate_id="item-456",
-            payload={"run_id": "run-123", "work_item_id": "item-456"},
-            occurred_at=clock.now(),
+        workflow_completed = _make_workflow_completed(work_item_id="item-456", workflow_id="run-123", occurred_at=clock.now(),
         )
         await event_store.append("workflow-stream", [workflow_completed])
 
@@ -213,10 +248,7 @@ class TestSimulationExecutionsRouter:
         )
 
         # Add a completed event
-        workflow_completed = WorkflowCompleted(
-            aggregate_id="item-completed",
-            payload={"run_id": "run-completed", "work_item_id": "item-completed"},
-            occurred_at=clock.now(),
+        workflow_completed = _make_workflow_completed(work_item_id="item-completed", workflow_id="run-completed", occurred_at=clock.now(),
         )
         await event_store.append("workflow-stream", [workflow_completed])
 
@@ -241,10 +273,7 @@ class TestSimulationExecutionsRouter:
         )
 
         # Add a completed event
-        workflow_completed = WorkflowCompleted(
-            aggregate_id="item-completed",
-            payload={"run_id": "run-completed", "work_item_id": "item-completed"},
-            occurred_at=clock.now(),
+        workflow_completed = _make_workflow_completed(work_item_id="item-completed", workflow_id="run-completed", occurred_at=clock.now(),
         )
         await event_store.append("workflow-stream", [workflow_completed])
 
@@ -264,21 +293,15 @@ class TestSimulationExecutionsRouter:
         now = clock.now()
 
         # Add event 5 minutes ago (should be included in default 30-minute window)
-        old_recent = WorkflowCompleted(
-            aggregate_id="item-1",
-            payload={"run_id": "run-1", "work_item_id": "item-1"},
+        old_recent = _make_workflow_completed(
+            work_item_id="item-1", workflow_id="run-1", occurred_at=now - timedelta(minutes=5)
         )
-        # Manually set occurred_at to 5 minutes ago
-        object.__setattr__(old_recent, "occurred_at", now - timedelta(minutes=5))
         await event_store.append("workflow-stream", [old_recent])
 
         # Add event 45 minutes ago (should NOT be included in default 30-minute window)
-        too_old = WorkflowCompleted(
-            aggregate_id="item-2",
-            payload={"run_id": "run-2", "work_item_id": "item-2"},
+        too_old = _make_workflow_completed(
+            work_item_id="item-2", workflow_id="run-2", occurred_at=now - timedelta(minutes=45)
         )
-        # Manually set occurred_at to 45 minutes ago
-        object.__setattr__(too_old, "occurred_at", now - timedelta(minutes=45))
         await event_store.append("workflow-stream", [too_old])
 
         async with AsyncClient(app=app, base_url="http://test", follow_redirects=True) as client:
@@ -297,19 +320,15 @@ class TestSimulationExecutionsRouter:
         now = clock.now()
 
         # Add event 15 minutes ago
-        event_15m = WorkflowCompleted(
-            aggregate_id="item-1",
-            payload={"run_id": "run-1", "work_item_id": "item-1"},
+        event_15m = _make_workflow_completed(
+            work_item_id="item-1", workflow_id="run-1", occurred_at=now - timedelta(minutes=15)
         )
-        object.__setattr__(event_15m, "occurred_at", now - timedelta(minutes=15))
         await event_store.append("workflow-stream", [event_15m])
 
         # Add event 35 minutes ago
-        event_35m = WorkflowCompleted(
-            aggregate_id="item-2",
-            payload={"run_id": "run-2", "work_item_id": "item-2"},
+        event_35m = _make_workflow_completed(
+            work_item_id="item-2", workflow_id="run-2", occurred_at=now - timedelta(minutes=35)
         )
-        object.__setattr__(event_35m, "occurred_at", now - timedelta(minutes=35))
         await event_store.append("workflow-stream", [event_35m])
 
         # Query with 20-minute window (should include 15m but not 35m)
@@ -379,10 +398,7 @@ class TestSimulationExecutionsRouter:
 
     async def test_executions_completed_execution_fields(self, app, event_store, clock):
         """Test completed execution has all required fields."""
-        workflow_completed = WorkflowCompleted(
-            aggregate_id="item-456",
-            payload={"run_id": "run-123", "work_item_id": "item-456"},
-            occurred_at=clock.now(),
+        workflow_completed = _make_workflow_completed(work_item_id="item-456", workflow_id="run-123", occurred_at=clock.now(),
         )
         await event_store.append("workflow-stream", [workflow_completed])
 
@@ -525,11 +541,11 @@ class TestSimulationExecutionsRouter:
         # Add completed event with unique ID
         now = clock.now()
         completed_work_item_id = "item-combined-completed"
-        event = WorkflowCompleted(
-            aggregate_id=completed_work_item_id,
-            payload={"run_id": "run-combined-completed", "work_item_id": completed_work_item_id},
+        event = _make_workflow_completed(
+            work_item_id=completed_work_item_id,
+            workflow_id="run-combined-completed",
+            occurred_at=now - timedelta(minutes=5),
         )
-        object.__setattr__(event, "occurred_at", now - timedelta(minutes=5))
         await event_store.append("workflow-stream", [event])
 
         # Test default (all) includes both types
@@ -568,9 +584,9 @@ class TestSimulationExecutionsRouter:
 
         # 2. Create and append an AgentExecutionStarted event with the expected agent_id
         event_time = clock.now()
-        agent_started_event = AgentExecutionStarted(
-            aggregate_id=work_item_id,
-            payload={"agent_id": expected_agent_id},
+        agent_started_event = _make_execution_started(
+            work_item_id=work_item_id,
+            agent_id=expected_agent_id,
             correlation_id=run_id,
             occurred_at=event_time,
         )
@@ -615,9 +631,9 @@ class TestSimulationExecutionsRouter:
 
         # 2. Create event with a specific timestamp (5 minutes ago)
         event_time = clock.now() - timedelta(minutes=5)
-        agent_started_event = AgentExecutionStarted(
-            aggregate_id=work_item_id,
-            payload={"agent_id": "test-agent"},
+        agent_started_event = _make_execution_started(
+            work_item_id=work_item_id,
+            agent_id="test-agent",
             correlation_id=run_id,
             occurred_at=event_time,
         )

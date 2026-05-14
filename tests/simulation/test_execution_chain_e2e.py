@@ -249,8 +249,8 @@ async def test_execution_chain_workflow_completes(exec_chain_env):
     event_types = [e.event_type for e in run_events]
 
     assert "WorkflowCreated" in event_types, f"WorkflowCreated missing; got: {event_types}"
-    assert "WorkflowStarted" in event_types, f"WorkflowStarted missing; got: {event_types}"
-    assert "WorkflowCompleted" in event_types, f"WorkflowCompleted missing; got: {event_types}"
+    assert "WorkflowStartedEvent" in event_types, f"WorkflowStarted missing; got: {event_types}"
+    assert "WorkflowCompletedEvent" in event_types, f"WorkflowCompleted missing; got: {event_types}"
 
 
 @pytest.mark.asyncio

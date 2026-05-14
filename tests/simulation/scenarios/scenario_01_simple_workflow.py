@@ -99,7 +99,7 @@ async def run_scenario(runner: SimulationRunner) -> None:
     # In a real scenario, this would call WorkflowOrchestrator
     # For now, we'll simulate by capturing events manually
 
-    from codetoreum.domain.events import (
+    from tests.simulation.test_event_helpers import (
         AgentExecutionCompleted,
         AgentExecutionStarted,
         WorkflowCompleted,

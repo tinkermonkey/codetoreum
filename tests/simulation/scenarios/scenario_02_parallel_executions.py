@@ -12,7 +12,7 @@ Expected outcome:
 
 from datetime import timedelta
 
-from codetoreum.domain.events import (
+from tests.simulation.test_event_helpers import (
     AgentExecutionCompleted,
     AgentExecutionStarted,
     WorkflowCompleted,

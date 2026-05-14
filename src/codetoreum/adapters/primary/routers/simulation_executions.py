@@ -164,7 +164,7 @@ def create_simulation_executions_router(
             # Subtract one microsecond from since to preserve inclusive boundary behavior (>=)
             # because get_events_by_type uses strict > comparison internally.
             since_adjusted = since - timedelta(microseconds=1)
-            workflow_completed_events = await event_store.get_events_by_type("WorkflowCompleted", since=since_adjusted)
+            workflow_completed_events = await event_store.get_events_by_type("WorkflowCompletedEvent", since=since_adjusted)
 
             for event in workflow_completed_events:
                 # Extract run_id from event if available
@@ -225,8 +225,10 @@ def _extract_agent_execution_info(events: list) -> tuple[str | None, datetime | 
     """
     # Search for AgentExecutionStarted event (first in the sequence for a run)
     for event in events:
-        if event.event_type == "AgentExecutionStarted":
-            agent_id = event.payload.get("agent_id")
+        if event.event_type == "ExecutionStartedEvent":
+            agent_id = getattr(event, "agent_id", None) or (
+                getattr(event, "payload", {}).get("agent_id") if hasattr(event, "payload") else None
+            )
             return agent_id, event.occurred_at
 
     return None, None
@@ -253,31 +255,16 @@ def _extract_current_step(events: list) -> str | None:
 
 
 def _extract_run_id_from_event(event: object) -> str | None:
-    """
-    Extract run_id from a WorkflowCompleted event.
+    """Extract run_id from a WorkflowCompletedEvent."""
+    # WorkflowCompletedEvent: workflow_id is the run identifier
+    if hasattr(event, "workflow_id") and event.workflow_id:
+        return str(event.workflow_id)
 
-    WorkflowCompleted events have a correlation_id or aggregate_id that may correspond
-    to the run. We try multiple paths to find the run identifier.
+    # Fallback: correlation_id (event sourcing correlation)
+    if hasattr(event, "correlation_id") and event.correlation_id:
+        return str(event.correlation_id)
 
-    Args:
-        event: Domain event object
-
-    Returns:
-        Run ID if found, None otherwise
-    """
-    # Try correlation_id first (used for event sourcing)
-    if hasattr(event, "correlation_id"):
-        correlation_id = event.correlation_id
-        if correlation_id:
-            return str(correlation_id)
-
-    # Try aggregate_id (fallback)
-    if hasattr(event, "aggregate_id"):
-        aggregate_id = event.aggregate_id
-        if aggregate_id:
-            return str(aggregate_id)
-
-    # Try payload (for newer event models)
+    # Legacy fallback: payload["run_id"]
     if hasattr(event, "payload"):
         payload = getattr(event, "payload", {})
         if isinstance(payload, Mapping) and "run_id" in payload:
@@ -287,26 +274,15 @@ def _extract_run_id_from_event(event: object) -> str | None:
 
 
 def _extract_work_item_id_from_event(event: object) -> str | None:
-    """
-    Extract work_item_id from a WorkflowCompleted event.
+    """Extract work_item_id from a WorkflowCompletedEvent."""
+    # WorkflowCompletedEvent: work_item_id is a direct field
+    if hasattr(event, "work_item_id") and event.work_item_id:
+        return event.work_item_id
 
-    Args:
-        event: Domain event object
-
-    Returns:
-        Work item ID if found, None otherwise
-    """
-    # Try payload first (common location for context data)
+    # Legacy fallback: payload["work_item_id"]
     if hasattr(event, "payload"):
         payload = getattr(event, "payload", {})
-        if isinstance(payload, Mapping):
-            if "work_item_id" in payload:
-                return payload["work_item_id"]
-
-    # Try aggregate_id (if it encodes work item ID)
-    if hasattr(event, "aggregate_id"):
-        aggregate_id = event.aggregate_id
-        if aggregate_id:
-            return str(aggregate_id)
+        if isinstance(payload, Mapping) and "work_item_id" in payload:
+            return payload["work_item_id"]
 
     return None

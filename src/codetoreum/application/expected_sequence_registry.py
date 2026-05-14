@@ -13,7 +13,7 @@ Pattern Syntax:
 Example:
     registry = ExpectedSequenceRegistry()
     sequence = registry.get_expected_sequence("standard_workflow")
-    # Returns: ["WorkflowCreated", "WorkflowStarted", "WorkflowStageAdvanced*", ...]
+    # Returns: ["WorkflowCreatedEvent", "WorkflowStartedEvent", "WorkflowStageAdvancedEvent*", ...]
 """
 
 from dataclasses import dataclass
@@ -54,31 +54,32 @@ class ExpectedSequenceRegistry:
     """
 
     # Base sequences for common workflow patterns
+    # Names match CodetoreumEvent subclass names (event_type property = __class__.__name__)
     WORKFLOW_LIFECYCLE = [
-        "WorkflowCreated",
-        "WorkflowStarted",
-        "WorkflowStageAdvanced*",  # Zero or more stage transitions
-        "WorkflowCompleted|WorkflowFailed",  # Terminal state (either)
+        "WorkflowCreatedEvent",
+        "WorkflowStartedEvent",
+        "WorkflowStageAdvancedEvent*",  # Zero or more stage transitions
+        "WorkflowCompletedEvent|WorkflowFailedEvent",  # Terminal state (either)
     ]
 
     STAGE_EXECUTION = [
-        "ExecutionInitialized",
-        "ExecutionStarted",
-        "ExecutionCompleted|ExecutionFailed|ExecutionTimeout",
+        "ExecutionInitializedEvent",
+        "ExecutionStartedEvent",
+        "ExecutionCompletedEvent|ExecutionFailedEvent|ExecutionTimedOutEvent",
     ]
 
     REVIEW_CYCLE = [
-        "ReviewCycleCreated",
-        "ReviewIterationStarted+",  # One or more iterations
-        "ReviewFeedbackSubmitted*",
-        "ReviewCycleApproved|ReviewCycleRejected|ReviewCycleEscalated",
+        "ReviewCycleStartedEvent",
+        "ReviewCycleIterationCompletedEvent+",  # One or more iterations
+        "ReviewCycleMakerRevisionEvent*",
+        "ReviewCycleApproved|ReviewCycleRejectedEvent|ReviewCycleEscalatedToHumanEvent",
     ]
 
     REPAIR_CYCLE = [
-        "RepairCycleCreated",
-        "TestExecutionStarted",
-        "TestExecutionCompleted|TestExecutionFailed",
-        "RepairCycleCompleted|RepairCycleExhausted",
+        "RepairCycleStartedEvent",
+        "RepairCycleTestExecutionStartedEvent",
+        "RepairCycleTestExecutionCompletedEvent|RepairCycleTestCycleCompletedEvent",
+        "RepairCycleCompletedEvent",
     ]
 
     @classmethod

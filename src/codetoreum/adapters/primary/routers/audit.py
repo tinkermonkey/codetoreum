@@ -300,14 +300,9 @@ def create_audit_router(
             return event_index_cache
 
         def _extract_payload_summary(event: Any) -> dict[str, Any]:
-            """Extract a readable summary from event payload."""
+            """Extract a readable summary from event fields."""
             from collections.abc import Mapping
 
-            payload = getattr(event, "payload", {})
-            if not isinstance(payload, Mapping):
-                return {}
-            # Return only key fields for readability, limit to ~10 fields
-            summary = {}
             key_fields = [
                 "work_item_id",
                 "workflow_id",
@@ -320,9 +315,18 @@ def create_audit_router(
                 "issue_id",
                 "correlation_id",
             ]
-            for field in key_fields:
-                if field in payload:
-                    summary[field] = payload[field]
+            summary = {}
+            # Check direct typed attributes first (domain events use typed fields)
+            for f in key_fields:
+                val = getattr(event, f, None)
+                if val is not None:
+                    summary[f] = val
+            # Also check legacy payload dict if present
+            payload = getattr(event, "payload", None)
+            if isinstance(payload, Mapping):
+                for f in key_fields:
+                    if f not in summary and f in payload:
+                        summary[f] = payload[f]
             return summary
 
         def _get_event_timestamp(event: Any) -> datetime:

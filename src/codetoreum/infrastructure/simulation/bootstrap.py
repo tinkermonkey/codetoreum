@@ -1409,14 +1409,11 @@ class SimulationApplicationBootstrap:
                 resolved.event_emitter.on(event_type, _publish_codetoreum_event_to_bus)
             logger.info("Wired PR review cycle event emitter to event bus with 12 event types")
 
-        # Wire event bus to board adapter for column change event publishing
-        # This enables the mock board adapter to publish WorkItemColumnChangedEvent to the event bus
-        # so that PRReviewCycleDispatchHandler receives the event and initiates PR review cycles
-        from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
-
-        if isinstance(resolved.board, MockBoardAdapter):
-            resolved.board.event_bus = self.infrastructure.event_bus
-            logger.info("Wired MockBoardAdapter to event bus for column change event publishing")
+        # NOTE: Do NOT wire board adapter directly to event_bus here.
+        # _register_board_event_bridge() registers local listeners that translate board events
+        # into domain events and publish them to the event bus. Direct wiring would cause
+        # double event processing: once via emit_async's direct publish, once via the bridge.
+        from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter  # noqa: F401
 
         # Create branch resolution adapter (mock adapter for simulation testing)
         resolved.branch_resolution_service = MockBranchResolutionAdapter(clock=self._engine.get_clock_for_testing())

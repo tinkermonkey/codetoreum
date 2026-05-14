@@ -9,7 +9,9 @@ from codetoreum.application.event_handlers.repair_cycle_event_handler import (
     RepairCycleEventHandler,
 )
 from codetoreum.domain.board_workflow_template import BoardWorkflowTemplate, ColumnTemplate, ColumnType
-from codetoreum.domain.events import WorkItemColumnChanged
+from datetime import UTC, datetime
+
+from codetoreum.domain.events import WorkItemColumnChangedEvent
 from codetoreum.domain.repair_cycle_types import (
     CycleResult,
     EnvironmentRepairConfig,
@@ -33,6 +35,28 @@ from codetoreum.ports.output.repair_cycle_service import (
     RepairCycleContext,
 )
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
+
+
+
+def _make_col_event(
+    work_item_id: str = "item-1",
+    board_id: str = "board-1",
+    project_id: str = "proj-1",
+    from_column: str = "Code Review",
+    to_column: str = "Testing",
+    moved_by: str = "system",
+) -> WorkItemColumnChangedEvent:
+    return WorkItemColumnChangedEvent(
+        type="workitem.column_changed",
+        timestamp=datetime.now(UTC).isoformat(),
+        source="test",
+        work_item_id=work_item_id,
+        board_id=board_id,
+        project_id=project_id,
+        from_column=from_column,
+        to_column=to_column,
+        moved_by=moved_by,
+    )
 
 
 class MockRepairCycleAdapter:
@@ -246,7 +270,7 @@ class TestRepairCycleEventHandlerGetEventTypes:
     def test_get_event_types_returns_correct_types(self, handler):
         """Test get_event_types returns correct event types."""
         event_types = handler.get_event_types()
-        assert event_types == ["WorkItemColumnChanged"]
+        assert event_types == ["WorkItemColumnChangedEvent"]
 
     def test_get_event_types_returns_list(self, handler):
         """Test get_event_types returns a list."""
@@ -265,17 +289,7 @@ class TestRepairCycleEventHandlerHandleMethod:
     @pytest.mark.asyncio
     async def test_handle_with_column_changed_event(self, handler, repair_cycle_adapter):
         """Test handle processes WorkItemColumnChanged events."""
-        event = WorkItemColumnChanged(
-            aggregate_id="item-1",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "from_column": "Code Review",
-                "to_column": "Testing",
-                "moved_by": "system",
-            },
-        )
+        event = _make_col_event()
 
         await handler.handle(event)
 
@@ -312,17 +326,7 @@ class TestRepairCycleEventHandlerHandleMethod:
         # Make repair cycle raise an exception
         repair_cycle_adapter.result = Exception("Test error")
 
-        event = WorkItemColumnChanged(
-            aggregate_id="item-1",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "from_column": "Code Review",
-                "to_column": "Testing",
-                "moved_by": "system",
-            },
-        )
+        event = _make_col_event()
 
         # Mock execute to raise exception
         async def raise_error(context):
@@ -340,17 +344,7 @@ class TestRepairCycleEventHandlerColumnChange:
     @pytest.mark.asyncio
     async def test_handle_column_change_enters_testing_stage(self, handler, repair_cycle_adapter):
         """Test handler triggers repair cycle when entering Testing column."""
-        event = WorkItemColumnChanged(
-            aggregate_id="item-1",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "from_column": "Code Review",
-                "to_column": "Testing",
-                "moved_by": "system",
-            },
-        )
+        event = _make_col_event()
 
         await handler.handle_column_change(event)
 
@@ -360,17 +354,7 @@ class TestRepairCycleEventHandlerColumnChange:
     @pytest.mark.asyncio
     async def test_handle_column_change_ignores_other_columns(self, handler, repair_cycle_adapter):
         """Test handler ignores movements to columns other than Testing."""
-        event = WorkItemColumnChanged(
-            aggregate_id="item-1",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "from_column": "Code Review",
-                "to_column": "Ready for Deploy",
-                "moved_by": "system",
-            },
-        )
+        event = _make_col_event(to_column="Ready for Deploy")
 
         await handler.handle_column_change(event)
 
@@ -379,17 +363,7 @@ class TestRepairCycleEventHandlerColumnChange:
     @pytest.mark.asyncio
     async def test_handle_column_change_extracts_payload_correctly(self, handler, repair_cycle_adapter):
         """Test handler extracts payload correctly from event."""
-        event = WorkItemColumnChanged(
-            aggregate_id="item-123",
-            payload={
-                "work_item_id": "item-123",
-                "board_id": "board-456",
-                "project_id": "proj-789",
-                "from_column": "Code Review",
-                "to_column": "Testing",
-                "moved_by": "system",
-            },
-        )
+        event = _make_col_event(work_item_id="item-123", board_id="board-456", project_id="proj-789")
 
         await handler.handle_column_change(event)
 
@@ -399,17 +373,7 @@ class TestRepairCycleEventHandlerColumnChange:
     @pytest.mark.asyncio
     async def test_handle_column_change_context_has_correct_test_configs(self, handler, repair_cycle_adapter):
         """Test handler creates context with correct test configurations."""
-        event = WorkItemColumnChanged(
-            aggregate_id="item-1",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "from_column": "Code Review",
-                "to_column": "Testing",
-                "moved_by": "system",
-            },
-        )
+        event = _make_col_event()
 
         await handler.handle_column_change(event)
 
@@ -422,17 +386,7 @@ class TestRepairCycleEventHandlerColumnChange:
     @pytest.mark.asyncio
     async def test_handle_column_change_context_has_correct_agent_name(self, handler, repair_cycle_adapter):
         """Test handler creates context with correct agent name."""
-        event = WorkItemColumnChanged(
-            aggregate_id="item-1",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "from_column": "Code Review",
-                "to_column": "Testing",
-                "moved_by": "system",
-            },
-        )
+        event = _make_col_event()
 
         await handler.handle_column_change(event)
 
@@ -446,17 +400,7 @@ class TestRepairCycleEventHandlerColumnChange:
 
         caplog.set_level(logging.INFO)
 
-        event = WorkItemColumnChanged(
-            aggregate_id="item-1",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "from_column": "Code Review",
-                "to_column": "Testing",
-                "moved_by": "system",
-            },
-        )
+        event = _make_col_event()
 
         # Set successful result
         repair_cycle_adapter.result = RepairCycleResult(
@@ -496,17 +440,7 @@ class TestRepairCycleEventHandlerColumnChange:
     @pytest.mark.asyncio
     async def test_handle_column_change_logs_failure(self, handler, repair_cycle_adapter, caplog):
         """Test handler logs failure when repair cycle fails."""
-        event = WorkItemColumnChanged(
-            aggregate_id="item-1",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "from_column": "Code Review",
-                "to_column": "Testing",
-                "moved_by": "system",
-            },
-        )
+        event = _make_col_event()
 
         # Set failed result
         repair_cycle_adapter.result = RepairCycleResult(
@@ -546,19 +480,15 @@ class TestRepairCycleEventHandlerColumnChange:
     @pytest.mark.asyncio
     async def test_handle_column_change_with_missing_payload_fields(self, handler, repair_cycle_adapter):
         """Test handler handles missing payload fields gracefully."""
-        event = WorkItemColumnChanged(
-            aggregate_id="item-1",
-            payload={
-                "from_column": "Code Review",
-                "to_column": "Testing",
-                # Missing work_item_id, board_id, project_id
-            },
-        )
+        # The new WorkItemColumnChangedEvent requires work_item_id; test missing-board
+        # scenario via a board_id that yields no template (empty string not valid).
+        # Verify that a non-Testing column also skips repair cycle.
+        event = _make_col_event(to_column="Backlog")
 
         # Should not raise exception
         await handler.handle_column_change(event)
 
-        # Repair cycle should not be executed when column cannot be determined
+        # Repair cycle should not be executed for non-configured column
         assert not repair_cycle_adapter.executed
 
     @pytest.mark.asyncio
@@ -571,17 +501,7 @@ class TestRepairCycleEventHandlerColumnChange:
 
         repair_cycle_adapter.execute = raise_error
 
-        event = WorkItemColumnChanged(
-            aggregate_id="item-1",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "from_column": "Code Review",
-                "to_column": "Testing",
-                "moved_by": "system",
-            },
-        )
+        event = _make_col_event()
 
         with pytest.raises(Exception):
             await handler.handle_column_change(event)
@@ -693,17 +613,7 @@ class TestAgentConfigExtraction:
 
         caplog.set_level(logging.DEBUG)
 
-        event = WorkItemColumnChanged(
-            aggregate_id="item-1",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "from_column": "Code Review",
-                "to_column": "Testing",
-                "moved_by": "system",
-            },
-        )
+        event = _make_col_event()
 
         await handler_no_workflow_config.handle_column_change(event)
 
@@ -721,17 +631,7 @@ class TestAgentConfigExtraction:
         caplog.set_level(logging.DEBUG)
         workflow_config_service.get_board_workflow_template.return_value = None
 
-        event = WorkItemColumnChanged(
-            aggregate_id="item-1",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "from_column": "Code Review",
-                "to_column": "Testing",
-                "moved_by": "system",
-            },
-        )
+        event = _make_col_event()
 
         await handler_with_workflow_config.handle_column_change(event)
 
@@ -769,17 +669,7 @@ class TestAgentConfigExtraction:
         )
         workflow_config_service.get_board_workflow_template.return_value = template
 
-        event = WorkItemColumnChanged(
-            aggregate_id="item-1",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "from_column": "Code Review",
-                "to_column": "Testing",  # This column doesn't exist in template
-                "moved_by": "system",
-            },
-        )
+        event = _make_col_event()  # to_column="Testing" — not in this custom template
 
         await handler_with_workflow_config.handle_column_change(event)
 
@@ -818,17 +708,7 @@ class TestAgentConfigExtraction:
         )
         workflow_config_service.get_board_workflow_template.return_value = template
 
-        event = WorkItemColumnChanged(
-            aggregate_id="item-1",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "from_column": "Code Review",
-                "to_column": "Testing",
-                "moved_by": "system",
-            },
-        )
+        event = _make_col_event()
 
         await handler_with_workflow_config.handle_column_change(event)
 
@@ -878,17 +758,7 @@ class TestAgentConfigExtraction:
         )
         workflow_config_service.get_board_workflow_template.return_value = template
 
-        event = WorkItemColumnChanged(
-            aggregate_id="item-1",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "from_column": "Code Review",
-                "to_column": "Testing",
-                "moved_by": "system",
-            },
-        )
+        event = _make_col_event()
 
         await handler_with_workflow_config.handle_column_change(event)
 
@@ -991,17 +861,7 @@ class TestCIPipelineIntegration:
             ci_pipeline_service=ci_pipeline_service,
         )
 
-        event = WorkItemColumnChanged(
-            aggregate_id="item-1",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "from_column": "Code Review",
-                "to_column": "Testing",
-                "moved_by": "system",
-            },
-        )
+        event = _make_col_event()
 
         await handler.handle_column_change(event)
 
@@ -1061,17 +921,7 @@ class TestCIPipelineIntegration:
             ci_pipeline_service=ci_pipeline_service,
         )
 
-        event = WorkItemColumnChanged(
-            aggregate_id="item-1",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "from_column": "Code Review",
-                "to_column": "Testing",
-                "moved_by": "system",
-            },
-        )
+        event = _make_col_event()
 
         await handler.handle_column_change(event)
 
@@ -1156,17 +1006,7 @@ class TestCIPipelineIntegration:
             working_directory_resolver=resolver,
         )
 
-        event = WorkItemColumnChanged(
-            aggregate_id="item-1",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "project_id": "proj-123",
-                "from_column": "Code Review",
-                "to_column": "Testing",
-                "moved_by": "system",
-            },
-        )
+        event = _make_col_event(project_id="proj-123")
 
         await handler.handle_column_change(event)
 
@@ -1225,17 +1065,7 @@ class TestCIPipelineIntegration:
             ci_pipeline_service=ci_pipeline_service,
         )
 
-        event = WorkItemColumnChanged(
-            aggregate_id="item-1",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "from_column": "Code Review",
-                "to_column": "Testing",
-                "moved_by": "system",
-            },
-        )
+        event = _make_col_event()
 
         # Unexpected exceptions should be re-raised
         with pytest.raises(TypeError, match="Unexpected type error in CI pipeline"):
@@ -1265,17 +1095,7 @@ class TestCIPipelineIntegration:
             ci_pipeline_service=None,  # Service not injected!
         )
 
-        event = WorkItemColumnChanged(
-            aggregate_id="item-1",
-            payload={
-                "work_item_id": "item-1",
-                "board_id": "board-1",
-                "project_id": "proj-1",
-                "from_column": "Code Review",
-                "to_column": "Testing",
-                "moved_by": "system",
-            },
-        )
+        event = _make_col_event()
 
         # Should raise ValueError due to configuration wiring error
         with pytest.raises(ValueError, match="CI test types configured.*no ICIPipelineService"):

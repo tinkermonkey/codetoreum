@@ -74,6 +74,7 @@ class CodetoreumEvent:
     timestamp: str
     source: str
     correlation_id: str | None = None
+    causation_id: str | None = None
     event_id: str = field(default_factory=lambda: str(uuid4()))
 
     def __post_init__(self) -> None:
@@ -127,6 +128,7 @@ class CodetoreumEvent:
             "timestamp": self.timestamp,
             "source": self.source,
             "correlation_id": self.correlation_id,
+            "causation_id": self.causation_id,
             "event_id": self.event_id,
         }
 
@@ -150,6 +152,7 @@ class CodetoreumEvent:
                 timestamp=data["timestamp"],
                 source=data["source"],
                 correlation_id=data.get("correlation_id"),
+                causation_id=data.get("causation_id"),
                 event_id=data.get("event_id", str(uuid4())),
             )
         except KeyError as e:

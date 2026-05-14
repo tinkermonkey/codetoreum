@@ -371,6 +371,8 @@ class MockBoardAdapter(IBoardService):
 
         board = await self.get_board(project_id, board_id)
 
+        pending_events: list = []
+
         async with self._lock:
             # Validate target column exists
             target_col = None
@@ -400,8 +402,8 @@ class MockBoardAdapter(IBoardService):
                                 if item_id in self._item_positions:
                                     board_id_stored, col_name, old_pos = self._item_positions[item_id]
                                     self._item_positions[item_id] = (board_id_stored, col_name, i)
-                                    # Emit position change event for sibling items
-                                    await self.emit_async(
+                                    # Collect position change event for sibling items (emitted after lock release)
+                                    pending_events.append(
                                         WorkItemPositionChangedEvent(
                                             type="workitem.position_changed",
                                             work_item_id=item_id,
@@ -439,8 +441,9 @@ class MockBoardAdapter(IBoardService):
                 )
                 self._movement_log.append(movement)
 
-                # Emit event
-                await self.emit_async(
+                # Collect column changed event (emitted after lock release to prevent deadlock:
+                # event bus handlers call board methods that re-acquire this lock)
+                pending_events.append(
                     WorkItemColumnChangedEvent(
                         type="workitem.column_changed",
                         work_item_id=work_item_id,
@@ -453,6 +456,12 @@ class MockBoardAdapter(IBoardService):
                         source="mock",
                     )
                 )
+
+        # Emit all collected events outside the lock to prevent deadlock.
+        # Event bus handlers (e.g. BoardColumnEventHandler) call board methods that
+        # re-acquire self._lock; emitting inside the lock causes asyncio.Lock deadlock.
+        for event in pending_events:
+            await self.emit_async(event)
 
         return ColumnMovementResult(
             work_item_id=work_item_id,
@@ -623,17 +632,18 @@ class MockBoardAdapter(IBoardService):
                 orphaned_items=orphaned_items,
             )
 
-            await self.emit_async(
-                BoardReconciledEvent(
-                    type="board.reconciled",
-                    project_id=self.current_project,
-                    board_id=board_id,
-                    columns_added=result.columns_added,
-                    columns_removed=result.columns_removed,
-                    timestamp=self._get_iso_timestamp(),
-                    source="mock",
-                )
+        # Emit outside the lock to prevent deadlock (event bus handlers re-acquire board lock)
+        await self.emit_async(
+            BoardReconciledEvent(
+                type="board.reconciled",
+                project_id=self.current_project,
+                board_id=board_id,
+                columns_added=result.columns_added,
+                columns_removed=result.columns_removed,
+                timestamp=self._get_iso_timestamp(),
+                source="mock",
             )
+        )
 
         return result
 

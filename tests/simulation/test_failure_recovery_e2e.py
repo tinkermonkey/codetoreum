@@ -133,7 +133,7 @@ async def test_agent_failure_emits_workflow_failed_event(
     )
 
     # WorkflowCompleted must NOT be present (cascade did not finish)
-    assert "WorkflowCompleted" not in run_event_types, (
+    assert "WorkflowCompletedEvent" not in run_event_types, (
         f"WorkflowCompleted should NOT be in EventStore after agent failure, " f"but found it in: {run_event_types}"
     )
 

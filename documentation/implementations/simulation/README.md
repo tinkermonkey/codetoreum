@@ -24,7 +24,9 @@ The simulation implementation serves multiple purposes:
 ## Contents
 
 ### [overview.md](./overview.md)
+
 Overview of the Simulation Implementation as a complete port contract implementation:
+
 - How it fulfills all architecture contracts with mock adapters
 - Configuration and behavior of 54 adapters
 - Time control (100x fast-forward) and determinism
@@ -32,7 +34,9 @@ Overview of the Simulation Implementation as a complete port contract implementa
 - Limitations and integration pattern
 
 ### [adapters.md](./adapters.md)
+
 Complete reference for all 54 adapters:
+
 - **36 Testing Adapters**: Mock implementations of output ports (InMemoryTicketAdapter, MockLLMAdapter, FakeContainerAdapter, etc.)
 - **18 Input Port Adapters**: HTTP endpoint wrappers (MockOrchestrationCommand, MockWorkItem, etc.)
 - Full mapping table with port interface → adapter class → file path
@@ -40,7 +44,9 @@ Complete reference for all 54 adapters:
 - Testing patterns and integration
 
 ### [bootstrap-wiring.md](./bootstrap-wiring.md)
+
 Complete bootstrap documentation with diagrams:
+
 - **6-Phase Bootstrap Sequence**: Engine → Infrastructure → Adapters → Services → Input Ports → FastAPI
 - **Level 4 Mermaid Flowchart**: Detailed wiring diagram with all phases
 - **Dependency Graphs**: Adapter and service dependency relationships
@@ -48,7 +54,9 @@ Complete bootstrap documentation with diagrams:
 - **Degraded Mode Support**: Graceful degradation for optional phases
 
 ### [scenarios.md](./scenarios.md)
+
 Complete scenario reference and catalog:
+
 - **10 Scenario Directories**: smoke, sdlc_pipeline, review_cycle, failure_recovery, repair_cycle_test, stress_test, planning_design_pipeline, planning_design_review_cycle, pr_feedback_child_issue, dev_environment_repair
 - **80 YAML Files**: 8 files per scenario (external + orchestrator subdirectories)
 - **YAML Schema**: Complete documentation of projects.yaml, workflows.yaml, agents.yaml, etc.
@@ -71,6 +79,7 @@ Input Ports (Mock) ──→ Application Services ──→ Output Ports (Mock)
 ```
 
 Everything is real except the adapters — which are mocks. This means:
+
 - Real domain logic is exercised
 - Real business rules are validated
 - Real event flows are tested
@@ -87,20 +96,21 @@ Everything is real except the adapters — which are mocks. This means:
 
 ## Comparison with Production
 
-| Aspect | Simulation | Production |
-|---|---|---|
-| Ticket System | MockTicketAdapter | GitHubTicketAdapter |
-| Container | FakeContainerAdapter | DockerContainerAdapter |
-| LLM | MockLLMAdapter | ClaudeCodeAdapter |
-| Event Store | InMemoryEventStore | RedisEventStore |
-| Configuration | InMemoryConfigStore | DatabaseConfigStore |
-| Speed | 100x faster | Real-time |
+| Aspect        | Simulation           | Production             |
+| ------------- | -------------------- | ---------------------- |
+| Ticket System | MockTicketAdapter    | GitHubTicketAdapter    |
+| Container     | FakeContainerAdapter | DockerContainerAdapter |
+| LLM           | MockLLMAdapter       | ClaudeCodeAdapter      |
+| Event Store   | InMemoryEventStore   | RedisEventStore        |
+| Configuration | InMemoryConfigStore  | DatabaseConfigStore    |
+| Speed         | 100x faster          | Real-time              |
 
 ## Using the Simulation
 
 See `overview.md` for detailed setup and usage.
 
 Quick example:
+
 ```python
 config = SimulationConfig.create_fast_config("test_workflow")
 runner = SimulationRunner(config)

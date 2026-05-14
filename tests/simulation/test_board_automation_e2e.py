@@ -88,7 +88,7 @@ async def test_item_cascades_from_trigger_to_exit(e2e_env):
             return False
         workflow_run_id = workflow_run_id_events[0].aggregate_id
         workflow_events = [e for e in all_events if e.aggregate_id == workflow_run_id]
-        return any(e.event_type == "WorkflowCompleted" for e in workflow_events)
+        return any(e.event_type == "WorkflowCompletedEvent" for e in workflow_events)
 
     await wait_for_condition(
         workflow_completed,
@@ -141,8 +141,8 @@ async def test_item_cascades_from_trigger_to_exit(e2e_env):
     event_types = [e.event_type for e in workflow_events]
 
     assert "WorkflowCreated" in event_types, f"WorkflowCreated not found, got: {event_types}"
-    assert "WorkflowStarted" in event_types, f"WorkflowStarted not found, got: {event_types}"
-    assert "WorkflowCompleted" in event_types, f"WorkflowCompleted not found, got: {event_types}"
+    assert "WorkflowStartedEvent" in event_types, f"WorkflowStarted not found, got: {event_types}"
+    assert "WorkflowCompletedEvent" in event_types, f"WorkflowCompleted not found, got: {event_types}"
 
     # Verify stage advances happened (3 stages = 3 advances)
     stage_advances = [e for e in workflow_events if e.event_type == "WorkflowStageAdvanced"]
@@ -370,7 +370,7 @@ async def test_autonomous_progression_via_api_single_http_call(e2e_env):
             return False
         workflow_run_id = workflow_run_id_events[0].aggregate_id
         workflow_events = [e for e in all_events if e.aggregate_id == workflow_run_id]
-        return any(e.event_type == "WorkflowCompleted" for e in workflow_events)
+        return any(e.event_type == "WorkflowCompletedEvent" for e in workflow_events)
 
     await wait_for_condition(
         workflow_completed,
@@ -391,8 +391,8 @@ async def test_autonomous_progression_via_api_single_http_call(e2e_env):
 
     # Verify critical lifecycle events
     assert "WorkflowCreated" in event_types, f"WorkflowCreated event not found. Event types: {event_types}"
-    assert "WorkflowStarted" in event_types, f"WorkflowStarted event not found. Event types: {event_types}"
-    assert "WorkflowCompleted" in event_types, f"WorkflowCompleted event not found. Event types: {event_types}"
+    assert "WorkflowStartedEvent" in event_types, f"WorkflowStarted event not found. Event types: {event_types}"
+    assert "WorkflowCompletedEvent" in event_types, f"WorkflowCompleted event not found. Event types: {event_types}"
 
     # 6. Verify stage advances (3 stages = 3 advances)
     stage_advances = [e for e in workflow_events if e.event_type == "WorkflowStageAdvanced"]
@@ -552,7 +552,7 @@ async def test_autonomous_progression_via_clock_tick(e2e_env):
     assert len(workflow_events) > 0, "No workflow events found"
 
     event_types = [e.event_type for e in workflow_events]
-    assert "WorkflowCompleted" in event_types, f"WorkflowCompleted event not found. Events: {event_types}"
+    assert "WorkflowCompletedEvent" in event_types, f"WorkflowCompleted event not found. Events: {event_types}"
 
     # =========================================================================
     # KEY VALIDATION: CLOCK-DRIVEN PROGRESSION EVIDENCE
