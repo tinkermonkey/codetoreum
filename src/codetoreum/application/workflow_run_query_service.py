@@ -485,7 +485,8 @@ class WorkflowRunQueryService(IWorkflowRunQueryPort):
         if include_validation:
             # Reconstruct all_events from events_data for validation
             # Note: We could optimize this further by caching event_types separately
-            actual_sequence = [event["event_type"] for event in events_data]
+            # Strip 'Event' suffix from full class names to match registry shorthand format
+            actual_sequence = [event["event_type"].removesuffix("Event") for event in events_data]
             expected_pattern = self._sequence_registry.get_expected_sequence("default")
             validation_result = self._sequence_validator.create_audit_validation_result(
                 expected_pattern, actual_sequence
