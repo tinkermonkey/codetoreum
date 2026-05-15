@@ -53,7 +53,7 @@ def redis_container():
 def elasticsearch_container():
     """Create Elasticsearch testcontainer with resource limits."""
     # Use modern wait strategy (no deprecation warnings)
-    container = ModernElasticsearchContainer("elasticsearch:8.11.0")
+    container = ModernElasticsearchContainer("elasticsearch:8.17.0")
     # Add resource limits to prevent memory exhaustion
     container.with_env("ES_JAVA_OPTS", "-Xms512m -Xmx512m")  # Limit ES heap to 512MB
     container.start()
