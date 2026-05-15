@@ -92,7 +92,9 @@ async def test_full_workflow_event_audit_trail(
 
     # Must have all lifecycle events
     assert "WorkflowCreated" in event_types_in_order, f"WorkflowCreated missing. Events found: {event_types_in_order}"
-    assert "WorkflowStartedEvent" in event_types_in_order, f"WorkflowStarted missing. Events found: {event_types_in_order}"
+    assert (
+        "WorkflowStartedEvent" in event_types_in_order
+    ), f"WorkflowStarted missing. Events found: {event_types_in_order}"
     assert (
         "WorkflowCompletedEvent" in event_types_in_order
     ), f"WorkflowCompleted missing. Events found: {event_types_in_order}"

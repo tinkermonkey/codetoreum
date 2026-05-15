@@ -320,7 +320,9 @@ class TestBridgeIntegration:
 
             # Find the WorkItemColumnChanged event
             work_item_event = next((e for e in events if e.event_type == "WorkItemColumnChangedEvent"), None)
-            assert work_item_event is not None, f"WorkItemColumnChangedEvent not found in DLQ. Available events: {[e.event_type for e in events]}"
+            assert (
+                work_item_event is not None
+            ), f"WorkItemColumnChangedEvent not found in DLQ. Available events: {[e.event_type for e in events]}"
             assert work_item_event.event_data["work_item_id"] == work_item_id
 
             # Verify error was classified as transient (bridge logic checks for ConnectionError)

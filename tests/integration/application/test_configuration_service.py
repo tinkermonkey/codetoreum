@@ -153,7 +153,9 @@ class TestProjectConfigUpdate:
         assert len(events) >= 1
         assert any(isinstance(event, ProjectConfigUpdatedEvent) for event in events)
         # Check that at least one event has project_config in the config_key
-        assert any(event.config_key == "project_config" for event in events if isinstance(event, ProjectConfigUpdatedEvent))
+        assert any(
+            event.config_key == "project_config" for event in events if isinstance(event, ProjectConfigUpdatedEvent)
+        )
 
     @pytest.mark.asyncio
     async def test_update_project_config_not_found(self, config_service):
@@ -311,7 +313,9 @@ class TestEnvironmentVariables:
         assert len(events) >= 1
         assert any(isinstance(event, EnvironmentVariableChangedEvent) for event in events)
         # Check that event has the right variable name
-        assert any(event.variable_name == "API_KEY" for event in events if isinstance(event, EnvironmentVariableChangedEvent))
+        assert any(
+            event.variable_name == "API_KEY" for event in events if isinstance(event, EnvironmentVariableChangedEvent)
+        )
 
     @pytest.mark.asyncio
     async def test_update_environment_variable(self, config_service, sample_project, config_store):

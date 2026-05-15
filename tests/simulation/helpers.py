@@ -174,7 +174,6 @@ class ScenarioHelpers:
     """
 
 
-
 def print_event_timeline(runner: SimulationRunner) -> None:
     """
     Print a timeline of captured events.

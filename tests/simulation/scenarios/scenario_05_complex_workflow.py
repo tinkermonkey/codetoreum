@@ -14,15 +14,15 @@ Expected outcome:
 
 from datetime import timedelta
 
+from codetoreum.infrastructure.simulation import (
+    SimulationConfig,
+    SimulationRunner,
+)
 from tests.simulation.test_event_helpers import (
     AgentExecutionCompleted,
     WorkflowBranchSelected,
     WorkflowCompleted,
     WorkflowStarted,
-)
-from codetoreum.infrastructure.simulation import (
-    SimulationConfig,
-    SimulationRunner,
 )
 
 

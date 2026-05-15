@@ -164,7 +164,9 @@ def create_simulation_executions_router(
             # Subtract one microsecond from since to preserve inclusive boundary behavior (>=)
             # because get_events_by_type uses strict > comparison internally.
             since_adjusted = since - timedelta(microseconds=1)
-            workflow_completed_events = await event_store.get_events_by_type("WorkflowCompletedEvent", since=since_adjusted)
+            workflow_completed_events = await event_store.get_events_by_type(
+                "WorkflowCompletedEvent", since=since_adjusted
+            )
 
             for event in workflow_completed_events:
                 # Extract run_id from event if available

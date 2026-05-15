@@ -7,7 +7,7 @@ capture in scenario tests without requiring full CodetoreumEvent constructors.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 
 
 @dataclass
@@ -15,7 +15,7 @@ class _SimTestEvent:
     aggregate_id: str = ""
     payload: dict = field(default_factory=dict)
     correlation_id: str | None = None
-    occurred_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    occurred_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def event_type(self) -> str:

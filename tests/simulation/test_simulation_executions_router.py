@@ -223,7 +223,10 @@ class TestSimulationExecutionsRouter:
     async def test_executions_status_filter_completed_only(self, app, event_store, clock):
         """Test status=completed filter returns only completed executions."""
         # Add a completed event
-        workflow_completed = _make_workflow_completed(work_item_id="item-456", workflow_id="run-123", occurred_at=clock.now(),
+        workflow_completed = _make_workflow_completed(
+            work_item_id="item-456",
+            workflow_id="run-123",
+            occurred_at=clock.now(),
         )
         await event_store.append("workflow-stream", [workflow_completed])
 
@@ -248,7 +251,10 @@ class TestSimulationExecutionsRouter:
         )
 
         # Add a completed event
-        workflow_completed = _make_workflow_completed(work_item_id="item-completed", workflow_id="run-completed", occurred_at=clock.now(),
+        workflow_completed = _make_workflow_completed(
+            work_item_id="item-completed",
+            workflow_id="run-completed",
+            occurred_at=clock.now(),
         )
         await event_store.append("workflow-stream", [workflow_completed])
 
@@ -273,7 +279,10 @@ class TestSimulationExecutionsRouter:
         )
 
         # Add a completed event
-        workflow_completed = _make_workflow_completed(work_item_id="item-completed", workflow_id="run-completed", occurred_at=clock.now(),
+        workflow_completed = _make_workflow_completed(
+            work_item_id="item-completed",
+            workflow_id="run-completed",
+            occurred_at=clock.now(),
         )
         await event_store.append("workflow-stream", [workflow_completed])
 
@@ -398,7 +407,10 @@ class TestSimulationExecutionsRouter:
 
     async def test_executions_completed_execution_fields(self, app, event_store, clock):
         """Test completed execution has all required fields."""
-        workflow_completed = _make_workflow_completed(work_item_id="item-456", workflow_id="run-123", occurred_at=clock.now(),
+        workflow_completed = _make_workflow_completed(
+            work_item_id="item-456",
+            workflow_id="run-123",
+            occurred_at=clock.now(),
         )
         await event_store.append("workflow-stream", [workflow_completed])
 

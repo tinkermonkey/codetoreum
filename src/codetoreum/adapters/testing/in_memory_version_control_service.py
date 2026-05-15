@@ -9,16 +9,13 @@ import hashlib
 import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from codetoreum.ports.output.event_emitter import IEventEmitter
 
 from codetoreum.ports.exceptions import (
     RepositoryError,
     ResourceNotFoundError,
     ValidationError,
 )
+from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.version_control_service import (
     IVersionControlService,
     Repository,

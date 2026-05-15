@@ -1,5 +1,6 @@
 """Unit tests for RepairCycleEventHandler."""
 
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -9,8 +10,6 @@ from codetoreum.application.event_handlers.repair_cycle_event_handler import (
     RepairCycleEventHandler,
 )
 from codetoreum.domain.board_workflow_template import BoardWorkflowTemplate, ColumnTemplate, ColumnType
-from datetime import UTC, datetime
-
 from codetoreum.domain.events import WorkItemColumnChangedEvent
 from codetoreum.domain.repair_cycle_types import (
     CycleResult,
@@ -35,7 +34,6 @@ from codetoreum.ports.output.repair_cycle_service import (
     RepairCycleContext,
 )
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
-
 
 
 def _make_col_event(

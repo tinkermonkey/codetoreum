@@ -257,7 +257,9 @@ async def test_event_store_work_item_ids(multi_project_env):
     alpha_event_types = [e.event_type for e in alpha_run_events]
     beta_event_types = [e.event_type for e in beta_run_events]
 
-    assert "WorkflowCompletedEvent" in alpha_event_types, f"Alpha run missing WorkflowCompleted, got: {alpha_event_types}"
+    assert (
+        "WorkflowCompletedEvent" in alpha_event_types
+    ), f"Alpha run missing WorkflowCompleted, got: {alpha_event_types}"
     assert "WorkflowCompletedEvent" in beta_event_types, f"Beta run missing WorkflowCompleted, got: {beta_event_types}"
 
     # Verify the two runs are independent (different aggregate_ids)

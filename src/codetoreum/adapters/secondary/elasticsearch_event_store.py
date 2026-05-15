@@ -938,7 +938,7 @@ class ElasticsearchEventStore(IEventStore):
                                 "trace_id": {"type": "keyword"},
                                 "span_id": {"type": "keyword"},
                                 "service": {"type": "keyword"},
-                            }
+                            },
                         },
                     }
                 },
@@ -948,9 +948,7 @@ class ElasticsearchEventStore(IEventStore):
         # Create template
         try:
             await self.client.indices.put_index_template(
-                name=template_name,
-                index_patterns=template["index_patterns"],
-                template=template["template"]
+                name=template_name, index_patterns=template["index_patterns"], template=template["template"]
             )
         except (ConnectionError, ConnectionTimeout, AuthenticationException) as e:
             # Infrastructure failure - propagate as EventStoreError

@@ -15,7 +15,6 @@ from codetoreum.adapters.testing.mock_review_cycle_adapter import MockReviewCycl
 from codetoreum.application.event_handlers.repair_cycle_event_handler import (
     RepairCycleEventContext,
 )
-from tests.simulation.test_event_helpers import WorkItemColumnChanged
 from codetoreum.domain.repair_cycle_types import (
     RepairTestRunConfig,
     RepairTestType,
@@ -25,6 +24,7 @@ from codetoreum.infrastructure.simulation.bootstrap import (
 )
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.ports.output.review_cycle_service import ReviewCycleRequest
+from tests.simulation.test_event_helpers import WorkItemColumnChanged
 
 
 @pytest.fixture

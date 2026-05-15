@@ -78,7 +78,6 @@ class FallbackTestEvent(CodetoreumEvent):
     """Test event with no specific aggregate ID field (fallback case)."""
 
 
-
 @pytest.fixture
 def query_service():
     """Create a WorkflowRunQueryService instance with InMemoryEventStore and no ticket system."""
