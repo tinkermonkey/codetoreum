@@ -153,7 +153,7 @@ class ElasticsearchConfigStorage(IConfigStore):
                                         "filter": [
                                             "lowercase",
                                             "asciifolding",
-                                            "word_delimiter",
+                                            "word_delimiter_graph",
                                         ],
                                     }
                                 }
