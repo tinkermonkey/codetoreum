@@ -108,5 +108,37 @@ if [ -n "${GITHUB_TOKEN:-}" ]; then
     # The agent will get a clear 403 error at runtime if permissions are insufficient.
 fi
 
+# --- Setup SSH config if .ssh/ is writable ----------------------------------
+if [ -d /home/orchestrator/.ssh ] || mkdir -p /home/orchestrator/.ssh 2>/dev/null; then
+    chmod 700 /home/orchestrator/.ssh 2>/dev/null || true
+
+    # Only create SSH config if .ssh/ is writable and config doesn't exist
+    if [ ! -f /home/orchestrator/.ssh/config ]; then
+        # Test if .ssh/ is writable
+        if touch /home/orchestrator/.ssh/.write_test 2>/dev/null; then
+            rm -f /home/orchestrator/.ssh/.write_test
+
+            # Create SSH config with accept-new key checking
+            cat > /home/orchestrator/.ssh/config <<'SSHEOF'
+Host github.com
+  StrictHostKeyChecking accept-new
+  UserKnownHostsFile /home/orchestrator/.ssh/known_hosts
+  IdentityFile /home/orchestrator/.ssh/id_github
+SSHEOF
+            chmod 600 /home/orchestrator/.ssh/config 2>/dev/null || true
+        fi
+    fi
+fi || true
+
+# --- Authenticate GitHub CLI if token is provided ---------------------------
+if [ -n "${GITHUB_TOKEN:-}" ]; then
+    mkdir -p /home/orchestrator/.config 2>/dev/null || true
+
+    # Authenticate via token (fallback to gh auth, but don't fail if it errors)
+    if command -v gh >/dev/null 2>&1; then
+        echo "$GITHUB_TOKEN" | gh auth login --with-token >/dev/null 2>&1 || true
+    fi
+fi || true
+
 # --- Hand off to the requested command --------------------------------------
 exec "$@"

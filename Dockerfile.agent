@@ -119,20 +119,24 @@ ENV DBUS_SESSION_BUS_ADDRESS=disabled:
 # ============================================================================
 # Stage 4b: Create Non-Root User with Docker Group Access
 # ============================================================================
-# Create docker group matching host GID and non-root user
+# Create docker group matching host GID and non-root user (if not already exists)
 RUN if [ "${DOCKER_GID}" = "0" ]; then \
-        useradd -m -u 1000 -G root orchestrator; \
+        id -u orchestrator >/dev/null 2>&1 || useradd -m -u 1000 -G root orchestrator; \
     else \
-        groupadd -g ${DOCKER_GID} docker || true && \
-        useradd -m -u 1000 -G docker orchestrator; \
+        groupadd -g ${DOCKER_GID} docker 2>/dev/null || true; \
+        if id -u orchestrator >/dev/null 2>&1; then \
+            usermod -aG docker orchestrator; \
+        else \
+            useradd -m -u 1000 -G docker orchestrator; \
+        fi \
     fi
 
 # ============================================================================
 # Stage 6: Install Entrypoint Script
 # ============================================================================
-# The entrypoint creates SSH config and authenticates GitHub CLI at runtime
-# Handles both readable and writable .ssh/ mounts gracefully
-COPY docker-entrypoint.sh /docker-entrypoint.sh
+# The entrypoint validates git CLI, handles DinD mount issues, and authenticates GitHub CLI
+# at runtime. Handles both readable and writable .ssh/ mounts gracefully.
+COPY scripts/agent-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
 # ============================================================================

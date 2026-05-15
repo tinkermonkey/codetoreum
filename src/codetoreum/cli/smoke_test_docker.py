@@ -31,7 +31,6 @@ from codetoreum.adapters.secondary.docker_container_adapter import (
     DockerConfig,
     DockerContainerAdapter,
 )
-from codetoreum.ports.exceptions import ContainerError, ContainerExecutionError
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
@@ -65,7 +64,7 @@ class SmokeTestRunner:
     def _detect_host_workspace_path(self) -> str:
         """Detect host workspace path from /proc/self/mountinfo."""
         try:
-            with open("/proc/self/mountinfo", "r") as f:
+            with open("/proc/self/mountinfo") as f:
                 for line in f:
                     parts = line.split()
                     if len(parts) > 4:
@@ -100,18 +99,12 @@ class SmokeTestRunner:
                 workspace_path = self._detect_host_workspace_path()
                 home_path = self._detect_host_home_path()
 
-                # Verify paths exist
-                workspace_exists = Path(workspace_path).exists()
-                home_exists = Path(home_path).exists()
-
-                if not workspace_exists:
-                    self._log_step(
-                        1,
-                        "Host path detection",
-                        "FAIL",
-                        f"Workspace path does not exist: {workspace_path}",
-                    )
-                    return False
+                # Note: We cannot directly verify these paths exist from inside a container
+                # since _detect_host_workspace_path() returns host paths that may not exist
+                # in the container filesystem. Instead, we log what was detected and validate
+                # in later steps when we actually use these paths (e.g., Step 2 workspace writable check).
+                logger.info(f"Detected workspace path: {workspace_path}")
+                logger.info(f"Detected home path: {home_path}")
 
                 duration = time.time() - step_start
                 self._log_step(
@@ -128,7 +121,7 @@ class SmokeTestRunner:
             step_start = time.time()
             try:
                 workspace_base = os.environ.get("AGENT_WORKSPACE_BASE", "/tmp/codetoreum/workspaces")
-                os.makedirs(workspace_base, exist_ok=True)
+                Path(workspace_base).mkdir(parents=True, exist_ok=True)
 
                 # Create a test file to verify writability
                 test_file = Path(workspace_base) / ".codetoreum_write_test"
@@ -161,7 +154,7 @@ class SmokeTestRunner:
                 result = await self.adapter.run(
                     image="python:3.11-slim",
                     command=["sh", "-c", "echo 'Container launched successfully' && sleep 1"],
-                    volumes={workspace_path: f"/workspace:rw"},
+                    volumes={workspace_path: "/workspace:rw"},
                     environment={
                         "OTEL_ENABLED": "1",
                         "OTEL_METRICS_EXPORTER": "otlp",
@@ -260,16 +253,31 @@ class SmokeTestRunner:
                 self._log_step(5, "OTEL env verification", "FAIL", str(e))
                 return False
 
-            # Step 6: Network connectivity (Redis check - skip if not available)
+            # Step 6: Network connectivity (Redis check via Docker DNS on compose network)
             step_start = time.time()
             try:
-                # This step can optionally check if Redis is reachable
-                # For now, we skip it if Redis is not available
+                # Test Docker DNS service discovery on the compose network
+                # Agent containers should be able to reach Redis by hostname on the named network
                 redis_available = False
                 try:
-                    result = await self.adapter.run(
+                    # Create a temporary adapter for this test with the compose network
+                    compose_network = os.environ.get("DOCKER_NETWORK", "codetoreum_default")
+                    redis_adapter = DockerContainerAdapter(
+                        config=DockerConfig(
+                            default_user="1000:1000",
+                            default_network=compose_network,
+                            remove_on_completion=True,
+                        )
+                    )
+
+                    # Connect to Redis on the named network using DNS service discovery
+                    result = await redis_adapter.run(
                         image="python:3.11-slim",
-                        command=["sh", "-c", "python3 -c 'import socket; s=socket.socket(); s.connect((\"localhost\", 6379)); s.close(); print(\"ok\")'"],
+                        command=[
+                            "sh",
+                            "-c",
+                            'python3 -c \'import socket; s=socket.socket(); s.connect(("redis", 6379)); s.close(); print("ok")\'',
+                        ],
                         volumes={},
                         environment={},
                     )
@@ -285,7 +293,7 @@ class SmokeTestRunner:
                         6,
                         "Network connectivity (Redis)",
                         "PASS",
-                        f"Redis reachable on localhost:6379 ({duration:.2f}s)",
+                        f"Redis reachable via DNS on {compose_network} network ({duration:.2f}s)",
                     )
                 else:
                     self._log_step(
@@ -372,18 +380,21 @@ class SmokeTestRunner:
             # Step 8: Cleanup verification
             step_start = time.time()
             try:
-                # Verify that test containers have been cleaned up
+                # Verify that agent containers have been cleaned up
                 import docker
+
                 try:
                     client = docker.from_env()
-                    containers = client.containers.list(all=True, filters={"name": "codetoreum-smoke-test"})
+                    # Check for lingering containers with the codetoreum-agent prefix
+                    # Note: Docker filters use regex, so we check for containers whose name contains "codetoreum-agent"
+                    containers = client.containers.list(all=True, filters={"name": "codetoreum-agent"})
 
                     if containers:
                         self._log_step(
                             8,
                             "Cleanup verification",
                             "FAIL",
-                            f"Found {len(containers)} lingering test containers",
+                            f"Found {len(containers)} lingering codetoreum-agent containers",
                         )
                         return False
 
@@ -392,7 +403,7 @@ class SmokeTestRunner:
                         8,
                         "Cleanup verification",
                         "PASS",
-                        f"No lingering smoke-test containers ({duration:.2f}s)",
+                        f"No lingering codetoreum-agent containers ({duration:.2f}s)",
                     )
                 except Exception as e:
                     # If we can't connect to Docker to verify, just log a warning
@@ -430,9 +441,7 @@ class SmokeTestRunner:
             status_symbol = "✓" if r["status"] == "PASS" else ("✗" if r["status"] == "FAIL" else "-")
             print(f"{status_symbol} Step {step_num}: {r['name']}")
 
-        print(
-            f"\nResults: {passed} passed, {failed} failed, {skipped} skipped ({len(self.results)} total)"
-        )
+        print(f"\nResults: {passed} passed, {failed} failed, {skipped} skipped ({len(self.results)} total)")
         print("=" * 70 + "\n")
 
         return failed == 0
@@ -440,17 +449,11 @@ class SmokeTestRunner:
 
 @click.command(name="smoke-test-docker")
 @click.option(
-    "--network",
-    envvar="DOCKER_NETWORK",
-    default="bridge",
-    help="Docker network for agent containers",
-)
-@click.option(
     "--verbose",
     is_flag=True,
     help="Enable verbose logging",
 )
-def smoke_test_docker(network: str, verbose: bool):
+def smoke_test_docker(verbose: bool):
     """Run Docker container smoke test."""
     if verbose:
         logging.getLogger().setLevel(logging.DEBUG)
