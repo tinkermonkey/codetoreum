@@ -71,12 +71,15 @@ class TestAdapterCredentialValidation:
     """Test credential validation for production adapters."""
 
     @pytest.mark.asyncio
-    async def test_real_adapter_without_credentials_fails_fast(self) -> None:
+    async def test_real_adapter_without_credentials_fails_fast(self, monkeypatch: Any) -> None:
         """Verify real adapter configured without required credentials raises error at setup.
 
         This test ensures credentials are validated at bootstrap time, not runtime,
         enabling fail-fast behavior and preventing partial application startup.
         """
+        # Unset GITHUB_ORG to test missing credential scenario
+        monkeypatch.delenv("GITHUB_ORG", raising=False)
+
         config = SimulationConfig.create_fast_config("cred_test")
         # Override one adapter slot to use GitHub (requires GITHUB_TOKEN)
         config = dataclasses.replace(
@@ -341,12 +344,16 @@ class TestAdapterConfigurationErrors:
     @pytest.mark.asyncio
     async def test_credential_error_includes_slot_implementation_and_missing_var(
         self,
+        monkeypatch: Any,
     ) -> None:
         """Verify error message format includes slot, implementation, and missing var.
 
         This test ensures error messages are diagnostic, containing all information
         needed to remediate the configuration error.
         """
+        # Unset GITHUB_ORG to test missing credential scenario
+        monkeypatch.delenv("GITHUB_ORG", raising=False)
+
         config = SimulationConfig.create_fast_config("diagnostic_error_test")
         config = dataclasses.replace(
             config,

@@ -41,6 +41,7 @@ from codetoreum.ports.output.board_service import (
     ReconciliationResult,
     WorkItemPosition,
 )
+from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.monitoring import (
     MonitoringConfig,
     MonitoringState,
@@ -57,9 +58,10 @@ class GitHubBoardAdapter(IBoardService):
 
     def __init__(
         self,
-        ticket_adapter: GitHubTicketAdapter,
-        graphql_client: GitHubGraphQLClient,
+        ticket_adapter: GitHubTicketAdapter | None = None,
+        graphql_client: GitHubGraphQLClient | None = None,
         webhook_enabled: bool = True,
+        event_emitter: "IEventEmitter | None" = None,
     ):
         """Initialize GitHub board adapter.
 
@@ -67,10 +69,12 @@ class GitHubBoardAdapter(IBoardService):
             ticket_adapter: GitHub ticket adapter for issue metadata
             graphql_client: GitHub GraphQL client for Projects v2 API
             webhook_enabled: If False, use polling fallback
+            event_emitter: Optional IEventEmitter for emitting domain events
         """
         self._ticket_adapter = ticket_adapter
         self._graphql = graphql_client
         self._webhook_enabled = webhook_enabled
+        self._event_emitter = event_emitter
 
         # Monitoring state
         self._monitoring: dict[str, MonitoringStatus] = {}
