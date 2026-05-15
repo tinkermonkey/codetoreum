@@ -450,17 +450,16 @@ class RedisConfigCache:
             project_id: Project identifier
         """
         try:
-            # Invalidate project config
             key_pattern = self._make_key("project", project_id)
-            await self.redis.publish(self.invalidation_channel, key_pattern)
-
-            # Also invalidate project name cache (need to get project first)
-            # This is a simplification - in production, we'd track this mapping
             key_pattern_name = self._make_key("project", "name", "*")
-            await self.redis.publish(self.invalidation_channel, key_pattern_name)
-
-            # Invalidate related lists
             key_pattern_list = self._make_key("list", "projects")
+
+            await self._handle_invalidation(key_pattern)
+            await self._handle_invalidation(key_pattern_name)
+            await self._handle_invalidation(key_pattern_list)
+
+            await self.redis.publish(self.invalidation_channel, key_pattern)
+            await self.redis.publish(self.invalidation_channel, key_pattern_name)
             await self.redis.publish(self.invalidation_channel, key_pattern_list)
 
             logger.debug(f"Invalidated project cache: {project_id}")
@@ -478,10 +477,12 @@ class RedisConfigCache:
         """
         try:
             key_pattern = self._make_key("agent", project_id, agent_name)
-            await self.redis.publish(self.invalidation_channel, key_pattern)
-
-            # Invalidate agent list
             key_pattern_list = self._make_key("list", "agents", project_id)
+
+            await self._handle_invalidation(key_pattern)
+            await self._handle_invalidation(key_pattern_list)
+
+            await self.redis.publish(self.invalidation_channel, key_pattern)
             await self.redis.publish(self.invalidation_channel, key_pattern_list)
 
             logger.debug(f"Invalidated agent cache: {project_id}/{agent_name}")
@@ -499,10 +500,12 @@ class RedisConfigCache:
         """
         try:
             key_pattern = self._make_key("pipeline", project_id, pipeline_name)
-            await self.redis.publish(self.invalidation_channel, key_pattern)
-
-            # Invalidate pipeline list
             key_pattern_list = self._make_key("list", "pipelines", project_id)
+
+            await self._handle_invalidation(key_pattern)
+            await self._handle_invalidation(key_pattern_list)
+
+            await self.redis.publish(self.invalidation_channel, key_pattern)
             await self.redis.publish(self.invalidation_channel, key_pattern_list)
 
             logger.debug(f"Invalidated pipeline cache: {project_id}/{pipeline_name}")
@@ -519,6 +522,8 @@ class RedisConfigCache:
         """
         try:
             key_pattern = self._make_key("workflow", template_name)
+
+            await self._handle_invalidation(key_pattern)
             await self.redis.publish(self.invalidation_channel, key_pattern)
 
             logger.debug(f"Invalidated workflow template cache: {template_name}")
@@ -530,6 +535,8 @@ class RedisConfigCache:
         """Invalidate all configuration cache entries."""
         try:
             key_pattern = self._make_key("*")
+
+            await self._handle_invalidation(key_pattern)
             await self.redis.publish(self.invalidation_channel, key_pattern)
 
             logger.info("Invalidated all configuration cache")

@@ -28,6 +28,7 @@ def docker_config():
         remove_on_completion=True,
         memory_limit="256m",  # Limit test containers to 256MB RAM
         cpu_limit=0.5,  # Limit to 0.5 CPU cores
+        agent_network="bridge",
     )
 
 
