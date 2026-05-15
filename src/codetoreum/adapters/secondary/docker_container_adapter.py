@@ -58,6 +58,9 @@ class DockerConfig:
     remove_on_completion: bool = True
     default_user: str | None = None
     agent_network: str = field(default_factory=lambda: os.environ.get("AGENT_NETWORK", "codetoreum_default"))
+    agent_otel_endpoint: str = field(
+        default_factory=lambda: os.environ.get("AGENT_OTEL_ENDPOINT", "http://otel-collector:4317")
+    )
 
     # Resource limits
     memory_limit: str | None = None  # e.g., "512m"
@@ -89,12 +92,24 @@ class DockerContainerAdapter(IContainer):
         self._docker_client = None
         self._host_workspace_path = self._detect_host_workspace_path()
         self._host_home_path = self._detect_host_home_path()
+        self._validate_workspace_base()
+
+    def _validate_workspace_base(self) -> None:
+        """Validate that AGENT_WORKSPACE_BASE is under /workspace/, not /tmp/."""
+        workspace_base = os.environ.get("AGENT_WORKSPACE_BASE")
+        if workspace_base and workspace_base.startswith("/tmp/"):
+            msg = (
+                f"AGENT_WORKSPACE_BASE={workspace_base} is under /tmp/, which is not host-path-translated. "
+                "Agent containers will receive empty volume mounts. "
+                "Set AGENT_WORKSPACE_BASE=/workspace/codetoreum/agent-workspaces or similar path under /workspace/."
+            )
+            raise ContainerError(msg)
 
     @staticmethod
     def _detect_host_workspace_path() -> str:
         """Parse /proc/self/mountinfo to find the host path mapped to /workspace."""
         try:
-            with open("/proc/self/mountinfo", "r") as f:
+            with open("/proc/self/mountinfo") as f:
                 for line in f:
                     parts = line.split()
                     if parts[4] == "/workspace":
@@ -138,17 +153,15 @@ class DockerContainerAdapter(IContainer):
         work_item_id: str,
     ) -> dict[str, str]:
         """Build OTEL environment variables for agent container."""
-        endpoint = os.environ.get("AGENT_OTEL_ENDPOINT", "http://otel-collector:4317")
         return {
             "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
             "OTEL_METRICS_EXPORTER": "otlp",
             "OTEL_LOGS_EXPORTER": "otlp",
-            "OTEL_EXPORTER_OTLP_ENDPOINT": endpoint,
+            "OTEL_EXPORTER_OTLP_ENDPOINT": self.config.agent_otel_endpoint,
             "OTEL_METRIC_EXPORT_INTERVAL": "10000",
             "OTEL_LOGS_EXPORT_INTERVAL": "5000",
             "OTEL_RESOURCE_ATTRIBUTES": (
-                f"agent={agent_name},project={project_id},"
-                f"execution_id={execution_id},work_item_id={work_item_id}"
+                f"agent={agent_name},project={project_id}," f"execution_id={execution_id},work_item_id={work_item_id}"
             ),
         }
 
@@ -156,34 +169,27 @@ class DockerContainerAdapter(IContainer):
         """
         Run a throwaway alpine container to verify workspace write access.
         Uses the Docker SDK directly (not self.run()) to avoid recursion.
-        Retries 3x with 2s delay. Raises ContainerError after all attempts fail.
+        Makes a single attempt; raises ContainerError on failure.
+        Retry logic (if needed) should be applied via infrastructure decorators.
         """
         test_filename = f".codetoreum_write_test_{uuid.uuid4().hex}"
         test_cmd = ["sh", "-c", f"touch {working_dir}/{test_filename} && rm {working_dir}/{test_filename}"]
-        last_error: Exception | None = None
         client = self._get_client()
-        for attempt in range(3):
-            try:
-                await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    lambda: client.containers.run(
-                        "alpine:latest",
-                        test_cmd,
-                        volumes=volume_spec,
-                        working_dir=working_dir,
-                        remove=True,
-                        user=self.config.default_user,
-                    ),
-                )
-                return
-            except Exception as e:
-                last_error = e
-                if attempt < 2:
-                    await asyncio.sleep(2)
-        raise ContainerError(
-            f"Workspace not writable after 3 attempts — check volume mount permissions. "
-            f"Volume: {volume_spec}. Last error: {last_error}"
-        )
+        try:
+            await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: client.containers.run(
+                    "alpine:latest",
+                    test_cmd,
+                    volumes=volume_spec,
+                    working_dir=working_dir,
+                    remove=True,
+                    user=self.config.default_user,
+                ),
+            )
+        except Exception as e:
+            msg = f"Workspace not writable — check volume mount permissions. " f"Volume: {volume_spec}. Error: {e}"
+            raise ContainerError(msg) from e
 
     def _get_client(self):
         """Get or create Docker client."""
@@ -554,6 +560,8 @@ class DockerContainerAdapter(IContainer):
         sanitized_name = None
         if name:
             sanitized_name = self._sanitize_container_name(name)
+            # Convert empty string to None so Docker auto-generates a name
+            sanitized_name = sanitized_name or None
 
         # Parse and translate volumes
         translated_volumes = {}
@@ -570,6 +578,12 @@ class DockerContainerAdapter(IContainer):
                 work_item_id=labels.get("org.codetoreum.work_item_id", "unknown"),
             )
             merged_env.update(otel_env)
+
+        # Verify workspace write access before creating container (async, outside executor)
+        if self.config.verify_workspace_writable and translated_volumes:
+            workspace_volume = {k: v for k, v in translated_volumes.items() if v.get("bind") == "/workspace"}
+            if workspace_volume:
+                await self._verify_workspace_writable(workspace_volume, working_dir or "/workspace")
 
         container_config = {
             "image": image,
@@ -588,7 +602,7 @@ class DockerContainerAdapter(IContainer):
 
         loop = asyncio.get_event_loop()
 
-        async def _create():
+        def _create():
             try:
                 # Check image exists
                 try:
@@ -600,16 +614,6 @@ class DockerContainerAdapter(IContainer):
                     # Re-raise other Docker errors as ContainerError
                     msg = f"Failed to check image: {e!s}"
                     raise ContainerError(msg) from e
-
-                # Verify workspace write access before creating container
-                if self.config.verify_workspace_writable and translated_volumes:
-                    workspace_volume = {
-                        k: v for k, v in translated_volumes.items() if "/workspace" in str(v)
-                    }
-                    if workspace_volume:
-                        await self._verify_workspace_writable(
-                            workspace_volume, working_dir or "/workspace"
-                        )
 
                 container = client.containers.create(**container_config)
                 return container.id

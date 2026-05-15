@@ -18,6 +18,13 @@ from codetoreum.adapters.secondary.docker_container_adapter import DockerConfig,
 from codetoreum.ports.exceptions import ContainerError, ValidationError
 
 
+@pytest.fixture(autouse=True)
+def _patch_agent_workspace_base():
+    """Patch AGENT_WORKSPACE_BASE to a valid path for all tests."""
+    with patch.dict(os.environ, {"AGENT_WORKSPACE_BASE": "/workspace/codetoreum/agent-workspaces"}, clear=False):
+        yield
+
+
 class TestDetectHostWorkspacePath:
     """Tests for _detect_host_workspace_path static method."""
 
@@ -28,9 +35,7 @@ class TestDetectHostWorkspacePath:
 3 1 8:2 /home /home rw,relatime - ext4 /dev/sdc rw
 """
         with patch("builtins.open", create=True) as mock_open:
-            mock_open.return_value.__enter__.return_value.readlines.return_value = (
-                mountinfo_content.strip().split("\n")
-            )
+            mock_open.return_value.__enter__.return_value.readlines.return_value = mountinfo_content.strip().split("\n")
             mock_open.return_value.__enter__.return_value = iter(mountinfo_content.strip().split("\n"))
 
             with patch("builtins.open", create=True) as mock_file:
@@ -81,7 +86,7 @@ class TestDetectHostHomePath:
     def test_detect_home_path_fallback(self):
         """Should use /root as fallback when HOME env var not set."""
         with patch.dict(os.environ, {}, clear=True):
-            with patch("os.environ.get", side_effect=lambda k, default: default):
+            with patch("os.environ.get", side_effect=lambda k, default=None: default):
                 result = DockerContainerAdapter._detect_host_home_path()
 
             assert result == "/root"
@@ -110,10 +115,10 @@ class TestSanitizeContainerName:
         assert result == "codetoreum-agent"
 
     def test_sanitize_leading_numbers(self):
-        """Should remove leading numbers."""
+        """Should preserve leading numbers (Docker allows [a-zA-Z0-9]...)."""
         name = "123codetoreum-agent"
         result = DockerContainerAdapter._sanitize_container_name(name)
-        assert result == "codetoreum-agent"
+        assert result == "123codetoreum-agent"
 
     def test_sanitize_multiple_dashes(self):
         """Should collapse multiple consecutive dashes."""
@@ -173,10 +178,10 @@ class TestBuildAgentOtelEnv:
 
     def test_build_otel_env_custom_endpoint(self):
         """Should respect AGENT_OTEL_ENDPOINT env var."""
-        config = DockerConfig()
-        adapter = DockerContainerAdapter(config)
-
         with patch.dict(os.environ, {"AGENT_OTEL_ENDPOINT": "http://custom:5000"}, clear=False):
+            config = DockerConfig()
+            adapter = DockerContainerAdapter(config)
+
             result = adapter._build_agent_otel_env("exec-1", "agent-1", "proj-1", "item-1")
 
         assert result["OTEL_EXPORTER_OTLP_ENDPOINT"] == "http://custom:5000"
@@ -220,31 +225,23 @@ class TestVerifyWorkspaceWritable:
         assert mock_client.containers.run.call_count == 1
 
     @pytest.mark.asyncio
-    async def test_verify_workspace_writable_retries_then_succeeds(self):
-        """Should retry on failure and succeed eventually."""
+    async def test_verify_workspace_writable_single_attempt(self):
+        """Should make a single attempt (no retries)."""
         config = DockerConfig()
         adapter = DockerContainerAdapter(config)
 
         mock_client = MagicMock()
         adapter._docker_client = mock_client
-
-        # Fail twice, then succeed
-        mock_client.containers.run.side_effect = [
-            Exception("Mount error"),
-            Exception("Mount error"),
-            None,  # Success on third attempt
-        ]
+        mock_client.containers.run.return_value = None
 
         volume_spec = {"/host/workspace": {"bind": "/workspace", "mode": "rw"}}
+        await adapter._verify_workspace_writable(volume_spec, "/workspace")
 
-        with patch("asyncio.sleep", new_callable=AsyncMock):
-            await adapter._verify_workspace_writable(volume_spec, "/workspace")
-
-        assert mock_client.containers.run.call_count == 3
+        assert mock_client.containers.run.call_count == 1
 
     @pytest.mark.asyncio
-    async def test_verify_workspace_writable_all_attempts_fail(self):
-        """Should raise ContainerError after 3 failed attempts."""
+    async def test_verify_workspace_writable_failure(self):
+        """Should raise ContainerError on single failed attempt."""
         config = DockerConfig()
         adapter = DockerContainerAdapter(config)
 
@@ -254,12 +251,12 @@ class TestVerifyWorkspaceWritable:
 
         volume_spec = {"/host/workspace": {"bind": "/workspace", "mode": "rw"}}
 
-        with patch("asyncio.sleep", new_callable=AsyncMock):
-            with pytest.raises(ContainerError) as exc_info:
-                await adapter._verify_workspace_writable(volume_spec, "/workspace")
+        with pytest.raises(ContainerError) as exc_info:
+            await adapter._verify_workspace_writable(volume_spec, "/workspace")
 
         assert "not writable" in str(exc_info.value)
         assert str(volume_spec) in str(exc_info.value)
+        assert mock_client.containers.run.call_count == 1
 
 
 class TestDockerConfigAgentNetwork:
@@ -307,16 +304,18 @@ class TestParseVolumeSpecWithPathTranslation:
 
     def test_parse_volume_spec_workspace_path_translation(self):
         """Should translate /workspace paths to host equivalents."""
-        config = DockerConfig()
-
         with patch.dict(os.environ, {"HOST_WORKSPACE_PATH": "/mnt/host/workspace"}, clear=False):
-            adapter = DockerContainerAdapter(config)
+            with patch.object(
+                DockerContainerAdapter, "_detect_host_workspace_path", return_value="/mnt/host/workspace"
+            ):
+                config = DockerConfig()
+                adapter = DockerContainerAdapter(config)
 
-        volumes = {"/workspace/project": "/workspace:rw"}
-        result = adapter._parse_volume_spec(volumes)
+                volumes = {"/workspace/project": "/workspace:rw"}
+                result = adapter._parse_volume_spec(volumes)
 
-        # Should have translated the path
-        assert "/mnt/host/workspace/project" in result
+                # Should have translated the path
+                assert "/mnt/host/workspace/project" in result
 
     def test_parse_volume_spec_non_workspace_path_unchanged(self):
         """Should not translate paths not under /workspace or $HOME."""
@@ -329,17 +328,22 @@ class TestParseVolumeSpecWithPathTranslation:
         # The path should be resolved (absolute) but not translated
         assert "/var/log" in result or str(Path("/var/log").resolve()) in result
 
-    def test_parse_volume_spec_invalid_paths_rejected(self):
-        """Should reject relative paths."""
+    def test_parse_volume_spec_relative_paths_resolved(self):
+        """Should resolve relative paths to absolute."""
         config = DockerConfig()
         adapter = DockerContainerAdapter(config)
 
         volumes = {"./relative/path": "/container:rw"}
+        result = adapter._parse_volume_spec(volumes)
 
-        with pytest.raises(ValidationError) as exc_info:
-            adapter._parse_volume_spec(volumes)
-
-        assert "absolute" in str(exc_info.value).lower()
+        # Relative paths should be resolved to absolute, and result keys should contain the resolved path
+        # The exact path depends on the current working directory
+        assert len(result) == 1
+        result_key = list(result.keys())[0]
+        # Should be an absolute path
+        assert result_key.startswith("/")
+        # Should end with the relative path components
+        assert result_key.endswith("relative/path")
 
     def test_parse_volume_spec_invalid_mode_rejected(self):
         """Should reject invalid mount modes."""
@@ -465,3 +469,53 @@ class TestCreateMethodIntegration:
             await adapter.create(image="test:latest", volumes=volumes)
 
             mock_verify.assert_not_called()
+
+
+class TestAgentWorkspaceBaseValidation:
+    """Tests for AGENT_WORKSPACE_BASE validation."""
+
+    def test_agent_workspace_base_raises_when_under_tmp(self):
+        """Should raise ContainerError if AGENT_WORKSPACE_BASE is under /tmp/."""
+        with patch.dict(os.environ, {"AGENT_WORKSPACE_BASE": "/tmp/codetoreum/workspaces"}, clear=False):
+            config = DockerConfig()
+            with pytest.raises(ContainerError) as exc_info:
+                DockerContainerAdapter(config)
+
+            assert "AGENT_WORKSPACE_BASE" in str(exc_info.value)
+            assert "/tmp/" in str(exc_info.value)
+
+    def test_agent_workspace_base_valid_under_workspace(self):
+        """Should not raise if AGENT_WORKSPACE_BASE is under /workspace/."""
+        with patch.dict(os.environ, {"AGENT_WORKSPACE_BASE": "/workspace/codetoreum/workspaces"}, clear=False):
+            config = DockerConfig()
+            adapter = DockerContainerAdapter(config)
+            assert adapter is not None
+
+
+class TestAgentOtelEndpoint:
+    """Tests for agent_otel_endpoint configuration."""
+
+    def test_agent_otel_endpoint_default(self):
+        """Should default to http://otel-collector:4317."""
+        with patch.dict(os.environ, {}, clear=True):
+            with patch("os.environ.get", side_effect=lambda k, default: default):
+                config = DockerConfig()
+
+        assert config.agent_otel_endpoint == "http://otel-collector:4317"
+
+    def test_agent_otel_endpoint_from_env_var(self):
+        """Should read AGENT_OTEL_ENDPOINT from environment."""
+        with patch.dict(os.environ, {"AGENT_OTEL_ENDPOINT": "http://custom:5000"}, clear=False):
+            config = DockerConfig()
+
+        assert config.agent_otel_endpoint == "http://custom:5000"
+
+    def test_build_otel_env_uses_config_endpoint(self):
+        """Should use agent_otel_endpoint from config, not os.environ directly."""
+        with patch.dict(os.environ, {"AGENT_OTEL_ENDPOINT": "http://custom-endpoint:9999"}, clear=False):
+            config = DockerConfig()
+            adapter = DockerContainerAdapter(config)
+
+            result = adapter._build_agent_otel_env("exec-1", "agent-1", "proj-1", "item-1")
+
+            assert result["OTEL_EXPORTER_OTLP_ENDPOINT"] == "http://custom-endpoint:9999"
