@@ -36,13 +36,25 @@ RUN apt-get update && \
 # WORKDIR should match where the orchestrator will mount the project
 WORKDIR /workspace/codetoreum
 
+# Poetry configuration: install into system Python, no per-project virtualenv.
+# In a container the container itself is the isolated environment, so a nested
+# venv adds no value and breaks `poetry run pytest` by creating a second Python.
+ENV POETRY_NO_INTERACTION=1 \
+    POETRY_VIRTUALENVS_CREATE=false \
+    POETRY_CACHE_DIR=/tmp/poetry_cache
+
 # Copy ONLY the dependency manifests needed for installation
 # DO NOT copy source code - it comes from the runtime mount
-COPY requirements.txt* pyproject.toml ./
+COPY requirements.txt* pyproject.toml poetry.lock* ./
 
-# Pre-install Python dependencies if requirements.txt exists
-# Use BuildKit cache mount for pip cache to speed up rebuilds
-RUN if [ -f requirements.txt ]; then \
+# Install Poetry so agents can use `poetry run pytest` (per CLAUDE.md)
+RUN pip install --no-cache-dir poetry
+
+# Install all project dependencies (runtime + dev) via poetry when lockfile exists;
+# fall back to requirements.txt otherwise.
+RUN if [ -f poetry.lock ]; then \
+    poetry install --no-root; \
+    elif [ -f requirements.txt ]; then \
     pip install --no-cache-dir -r requirements.txt; \
     fi
 
