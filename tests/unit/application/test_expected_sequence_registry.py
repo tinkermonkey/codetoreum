@@ -18,10 +18,10 @@ class TestExpectedSequenceRegistry:
         sequence = ExpectedSequenceRegistry.get_expected_sequence()
 
         assert sequence == ExpectedSequenceRegistry.WORKFLOW_LIFECYCLE
-        assert "WorkflowCreated" in sequence
-        assert "WorkflowStarted" in sequence
-        assert "WorkflowStageAdvanced*" in sequence
-        assert "WorkflowCompleted|WorkflowFailed" in sequence
+        assert "WorkflowCreatedEvent" in sequence
+        assert "WorkflowStartedEvent" in sequence
+        assert "WorkflowStageAdvancedEvent*" in sequence
+        assert "WorkflowCompletedEvent|WorkflowFailedEvent" in sequence
 
     def test_get_expected_sequence_with_type(self):
         """Test getting sequence for specific workflow type."""
@@ -34,45 +34,44 @@ class TestExpectedSequenceRegistry:
         pattern = ExpectedSequenceRegistry.WORKFLOW_LIFECYCLE
 
         assert len(pattern) == 4
-        assert pattern[0] == "WorkflowCreated"
-        assert pattern[1] == "WorkflowStarted"
-        assert pattern[2] == "WorkflowStageAdvanced*"  # Zero or more
-        assert pattern[3] == "WorkflowCompleted|WorkflowFailed"  # Either/or
+        assert pattern[0] == "WorkflowCreatedEvent"
+        assert pattern[1] == "WorkflowStartedEvent"
+        assert pattern[2] == "WorkflowStageAdvancedEvent*"  # Zero or more
+        assert pattern[3] == "WorkflowCompletedEvent|WorkflowFailedEvent"  # Either/or
 
     def test_stage_execution_pattern(self):
         """Test stage execution pattern structure."""
         pattern = ExpectedSequenceRegistry.get_stage_execution_sequence()
 
         assert len(pattern) == 3
-        assert pattern[0] == "ExecutionInitialized"
-        assert pattern[1] == "ExecutionStarted"
-        assert "ExecutionCompleted" in pattern[2]
-        assert "ExecutionFailed" in pattern[2]
-        assert "ExecutionTimeout" in pattern[2]
+        assert pattern[0] == "ExecutionInitializedEvent"
+        assert pattern[1] == "ExecutionStartedEvent"
+        assert "ExecutionCompletedEvent" in pattern[2]
+        assert "ExecutionFailedEvent" in pattern[2]
+        assert "ExecutionTimedOutEvent" in pattern[2]
 
     def test_review_cycle_pattern(self):
         """Test review cycle pattern structure."""
         pattern = ExpectedSequenceRegistry.get_review_cycle_sequence()
 
         assert len(pattern) == 4
-        assert pattern[0] == "ReviewCycleCreated"
-        assert pattern[1] == "ReviewIterationStarted+"  # One or more
-        assert pattern[2] == "ReviewFeedbackSubmitted*"  # Zero or more
-        assert "ReviewCycleApproved" in pattern[3]
-        assert "ReviewCycleRejected" in pattern[3]
-        assert "ReviewCycleEscalated" in pattern[3]
+        assert pattern[0] == "ReviewCycleStartedEvent"
+        assert pattern[1] == "ReviewCycleIterationCompletedEvent+"  # One or more
+        assert pattern[2] == "ReviewCycleMakerRevisionEvent*"  # Zero or more
+        assert "ReviewCycleApprovedEvent" in pattern[3]
+        assert "ReviewCycleRejectedEvent" in pattern[3]
+        assert "ReviewCycleEscalatedToHumanEvent" in pattern[3]
 
     def test_repair_cycle_pattern(self):
         """Test repair cycle pattern structure."""
         pattern = ExpectedSequenceRegistry.get_repair_cycle_sequence()
 
         assert len(pattern) == 4
-        assert pattern[0] == "RepairCycleCreated"
-        assert pattern[1] == "TestExecutionStarted"
-        assert "TestExecutionCompleted" in pattern[2]
-        assert "TestExecutionFailed" in pattern[2]
-        assert "RepairCycleCompleted" in pattern[3]
-        assert "RepairCycleExhausted" in pattern[3]
+        assert pattern[0] == "RepairCycleStartedEvent"
+        assert pattern[1] == "RepairCycleTestExecutionStartedEvent"
+        assert "RepairCycleTestExecutionCompletedEvent" in pattern[2]
+        assert "RepairCycleTestCycleCompletedEvent" in pattern[2]
+        assert pattern[3] == "RepairCycleCompletedEvent"
 
     def test_get_all_patterns(self):
         """Test getting all available patterns."""

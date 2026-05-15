@@ -72,7 +72,7 @@ class ExpectedSequenceRegistry:
         "ReviewCycleStartedEvent",
         "ReviewCycleIterationCompletedEvent+",  # One or more iterations
         "ReviewCycleMakerRevisionEvent*",
-        "ReviewCycleApproved|ReviewCycleRejectedEvent|ReviewCycleEscalatedToHumanEvent",
+        "ReviewCycleApprovedEvent|ReviewCycleRejectedEvent|ReviewCycleEscalatedToHumanEvent",
     ]
 
     REPAIR_CYCLE = [
