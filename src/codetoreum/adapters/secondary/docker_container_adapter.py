@@ -4,10 +4,13 @@ import asyncio
 import gc
 import io
 import logging
+import os
+import re
 import tarfile
 import time
+import uuid
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -54,7 +57,7 @@ class DockerConfig:
     default_timeout: int = 300  # 5 minutes
     remove_on_completion: bool = True
     default_user: str | None = None
-    default_network: str = "bridge"
+    agent_network: str = field(default_factory=lambda: os.environ.get("AGENT_NETWORK", "codetoreum_default"))
 
     # Resource limits
     memory_limit: str | None = None  # e.g., "512m"
@@ -62,6 +65,9 @@ class DockerConfig:
 
     # Logging
     log_driver: str = "json-file"
+
+    # Write verification
+    verify_workspace_writable: bool = True
 
 
 class DockerContainerAdapter(IContainer):
@@ -81,6 +87,103 @@ class DockerContainerAdapter(IContainer):
         """
         self.config = config
         self._docker_client = None
+        self._host_workspace_path = self._detect_host_workspace_path()
+        self._host_home_path = self._detect_host_home_path()
+
+    @staticmethod
+    def _detect_host_workspace_path() -> str:
+        """Parse /proc/self/mountinfo to find the host path mapped to /workspace."""
+        try:
+            with open("/proc/self/mountinfo", "r") as f:
+                for line in f:
+                    parts = line.split()
+                    if parts[4] == "/workspace":
+                        return parts[3]
+        except Exception as e:
+            logger.warning("Failed to auto-detect host workspace: %s", e)
+        fallback = os.environ.get("HOST_WORKSPACE_PATH", "/workspace")
+        logger.warning(
+            "Could not auto-detect host workspace path; using HOST_WORKSPACE_PATH=%s. "
+            "Agent containers may receive empty workspaces if this is wrong.",
+            fallback,
+        )
+        return fallback
+
+    @staticmethod
+    def _detect_host_home_path() -> str:
+        """Read HOST_HOME env var. Warns if unset — Snap Docker breaks $HOME."""
+        host_home = os.environ.get("HOST_HOME")
+        if host_home:
+            return host_home
+        logger.warning(
+            "HOST_HOME is not set. SSH/git mounts may fail if Docker is installed via Snap. "
+            "Set HOST_HOME=/home/<username> in .env."
+        )
+        return os.environ.get("HOME", "/root")
+
+    @staticmethod
+    def _sanitize_container_name(name: str) -> str:
+        """Sanitize container name to Docker naming constraints."""
+        # Docker allows: [a-zA-Z0-9][a-zA-Z0-9_.-]*
+        sanitized = re.sub(r"[^a-zA-Z0-9_.-]", "-", name)
+        sanitized = re.sub(r"^[^a-zA-Z0-9]+", "", sanitized)
+        sanitized = re.sub(r"-+", "-", sanitized)
+        return sanitized
+
+    def _build_agent_otel_env(
+        self,
+        execution_id: str,
+        agent_name: str,
+        project_id: str,
+        work_item_id: str,
+    ) -> dict[str, str]:
+        """Build OTEL environment variables for agent container."""
+        endpoint = os.environ.get("AGENT_OTEL_ENDPOINT", "http://otel-collector:4317")
+        return {
+            "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+            "OTEL_METRICS_EXPORTER": "otlp",
+            "OTEL_LOGS_EXPORTER": "otlp",
+            "OTEL_EXPORTER_OTLP_ENDPOINT": endpoint,
+            "OTEL_METRIC_EXPORT_INTERVAL": "10000",
+            "OTEL_LOGS_EXPORT_INTERVAL": "5000",
+            "OTEL_RESOURCE_ATTRIBUTES": (
+                f"agent={agent_name},project={project_id},"
+                f"execution_id={execution_id},work_item_id={work_item_id}"
+            ),
+        }
+
+    async def _verify_workspace_writable(self, volume_spec: dict, working_dir: str) -> None:
+        """
+        Run a throwaway alpine container to verify workspace write access.
+        Uses the Docker SDK directly (not self.run()) to avoid recursion.
+        Retries 3x with 2s delay. Raises ContainerError after all attempts fail.
+        """
+        test_filename = f".codetoreum_write_test_{uuid.uuid4().hex}"
+        test_cmd = ["sh", "-c", f"touch {working_dir}/{test_filename} && rm {working_dir}/{test_filename}"]
+        last_error: Exception | None = None
+        client = self._get_client()
+        for attempt in range(3):
+            try:
+                await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: client.containers.run(
+                        "alpine:latest",
+                        test_cmd,
+                        volumes=volume_spec,
+                        working_dir=working_dir,
+                        remove=True,
+                        user=self.config.default_user,
+                    ),
+                )
+                return
+            except Exception as e:
+                last_error = e
+                if attempt < 2:
+                    await asyncio.sleep(2)
+        raise ContainerError(
+            f"Workspace not writable after 3 attempts — check volume mount permissions. "
+            f"Volume: {volume_spec}. Last error: {last_error}"
+        )
 
     def _get_client(self):
         """Get or create Docker client."""
@@ -102,13 +205,17 @@ class DockerContainerAdapter(IContainer):
 
     def _parse_volume_spec(self, volumes: dict[str, str]) -> dict[str, dict[str, str]]:
         """
-        Parse volume specification with path traversal protection.
+        Parse volume specification with path traversal protection and host path translation.
+
+        When running in a nested container (Level 2+), /workspace and $HOME are mounted
+        from the host. This method translates container-local paths to host paths for
+        mounting into child containers (Level 3+).
 
         Args:
             volumes: Volume mounts (host_path: container_path:mode)
 
         Returns:
-            Docker SDK volume specification
+            Docker SDK volume specification with translated host paths
 
         Raises:
             ValidationError: If volume specification is invalid or contains unsafe paths
@@ -125,13 +232,27 @@ class DockerContainerAdapter(IContainer):
                     msg = f"Host path must be absolute: {host_path}"
                     raise ValidationError(msg)
 
-                # Check if path exists (optional - comment out if you want to allow non-existent paths)
-                # if not resolved_host_path.exists():
-                #     raise ValidationError(f"Host path does not exist: {host_path}")
-
             except (OSError, RuntimeError) as e:
                 msg = f"Invalid host path '{host_path}': {e}"
                 raise ValidationError(msg) from e
+
+            # Translate paths that are under /workspace or $HOME to their host equivalents
+            # This is necessary when running in nested containers
+            translated_path = resolved_host_path
+            try:
+                if str(resolved_host_path).startswith("/workspace"):
+                    # Translate /workspace paths to detected host path
+                    relative = resolved_host_path.relative_to("/workspace")
+                    translated_path = Path(self._host_workspace_path) / relative
+                else:
+                    # Check if path is under $HOME (only if HOME is set)
+                    home_path = os.environ.get("HOME")
+                    if home_path and str(resolved_host_path).startswith(home_path):
+                        relative = resolved_host_path.relative_to(home_path)
+                        translated_path = Path(self._host_home_path) / relative
+            except ValueError:
+                # Path is not under /workspace or $HOME, use as-is
+                translated_path = resolved_host_path
 
             # Parse container_path:mode
             parts = spec.split(":")
@@ -154,7 +275,7 @@ class DockerContainerAdapter(IContainer):
                 msg = f"Invalid mount mode '{mode}'. Must be 'rw' (read-write) or 'ro' (read-only)"
                 raise ValidationError(msg)
 
-            docker_volumes[str(resolved_host_path)] = {
+            docker_volumes[str(translated_path)] = {
                 "bind": container_path,
                 "mode": mode,
             }
@@ -217,7 +338,7 @@ class DockerContainerAdapter(IContainer):
             "environment": environment,
             "detach": True,
             "remove": self.config.remove_on_completion,
-            "network": self.config.default_network,
+            "network": self.config.agent_network,
             "user": self.config.default_user,
         }
 
@@ -429,24 +550,45 @@ class DockerContainerAdapter(IContainer):
         """
         client = self._get_client()
 
+        # Sanitize container name
+        sanitized_name = None
+        if name:
+            sanitized_name = self._sanitize_container_name(name)
+
+        # Parse and translate volumes
+        translated_volumes = {}
+        if volumes:
+            translated_volumes = self._parse_volume_spec(volumes)
+
+        # Merge environment with OTEL vars
+        merged_env = dict(environment or {})
+        if labels:
+            otel_env = self._build_agent_otel_env(
+                execution_id=labels.get("org.codetoreum.execution_id", "unknown"),
+                agent_name=labels.get("org.codetoreum.agent", "unknown"),
+                project_id=labels.get("org.codetoreum.project", "unknown"),
+                work_item_id=labels.get("org.codetoreum.work_item_id", "unknown"),
+            )
+            merged_env.update(otel_env)
+
         container_config = {
             "image": image,
-            "name": name,
+            "name": sanitized_name,
             "command": command,
-            "environment": environment or {},
+            "environment": merged_env,
             "detach": True,
             "working_dir": working_dir,
             "user": user or self.config.default_user,
-            "network": network or self.config.default_network,
+            "network": network or self.config.agent_network,
             "labels": labels or {},
         }
 
-        if volumes:
-            container_config["volumes"] = self._parse_volume_spec(volumes)
+        if translated_volumes:
+            container_config["volumes"] = translated_volumes
 
         loop = asyncio.get_event_loop()
 
-        def _create():
+        async def _create():
             try:
                 # Check image exists
                 try:
@@ -458,6 +600,16 @@ class DockerContainerAdapter(IContainer):
                     # Re-raise other Docker errors as ContainerError
                     msg = f"Failed to check image: {e!s}"
                     raise ContainerError(msg) from e
+
+                # Verify workspace write access before creating container
+                if self.config.verify_workspace_writable and translated_volumes:
+                    workspace_volume = {
+                        k: v for k, v in translated_volumes.items() if "/workspace" in str(v)
+                    }
+                    if workspace_volume:
+                        await self._verify_workspace_writable(
+                            workspace_volume, working_dir or "/workspace"
+                        )
 
                 container = client.containers.create(**container_config)
                 return container.id
