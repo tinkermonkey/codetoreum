@@ -102,10 +102,10 @@ def validate_credentials_command() -> None:
         codetoreum validate-credentials
     """
     validator = CredentialValidator()
-    exit_code = asyncio.run(validator.validate_all())
+    success = asyncio.run(validator.validate_all())
     validator.print_results()
 
-    if not exit_code:
+    if success:
         raise SystemExit(0)
     raise SystemExit(1)
 

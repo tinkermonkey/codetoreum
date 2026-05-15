@@ -62,10 +62,10 @@ These are optional but recommended for production:
 
 Codetoreum is deployed in phases, each adding more capabilities:
 
-- **Phase A1 (This)** — Credential infrastructure and validation
-- **Phase 2** — Core orchestration and workflow execution
-- **Phase 3** — Container-based agent execution
-- Later phases — Review cycles, repair cycles, multi-project support
+- **Credential Infrastructure** — Credential documentation and validation
+- **Core Orchestration** — Workflow execution and orchestration
+- **Container-based Agents** — Containerized agent execution
+- **Advanced Features** — Review cycles, repair cycles, multi-project support
 
 ## Monitoring and Observability
 

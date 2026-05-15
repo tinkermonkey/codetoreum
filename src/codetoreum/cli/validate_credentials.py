@@ -128,6 +128,13 @@ class CredentialValidator:
             )
             return False
 
+        # Pre-resolve event_emitter for adapters that depend on it
+        try:
+            resolver._resolved["event_emitter"] = resolver.resolve_event_emitter()
+        except Exception as e:
+            logger.error(f"Failed to resolve event_emitter: {e}")
+            # Continue anyway - adapters will fail with more specific errors
+
         # Health check each critical adapter
         await self._check_adapter_ticket(resolver)
         await self._check_adapter_board(resolver)
@@ -348,18 +355,32 @@ class CredentialValidator:
             concrete_class = type(adapter).__name__
 
             if concrete_class == "GitHubCodeReviewAdapter":
-                # Code review adapter uses same GitHub credentials as ticket adapter
-                # If ticket and board adapters passed, code review is also validated
-                # We verify the adapter resolved successfully and has required methods
-                if hasattr(adapter, "get_review_for_work_item"):
+                try:
+                    # Cheap read-only call: test GitHub API connectivity via code review endpoint
+                    # This validates the same GitHub credentials as ticket/board adapters
+                    # Use a non-existent work item to test the endpoint without side effects
+                    _ = await adapter.get_review_for_work_item("test-work-item-999")
+                    # If we get here without 404, API is working
                     self._add_result("code_review", concrete_class, "PASS")
-                else:
-                    self._add_result(
-                        "code_review",
-                        concrete_class,
-                        "FAIL",
-                        "Missing required methods",
-                    )
+                except Exception as e:
+                    error_msg = str(e)
+                    # 404 is expected (work item doesn't exist) - it means API is accessible
+                    if "404" in error_msg or "not found" in error_msg.lower():
+                        self._add_result("code_review", concrete_class, "PASS")
+                    elif "401" in error_msg or "unauthorized" in error_msg.lower():
+                        self._add_result(
+                            "code_review",
+                            concrete_class,
+                            "FAIL",
+                            "GitHub token invalid, check GITHUB_TOKEN",
+                        )
+                    else:
+                        self._add_result(
+                            "code_review",
+                            concrete_class,
+                            "FAIL",
+                            f"Failed to connect to GitHub API: {error_msg[:80]}",
+                        )
             else:
                 self._add_result("code_review", concrete_class, "SKIP", "Not a production adapter")
         except Exception as e:
