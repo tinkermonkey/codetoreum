@@ -3,6 +3,11 @@
 # ============================================================================
 FROM switchyard-orchestrator:latest
 
+# Build argument for host docker group GID (required for non-root Docker socket access)
+# Linux: run `getent group docker | cut -d: -f3` to get the GID
+# macOS: use 0 (Docker group is root)
+ARG DOCKER_GID=984
+
 # The base image already includes:
 # - Claude CLI (REQUIRED - must be present)
 # - Git CLI (REQUIRED - must be present)
@@ -112,12 +117,23 @@ ENV DBUS_SESSION_BUS_ADDRESS=disabled:
 # ============================================================================
 
 # ============================================================================
+# Stage 4b: Create Non-Root User with Docker Group Access
+# ============================================================================
+# Create docker group matching host GID and non-root user
+RUN if [ "${DOCKER_GID}" = "0" ]; then \
+        useradd -m -u 1000 -G root orchestrator; \
+    else \
+        groupadd -g ${DOCKER_GID} docker || true && \
+        useradd -m -u 1000 -G docker orchestrator; \
+    fi
+
+# ============================================================================
 # Stage 6: Install Entrypoint Script
 # ============================================================================
-# The entrypoint validates the git environment at startup and repairs common
-# DinD mount corruption (e.g. .gitconfig appearing as a directory).
-COPY scripts/agent-entrypoint.sh /usr/local/bin/agent-entrypoint.sh
-RUN chmod +x /usr/local/bin/agent-entrypoint.sh
+# The entrypoint creates SSH config and authenticates GitHub CLI at runtime
+# Handles both readable and writable .ssh/ mounts gracefully
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 
 # ============================================================================
 # Stage 7: Switch to Runtime User
@@ -156,5 +172,5 @@ RUN ruff --version && \
 # ============================================================================
 # Default command
 # ============================================================================
-ENTRYPOINT ["agent-entrypoint.sh"]
+ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["/bin/bash"]

@@ -2,9 +2,90 @@
 
 ## Summary
 
-This document provides factory functions to wire `BranchResolutionAdapter` into the workspace preparation flow. These factories are ready for integration into a production bootstrap path once it exists.
+This document covers production bootstrap configuration including:
+- **Workspace Router Setup**: Factory functions to wire `BranchResolutionAdapter` into the workspace preparation flow
+- **Agent Workspace Base**: Directory setup and ownership requirements for agent container execution
 
 **Important Note**: A production bootstrap entry point for `WorkspaceRouter` does not yet exist in `fastapi_app.py`. Currently, only the simulation bootstrap (`infrastructure/simulation/bootstrap.py`) instantiates `WorkspaceRouter`. The factories in this document are designed to be called from production startup code once such an entry point is created.
+
+## Agent Workspace Base Setup
+
+### Purpose
+
+`AGENT_WORKSPACE_BASE` is the directory on the host where orchestrator mounts project workspaces for agent containers. All agent executions receive isolated snapshots of repositories as subdirectories under this base path.
+
+### Configuration
+
+**Environment Variable**: `AGENT_WORKSPACE_BASE`
+- **Default**: `/tmp/codetoreum/workspaces`
+- **Ownership**: Must be owned by UID 1000 (the `orchestrator` user)
+- **Permissions**: Must be writable by UID 1000
+
+### Setup Steps
+
+1. **Create the directory** (during orchestrator startup or deployment):
+   ```bash
+   mkdir -p /tmp/codetoreum/workspaces
+   ```
+
+2. **Set correct ownership** (UID 1000, GID 1000):
+   ```bash
+   # If running orchestrator as root (not recommended):
+   chown 1000:1000 /tmp/codetoreum/workspaces
+   chmod 755 /tmp/codetoreum/workspaces
+
+   # If running orchestrator as unprivileged user:
+   # Let the orchestrator create it with its own user ownership
+   ```
+
+3. **Verify writability** (during application bootstrap):
+   ```python
+   from pathlib import Path
+   import os
+
+   agent_workspace_base = os.environ.get("AGENT_WORKSPACE_BASE", "/tmp/codetoreum/workspaces")
+   Path(agent_workspace_base).mkdir(parents=True, exist_ok=True)
+
+   # Verify it's writable
+   test_file = Path(agent_workspace_base) / ".codetoreum_write_test"
+   test_file.write_text("test")
+   test_file.unlink()
+   ```
+
+### Docker Compose Integration
+
+The orchestrator Dockerfile creates `/tmp/codetoreum/workspaces` with correct ownership:
+
+```dockerfile
+RUN mkdir -p /tmp/codetoreum/workspaces && \
+    chown -R orchestrator:orchestrator /tmp/codetoreum
+```
+
+When using Docker Compose, the volume is created automatically. For host-based execution, you must create the directory manually with correct permissions.
+
+### Ownership Invariant
+
+**Critical**: Agent containers run as UID 1000. Files written to `AGENT_WORKSPACE_BASE` by agents must be readable and writable by the orchestrator (also UID 1000).
+
+- ❌ Wrong: `AGENT_WORKSPACE_BASE` owned by root (UID 0) → agents cannot write to it
+- ❌ Wrong: `AGENT_WORKSPACE_BASE` owned by UID 1001 → orchestrator cannot read agent output
+- ✅ Correct: `AGENT_WORKSPACE_BASE` owned by UID 1000 → agents write files owned by 1000, orchestrator reads them without chown
+
+This invariant ensures:
+1. Agent containers can write their workspace snapshots
+2. Orchestrator can immediately read and process agent output
+3. No `chown` operations needed after agent execution (faster cleanup)
+
+### Pre-Launch Verification
+
+`DockerContainerAdapter.create()` runs a pre-launch write verification (by default, enabled via `DockerConfig.verify_workspace_writable=True`) before spending LLM API tokens. This verification:
+
+1. Creates a temporary Alpine container with identical volume config
+2. Attempts to write a test file to the mount point
+3. Retries 3 times with 2-second delays (for transient Docker hiccups)
+4. Fails fast with actionable error if all attempts fail
+
+**Acceptance criteria**: Smoke test step 2 explicitly calls this verification and logs the result.
 
 ## Current Status
 

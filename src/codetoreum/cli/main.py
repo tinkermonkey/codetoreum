@@ -20,6 +20,7 @@ import click
 # Import subcommand groups and commands
 from codetoreum.cli.sim_watch import sim_watch_command
 from codetoreum.cli.simulation_server import main as simulation_server_main
+from codetoreum.cli.smoke_test_docker import smoke_test_docker
 from codetoreum.cli.validate_credentials import CredentialValidator
 
 # Conditionally import yaml_import to handle import errors gracefully
@@ -81,6 +82,10 @@ cli.add_command(sim_watch_command)
 # Register the yaml-import group (which has its own subcommands: import-config, import-batch)
 if YAML_IMPORT_AVAILABLE:
     cli.add_command(yaml_import_cli, name="yaml-import")
+
+
+# Register the smoke-test-docker command
+cli.add_command(smoke_test_docker, name="smoke-test-docker")
 
 
 @cli.command(name="validate-credentials")

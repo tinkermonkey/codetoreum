@@ -1,0 +1,213 @@
+version: '3.8'
+
+# ============================================================================
+# Codetoreum Docker Compose Configuration
+# ============================================================================
+# Services:
+# - orchestrator: Main application server
+# - redis: Event store and caching
+# - postgres: Configuration and metadata storage
+# - otel-collector: OpenTelemetry metrics/traces collection
+# - signoz: Observability UI (optional)
+#
+# Agent containers are created dynamically by the orchestrator into the
+# 'codetoreum_default' network so they can reach Redis and otel-collector
+# by service name (redis:6379, otel-collector:4317).
+
+networks:
+  default:
+    name: codetoreum_default
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+
+services:
+  # ========================================================================
+  # Orchestrator — Main Application Server
+  # ========================================================================
+  orchestrator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        DOCKER_GID: "${DOCKER_GID:-984}"
+    container_name: codetoreum-orchestrator
+    restart: unless-stopped
+    ports:
+      - "${API_HOST:-0.0.0.0}:${API_PORT:-8000}:8000"
+    environment:
+      # Application settings
+      APP_ENV: "${APP_ENV:-development}"
+      DEBUG: "${DEBUG:-false}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+
+      # Database
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-codetoreum}:${POSTGRES_PASSWORD:-codetoreum}@postgres:5432/${POSTGRES_DB:-codetoreum}"
+      DATABASE_POOL_SIZE: "${DATABASE_POOL_SIZE:-20}"
+
+      # Redis
+      REDIS_URL: "redis://redis:6379/0"
+      REDIS_MAX_CONNECTIONS: "${REDIS_MAX_CONNECTIONS:-50}"
+
+      # Container Runtime
+      DOCKER_HOST: "unix:///var/run/docker.sock"
+      DOCKER_GID: "${DOCKER_GID:-984}"
+      AGENT_WORKSPACE_BASE: "${AGENT_WORKSPACE_BASE:-/tmp/codetoreum/workspaces}"
+      HOST_HOME: "${HOST_HOME:-}"
+      HOST_WORKSPACE_PATH: "${HOST_WORKSPACE_PATH:-}"
+
+      # Agent OTEL Configuration (internal Docker network service name)
+      AGENT_OTEL_ENDPOINT: "${AGENT_OTEL_ENDPOINT:-http://otel-collector:4317}"
+
+      # GitHub Integration
+      GITHUB_APP_ID: "${GITHUB_APP_ID:-}"
+      GITHUB_PRIVATE_KEY_PATH: "${GITHUB_PRIVATE_KEY_PATH:-}"
+      GITHUB_WEBHOOK_SECRET: "${GITHUB_WEBHOOK_SECRET:-}"
+
+      # Claude API
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      CLAUDE_CODE_OAUTH_TOKEN: "${CLAUDE_CODE_OAUTH_TOKEN:-}"
+
+      # Security
+      CODETOREUM_SECRET_KEY: "${CODETOREUM_SECRET_KEY:-}"
+      CODETOREUM_ENV: "${CODETOREUM_ENV:-development}"
+
+      # Observability
+      OTEL_ENABLED: "${OTEL_ENABLED:-true}"
+      SIGNOZ_ENABLED: "${SIGNOZ_ENABLED:-false}"
+      SIGNOZ_HOST: "${SIGNOZ_HOST:-http://signoz:3301}"
+      SIGNOZ_API_KEY: "${SIGNOZ_API_KEY:-}"
+
+      # Simulation mode
+      SIMULATION_MODE: "${SIMULATION_MODE:-false}"
+      SIMULATION_TIME_SCALE: "${SIMULATION_TIME_SCALE:-10}"
+
+    volumes:
+      # Docker socket for container access (read-only by default)
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Project workspace
+      - ${WORKSPACE_VOLUME:-./:/workspace}
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    networks:
+      - default
+
+  # ========================================================================
+  # PostgreSQL — Configuration and Metadata Storage
+  # ========================================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: codetoreum-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER:-codetoreum}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-codetoreum}"
+      POSTGRES_DB: "${POSTGRES_DB:-codetoreum}"
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-codetoreum}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+    networks:
+      - default
+
+    # Expose postgres only internally (not on host)
+    expose:
+      - "5432"
+
+  # ========================================================================
+  # Redis — Event Store and Cache
+  # ========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: codetoreum-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --appendfsync everysec
+
+    volumes:
+      - redis_data:/data
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+    networks:
+      - default
+
+    # Expose redis only internally (not on host)
+    expose:
+      - "6379"
+
+  # ========================================================================
+  # OpenTelemetry Collector — Metrics/Traces/Logs Collection
+  # ========================================================================
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: codetoreum-otel-collector
+    restart: unless-stopped
+
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+
+    command: ["--config=/etc/otel-collector-config.yaml"]
+
+    environment:
+      GOGC: "80"
+
+    ports:
+      # OTLP gRPC receiver (used by agents)
+      - "4317:4317"
+      # OTLP HTTP receiver
+      - "4318:4318"
+      # Prometheus metrics endpoint
+      - "8888:8888"
+      # Health check
+      - "13133:13133"
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:13133"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+    networks:
+      - default
+
+  # ========================================================================
+  # SigNoz (Optional) — Observability UI and Storage
+  # ========================================================================
+  # Uncomment to enable SigNoz for observability dashboard
+  # signoz:
+  #   image: signoz/signoz:latest
+  #   container_name: codetoreum-signoz
+  #   restart: unless-stopped
+  #   environment:
+  #     POSTGRES_USER: "${POSTGRES_USER:-codetoreum}"
+  #     POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-codetoreum}"
+  #     POSTGRES_DB: signoz
+  #   ports:
+  #     - "3301:3301"      # UI
+  #     - "4317:4317"      # OTLP gRPC
+  #     - "4318:4318"      # OTLP HTTP
+  #   depends_on:
+  #     - postgres
+  #   networks:
+  #     - default
