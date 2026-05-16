@@ -33,6 +33,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from codetoreum.adapters.primary.api_models import (
     DependencyStatus,
+    HealthCheckResponse,
     ReadinessCheckResponse,
     TokenInfoResponse,
 )
@@ -679,6 +680,7 @@ def create_app(
         "/api/v2/health",
         tags=["health"],
         summary="Health check endpoint",
+        response_model=HealthCheckResponse,
     )
     async def health_check() -> dict[str, Any]:
         """
@@ -691,9 +693,10 @@ def create_app(
             Health status including adapter slot information
         """
         response: dict[str, Any] = {
-            "status": "ok",
+            "status": "healthy",
             "service": "codetoreum-api",
             "version": "2.0.0",
+            "timestamp": datetime.now(UTC),
         }
 
         # Include adapter slot info if available

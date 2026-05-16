@@ -925,8 +925,7 @@ class ProductionApplicationBootstrap:
         Clean up all resources.
 
         Performs cleanup in order:
-        - Drain event bus (wait for pending handlers)
-        - Flush metrics to external systems
+        - Log final event bus statistics
         - Clear adapter references
         - Reset state
 
@@ -940,19 +939,15 @@ class ProductionApplicationBootstrap:
         try:
             logger.info("Tearing down production bootstrap...")
 
-            # Drain event bus (wait for all pending event handlers to complete)
+            # Log final event bus statistics
             if self.infrastructure and self.infrastructure.event_bus:
-                self.infrastructure.event_bus.reset_statistics()
-                logger.debug("Event bus drained and statistics reset")
-
-            # Flush metrics to external systems (if any)
-            if self.adapters and self.adapters.metrics:
-                try:
-                    # Metrics adapter may have async shutdown logic
-                    # For now, just acknowledge it exists
-                    logger.debug("Metrics adapter flushed")
-                except Exception as e:
-                    logger.warning(f"Error flushing metrics: {e}", exc_info=True)
+                stats = self.infrastructure.event_bus.get_statistics()
+                logger.info(
+                    f"Event bus statistics: "
+                    f"events_published={stats.get('events_published', 0)}, "
+                    f"events_handled={stats.get('events_handled', 0)}, "
+                    f"handler_errors={stats.get('handler_errors', 0)}"
+                )
 
             # Clear references
             self.app = None

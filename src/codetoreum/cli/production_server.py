@@ -6,7 +6,7 @@ Start the Codetoreum application server in production mode with real adapters.
 Usage:
     codetoreum-server
     codetoreum-server --port 8080
-    codetoreum-server --host 0.0.0.0 --port 8000 --workers 4
+    codetoreum-server --host 0.0.0.0 --port 8000
 """
 
 import asyncio
@@ -31,8 +31,6 @@ logger = logging.getLogger(__name__)
 # Constants for validation
 MAX_PORT = 65535
 MIN_PORT = 1
-MAX_WORKERS = 32
-MIN_WORKERS = 1
 
 
 def validate_port(port: int) -> None:
@@ -47,21 +45,6 @@ def validate_port(port: int) -> None:
     """
     if not (MIN_PORT <= port <= MAX_PORT):
         msg = f"Port must be between {MIN_PORT} and {MAX_PORT}, got {port}"
-        raise click.BadParameter(msg)
-
-
-def validate_workers(workers: int) -> None:
-    """
-    Validate worker count.
-
-    Args:
-        workers: Number of workers to validate
-
-    Raises:
-        click.BadParameter: If workers count is invalid
-    """
-    if not (MIN_WORKERS <= workers <= MAX_WORKERS):
-        msg = f"Workers must be between {MIN_WORKERS} and {MAX_WORKERS}, got {workers}"
         raise click.BadParameter(msg)
 
 
@@ -160,7 +143,6 @@ def display_adapter_summary(bootstrap: ProductionApplicationBootstrap) -> None:
 def display_startup_info(
     host: str,
     port: int,
-    workers: int,
     log_level: str,
     bootstrap: ProductionApplicationBootstrap,
 ) -> None:
@@ -170,7 +152,6 @@ def display_startup_info(
     Args:
         host: Server host
         port: Server port
-        workers: Number of workers
         log_level: Log level
         bootstrap: Configured bootstrap instance
     """
@@ -183,7 +164,6 @@ def display_startup_info(
 
     table.add_row("Host", host)
     table.add_row("Port", str(port))
-    table.add_row("Workers", str(workers))
     table.add_row("Log Level", log_level)
     table.add_row("Mode", "[green]PRODUCTION[/green]")
 
@@ -210,7 +190,6 @@ async def run_server(
     bootstrap: ProductionApplicationBootstrap,
     host: str,
     port: int,
-    workers: int,
     log_level: str,
 ) -> None:
     """
@@ -220,7 +199,6 @@ async def run_server(
         bootstrap: Configured bootstrap instance
         host: Server host
         port: Server port
-        workers: Number of workers
         log_level: Log level
 
     Raises:
@@ -234,7 +212,6 @@ async def run_server(
             app=bootstrap.app,
             host=host,
             port=port,
-            workers=workers,
             log_level=log_level.lower(),
             access_log=False,  # Disable access logs in production
         )
@@ -260,7 +237,6 @@ async def run_server(
 async def main_async(
     host: str,
     port: int,
-    workers: int,
     log_level: str,
 ) -> None:
     """
@@ -269,7 +245,6 @@ async def main_async(
     Args:
         host: Server host
         port: Server port
-        workers: Number of workers
         log_level: Log level
     """
     bootstrap = None
@@ -294,16 +269,20 @@ async def main_async(
             return
 
         # Display startup info
-        display_startup_info(host, port, workers, log_level, bootstrap)
+        display_startup_info(host, port, log_level, bootstrap)
 
         # Run server (blocking)
-        await run_server(bootstrap, host, port, workers, log_level)
+        await run_server(bootstrap, host, port, log_level)
 
     except KeyboardInterrupt:
         console.print("\n[yellow]Interrupted by user[/yellow]")
     except OSError as e:
         console.print(f"\n[bold red]Server error:[/bold red] {e}")
-        logger.error(f"Server error: {e}", exc_info=True, extra={"error_id": "ERR_SERVICE_UNAVAILABLE"})
+        logger.error(
+            f"Server error: {e}",
+            exc_info=True,
+            extra={"error_id": ErrorRegistry.ERR_SERVICE_UNAVAILABLE},
+        )
         sys.exit(1)
     except RuntimeError as e:
         console.print(f"\n[bold red]Runtime error:[/bold red] {e}")
@@ -314,7 +293,10 @@ async def main_async(
         sys.exit(1)
     except Exception as e:
         console.print(f"\n[bold red]Unexpected error:[/bold red] {e}")
-        logger.exception("Unexpected error in production server", extra={"error_id": "ERR_UNHANDLED_EXCEPTION"})
+        logger.exception(
+            "Unexpected error in production server",
+            extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+        )
         sys.exit(1)
     finally:
         # Cleanup
@@ -347,13 +329,6 @@ async def main_async(
     show_default=True,
 )
 @click.option(
-    "--workers",
-    default=1,
-    type=int,
-    help="Number of uvicorn workers (1-32)",
-    show_default=True,
-)
-@click.option(
     "--log-level",
     default="info",
     type=click.Choice(["debug", "info", "warning", "error"], case_sensitive=False),
@@ -363,7 +338,6 @@ async def main_async(
 def main(
     host: str,
     port: int,
-    workers: int,
     log_level: str,
 ) -> None:
     """
@@ -375,16 +349,16 @@ def main(
     Critical credentials are validated at startup. If any required credential is
     missing or invalid, the server will exit with an error message and non-zero exit code.
 
+    Horizontal scaling is handled at the orchestration layer (Docker, Kubernetes, etc.)
+    by running multiple container instances. Each instance runs a single-process server.
+
     Examples:
 
-        # Start with default settings (localhost:8000, 1 worker)
+        # Start with default settings (localhost:8000)
         codetoreum-server
 
         # Start on all interfaces with custom port
         codetoreum-server --host 0.0.0.0 --port 8080
-
-        # Start with 4 workers for higher throughput
-        codetoreum-server --workers 4
 
         # Start with debug logging
         codetoreum-server --log-level debug
@@ -392,7 +366,6 @@ def main(
     # Validate inputs
     try:
         validate_port(port)
-        validate_workers(workers)
     except click.BadParameter as e:
         console.print(f"\n[bold red]Validation error:[/bold red] {e}")
         sys.exit(1)
@@ -411,7 +384,6 @@ def main(
             main_async(
                 host,
                 port,
-                workers,
                 log_level,
             )
         )
@@ -419,7 +391,10 @@ def main(
         console.print("\n[yellow]Server stopped by user[/yellow]")
     except Exception as e:
         console.print(f"\n[bold red]Fatal error:[/bold red] {e}")
-        logger.exception("Fatal error in production server", extra={"error_id": "ERR_UNHANDLED_EXCEPTION"})
+        logger.exception(
+            "Fatal error in production server",
+            extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+        )
         sys.exit(1)
 
 
