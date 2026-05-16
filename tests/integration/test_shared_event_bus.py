@@ -17,6 +17,9 @@ from codetoreum.infrastructure.adapters.event_store_factory import (
 )
 from codetoreum.infrastructure.bootstrap.cli_bootstrap import CLIBootstrap
 from codetoreum.ports.output.event_store import IEventStore
+from tests.conftest import docker_available
+
+pytestmark = docker_available
 
 
 @pytest.mark.asyncio
@@ -51,7 +54,7 @@ class TestSharedEventBus:
 
             # Create a test event
             stream_id = "test-workflow-123"
-            test_event = TestBoardEvent(
+            test_event = BoardEventForTesting(
                 aggregate_id=stream_id,
                 aggregate_type="Workflow",
                 event_type="test.event",
@@ -78,7 +81,7 @@ class TestSharedEventBus:
             # Verify event integrity
             assert retrieved.aggregate_id == stream_id
             assert retrieved.event_type == "test.event"
-            assert isinstance(retrieved, TestBoardEvent)
+            assert isinstance(retrieved, BoardEventForTesting)
             assert retrieved.old_value == "column_a"
             assert retrieved.new_value == "column_b"
         finally:
@@ -107,7 +110,7 @@ class TestSharedEventBus:
             stream_id = "test-workflow-456"
             assert cli.adapters is not None, "CLI adapters not initialized"
             events = [
-                TestBoardEvent(
+                BoardEventForTesting(
                     aggregate_id=stream_id,
                     aggregate_type="Workflow",
                     event_type="test.event",
@@ -157,7 +160,7 @@ class TestSharedEventBus:
             stream1_id = "workflow-stream-1"
             stream2_id = "workflow-stream-2"
 
-            event1 = TestBoardEvent(
+            event1 = BoardEventForTesting(
                 aggregate_id=stream1_id,
                 aggregate_type="Workflow",
                 event_type="test.event",
@@ -167,7 +170,7 @@ class TestSharedEventBus:
                 new_value="b",
             )
 
-            event2 = TestBoardEvent(
+            event2 = BoardEventForTesting(
                 aggregate_id=stream2_id,
                 aggregate_type="Workflow",
                 event_type="test.event",
@@ -197,32 +200,10 @@ class TestSharedEventBus:
 
 
 # Test event fixture
-class TestBoardEvent(CodetoreumEvent):
+class BoardEventForTesting(CodetoreumEvent):
     """Test event for shared event bus testing."""
 
     old_value: str = ""
     new_value: str = ""
 
 
-@pytest.fixture(scope="function")
-async def elasticsearch_client() -> AsyncElasticsearch:
-    """Create Elasticsearch client for testing.
-
-    This fixture requires:
-    - ModernElasticsearchContainer to be available in conftest
-    - ELASTICSEARCH_URL environment variable OR running Elasticsearch on localhost:9200
-    """
-    import os
-
-    es_url = os.getenv("ELASTICSEARCH_URL", "http://localhost:9200")
-
-    client = AsyncElasticsearch([es_url])
-
-    try:
-        # Verify connection
-        info = await client.info()
-        assert info is not None, "Failed to connect to Elasticsearch"
-
-        yield client
-    finally:
-        await client.close()
