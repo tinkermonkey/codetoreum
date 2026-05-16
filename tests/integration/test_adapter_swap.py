@@ -77,7 +77,8 @@ class TestAdapterCredentialValidation:
         This test ensures credentials are validated at bootstrap time, not runtime,
         enabling fail-fast behavior and preventing partial application startup.
         """
-        # Unset GITHUB_ORG to test missing credential scenario
+        # Clear credentials from environment (they may be set in .env file)
+        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
         monkeypatch.delenv("GITHUB_ORG", raising=False)
 
         config = SimulationConfig.create_fast_config("cred_test")
@@ -110,10 +111,11 @@ class TestAdapterCredentialValidation:
         This test ensures that if multiple adapters are misconfigured,
         all missing credentials are reported together for efficient remediation.
         """
-        # Unset credentials to test missing credential scenario
+        # Clear credentials from environment (they may be set in .env file)
+        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
         monkeypatch.delenv("GITHUB_ORG", raising=False)
         monkeypatch.delenv("GITHUB_REPO", raising=False)
-        monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
+        monkeypatch.delenv("CLAUDE_CODE_TOKEN", raising=False)
 
         config = SimulationConfig.create_fast_config("multi_cred_test")
         # Override multiple adapters to use production implementations
@@ -356,7 +358,8 @@ class TestAdapterConfigurationErrors:
         This test ensures error messages are diagnostic, containing all information
         needed to remediate the configuration error.
         """
-        # Unset GITHUB_ORG to test missing credential scenario
+        # Clear credentials from environment (they may be set in .env file)
+        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
         monkeypatch.delenv("GITHUB_ORG", raising=False)
 
         config = SimulationConfig.create_fast_config("diagnostic_error_test")

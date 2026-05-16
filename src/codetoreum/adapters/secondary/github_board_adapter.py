@@ -69,7 +69,7 @@ class GitHubBoardAdapter(IBoardService):
             ticket_adapter: GitHub ticket adapter for issue metadata
             graphql_client: GitHub GraphQL client for Projects v2 API
             webhook_enabled: If False, use polling fallback
-            event_emitter: Optional IEventEmitter for emitting domain events
+            event_emitter: Optional event emitter (unused, for adapter factory compatibility)
         """
         self._ticket_adapter = ticket_adapter
         self._graphql = graphql_client

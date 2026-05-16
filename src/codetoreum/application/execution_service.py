@@ -518,6 +518,10 @@ class ExecutionService:
         """
         Execute agent in Docker container.
 
+        Containers start detached with a bounded wait timeout. Log streaming runs
+        as a background task. DockerContainerRecoveryAdapter handles reconnection
+        if the orchestrator restarts mid-execution.
+
         Args:
             execution: AgentExecution to run
             context: Execution context
@@ -533,7 +537,7 @@ class ExecutionService:
             # Build container labels for recovery tracking
             labels = self._build_container_labels(execution, context)
 
-            # Create container
+            # Create container (detached, non-blocking)
             # Use helper methods to convert immutable types (tuple, Mapping) to mutable types
             # (list, dict) for adapter compatibility, while maintaining domain layer immutability
             container_id = await self.container.create(
@@ -550,14 +554,19 @@ class ExecutionService:
 
             logger.info(f"Created container {container_id} for execution {execution.id}")
 
-            # Start container
+            # Start container (detached, non-blocking)
             await self.container.start(container_id)
 
-            # Stream logs if callback provided
+            logger.info(f"Started container {container_id} for execution {execution.id}")
+
+            # Stream logs in background if callback provided
+            # This does not block execution
             if stream_callback:
                 asyncio.create_task(self._stream_container_logs(container_id, execution.id, stream_callback))
 
-            # Wait for container to complete
+            # Wait for container to complete with bounded timeout
+            # Orchestrator restart drops this task, and DockerContainerRecoveryAdapter
+            # picks up the container on next start
             exit_code = await self.container.wait(container_id, timeout=context.timeout_seconds)
 
             # Get output

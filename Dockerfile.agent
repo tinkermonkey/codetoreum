@@ -24,13 +24,18 @@ USER root
 # This is a Python-based project, so we don't need additional runtimes
 # The base image already provides Python 3.11
 
-# Install any additional system packages that may be needed for Python dependencies
+# Install system packages needed for Python dependencies and integration tests.
+# - build-essential, libpq-dev: compilation of native Python extensions
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+
+# Add orchestrator user to docker group so testcontainers can access /var/run/docker.sock.
+# The docker-py SDK connects to the socket directly; no Docker CLI binary is needed.
+RUN groupadd -f docker && usermod -aG docker orchestrator
 
 # ============================================================================
 # Stage 3: Pre-install Dependencies (OPTIONAL but RECOMMENDED)

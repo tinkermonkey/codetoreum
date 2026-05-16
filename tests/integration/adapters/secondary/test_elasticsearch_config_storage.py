@@ -36,7 +36,7 @@ pytestmark = docker_available
 def elasticsearch_container():
     """Create Elasticsearch testcontainer with resource limits."""
     # Use Elasticsearch 8.x with modern wait strategy (no deprecation warnings)
-    container = ModernElasticsearchContainer("elasticsearch:8.11.0")
+    container = ModernElasticsearchContainer("elasticsearch:8.17.0")
     # Add resource limits to prevent memory exhaustion
     container.with_env("ES_JAVA_OPTS", "-Xms512m -Xmx512m")  # Limit ES heap to 512MB
     container.start()

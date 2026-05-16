@@ -303,18 +303,18 @@ class ModernElasticsearchContainer(DockerContainer):
     wait strategies (HttpWaitStrategy) instead of the deprecated decorator approach.
 
     Example:
-        >>> container = ModernElasticsearchContainer("elasticsearch:8.11.0")
+        >>> container = ModernElasticsearchContainer("elasticsearch:8.17.0")
         >>> container.start()
         >>> url = container.get_url()
         >>> # ... use Elasticsearch ...
         >>> container.stop()
     """
 
-    def __init__(self, image: str = "elasticsearch:8.11.0", port: int = 9200) -> None:
+    def __init__(self, image: str = "elasticsearch:8.17.0", port: int = 9200) -> None:
         """Initialize Elasticsearch container.
 
         Args:
-            image: Docker image name (must include version). Defaults to "elasticsearch:8.11.0"
+            image: Docker image name (must include version). Defaults to "elasticsearch:8.17.0"
             port: Container port to expose. Defaults to 9200
         """
         super().__init__(image)
