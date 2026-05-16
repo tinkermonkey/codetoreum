@@ -58,7 +58,7 @@ services:
       # Container Runtime
       DOCKER_HOST: "unix:///var/run/docker.sock"
       DOCKER_GID: "${DOCKER_GID:-984}"
-      AGENT_WORKSPACE_BASE: "${AGENT_WORKSPACE_BASE:-/tmp/codetoreum/workspaces}"
+      AGENT_WORKSPACE_BASE: "${AGENT_WORKSPACE_BASE:-/workspace/codetoreum/agent-workspaces}"
       HOST_HOME: "${HOST_HOME:-}"
       HOST_WORKSPACE_PATH: "${HOST_WORKSPACE_PATH:-}"
 

@@ -155,7 +155,7 @@ class CredentialValidator:
             ticket="github",
             board="github",
             llm="claude_code",
-            version_control="git",
+            version_control="github",
             container="docker",
             code_review="github",
             # Use defaults for non-critical adapters
