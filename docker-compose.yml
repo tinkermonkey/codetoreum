@@ -22,6 +22,7 @@ networks:
 volumes:
   postgres_data:
   redis_data:
+  elasticsearch_data:
 
 services:
   # ========================================================================
@@ -50,6 +51,9 @@ services:
       # Redis
       REDIS_URL: "redis://redis:6379/0"
       REDIS_MAX_CONNECTIONS: "${REDIS_MAX_CONNECTIONS:-50}"
+
+      # Elasticsearch
+      ELASTICSEARCH_URL: "http://elasticsearch:9200"
 
       # Container Runtime
       DOCKER_HOST: "unix:///var/run/docker.sock"
@@ -94,6 +98,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      elasticsearch:
         condition: service_healthy
 
     networks:
@@ -154,6 +160,39 @@ services:
     # Expose redis only internally (not on host)
     expose:
       - "6379"
+
+  # ========================================================================
+  # Elasticsearch — Event Store and Search
+  # ========================================================================
+  elasticsearch:
+    image: elasticsearch:8.17.0
+    container_name: codetoreum-elasticsearch
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+      transport.host: "127.0.0.1"
+      http.host: "0.0.0.0"
+
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+    networks:
+      - default
+
+    expose:
+      - "9200"
+
+    ports:
+      - "${ELASTICSEARCH_PORT:-9200}:9200"
 
   # ========================================================================
   # OpenTelemetry Collector — Metrics/Traces/Logs Collection

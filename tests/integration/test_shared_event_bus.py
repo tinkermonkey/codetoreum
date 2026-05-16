@@ -6,17 +6,17 @@ Phase E2 dogfooding verification.
 """
 
 import asyncio
+from datetime import UTC, datetime
 
 import pytest
 from elasticsearch import AsyncElasticsearch
 
-from codetoreum.domain.events.adapter_events import CodetoreumEvent, now_iso
+from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.infrastructure.adapters.event_store_factory import (
     create_elasticsearch_event_store,
     initialize_event_store,
 )
 from codetoreum.infrastructure.bootstrap.cli_bootstrap import CLIBootstrap
-from codetoreum.ports.output.event_store import IEventStore
 from tests.conftest import docker_available
 
 pytestmark = docker_available
@@ -52,38 +52,40 @@ class TestSharedEventBus:
             server_event_store = create_elasticsearch_event_store(elasticsearch_client)
             await initialize_event_store(server_event_store)
 
-            # Create a test event
-            stream_id = "test-workflow-123"
-            test_event = BoardEventForTesting(
-                aggregate_id=stream_id,
-                aggregate_type="Workflow",
-                event_type="test.event",
-                timestamp=now_iso(),
+            # Create a test event using the correct API
+            work_item_id = "WI-123"
+            test_event = WorkItemColumnChangedEvent(
+                type="workitem.column_changed",
+                timestamp=datetime.now(UTC).isoformat(),
                 source="test",
-                old_value="column_a",
-                new_value="column_b",
+                work_item_id=work_item_id,
+                project_id="test-project",
+                board_id="test-board",
+                from_column="Backlog",
+                to_column="In Progress",
+                moved_by="human",
             )
 
             # Publish event via CLI event store
             assert cli.adapters is not None, "CLI adapters not initialized"
-            await cli.adapters.event_store.append(stream_id, [test_event])
+            await cli.adapters.event_store.append(work_item_id, [test_event])
 
             # Give Elasticsearch time to index the event
             await asyncio.sleep(0.5)
 
             # Retrieve event from server event store
-            retrieved_events = await server_event_store.get_events(stream_id)
+            retrieved_events = await server_event_store.get_events(work_item_id)
 
             # Verify event was retrieved
             assert len(retrieved_events) == 1, f"Expected 1 event, got {len(retrieved_events)}"
             retrieved = retrieved_events[0]
 
             # Verify event integrity
-            assert retrieved.aggregate_id == stream_id
-            assert retrieved.event_type == "test.event"
-            assert isinstance(retrieved, BoardEventForTesting)
-            assert retrieved.old_value == "column_a"
-            assert retrieved.new_value == "column_b"
+            assert retrieved.type == "workitem.column_changed"
+            assert isinstance(retrieved, WorkItemColumnChangedEvent)
+            assert retrieved.work_item_id == work_item_id
+            assert retrieved.from_column == "Backlog"
+            assert retrieved.to_column == "In Progress"
         finally:
             await cli.teardown()
 
@@ -107,33 +109,35 @@ class TestSharedEventBus:
             await initialize_event_store(server_event_store)
 
             # Publish multiple events via CLI
-            stream_id = "test-workflow-456"
+            work_item_id = "WI-456"
             assert cli.adapters is not None, "CLI adapters not initialized"
             events = [
-                BoardEventForTesting(
-                    aggregate_id=stream_id,
-                    aggregate_type="Workflow",
-                    event_type="test.event",
-                    timestamp=now_iso(),
+                WorkItemColumnChangedEvent(
+                    type="workitem.column_changed",
+                    timestamp=datetime.now(UTC).isoformat(),
                     source="test",
-                    old_value=f"column_{i}",
-                    new_value=f"column_{i+1}",
+                    work_item_id=work_item_id,
+                    project_id="test-project",
+                    board_id="test-board",
+                    from_column=f"column_{i}",
+                    to_column=f"column_{i+1}",
+                    moved_by="human",
                 )
                 for i in range(3)
             ]
 
-            await cli.adapters.event_store.append(stream_id, events)
+            await cli.adapters.event_store.append(work_item_id, events)
 
             # Wait for indexing
             await asyncio.sleep(0.5)
 
             # Retrieve from server
-            retrieved_events = await server_event_store.get_events(stream_id)
+            retrieved_events = await server_event_store.get_events(work_item_id)
 
             assert len(retrieved_events) == 3
             for i, event in enumerate(retrieved_events):
-                assert event.old_value == f"column_{i}"
-                assert event.new_value == f"column_{i+1}"
+                assert event.from_column == f"column_{i}"
+                assert event.to_column == f"column_{i+1}"
         finally:
             await cli.teardown()
 
@@ -157,27 +161,31 @@ class TestSharedEventBus:
             await initialize_event_store(server_event_store)
 
             # Publish events to different streams via CLI
-            stream1_id = "workflow-stream-1"
-            stream2_id = "workflow-stream-2"
+            stream1_id = "WI-stream-1"
+            stream2_id = "WI-stream-2"
 
-            event1 = BoardEventForTesting(
-                aggregate_id=stream1_id,
-                aggregate_type="Workflow",
-                event_type="test.event",
-                timestamp=now_iso(),
+            event1 = WorkItemColumnChangedEvent(
+                type="workitem.column_changed",
+                timestamp=datetime.now(UTC).isoformat(),
                 source="test",
-                old_value="a",
-                new_value="b",
+                work_item_id=stream1_id,
+                project_id="test-project",
+                board_id="test-board",
+                from_column="a",
+                to_column="b",
+                moved_by="human",
             )
 
-            event2 = BoardEventForTesting(
-                aggregate_id=stream2_id,
-                aggregate_type="Workflow",
-                event_type="test.event",
-                timestamp=now_iso(),
+            event2 = WorkItemColumnChangedEvent(
+                type="workitem.column_changed",
+                timestamp=datetime.now(UTC).isoformat(),
                 source="test",
-                old_value="x",
-                new_value="y",
+                work_item_id=stream2_id,
+                project_id="test-project",
+                board_id="test-board",
+                from_column="x",
+                to_column="y",
+                moved_by="human",
             )
 
             assert cli.adapters is not None, "CLI adapters not initialized"
@@ -193,17 +201,7 @@ class TestSharedEventBus:
 
             assert len(events1) == 1
             assert len(events2) == 1
-            assert events1[0].old_value == "a"
-            assert events2[0].old_value == "x"
+            assert events1[0].from_column == "a"
+            assert events2[0].from_column == "x"
         finally:
             await cli.teardown()
-
-
-# Test event fixture
-class BoardEventForTesting(CodetoreumEvent):
-    """Test event for shared event bus testing."""
-
-    old_value: str = ""
-    new_value: str = ""
-
-
