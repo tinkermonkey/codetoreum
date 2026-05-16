@@ -1556,6 +1556,7 @@ class AdapterFactory:
         # For Elasticsearch, create the client if not provided
         if resolved_name == "elasticsearch" and "es_client" not in kwargs:
             import os
+
             from elasticsearch import AsyncElasticsearch
 
             es_url = os.getenv("ELASTICSEARCH_URL", "http://localhost:9200")
