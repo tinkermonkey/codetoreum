@@ -397,34 +397,13 @@ class TestFindStatusFieldId:
         """Test that _find_status_field_id returns cached value without re-querying."""
         from codetoreum.ports.output.board_service import BoardColumn, ProjectBoard
 
-        # Create a board with cached status field ID
+        # Manually populate the adapter cache
+        board_id = "board-456"
+        board_adapter._status_field_id_cache[board_id] = "PVTF_lADOA1"
+
+        # Create a board without the field in the dataclass
         board = ProjectBoard(
-            id="board-456",
-            name="Test Project",
-            project_id="proj-123",
-            columns=(
-                BoardColumn(
-                    id="PVTF_lADOA1",
-                    name="Backlog",
-                    position=0,
-                    work_item_ids=("1",),
-                    option_id="opt-1",
-                ),
-            ),
-            status_field_id="PVTF_lADOA1",
-        )
-
-        # Should return the cached field ID
-        field_id = board_adapter._find_status_field_id(board)
-        assert field_id == "PVTF_lADOA1"
-
-    def test_find_status_field_id_returns_none_when_not_cached(self, board_adapter):
-        """Test that _find_status_field_id returns None when field ID not cached."""
-        from codetoreum.ports.output.board_service import BoardColumn, ProjectBoard
-
-        # Create a board without cached status field ID
-        board = ProjectBoard(
-            id="board-456",
+            id=board_id,
             name="Test Project",
             project_id="proj-123",
             columns=(
@@ -433,13 +412,34 @@ class TestFindStatusFieldId:
                     name="Backlog",
                     position=0,
                     work_item_ids=("1",),
-                    option_id="opt-1",
                 ),
             ),
-            status_field_id=None,
         )
 
-        # Should return None
+        # Should return the cached field ID from adapter state
+        field_id = board_adapter._find_status_field_id(board)
+        assert field_id == "PVTF_lADOA1"
+
+    def test_find_status_field_id_returns_none_when_not_cached(self, board_adapter):
+        """Test that _find_status_field_id returns None when field ID not cached."""
+        from codetoreum.ports.output.board_service import BoardColumn, ProjectBoard
+
+        # Create a board without cached status field ID in adapter
+        board = ProjectBoard(
+            id="board-789",
+            name="Test Project",
+            project_id="proj-123",
+            columns=(
+                BoardColumn(
+                    id="col-1",
+                    name="Backlog",
+                    position=0,
+                    work_item_ids=("1",),
+                ),
+            ),
+        )
+
+        # Should return None (board_id not in cache)
         field_id = board_adapter._find_status_field_id(board)
         assert field_id is None
 
@@ -468,12 +468,19 @@ class TestFindOptionId:
         assert done_option == "opt-4"
 
     def test_find_option_id_returns_cached_value(self, board_adapter):
-        """Test that _find_option_id returns cached value from column."""
+        """Test that _find_option_id returns cached value from adapter state."""
         from codetoreum.ports.output.board_service import BoardColumn, ProjectBoard
 
-        # Create a board with cached option IDs
+        # Manually populate the adapter cache with option IDs
+        board_id = "board-456"
+        board_adapter._option_id_cache[board_id] = {
+            "Backlog": "opt-1",
+            "In Progress": "opt-2",
+        }
+
+        # Create a board without option_id in dataclass
         board = ProjectBoard(
-            id="board-456",
+            id=board_id,
             name="Test Project",
             project_id="proj-123",
             columns=(
@@ -482,20 +489,17 @@ class TestFindOptionId:
                     name="Backlog",
                     position=0,
                     work_item_ids=("1",),
-                    option_id="opt-1",
                 ),
                 BoardColumn(
                     id="col-2",
                     name="In Progress",
                     position=1,
                     work_item_ids=("2",),
-                    option_id="opt-2",
                 ),
             ),
-            status_field_id="PVTF_lADOA1",
         )
 
-        # Should return the cached option ID
+        # Should return the cached option ID from adapter state
         option_id = board_adapter._find_option_id(board, "PVTF_lADOA1", "In Progress")
         assert option_id == "opt-2"
 
@@ -503,9 +507,15 @@ class TestFindOptionId:
         """Test that _find_option_id returns None for non-existent column."""
         from codetoreum.ports.output.board_service import BoardColumn, ProjectBoard
 
+        # Manually populate the adapter cache with limited columns
+        board_id = "board-456"
+        board_adapter._option_id_cache[board_id] = {
+            "Backlog": "opt-1",
+        }
+
         # Create a board with limited columns
         board = ProjectBoard(
-            id="board-456",
+            id=board_id,
             name="Test Project",
             project_id="proj-123",
             columns=(
@@ -514,10 +524,8 @@ class TestFindOptionId:
                     name="Backlog",
                     position=0,
                     work_item_ids=("1",),
-                    option_id="opt-1",
                 ),
             ),
-            status_field_id="PVTF_lADOA1",
         )
 
         # Should return None for non-existent column
@@ -528,9 +536,15 @@ class TestFindOptionId:
         """Test that _find_option_id ignores field_id parameter and finds by column name."""
         from codetoreum.ports.output.board_service import BoardColumn, ProjectBoard
 
-        # Create a board with cached option IDs
+        # Manually populate the adapter cache
+        board_id = "board-456"
+        board_adapter._option_id_cache[board_id] = {
+            "Done": "opt-4",
+        }
+
+        # Create a board without option_id in dataclass
         board = ProjectBoard(
-            id="board-456",
+            id=board_id,
             name="Test Project",
             project_id="proj-123",
             columns=(
@@ -539,10 +553,8 @@ class TestFindOptionId:
                     name="Done",
                     position=3,
                     work_item_ids=(),
-                    option_id="opt-4",
                 ),
             ),
-            status_field_id="PVTF_lADOA1",
         )
 
         # Should return option ID regardless of field_id parameter
@@ -565,23 +577,25 @@ class TestFieldAndOptionCaching:
 
         board = await board_adapter.get_board("proj-123", "board-456")
 
-        # Field ID should be cached in the board
-        assert board.status_field_id == "PVTF_lADOA1"
+        # Field ID should be cached in the adapter's internal cache
+        assert board_adapter._status_field_id_cache.get(board.id) == "PVTF_lADOA1"
 
     @pytest.mark.asyncio
     async def test_parse_board_response_caches_option_ids(
         self, board_adapter, mock_graphql_client, sample_board_response
     ):
-        """Test that _parse_board_response caches option IDs in columns."""
+        """Test that _parse_board_response caches option IDs in adapter state."""
         mock_graphql_client.execute.return_value = sample_board_response
 
         board = await board_adapter.get_board("proj-123", "board-456")
 
-        # Option IDs should be cached in each column
-        assert board.columns[0].option_id == "opt-1"
-        assert board.columns[1].option_id == "opt-2"
-        assert board.columns[2].option_id == "opt-3"
-        assert board.columns[3].option_id == "opt-4"
+        # Option IDs should be cached in the adapter's internal cache
+        board_cache = board_adapter._option_id_cache.get(board.id)
+        assert board_cache is not None
+        assert board_cache.get("Backlog") == "opt-1"
+        assert board_cache.get("In Progress") == "opt-2"
+        assert board_cache.get("Review") == "opt-3"
+        assert board_cache.get("Done") == "opt-4"
 
     @pytest.mark.asyncio
     async def test_no_additional_graphql_calls_for_cached_data(

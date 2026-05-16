@@ -88,6 +88,10 @@ class GitHubBoardAdapter(IBoardService):
         self._polling_intervals: dict[str, float] = {}
         self._activity_counters: dict[str, dict[str, int]] = {}
 
+        # Cache for GitHub Projects v2 field and option IDs (adapter-internal, not in port)
+        self._status_field_id_cache: dict[str, str] = {}
+        self._option_id_cache: dict[str, dict[str, str]] = {}
+
         # Current context for event emission
         self._current_project_id: str | None = None
         self._current_board_id: str | None = None
@@ -853,20 +857,23 @@ class GitHubBoardAdapter(IBoardService):
                 if field.get("name") == "Status":
                     status_field = field
                     status_field_id = field.get("id")
+                    if status_field_id:
+                        self._status_field_id_cache[board_id] = status_field_id
                     break
 
             if not status_field:
                 msg = "GitHub"
                 raise ExternalServiceError(msg, "Status field not found on board")
 
-            # Build column map with option IDs
+            # Build column map with option IDs and cache them in adapter state
             columns_by_id: dict[str, str] = {}
-            options_by_name: dict[str, str] = {}
+            if board_id not in self._option_id_cache:
+                self._option_id_cache[board_id] = {}
             for option in status_field.get("options", []):
                 option_id = option.get("id", "")
                 option_name = option.get("name", "")
                 columns_by_id[option_id] = option_name
-                options_by_name[option_name] = option_id
+                self._option_id_cache[board_id][option_name] = option_id
 
             # Extract items and their positions
             items_data = node.get("items", {}).get("nodes", [])
@@ -893,12 +900,11 @@ class GitHubBoardAdapter(IBoardService):
                             # Use issue number as work_item_id
                             columns_by_name[column_name].append(str(issue_number))
 
-            # Create BoardColumn objects ordered by position with cached option IDs
+            # Create BoardColumn objects ordered by position
             columns: list[BoardColumn] = []
             for position, option in enumerate(status_field.get("options", [])):
                 column_name = option.get("name", "")
                 column_id = option.get("id", "")
-                option_id = option.get("id", "")
                 work_items = columns_by_name.get(column_name, [])
 
                 columns.append(
@@ -907,7 +913,6 @@ class GitHubBoardAdapter(IBoardService):
                         name=column_name,
                         position=position,
                         work_item_ids=work_items,
-                        option_id=option_id,
                     )
                 )
 
@@ -916,7 +921,6 @@ class GitHubBoardAdapter(IBoardService):
                 name=board_name,
                 project_id=project_id,
                 columns=columns,
-                status_field_id=status_field_id,
             )
 
         except (KeyError, TypeError) as e:
@@ -930,36 +934,36 @@ class GitHubBoardAdapter(IBoardService):
         the board was first fetched via _parse_board_response.
 
         Args:
-            board: Project board with cached field ID
+            board: Project board to look up
 
         Returns:
             Status field ID or None if not cached
         """
-        return board.status_field_id
+        return self._status_field_id_cache.get(board.id)
 
     def _find_option_id(
         self,
         board: ProjectBoard,
-        field_id: str | None,
+        _field_id: str | None,
         column_name: str,
     ) -> str | None:
         """Find option ID for a column name.
 
-        Retrieves the cached option ID from the matching column.
+        Retrieves the cached option ID from adapter state.
         The option ID is populated when the board is first fetched
         via _parse_board_response.
 
         Args:
-            board: Project board with cached option IDs
-            field_id: Status field ID (unused, kept for compatibility)
+            board: Project board to look up
+            _field_id: Status field ID (unused, included for interface compatibility)
             column_name: Column name to find
 
         Returns:
             Option ID for the column or None if not found
         """
-        for column in board.columns:
-            if column.name == column_name:
-                return column.option_id
+        board_cache = self._option_id_cache.get(board.id)
+        if board_cache:
+            return board_cache.get(column_name)
         return None
 
     async def _create_column(self, board_id: str, column_name: str) -> None:
