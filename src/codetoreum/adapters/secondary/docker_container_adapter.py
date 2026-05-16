@@ -124,7 +124,7 @@ class DockerContainerAdapter(IContainer):
                     if parts[4] == "/workspace":
                         return parts[3]
         except Exception as e:
-            logger.warning("Failed to auto-detect host workspace: %s", e)
+            logger.error("Failed to auto-detect host workspace: %s", e, exc_info=True)
         fallback = os.environ.get("HOST_WORKSPACE_PATH", "/workspace")
         logger.warning(
             "Could not auto-detect host workspace path; using HOST_WORKSPACE_PATH=%s. "
