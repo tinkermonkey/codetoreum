@@ -319,9 +319,12 @@ class AdapterResolver:
 
     def resolve_version_control(self) -> IVersionControlService:
         """Resolve version control service adapter."""
+        kwargs = {}
+        if self._config.version_control == "in_memory":
+            kwargs["time_source"] = lambda: self._deps.engine.get_clock_for_testing().now()
         return self._factory.create_version_control_service(
             adapter_name=self._config.version_control,
-            time_source=lambda: self._deps.engine.get_clock_for_testing().now(),
+            **kwargs,
         )
 
     def resolve_project_manager(self) -> IProjectManagerService:

@@ -41,7 +41,8 @@ class TestGitHubVersionControlAdapter:
         assert adapter._git_config is not None
         assert isinstance(adapter._git_config, GitConfig)
 
-    def test_get_repository_with_valid_path(self):
+    @pytest.mark.asyncio
+    async def test_get_repository_with_valid_path(self):
         """get_repository should return Repository with URL from git remote."""
         with tempfile.TemporaryDirectory() as tmpdir:
             adapter = GitHubVersionControlAdapter()
@@ -56,25 +57,17 @@ class TestGitHubVersionControlAdapter:
                 capture_output=True,
             )
 
-            # Get repository info
-            repo = AsyncMock()
-            repo.id = str(path)
-            repo.name = path.name
-            repo.url = "https://github.com/example/repo.git"
-            repo.default_branch = "main"
+            # Call the adapter method
+            repo = await adapter.get_repository(str(path))
 
-            # Verify it would create a valid Repository
-            with patch.object(adapter, "_repository_adapter", AsyncMock()):
-                result = subprocess.run(
-                    ["git", "remote", "get-url", "origin"],  # noqa: S607
-                    cwd=path,
-                    capture_output=True,
-                    text=True,
-                    check=True,
-                )
-                assert result.stdout.strip() == "https://github.com/example/repo.git"
+            # Verify the returned Repository object
+            assert repo.id == str(path)
+            assert repo.name == path.name
+            assert repo.url == "https://github.com/example/repo.git"
+            assert repo.default_branch == "main"
 
-    def test_get_repository_uses_file_url_fallback(self):
+    @pytest.mark.asyncio
+    async def test_get_repository_uses_file_url_fallback(self):
         """get_repository should use file:// URL if git remote not available."""
         with tempfile.TemporaryDirectory() as tmpdir:
             adapter = GitHubVersionControlAdapter()
@@ -83,16 +76,14 @@ class TestGitHubVersionControlAdapter:
             # Initialize git repo without remote
             subprocess.run(["git", "init"], cwd=path, check=True, capture_output=True)  # noqa: S607
 
-            # Verify fallback URL format
-            result = subprocess.run(
-                ["git", "remote", "get-url", "origin"],  # noqa: S607
-                cwd=path,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            # Should fail since remote doesn't exist
-            assert result.returncode != 0
+            # Call the adapter method
+            repo = await adapter.get_repository(str(path))
+
+            # Verify the returned Repository uses file:// fallback
+            assert repo.id == str(path)
+            assert repo.name == path.name
+            assert repo.url == f"file://{path.absolute()}"
+            assert repo.default_branch == "main"
 
     def test_pull_uses_keyword_arguments(self):
         """pull method should pass remote and branch as keyword arguments."""
