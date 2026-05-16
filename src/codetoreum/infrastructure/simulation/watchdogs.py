@@ -25,7 +25,7 @@ from codetoreum.ports.output.pipeline_lock_service import IPipelineLockService
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 if TYPE_CHECKING:
-    from codetoreum.adapters.testing.execution_service_agent_executor import (
+    from codetoreum.adapters.secondary.execution_service_agent_executor import (
         ExecutionServiceAgentExecutor,
     )
 

@@ -28,7 +28,7 @@ from codetoreum.ports.input.execution_query import (
 )
 
 if TYPE_CHECKING:
-    from codetoreum.adapters.testing.execution_service_agent_executor import ExecutionServiceAgentExecutor
+    from codetoreum.adapters.secondary.execution_service_agent_executor import ExecutionServiceAgentExecutor
 
 logger = logging.getLogger(__name__)
 
