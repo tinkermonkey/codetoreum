@@ -677,8 +677,8 @@ class ClaudeCodeAdapter(ILLMProvider):
         """
         Create a new conversation.
 
-        Note: Claude Code CLI manages sessions internally.
-        This creates a local tracking entry.
+        Note: Conversations are tracked locally with message history.
+        Claude Code CLI sessions are subprocess-specific and cannot be reused.
         """
         conversation_id = str(uuid.uuid4())
 
@@ -687,6 +687,7 @@ class ClaudeCodeAdapter(ILLMProvider):
             "parameters": parameters,
             "created_at": datetime.now(UTC),
             "message_count": 0,
+            "message_history": [],  # Track messages for conversation context
         }
 
         return conversation_id
@@ -704,16 +705,38 @@ class ClaudeCodeAdapter(ILLMProvider):
 
         conv_data = self._conversations[conversation_id]
 
-        # Build context with conversation ID
+        # Build context without conversation_id (Claude CLI sessions are subprocess-specific)
+        # Instead, use message history for conversation context
         context = conv_data.get("parameters") or ExecutionContext()
-        context = replace(context, conversation_id=conversation_id)
 
-        # Execute with conversation context
-        result = await self.execute(message, context, stream_callback)
+        # Build conversation history for the system prompt
+        system_prompt = conv_data.get("system_prompt")
+        message_history = conv_data.get("message_history", [])
+
+        # Build the full prompt with conversation history
+        full_prompt = ""
+        if system_prompt:
+            full_prompt = f"System: {system_prompt}\n\n"
+
+        # Add previous messages as context
+        for prev_msg in message_history:
+            full_prompt += f"User: {prev_msg['user']}\nAssistant: {prev_msg['assistant']}\n\n"
+
+        full_prompt += f"User: {message}"
+
+        # Execute without session_id (don't reuse subprocess sessions)
+        context = replace(context, conversation_id=None, system_prompt=None)
+        result = await self.execute(full_prompt, context, stream_callback)
 
         # Update conversation tracking
         conv_data["message_count"] += 1
         conv_data["last_message_at"] = datetime.now(UTC)
+
+        # Store the message and response in history
+        conv_data["message_history"].append({
+            "user": message,
+            "assistant": result.content,
+        })
 
         return result
 
