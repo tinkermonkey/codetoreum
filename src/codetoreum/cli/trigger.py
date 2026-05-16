@@ -171,10 +171,16 @@ async def trigger_work_item(
                 click.echo(f"[!] Failed to serialize event: {e}", err=True)
                 return 1
 
-        # Publish the event to the event bus
-        click.echo("[*] Publishing event to event bus...")
+        # Publish the event to the event bus and persist to shared event store
+        click.echo("[*] Publishing event to event store...")
         try:
+            # Persist to shared event store (Elasticsearch) for cross-process distribution
+            # This ensures the event reaches the application server via the shared event store
+            await bootstrap.adapters.event_store.append(work_item_id, [event])
+
+            # Also publish to local event bus for any local handlers (CLI has none, but good practice)
             await event_bus.publish(event)
+
             click.echo("[✓] Event published successfully")
             click.echo(f"[*] Event ID: {getattr(event, 'event_id', 'N/A')}")
             logger.info(

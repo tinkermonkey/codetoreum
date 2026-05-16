@@ -226,6 +226,7 @@ class ProductionApplicationBootstrap:
                 container="docker",
                 code_review="github",
                 event_store="elasticsearch",  # Shared event bus for cross-process event distribution
+                event_emitter="mock",  # Use mock emitter (in-memory, not capturing for tests)
                 # Non-critical slots use mocks (logged as warnings)
                 review_cycle="mock",
                 pr_review_cycle="mock",
@@ -336,6 +337,10 @@ class ProductionApplicationBootstrap:
             # Phase 3: Critical path enforcement
             logger.info("Phase 3: Validating no mocks on critical execution paths...")
             self._validate_no_mocks_on_critical_path()
+
+            # Phase 3b: Verify event_emitter is not a test capture adapter
+            logger.info("Phase 3b: Verifying production event_emitter is not test-only...")
+            self._validate_event_emitter_is_production()
 
             # Phase 4: Resilience decoration
             logger.info("Phase 4: Applying resilience decorators...")
@@ -458,6 +463,41 @@ class ProductionApplicationBootstrap:
         # Also capture branch_resolution_service (not in AdapterSelectionConfig, created separately)
         if self.adapters.branch_resolution_service:
             self._slot_info["branch_resolution_service"] = type(self.adapters.branch_resolution_service).__name__
+
+    def _validate_event_emitter_is_production(self) -> None:
+        """
+        Validate that the resolved event_emitter is not a test-only capture adapter.
+
+        The production bootstrap creates a CapturingMockEventEmitter as a fallback
+        during adapter resolution. This method verifies that it was replaced with
+        the actual configured event_emitter (e.g., "mock" not "capturing").
+
+        Raises:
+            RuntimeError: If event_emitter is CapturingMockEventEmitter (test-only)
+        """
+        if not self.adapters or not self.adapters.event_emitter:
+            message = "event_emitter not resolved"
+            raise RuntimeError(message)
+
+        emitter_class = type(self.adapters.event_emitter).__name__
+
+        if emitter_class == "CapturingMockEventEmitter":
+            message = (
+                "Production event_emitter is CapturingMockEventEmitter (test-only). "
+                "This means the fallback adapter from resolver dependencies is still in use. "
+                "Verify that ProductionApplicationBootstrap.adapter_config sets "
+                "event_emitter to a production implementation (e.g., 'mock', not 'capturing'). "
+                "Events emitted through this adapter will go to in-memory test storage "
+                "instead of production systems."
+            )
+            logger.error(
+                message,
+                exc_info=False,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+            )
+            raise RuntimeError(message)
+
+        logger.debug(f"Production event_emitter verified: {emitter_class}")
 
     def _log_non_critical_slots(self) -> None:
         """Log warnings for non-critical slots with mock implementations."""
