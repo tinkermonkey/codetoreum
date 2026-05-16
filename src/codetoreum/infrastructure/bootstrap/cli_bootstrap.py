@@ -85,6 +85,9 @@ class CLIBootstrap:
                 if not board_adapter:
                     msg = "Failed to create GitHub board adapter"
                     raise ValueError(msg)
+            except ValueError:
+                # Re-raise ValueError without wrapping (our explicit check above)
+                raise
             except Exception as e:
                 msg = f"Failed to create board adapter (GitHub credentials required): {e}"
                 logger.error(msg, exc_info=True)
@@ -97,6 +100,9 @@ class CLIBootstrap:
                 if not workflow_config_adapter:
                     msg = "Failed to create workflow config adapter"
                     raise ValueError(msg)
+            except ValueError:
+                # Re-raise ValueError without wrapping (our explicit check above)
+                raise
             except Exception as e:
                 msg = f"Failed to create workflow config adapter: {e}"
                 logger.error(msg, exc_info=True)
