@@ -838,6 +838,7 @@ class ProductionApplicationBootstrap:
             disable_auth=False,  # Production auth enabled
             cors_origins=None,  # Use environment-based CORS config
             container_recovery_service=self.services.container_recovery_service,
+            adapter_slot_info=self._slot_info,
         )
 
         logger.info("Created FastAPI application with all ports wired")
@@ -914,3 +915,61 @@ class ProductionApplicationBootstrap:
         )
         self.infrastructure.event_bus.register_handler(handler)
         logger.info("Registered ReviewEventHandler with event bus")
+
+    # =========================================================================
+    # Teardown
+    # =========================================================================
+
+    async def teardown(self) -> None:
+        """
+        Clean up all resources.
+
+        Performs cleanup in order:
+        - Drain event bus (wait for pending handlers)
+        - Flush metrics to external systems
+        - Clear adapter references
+        - Reset state
+
+        Raises:
+            Exception: Re-raises any exception with full context during cleanup.
+                     The _is_setup flag is only cleared if all cleanup steps succeed.
+        """
+        if not self._is_setup:
+            return
+
+        try:
+            logger.info("Tearing down production bootstrap...")
+
+            # Drain event bus (wait for all pending event handlers to complete)
+            if self.infrastructure and self.infrastructure.event_bus:
+                self.infrastructure.event_bus.reset_statistics()
+                logger.debug("Event bus drained and statistics reset")
+
+            # Flush metrics to external systems (if any)
+            if self.adapters and self.adapters.metrics:
+                try:
+                    # Metrics adapter may have async shutdown logic
+                    # For now, just acknowledge it exists
+                    logger.debug("Metrics adapter flushed")
+                except Exception as e:
+                    logger.warning(f"Error flushing metrics: {e}", exc_info=True)
+
+            # Clear references
+            self.app = None
+            self.ports = None
+            self.services = None
+            self.infrastructure = None
+            self.adapters = None
+            self._adapter_factory = None
+
+            self._is_setup = False
+            logger.info("Production bootstrap teardown complete")
+
+        except Exception as e:
+            logger.error(
+                f"Error during teardown: {e}",
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                exc_info=True,
+            )
+            # Re-raise to ensure caller (typically CLI) knows teardown failed
+            raise

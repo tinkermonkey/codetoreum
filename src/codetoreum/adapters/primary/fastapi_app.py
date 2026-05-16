@@ -33,7 +33,6 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from codetoreum.adapters.primary.api_models import (
     DependencyStatus,
-    HealthCheckResponse,
     ReadinessCheckResponse,
     TokenInfoResponse,
 )
@@ -244,6 +243,7 @@ def create_app(
     disable_auth: bool = False,
     cors_origins: list | None = None,
     container_recovery_service: Any | None = None,
+    adapter_slot_info: dict[str, str] | None = None,
 ) -> FastAPI:
     """
     Create and configure FastAPI application.
@@ -274,6 +274,7 @@ def create_app(
         disable_auth: If True, authentication is disabled (for development/testing only)
         cors_origins: List of allowed CORS origins
         container_recovery_service: Optional container recovery service for startup recovery
+        adapter_slot_info: Optional dictionary mapping adapter slot names to implementation names
 
     Returns:
         Configured FastAPI application
@@ -678,9 +679,8 @@ def create_app(
         "/api/v2/health",
         tags=["health"],
         summary="Health check endpoint",
-        response_model=HealthCheckResponse,
     )
-    async def health_check() -> HealthCheckResponse:
+    async def health_check() -> dict[str, Any]:
         """
         Basic health check endpoint.
 
@@ -688,13 +688,19 @@ def create_app(
         monitoring and load balancer health checks.
 
         Returns:
-            Health status
+            Health status including adapter slot information
         """
-        return HealthCheckResponse(
-            status="healthy",
-            service="codetoreum-api",
-            version="2.0.0",
-        )
+        response: dict[str, Any] = {
+            "status": "ok",
+            "service": "codetoreum-api",
+            "version": "2.0.0",
+        }
+
+        # Include adapter slot info if available
+        if adapter_slot_info:
+            response["adapters"] = adapter_slot_info
+
+        return response
 
     @app.get(
         "/api/v2/health/ready",
