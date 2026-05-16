@@ -1,7 +1,7 @@
 """ExecutionServiceAgentExecutor - wires IAgentExecutor to ExecutionService chain.
 
-This adapter drives the full LLM → Container → VCS chain in simulation by
-integrating with ExecutionService, WorkspaceRouter, and supporting repositories.
+This adapter drives the full LLM → Container → VCS chain in both simulation and
+production by integrating with ExecutionService, WorkspaceRouter, and supporting repositories.
 """
 
 from __future__ import annotations
@@ -339,17 +339,18 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 updated_at=project_config.updated_at or datetime.now(UTC),
             )
 
-            # Step 3: Clone repository (synthetic path for simulation)
+            # Step 3: Clone repository
             repo_path = f"/workspace/{work_item_id}"
             try:
                 await self._vcs.clone_repository(repo_url, repo_path)
             except Exception as e:
-                logger.warning(
-                    f"VCS clone failed (non-fatal in simulation): {e}",
+                logger.error(
+                    f"VCS clone failed for '{work_item_id}': {e}",
                     exc_info=True,
                     extra={"error_id": "ERR_EXEC_CHAIN_VCS_CLONE_FAILURE"},
                 )
-                # In simulation, continue even if clone "fails" (path may already exist)
+                await self._call_completion(work_item_id, board_id, False)
+                return
 
             # Step 4: Route workspace
             try:

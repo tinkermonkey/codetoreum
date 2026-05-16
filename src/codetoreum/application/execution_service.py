@@ -562,7 +562,8 @@ class ExecutionService:
             # Stream logs in background if callback provided
             # This does not block execution
             if stream_callback:
-                asyncio.create_task(self._stream_container_logs(container_id, execution.id, stream_callback))
+                task = asyncio.create_task(self._stream_container_logs(container_id, execution.id, stream_callback))
+                task.add_done_callback(self._stream_logs_done_callback)
 
             # Wait for container to complete with bounded timeout
             # Orchestrator restart drops this task, and DockerContainerRecoveryAdapter
@@ -997,6 +998,26 @@ class ExecutionService:
                 f"Error streaming container logs: {e}",
                 exc_info=True,
                 extra={"error_id": "ERR_EXECUTION_STREAM_CONTAINER_LOGS_ERROR"},
+            )
+
+    def _stream_logs_done_callback(self, task: asyncio.Task[None]) -> None:
+        """Handle completion of background log streaming task.
+
+        Surfaces any unhandled exceptions from _stream_container_logs so they
+        are not silently swallowed by asyncio's default task exception handler.
+
+        Args:
+            task: The completed asyncio.Task
+        """
+        try:
+            task.result()
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error(
+                f"Unhandled exception in container log streaming: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_EXECUTION_LOG_STREAMING_EXCEPTION"},
             )
 
     def _extract_token_usage(self, logs: str) -> tuple[int, int]:

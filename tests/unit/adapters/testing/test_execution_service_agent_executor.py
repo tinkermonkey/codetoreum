@@ -188,6 +188,18 @@ class TestExecutionServiceAgentExecutorFailurePaths:
         fx.workspace_router.route_workspace.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_vcs_clone_failure_calls_completion_with_failure(self):
+        """Step 3: vcs.clone_repository raises → completion called with False."""
+        fx = ExecutorFixture()
+        fx.vcs.clone_repository.side_effect = RuntimeError("clone failed")
+        executor = fx.make_executor()
+
+        await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+        fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, False)
+        fx.workspace_router.route_workspace.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_workspace_route_failure_calls_completion_with_failure(self):
         """Step 4: workspace_router.route_workspace raises → completion called with False."""
         fx = ExecutorFixture()

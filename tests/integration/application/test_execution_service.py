@@ -339,3 +339,52 @@ async def test_get_execution_logs(
     assert len(logs) > 0
     assert all(isinstance(entry, LogEntry) for entry in logs)
     assert all(entry.source == "container" for entry in logs)
+
+
+@pytest.mark.asyncio
+async def test_stream_logs_done_callback_handles_exceptions(execution_service):
+    """Test that _stream_logs_done_callback properly handles exceptions from log streaming task."""
+    import asyncio
+    from unittest.mock import AsyncMock, patch
+
+    # Create a task that raises an exception
+    async def failing_task():
+        raise RuntimeError("Log streaming failed")
+
+    # Create and run the task
+    task = asyncio.create_task(failing_task())
+    try:
+        await task
+    except RuntimeError:
+        pass  # Catch the exception so task is done
+
+    # Mock the logger to verify error was logged
+    with patch("codetoreum.application.execution_service.logger") as mock_logger:
+        execution_service._stream_logs_done_callback(task)
+        mock_logger.error.assert_called_once()
+        # Verify the error message mentions log streaming
+        call_args = mock_logger.error.call_args
+        assert "log streaming" in str(call_args).lower()
+
+
+@pytest.mark.asyncio
+async def test_stream_logs_done_callback_ignores_cancelled_error(execution_service):
+    """Test that _stream_logs_done_callback suppresses CancelledError."""
+    import asyncio
+    from unittest.mock import patch
+
+    # Create a task that gets cancelled
+    async def cancellable_task():
+        await asyncio.sleep(1)
+
+    task = asyncio.create_task(cancellable_task())
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass  # Normal cancellation
+
+    # Mock the logger to verify no error was logged
+    with patch("codetoreum.application.execution_service.logger") as mock_logger:
+        execution_service._stream_logs_done_callback(task)
+        mock_logger.error.assert_not_called()
