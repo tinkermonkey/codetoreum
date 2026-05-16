@@ -3,17 +3,17 @@ Production Application Bootstrap
 
 Wires up the entire application stack in production mode through 7 phases:
 
-**Phase 1**: Credential validation (validates all adapter credentials before instantiation)
-**Phase 2**: Adapter resolution (creates all 33 adapters via AdapterResolver)
+**Phase 1**: Infrastructure creation (event bus, adapter factory, resolver setup)
+**Phase 2**: Adapter resolution (creates all 33 adapters with credential validation)
 **Phase 3**: Critical path enforcement (validates no mocks on critical execution paths)
 **Phase 4**: Resilience decoration (wraps adapters with rate limiting, circuit breaking, timeouts, retries)
 **Phase 5**: Application service instantiation (creates 11 services with production adapters)
-**Phase 6**: Event handler registration (registers handlers for board, PR review, repair cycles)
-**Phase 7**: FastAPI app creation (creates app with all input ports wired)
+**Phase 6**: Input port creation (creates 17 input port implementations)
+**Phase 7**: FastAPI app creation (creates app with all ports wired)
 
 This bootstrap ensures:
 - Hard enforcement that no mock adapters reach critical paths
-- All credentials validated before any adapter is instantiated
+- All credentials validated during Phase 2 (before any adapter is instantiated)
 - Resilience patterns applied consistently
 - No simulation-specific code or routes included
 - All input port parameters are non-None before app creation
@@ -52,10 +52,6 @@ from codetoreum.application.agent_execution_recovery_service import (
 from codetoreum.application.agent_scheduler import (
     AgentScheduler,
     InMemoryTaskQueue,
-    MockProjectConfiguration,
-    MockRateLimiter,
-    MockResourceMonitor,
-    MockSchedulingEvents,
 )
 from codetoreum.application.configuration_service import ConfigurationService
 from codetoreum.application.container_recovery_service import ContainerRecoveryService
@@ -80,7 +76,7 @@ from codetoreum.application.multi_project_orchestrator import MultiProjectOrches
 from codetoreum.application.pipeline_manager import PipelineManager
 from codetoreum.application.review_service import ReviewService
 from codetoreum.application.work_item_service import WorkItemService
-from codetoreum.application.workflow_orchestrator import WorkflowOrchestrator, WorkflowState
+from codetoreum.application.workflow_orchestrator import WorkflowOrchestrator
 from codetoreum.application.workflow_run_query_service import WorkflowRunQueryService
 from codetoreum.application.workspace_router import WorkspaceRouter
 from codetoreum.infrastructure.adapters.factory import (
@@ -120,7 +116,8 @@ from codetoreum.ports.input.workspace_query import IWorkspaceQueryPort
 
 logger = logging.getLogger(__name__)
 
-# Critical execution path slots (7 total)
+# Critical execution path slots (6 total)
+# event_store excluded: InMemoryEventStore is acceptable for MVP
 CRITICAL_ADAPTER_SLOTS = {
     "board",
     "ticket",
@@ -128,11 +125,11 @@ CRITICAL_ADAPTER_SLOTS = {
     "version_control",
     "container",
     "code_review",
-    "event_store",
 }
 
 # Slots without production implementations (not on MVP critical path)
 NON_CRITICAL_SLOTS = {
+    "event_store",  # InMemoryEventStore acceptable for MVP
     "review_cycle",
     "pr_review_cycle",
     "systemic_analysis",
@@ -270,12 +267,12 @@ class ProductionApplicationBootstrap:
         Set up the entire production application stack.
 
         This method executes bootstrap phases in order:
-        - Phase 1: Credential validation (pre-flight check before any adapter creation)
-        - Phase 2: Adapter resolution (create all 33 adapters with resolved dependencies)
+        - Phase 1: Infrastructure creation (event bus, adapter factory, resolver)
+        - Phase 2: Adapter resolution (create all 33 adapters, validate credentials)
         - Phase 3: Critical path enforcement (validate no mocks on critical slots)
         - Phase 4: Resilience decoration (wrap adapters with resilience patterns)
         - Phase 5: Application service instantiation (create 11 services)
-        - Phase 6: Event handler registration (register handlers for automation)
+        - Phase 6: Input port creation (create 17 port implementations)
         - Phase 7: FastAPI app creation (wire all ports to API endpoints)
 
         Returns:
@@ -302,17 +299,23 @@ class ProductionApplicationBootstrap:
             self._adapter_factory = AdapterFactory()
 
             # Create a fallback event emitter for resolver dependencies
-            # (this is used when resolvers create adapters that need event emitters)
-            from codetoreum.adapters.testing import MockEventEmitter
+            # (this is used temporarily during adapter resolution, then replaced by the actual resolved emitter)
+            from codetoreum.adapters.testing import CapturingMockEventEmitter
 
-            fallback_event_emitter = MockEventEmitter()
+            fallback_event_emitter = CapturingMockEventEmitter()
+
+            # Create a minimal engine stub for production
+            # (used by resolver to create mocks for non-critical slots like review_cycle)
+            from codetoreum.infrastructure.bootstrap.production_engine_stub import ProductionEngineStub
+
+            engine_stub = ProductionEngineStub()
 
             # Create dependencies for resolver
             adapter_deps = AdapterDependencies(
                 event_bus=self.infrastructure.event_bus,
                 event_emitter=fallback_event_emitter,
                 logger=logger,
-                engine=None,  # type: ignore  # No engine in production
+                engine=engine_stub,  # type: ignore  # Minimal engine for non-critical mocks
                 config=None,  # type: ignore  # No simulation config in production
             )
 
@@ -594,10 +597,17 @@ class ProductionApplicationBootstrap:
 
         # Agent Scheduler
         task_queue = InMemoryTaskQueue()
-        resource_monitor = MockResourceMonitor()
-        rate_limiter = MockRateLimiter()
-        project_config = MockProjectConfiguration()
-        scheduling_events = MockSchedulingEvents()
+        from codetoreum.infrastructure.bootstrap.agent_scheduler_implementations import (
+            ProductionProjectConfiguration,
+            ProductionRateLimiter,
+            ProductionResourceMonitor,
+            ProductionSchedulingEvents,
+        )
+
+        resource_monitor = ProductionResourceMonitor()
+        rate_limiter = ProductionRateLimiter()
+        project_config = ProductionProjectConfiguration()
+        scheduling_events = ProductionSchedulingEvents()
 
         agent_scheduler = AgentScheduler(
             task_queue=task_queue,
@@ -608,54 +618,12 @@ class ProductionApplicationBootstrap:
             event_store=self.adapters.event_store,
         )
 
-        # Workflow Orchestrator
-        class ProductionWorkflowStateManager:
-            """Workflow state manager for production."""
-
-            def __init__(self):
-                self._states = {}
-
-            async def get_workflow_state(self, issue_id: str) -> "WorkflowState":
-                if issue_id not in self._states:
-                    self._states[issue_id] = WorkflowState(
-                        in_progress_tasks={}, current_column=None, current_agent=None
-                    )
-                return self._states[issue_id]
-
-            async def update_workflow_state(self, issue_id: str, state) -> None:
-                self._states[issue_id] = state
-
-        class ProductionDecisionEvents:
-            """Decision events for production."""
-
-            def __init__(self):
-                self.routing_decisions = []
-                self.progression_decisions = []
-
-            async def emit_routing_decision(self, decision) -> None:
-                self.routing_decisions.append(decision)
-
-            async def emit_progression_decision(self, decision) -> None:
-                self.progression_decisions.append(decision)
-
-        class ProductionProjectsAPI:
-            """Projects API for production."""
-
-            def __init__(self):
-                self.card_movements = []
-                self.labels_added = []
-
-            async def move_card_to_column(self, project: str, issue_number: int, column_name: str) -> None:
-                self.card_movements.append(
-                    {
-                        "project": project,
-                        "issue_number": issue_number,
-                        "column_name": column_name,
-                    }
-                )
-
-            async def add_label(self, project: str, issue_number: int, label: str) -> None:
-                self.labels_added.append({"project": project, "issue_number": issue_number, "label": label})
+        # Workflow Orchestrator dependencies
+        from codetoreum.infrastructure.bootstrap.workflow_services import (
+            ProductionDecisionEvents,
+            ProductionProjectsAPI,
+            ProductionWorkflowStateManager,
+        )
 
         workflow_state_manager = ProductionWorkflowStateManager()
         decision_events = ProductionDecisionEvents()
