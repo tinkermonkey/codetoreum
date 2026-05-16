@@ -479,9 +479,9 @@ class ProductionApplicationBootstrap:
             message = "event_emitter not resolved"
             raise RuntimeError(message)
 
-        emitter_class = type(self.adapters.event_emitter).__name__
+        from codetoreum.adapters.testing import CapturingMockEventEmitter
 
-        if emitter_class == "CapturingMockEventEmitter":
+        if isinstance(self.adapters.event_emitter, CapturingMockEventEmitter):
             message = (
                 "Production event_emitter is CapturingMockEventEmitter (test-only). "
                 "This means the fallback adapter from resolver dependencies is still in use. "
@@ -497,7 +497,7 @@ class ProductionApplicationBootstrap:
             )
             raise RuntimeError(message)
 
-        logger.debug(f"Production event_emitter verified: {emitter_class}")
+        logger.debug(f"Production event_emitter verified: {type(self.adapters.event_emitter).__name__}")
 
     def _log_non_critical_slots(self) -> None:
         """Log warnings for non-critical slots with mock implementations."""

@@ -86,3 +86,53 @@ def test_non_critical_adapter_slots_defined() -> None:
     }
 
     assert expected_non_critical == NON_CRITICAL_SLOTS
+
+
+@pytest.mark.asyncio
+async def test_validate_event_emitter_raises_when_capturing_mock_detected() -> None:
+    """Verify that _validate_event_emitter_is_production raises RuntimeError when CapturingMockEventEmitter is detected."""
+    from codetoreum.adapters.testing import CapturingMockEventEmitter
+
+    bootstrap = ProductionApplicationBootstrap()
+    # Manually set adapters with CapturingMockEventEmitter to simulate the misconfiguration
+    bootstrap.adapters = type("Adapters", (), {"event_emitter": CapturingMockEventEmitter()})()
+
+    with pytest.raises(RuntimeError, match="CapturingMockEventEmitter"):
+        bootstrap._validate_event_emitter_is_production()
+
+
+@pytest.mark.asyncio
+async def test_validate_event_emitter_raises_when_none() -> None:
+    """Verify that _validate_event_emitter_is_production raises RuntimeError when event_emitter is None."""
+    bootstrap = ProductionApplicationBootstrap()
+    # Manually set adapters with None event_emitter
+    bootstrap.adapters = type("Adapters", (), {"event_emitter": None})()
+
+    with pytest.raises(RuntimeError, match="event_emitter not resolved"):
+        bootstrap._validate_event_emitter_is_production()
+
+
+@pytest.mark.asyncio
+async def test_validate_event_emitter_raises_when_adapters_none() -> None:
+    """Verify that _validate_event_emitter_is_production raises RuntimeError when adapters is None."""
+    bootstrap = ProductionApplicationBootstrap()
+    bootstrap.adapters = None
+
+    with pytest.raises(RuntimeError, match="event_emitter not resolved"):
+        bootstrap._validate_event_emitter_is_production()
+
+
+@pytest.mark.asyncio
+async def test_validate_event_emitter_passes_with_non_capturing_adapter() -> None:
+    """Verify that _validate_event_emitter_is_production passes validation with non-capturing emitter."""
+
+    # Create a simple non-capturing mock object (not CapturingMockEventEmitter)
+    class MockEventEmitter:
+        pass
+
+    bootstrap = ProductionApplicationBootstrap()
+    # Manually set adapters with a non-capturing adapter
+    bootstrap.adapters = type("Adapters", (), {"event_emitter": MockEventEmitter()})()
+
+    # Should not raise any exception
+    bootstrap._validate_event_emitter_is_production()
