@@ -5,7 +5,7 @@ This command allows manual triggering of work item column changes, exercising
 the full execution chain from the event bus through BoardColumnEventHandler.
 
 Usage:
-    codetoreum-trigger --work-item-id <id> [--column <name>] [--project <slug>] [--dry-run]
+    codetoreum-trigger --work-item-id <id> [--column <name>] [--dry-run]
 
 The trigger publishes a WorkItemColumnChangedEvent directly to the event bus,
 bypassing webhook delivery entirely. This is useful for manual testing in development
@@ -13,6 +13,9 @@ environments where inbound webhooks may not be available.
 
 The work item must exist on the board, and the column name must be valid in the
 board's workflow template. Configuration is read from the database-backed config system.
+
+For MVP, the trigger uses the codetoreum/codetoreum repository's configured board.
+Multi-project support is a post-MVP enhancement.
 """
 
 import asyncio
@@ -24,8 +27,10 @@ from datetime import UTC, datetime
 import click
 
 from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
-from codetoreum.infrastructure.bootstrap.production_bootstrap import (
-    ProductionApplicationBootstrap,
+from codetoreum.infrastructure.bootstrap.cli_bootstrap import CLIBootstrap
+from codetoreum.infrastructure.bootstrap.codetoreum_board_setup import (
+    CODETOREUM_BOARD_ID,
+    CODETOREUM_PROJECT_ID,
 )
 
 logger = logging.getLogger(__name__)
@@ -49,7 +54,6 @@ def setup_logging(verbose: bool = False) -> None:
 async def trigger_work_item(
     work_item_id: str,
     column: str,
-    project: str | None,
     dry_run: bool = False,
     verbose: bool = False,
 ) -> int:
@@ -57,8 +61,8 @@ async def trigger_work_item(
     Trigger a work item column change by publishing an event to the event bus.
 
     This function:
-    1. Bootstraps the application to access the event bus and services
-    2. Reads board configuration from the database
+    1. Bootstraps the CLI to access the event bus and services
+    2. Reads board configuration from the database (board ID, project ID, column configs)
     3. Validates that the work item exists and the column is valid
     4. Creates a WorkItemColumnChangedEvent
     5. Publishes it to the event bus (or prints it in dry-run mode)
@@ -66,7 +70,6 @@ async def trigger_work_item(
     Args:
         work_item_id: GitHub issue number or ID
         column: Target column name (default: "In Progress")
-        project: GitHub project slug (owner/repo), reads from config if not provided
         dry_run: Print event without publishing if True
         verbose: Enable debug logging if True
 
@@ -76,9 +79,9 @@ async def trigger_work_item(
     setup_logging(verbose)
 
     try:
-        # Bootstrap the application to access services
-        click.echo("[*] Bootstrapping application...")
-        bootstrap = ProductionApplicationBootstrap()
+        # Bootstrap minimal CLI infrastructure (event bus + config + board adapters only)
+        click.echo("[*] Bootstrapping CLI environment...")
+        bootstrap = CLIBootstrap()
         await bootstrap.setup()
 
         if not bootstrap.infrastructure or not bootstrap.adapters:
@@ -89,22 +92,10 @@ async def trigger_work_item(
         workflow_config = bootstrap.adapters.workflow_config
         board_service = bootstrap.adapters.board
 
-        # Use codetoreum board for MVP (hardcoded for now)
-        board_id = "board-codetoreum"
-        project_id = "proj-codetoreum"
-
-        if not project:
-            # Use default codetoreum project
-            project = "codetoreum/codetoreum"
-            click.echo(f"[*] Using default project: {project}")
-        else:
-            # Parse the project to get org and repo
-            if "/" not in project:
-                click.echo(f"[!] Invalid project format: '{project}'. Expected format: owner/repo", err=True)
-                return 1
-            # Project is provided but we'll still use codetoreum board for MVP
-            click.echo("[*] Note: Using codetoreum board for MVP (project parameter ignored)")
-            click.echo(f"[*] Project specified: {project}")
+        # For MVP, use the codetoreum board configuration
+        click.echo("[*] Reading board configuration for codetoreum repository...")
+        board_id = CODETOREUM_BOARD_ID
+        project_id = CODETOREUM_PROJECT_ID
 
         # Get workflow template for the board
         click.echo(f"[*] Loading workflow template for board {board_id}...")
@@ -167,19 +158,10 @@ async def trigger_work_item(
         if dry_run:
             click.echo("[*] Dry-run mode: printing event without publishing")
             try:
-                event_dict = {
-                    "type": event.type,
-                    "timestamp": event.timestamp,
-                    "source": event.source,
-                    "work_item_id": event.work_item_id,
-                    "project_id": event.project_id,
-                    "board_id": event.board_id,
-                    "from_column": event.from_column,
-                    "to_column": event.to_column,
-                    "moved_by": event.moved_by,
-                }
+                event_dict = event.to_dict()
                 click.echo("\n" + json.dumps(event_dict, indent=2))
                 click.echo("\n[✓] Event would be published (dry-run mode)")
+                click.echo(f"[*] Event ID: {event_dict['event_id']}")
                 return 0
             except Exception as e:
                 click.echo(f"[!] Failed to serialize event: {e}", err=True)
@@ -224,11 +206,6 @@ async def trigger_work_item(
     help='Target column name [default: "In Progress"]',
 )
 @click.option(
-    "--project",
-    default=None,
-    help="GitHub project slug (owner/repo) [default: reads from config]",
-)
-@click.option(
     "--dry-run",
     is_flag=True,
     help="Print the event payload without publishing",
@@ -239,12 +216,15 @@ async def trigger_work_item(
     is_flag=True,
     help="Enable debug-level logging",
 )
-def main(work_item_id: str, column: str, project: str | None, dry_run: bool, verbose: bool) -> None:
+def main(work_item_id: str, column: str, dry_run: bool, verbose: bool) -> None:
     """
     Manually trigger a work item column change by publishing a WorkItemColumnChangedEvent.
 
     This command exercises the full execution chain from the event bus through
     BoardColumnEventHandler, enabling manual testing without requiring inbound webhooks.
+
+    For MVP, the trigger uses the codetoreum/codetoreum repository's configured board.
+    Multi-project support is planned for a future release.
 
     Examples:
 
@@ -254,16 +234,13 @@ def main(work_item_id: str, column: str, project: str | None, dry_run: bool, ver
         # Trigger to a different column
         codetoreum-trigger --work-item-id 123 --column "In Review"
 
-        # Specify the project explicitly
-        codetoreum-trigger --work-item-id 123 --project myorg/myrepo
-
         # Preview the event without publishing (dry-run)
         codetoreum-trigger --work-item-id 123 --dry-run
 
         # Enable debug logging
         codetoreum-trigger --work-item-id 123 --verbose
     """
-    exit_code = asyncio.run(trigger_work_item(work_item_id, column, project, dry_run, verbose))
+    exit_code = asyncio.run(trigger_work_item(work_item_id, column, dry_run, verbose))
     sys.exit(exit_code)
 
 

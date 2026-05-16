@@ -12,6 +12,10 @@ from codetoreum.domain.board_workflow_template import (
     ColumnType,
 )
 
+# Codetoreum board configuration constants (used by trigger CLI and setup)
+CODETOREUM_BOARD_ID = "board-codetoreum"
+CODETOREUM_PROJECT_ID = "proj-codetoreum"
+
 
 def create_codetoreum_board_template() -> BoardWorkflowTemplate:
     """
@@ -30,8 +34,8 @@ def create_codetoreum_board_template() -> BoardWorkflowTemplate:
     return BoardWorkflowTemplate(
         id="codetoreum-board-workflow",
         name="Codetoreum SDLC Pipeline",
-        board_id="board-codetoreum",
-        project_id="proj-codetoreum",
+        board_id=CODETOREUM_BOARD_ID,
+        project_id=CODETOREUM_PROJECT_ID,
         columns=(
             ColumnTemplate(
                 name="Backlog",
