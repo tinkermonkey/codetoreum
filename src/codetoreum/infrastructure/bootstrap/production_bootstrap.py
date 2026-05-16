@@ -327,9 +327,7 @@ class ProductionApplicationBootstrap:
 
             # Phase 2b: Create branch_resolution_service (34th adapter, not via resolver)
             # Use mock adapter since it's not on critical path
-            from codetoreum.adapters.testing.mock_branch_resolution_adapter import (
-                MockBranchResolutionAdapter,
-            )
+            from codetoreum.adapters.testing import MockBranchResolutionAdapter
 
             self.adapters.branch_resolution_service = MockBranchResolutionAdapter(clock=None)  # type: ignore
 
@@ -555,7 +553,7 @@ class ProductionApplicationBootstrap:
         )
 
         # For production, use the execution service executor with a system clock
-        from codetoreum.adapters.testing.execution_service_agent_executor import (
+        from codetoreum.adapters.secondary.execution_service_agent_executor import (
             ExecutionServiceAgentExecutor,
         )
 
