@@ -8,7 +8,7 @@ import re
 import subprocess
 import uuid
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -706,7 +706,7 @@ class ClaudeCodeAdapter(ILLMProvider):
 
         # Build context with conversation ID
         context = conv_data.get("parameters") or ExecutionContext()
-        context.conversation_id = conversation_id
+        context = replace(context, conversation_id=conversation_id)
 
         # Execute with conversation context
         result = await self.execute(message, context, stream_callback)

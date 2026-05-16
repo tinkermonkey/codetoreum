@@ -104,12 +104,17 @@ class TestAdapterCredentialValidation:
         ), "Error should mention missing credentials"
 
     @pytest.mark.asyncio
-    async def test_multiple_missing_credentials_aggregated_in_error(self) -> None:
+    async def test_multiple_missing_credentials_aggregated_in_error(self, monkeypatch: Any) -> None:
         """Verify multiple missing credentials are aggregated into one error.
 
         This test ensures that if multiple adapters are misconfigured,
         all missing credentials are reported together for efficient remediation.
         """
+        # Unset credentials to test missing credential scenario
+        monkeypatch.delenv("GITHUB_ORG", raising=False)
+        monkeypatch.delenv("GITHUB_REPO", raising=False)
+        monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
+
         config = SimulationConfig.create_fast_config("multi_cred_test")
         # Override multiple adapters to use production implementations
         config = dataclasses.replace(
