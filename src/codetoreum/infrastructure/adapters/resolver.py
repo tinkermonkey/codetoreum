@@ -321,7 +321,6 @@ class AdapterResolver:
         """Resolve version control service adapter."""
         return self._factory.create_version_control_service(
             adapter_name=self._config.version_control,
-            event_emitter=self._resolved["event_emitter"],
             time_source=lambda: self._deps.engine.get_clock_for_testing().now(),
         )
 

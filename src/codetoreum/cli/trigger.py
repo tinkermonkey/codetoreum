@@ -125,21 +125,19 @@ async def trigger_work_item(
         from_column = "Backlog"  # Default to Backlog for new items
         try:
             # Try to get item position (if board service supports it)
-            try:
-                item_position = await board_service.get_item_position(work_item_id)
-                from_column = item_position.column_name
-                click.echo(f"[*] Work item found in column: {from_column}")
-            except NotImplementedError:
-                # Board service doesn't support position lookup; assume Backlog
-                click.echo(f"[*] Assuming work item is in column: {from_column} (no position lookup available)")
+            item_position = await board_service.get_item_position(work_item_id)
+            from_column = item_position.column_name
+            click.echo(f"[*] Work item found in column: {from_column}")
+        except NotImplementedError:
+            # Board service doesn't support position lookup; assume Backlog
+            click.echo(f"[*] Assuming work item is in column: {from_column} (no position lookup available)")
         except Exception as e:
             click.echo(
                 f"[!] Error verifying work item {work_item_id}: {e}",
                 err=True,
             )
             logger.error("Failed to verify work item", exc_info=True)
-            # Don't fail - proceed with Backlog assumption
-            from_column = "Backlog"
+            return 1
 
         # Create the WorkItemColumnChangedEvent
         click.echo("[*] Creating WorkItemColumnChangedEvent...")
