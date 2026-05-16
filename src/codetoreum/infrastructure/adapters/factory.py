@@ -21,13 +21,13 @@ from codetoreum.adapters.secondary import (
     ClaudeCodeConfig,
     DockerContainerAdapter,
     ElasticsearchConfigStorage,
+    GitConfig,
     GitHubBoardAdapter,
     GitHubCIPipelineAdapter,
     GitHubCodeReviewAdapter,
     GitHubConfig,
     GitHubTicketAdapter,
     GitRepositoryAdapter,
-    GitConfig,
     MockEventEmitter,
 )
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
@@ -180,7 +180,6 @@ except ImportError:
     )
     ProductionEnvironmentRepairAdapter = None  # type: ignore
 
-from codetoreum.infrastructure.adapters.resolver import AdapterConfigurationError
 from codetoreum.infrastructure.adapters.registries import (
     ActiveWorkflowRunRegistryRegistry,
     AgentExecutorRegistry,
@@ -221,6 +220,7 @@ from codetoreum.infrastructure.adapters.registry_base import (
     AdapterCredentialRequirement,
     AdapterRegistry,
 )
+from codetoreum.infrastructure.adapters.resolver import AdapterConfigurationError
 from codetoreum.infrastructure.resilience import (
     CLAUDE_RESILIENCE_CONFIG,
     CONTAINER_RESILIENCE_CONFIG,
