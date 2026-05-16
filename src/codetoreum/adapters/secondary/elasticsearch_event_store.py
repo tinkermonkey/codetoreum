@@ -965,6 +965,12 @@ class ElasticsearchEventStore(IEventStore):
 
     async def close(self) -> None:
         """Close the event store (cleanup resources)."""
-        # Elasticsearch client is managed externally
-        self._initialized = False
-        logger.info("Elasticsearch event store closed")
+        try:
+            if self.client:
+                logger.info("Closing Elasticsearch client")
+                await self.client.close()
+        except Exception as e:
+            logger.error(f"Error closing Elasticsearch client: {e}", exc_info=True)
+        finally:
+            self._initialized = False
+            logger.info("Elasticsearch event store closed")

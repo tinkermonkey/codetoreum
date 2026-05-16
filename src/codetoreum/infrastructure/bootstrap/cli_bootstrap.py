@@ -18,7 +18,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from codetoreum.adapters.secondary.event_store_factory import initialize_event_store
+from codetoreum.infrastructure.adapters.event_store_factory import initialize_event_store
 from codetoreum.infrastructure.adapters.factory import AdapterFactory
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.simulation.simulation_config import AdapterSelectionConfig
@@ -186,7 +186,7 @@ class CLIBootstrap:
         logger.info("CLI bootstrap teardown starting")
         try:
             if self.adapters and self.adapters.event_store:
-                from codetoreum.adapters.secondary.event_store_factory import close_event_store
+                from codetoreum.infrastructure.adapters.event_store_factory import close_event_store
 
                 await close_event_store(self.adapters.event_store)
             logger.debug("CLI bootstrap teardown complete")

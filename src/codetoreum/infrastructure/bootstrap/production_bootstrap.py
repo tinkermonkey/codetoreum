@@ -972,6 +972,7 @@ class ProductionApplicationBootstrap:
         Clean up all resources.
 
         Performs cleanup in order:
+        - Close event store (closes Elasticsearch client if applicable)
         - Log final event bus statistics
         - Clear adapter references
         - Reset state
@@ -985,6 +986,21 @@ class ProductionApplicationBootstrap:
 
         try:
             logger.info("Tearing down production bootstrap...")
+
+            # Close event store (closes Elasticsearch client for production deployments)
+            if self.adapters and self.adapters.event_store:
+                logger.info("Closing event store...")
+                from codetoreum.infrastructure.adapters.event_store_factory import close_event_store
+
+                try:
+                    await close_event_store(self.adapters.event_store)
+                except Exception as e:
+                    logger.error(
+                        f"Error closing event store: {e}",
+                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                        exc_info=True,
+                    )
+                    # Continue with other cleanup even if event store close fails
 
             # Log final event bus statistics
             if self.infrastructure and self.infrastructure.event_bus:

@@ -10,7 +10,6 @@ import os
 from elasticsearch import AsyncElasticsearch
 
 from codetoreum.adapters.secondary.elasticsearch_event_store import ElasticsearchEventStore
-from codetoreum.adapters.testing import InMemoryEventStore
 from codetoreum.ports.output.event_store import IEventStore
 
 logger = logging.getLogger(__name__)
@@ -96,13 +95,7 @@ async def initialize_event_store(event_store: IEventStore) -> None:
         await initialize_event_store(event_store)
         ```
     """
-    if isinstance(event_store, ElasticsearchEventStore):
-        logger.info("Initializing Elasticsearch event store...")
-        await event_store.initialize()
-        logger.info("Elasticsearch event store initialized successfully")
-
-    # For other implementations, call initialize if available
-    elif hasattr(event_store, "initialize"):
+    if hasattr(event_store, "initialize"):
         logger.info(f"Initializing event store: {type(event_store).__name__}")
         await event_store.initialize()
         logger.info("Event store initialized successfully")
@@ -122,12 +115,7 @@ async def close_event_store(event_store: IEventStore) -> None:
         await close_event_store(event_store)
         ```
     """
-    if isinstance(event_store, ElasticsearchEventStore):
-        logger.info("Closing Elasticsearch event store...")
-        await event_store.close()
-        logger.info("Elasticsearch event store closed")
-
-    elif hasattr(event_store, "close"):
+    if hasattr(event_store, "close"):
         logger.info(f"Closing event store: {type(event_store).__name__}")
         await event_store.close()
         logger.info("Event store closed")
