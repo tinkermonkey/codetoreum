@@ -427,6 +427,25 @@ class WorkspaceRouter:
         and BEFORE finalize_workspace(). It retrieves the resolved branch name from the
         cache populated during prepare_workspace() and sets CODETOREUM_BRANCH_NAME env var.
 
+        **Security Note**: This method does NOT pass any credentials into the container:
+        - CLAUDE_CODE_OAUTH_TOKEN is NOT passed (Claude Code CLI uses it from server process)
+        - GITHUB_TOKEN is NOT passed (orchestrator handles all git operations)
+        - SSH keys, private keys, or other secrets are NOT passed
+
+        **Environment Variables Injected** (11 total for issue workspaces, 10 for others):
+        1. CODETOREUM_PROJECT_ID - Project identifier
+        2. CODETOREUM_WORK_ITEM_ID - Work item being processed
+        3. CODETOREUM_WORKSPACE_TYPE - Type of workspace (issue, discussion, hybrid)
+        4. CODETOREUM_ALLOW_CODE_CHANGES - Whether agent can modify code
+        5. CODETOREUM_AGENT_ID - Agent identifier
+        6. CODETOREUM_AGENT_TYPE - Agent type (maker, reviewer, specialized, etc.)
+        7. GIT_AUTHOR_NAME - Git author name for commits
+        8. GIT_AUTHOR_EMAIL - Git author email for commits
+        9. GIT_COMMITTER_NAME - Git committer name (same as author)
+        10. GIT_COMMITTER_EMAIL - Git committer email (same as author)
+        11. CODETOREUM_BRANCH_NAME - Resolved branch name (issue workspaces only)
+        + Any project-level environment variables (non-secret)
+
         Args:
             context: Workspace context
             project: Project context
