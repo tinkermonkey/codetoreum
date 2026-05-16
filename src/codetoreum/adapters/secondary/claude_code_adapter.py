@@ -81,8 +81,10 @@ class ClaudeCodeConfig:
     """Configuration for Claude Code CLI adapter."""
 
     # Authentication (secure references)
-    api_key_credential_name: str = "ANTHROPIC_API_KEY"  # Name of credential in provider
-    oauth_token_credential_name: str = "CLAUDE_CODE_OAUTH_TOKEN"  # Name of OAuth token
+    # Primary: OAuth token (Claude Code native authentication)
+    # Fallback: ANTHROPIC_API_KEY (legacy support, only if OAuth token unavailable)
+    api_key_credential_name: str = "ANTHROPIC_API_KEY"  # Fallback only; OAuth token preferred
+    oauth_token_credential_name: str = "CLAUDE_CODE_OAUTH_TOKEN"  # Primary authentication method
     credential_provider: ICredentialProvider | None = None  # Secure credential provider
 
     # CLI configuration
@@ -92,6 +94,9 @@ class ClaudeCodeConfig:
 
     # Output configuration
     output_format: str = "stream-json"  # or "text"
+    # Note: --verbose is automatically enabled when output_format=="stream-json" because the
+    # Claude CLI requires this flag for stream-json output with --print. When using the
+    # default stream-json format, verbose=False does not disable the flag.
     verbose: bool = False
 
     # Execution limits
@@ -226,10 +231,15 @@ class ClaudeCodeAdapter(ILLMProvider):
             )
             raise AuthenticationError(msg)
 
-        if api_key:
-            env["ANTHROPIC_API_KEY"] = api_key
-        elif oauth_token:
+        # OAuth token is preferred; API key used only as fallback
+        if oauth_token:
             env["CLAUDE_CODE_OAUTH_TOKEN"] = oauth_token
+        elif api_key:
+            logger.warning(
+                "Using ANTHROPIC_API_KEY as fallback. "
+                "CLAUDE_CODE_OAUTH_TOKEN is the preferred authentication method."
+            )
+            env["ANTHROPIC_API_KEY"] = api_key
 
         # Add context environment variables
         if context and context.environment_variables:
@@ -554,23 +564,18 @@ class ClaudeCodeAdapter(ILLMProvider):
     ) -> AsyncIterator[StreamChunk]:
         """Stream completion tokens.
 
-        This method provides a pure streaming interface and is NOT part of the critical
-        execution path. In the standard pipeline (webhook → column change → agent execute
-        → PR create), the `execute()` method is used with an optional `stream_callback`
-        parameter instead.
+        This method implements the ILLMProvider.stream_completion() port contract.
+        It provides a pure streaming interface for callers that prefer iterator-based
+        streaming over callback-based streaming.
 
-        `stream_completion()` is only invoked by the ResilientLLMProviderDecorator
-        (infrastructure/resilience/decorators.py:399, 402) as a fallback mechanism
-        when resilience patterns (circuit breaker, rate limiting) trigger alternative
-        code paths.
+        In the current pipeline (webhook → column change → agent execute → PR create),
+        the `execute()` method is used with an optional `stream_callback` parameter
+        instead. The pipeline does not invoke stream_completion() directly.
 
-        Streaming in normal pipeline execution:
-        - Call: ExecutionService.execute_with_llm() → self.llm_provider.execute()
-        - Streaming: Via stream_callback parameter in execute()
-        - NOT via separate stream_completion() call
-
-        This implementation remains for completeness and for scenarios where pure
-        streaming iteration is preferred over callback-based streaming.
+        When the ResilientLLMProviderDecorator wraps this method, it applies rate
+        limiting and circuit breaker patterns (infrastructure/resilience/decorators.py).
+        However, this is not a fallback mechanism — it is the standard resilience
+        wrapper for all ILLMProvider methods, including stream_completion().
         """
         ctx = context or ExecutionContext()
 

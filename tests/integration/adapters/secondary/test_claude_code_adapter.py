@@ -2,7 +2,7 @@
 
 These tests interact with the actual Claude Code CLI and require:
 - Claude CLI installed and available in PATH
-- Valid Anthropic API key
+- Valid Claude Code OAuth token (CLAUDE_CODE_OAUTH_TOKEN)
 """
 
 import os
