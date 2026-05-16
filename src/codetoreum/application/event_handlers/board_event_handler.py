@@ -561,7 +561,7 @@ class BoardColumnEventHandler(EventHandler):
                     "work_item_id": work_item_id,
                     "stage_name": column_config.name,
                     "template_id": workflow_config.id,
-                    "agent_id": column_config.agent_id,
+                    "agent_id": column_config.agent_id or "none",
                     "board_id": board_id,
                     "project_id": project_id,
                 },

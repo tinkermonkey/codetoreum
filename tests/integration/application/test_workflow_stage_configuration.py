@@ -1,35 +1,28 @@
 """
-Phase D2: Agent Pipeline Workflow Configuration Tests
+Workflow stage configuration tests
 
-Tests for configuring workflow templates for the "In Progress" stage:
-- Agent type (coding agent)
-- Model selection (Claude Sonnet)
+Tests for configuring workflow templates for automated pipeline stages:
+- Agent type (coding agent, reviewer, etc.)
+- Model selection (Claude Sonnet, etc.)
 - Context file mounting
 - Agent prompt template
 - Git identity for commits
 - Verification that no credentials are passed to container
-
-This test suite verifies the requirements for Phase D2.
 """
 
 from datetime import UTC, datetime
-from types import MappingProxyType
 
 import pytest
 
 from codetoreum.adapters.testing.in_memory_config_store import InMemoryConfigStore
-from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
 from codetoreum.application.configuration_service import ConfigurationService
 from codetoreum.application.workspace_router import WorkspaceRouter
 from codetoreum.domain.agent import Agent, AgentType
 from codetoreum.domain.project_context import ProjectContext
-from codetoreum.domain.workspace_context import WorkspaceContext, WorkspaceType
+from codetoreum.domain.workspace_context import WorkspaceContext
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.ports.input.config_command import UpdatePipelineConfigCommand
-from codetoreum.ports.output.config_store import (
-    ConfigNotFoundError,
-    ProjectConfig,
-)
+from codetoreum.ports.output.config_store import ProjectConfig
 
 
 @pytest.fixture
@@ -70,8 +63,8 @@ async def sample_project(config_store):
     return project
 
 
-class TestPhaseD2WorkflowConfiguration:
-    """Tests for Phase D2 workflow configuration."""
+class TestWorkflowStageConfiguration:
+    """Tests for workflow stage configuration."""
 
     @pytest.mark.asyncio
     async def test_configure_in_progress_stage_with_coding_agent(self, config_service, config_store, sample_project):
@@ -254,7 +247,7 @@ class TestPhaseD2WorkflowConfiguration:
             name="test-agent",
             display_name="Test Agent",
             agent_type=AgentType.DEVELOPER,
-            role_description="Test agent for Phase D2",
+            role_description="Test agent for workflow stages",
             model="claude-sonnet-4-5",
             capabilities={"testing": AgentCapability(skill="testing", proficiency=1.0)},
             makes_code_changes=True,
@@ -292,22 +285,6 @@ class TestPhaseD2WorkflowConfiguration:
 
         for var in forbidden_vars:
             assert var not in env_vars, f"SECURITY ISSUE: Credential variable '{var}' should NOT be passed to container"
-
-        # Document injected environment variables
-        print("\n" + "=" * 70)
-        print("AUDIT: Environment Variables Passed to Container")
-        print("=" * 70)
-        for var, value in sorted(env_vars.items()):
-            # Redact actual values for security
-            if any(secret in var.lower() for secret in ["password", "token", "key", "secret"]):
-                print(f"  {var}: <REDACTED>")
-            elif var in ["GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME"] or var in ["GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL"]:
-                print(f"  {var}: {value}")
-            else:
-                print(f"  {var}: {value}")
-        print("=" * 70)
-        print("✓ No credential environment variables leaked")
-        print("=" * 70 + "\n")
 
     @pytest.mark.asyncio
     async def test_git_identity_configuration(self, config_service, config_store, sample_project):

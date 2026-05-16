@@ -1,10 +1,10 @@
 """
-Phase D2: End-to-End Workflow Configuration and Execution
+End-to-end workflow stage configuration and execution
 
-Tests the complete Phase D2 workflow:
-- Configure workflow template for "In Progress" stage
-- Move work item to "In Progress" column
-- Verify BoardColumnEventHandler starts workflow run with template loaded
+Tests the complete workflow stage lifecycle:
+- Configure workflow template for automated stage
+- Move work item to trigger column
+- Verify event handler starts workflow run with template loaded
 - Verify logging includes workflow configuration details
 """
 
@@ -119,18 +119,18 @@ def mock_workflow_config_service():
     return MockWorkflowConfigService()
 
 
-class TestPhaseD2WorkflowE2E:
-    """End-to-end tests for Phase D2 workflow configuration."""
+class TestWorkflowStageE2E:
+    """End-to-end tests for workflow stage configuration."""
 
     @pytest.mark.asyncio
     async def test_workflow_run_logs_template_on_column_entry(
         self, config_service, config_store, sample_project, mock_workflow_config_service, caplog
     ):
-        """Test that entering 'In Progress' column logs workflow run with template details.
+        """Test that entering automated stage column logs workflow run with template details.
 
         Verifies:
-        - Pipeline config stored with "In Progress" stage
-        - Moving item to "In Progress" triggers BoardColumnEventHandler
+        - Pipeline config stored with stage configuration
+        - Moving item to stage column triggers BoardColumnEventHandler
         - Handler logs "Starting workflow run" with template and stage details
         """
         # 1. Configure the pipeline with "In Progress" stage
@@ -213,93 +213,3 @@ class TestPhaseD2WorkflowE2E:
         assert "In Progress" in log_text
         assert "board-1" in log_text
         assert "coding-agent" in log_text  # Agent ID from column template
-
-    @pytest.mark.asyncio
-    async def test_pipeline_config_with_complete_stage_definition(self, config_service, config_store, sample_project):
-        """Test complete stage definition with all Phase D2 requirements.
-
-        Verifies all fields required for Phase D2 are stored:
-        - Agent type
-        - Model
-        - Context files
-        - Prompt template
-        - Git identity
-        """
-        command = UpdatePipelineConfigCommand(
-            project_name="codetoreum/codetoreum",
-            pipeline_name="default",
-            updates={
-                "stages": [
-                    {
-                        "name": "In Progress",
-                        "agent_type": "coding agent",
-                        "model": "claude-sonnet-4-5",
-                        "context_files": [
-                            {
-                                "path": "/context/issue.md",
-                                "description": "Work item title, description, and labels",
-                            },
-                            {
-                                "path": "/context/repo_summary.md",
-                                "description": "Repository structure summary",
-                            },
-                            {
-                                "path": "/context/previous_stage.txt",
-                                "description": "Output from previous stage",
-                            },
-                        ],
-                        "prompt_template": (
-                            "You are a software engineer. "
-                            "Implement the issue in /context/issue.md. "
-                            "Write tests for your implementation. "
-                            "Output a summary of your changes."
-                        ),
-                        "git_author_name": "Codetoreum Agent",
-                        "git_author_email": "agent@codetoreum.dev",
-                    }
-                ]
-            },
-            user_id="test-user",
-        )
-
-        result = await config_service.update_pipeline_config(command)
-        assert result.success
-
-        # Read back and verify all fields
-        pipeline = await config_store.get_pipeline_config(sample_project.id, "default")
-        assert len(pipeline.stages) == 1
-
-        stage = dict(pipeline.stages[0])
-
-        # Verify all required fields
-        required_fields = {
-            "name": "In Progress",
-            "agent_type": "coding agent",
-            "model": "claude-sonnet-4-5",
-            "git_author_name": "Codetoreum Agent",
-            "git_author_email": "agent@codetoreum.dev",
-        }
-
-        for field, expected_value in required_fields.items():
-            assert field in stage
-            assert stage[field] == expected_value
-
-        # Verify context files
-        assert "context_files" in stage
-        context_files = stage["context_files"]
-        assert len(context_files) == 3
-
-        paths = [f["path"] for f in context_files]
-        descriptions = [f["description"] for f in context_files]
-
-        assert "/context/issue.md" in paths
-        assert "/context/repo_summary.md" in paths
-        assert "/context/previous_stage.txt" in paths
-
-        assert "Work item title" in descriptions[0]
-        assert "Repository structure" in descriptions[1]
-
-        # Verify prompt template
-        assert "prompt_template" in stage
-        assert "software engineer" in stage["prompt_template"]
-        assert "tests" in stage["prompt_template"]

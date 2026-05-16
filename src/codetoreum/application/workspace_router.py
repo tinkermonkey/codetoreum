@@ -432,7 +432,7 @@ class WorkspaceRouter:
         - GITHUB_TOKEN is NOT passed (orchestrator handles all git operations)
         - SSH keys, private keys, or other secrets are NOT passed
 
-        **Environment Variables Injected** (11 total for issue workspaces, 10 for others):
+        **System Environment Variables Injected** (11 base + project-level variables):
         1. CODETOREUM_PROJECT_ID - Project identifier
         2. CODETOREUM_WORK_ITEM_ID - Work item being processed
         3. CODETOREUM_WORKSPACE_TYPE - Type of workspace (issue, discussion, hybrid)
@@ -444,7 +444,8 @@ class WorkspaceRouter:
         9. GIT_COMMITTER_NAME - Git committer name (same as author)
         10. GIT_COMMITTER_EMAIL - Git committer email (same as author)
         11. CODETOREUM_BRANCH_NAME - Resolved branch name (issue workspaces only)
-        + Any project-level environment variables (non-secret)
+
+        Also merged: Any project-level environment variables (non-secret)
 
         Args:
             context: Workspace context
