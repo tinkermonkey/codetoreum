@@ -17,7 +17,11 @@ from codetoreum.infrastructure.adapters.event_store_factory import (
     initialize_event_store,
 )
 from codetoreum.infrastructure.bootstrap.cli_bootstrap import CLIBootstrap
+from codetoreum.infrastructure.event_serialization import EventSerializer
 from tests.conftest import docker_available
+
+# Register event types for deserialization
+EventSerializer.register_event_type(WorkItemColumnChangedEvent)
 
 pytestmark = docker_available
 
@@ -70,8 +74,8 @@ class TestSharedEventBus:
             assert cli.adapters is not None, "CLI adapters not initialized"
             await cli.adapters.event_store.append(work_item_id, [test_event])
 
-            # Give Elasticsearch time to index the event
-            await asyncio.sleep(0.5)
+            # Refresh Elasticsearch indices to make events immediately searchable
+            await elasticsearch_client.indices.refresh(index="events-*")
 
             # Retrieve event from server event store
             retrieved_events = await server_event_store.get_events(work_item_id)
@@ -128,8 +132,8 @@ class TestSharedEventBus:
 
             await cli.adapters.event_store.append(work_item_id, events)
 
-            # Wait for indexing
-            await asyncio.sleep(0.5)
+            # Refresh Elasticsearch indices to make events immediately searchable
+            await elasticsearch_client.indices.refresh(index="events-*")
 
             # Retrieve from server
             retrieved_events = await server_event_store.get_events(work_item_id)
@@ -192,8 +196,8 @@ class TestSharedEventBus:
             await cli.adapters.event_store.append(stream1_id, [event1])
             await cli.adapters.event_store.append(stream2_id, [event2])
 
-            # Wait for indexing
-            await asyncio.sleep(0.5)
+            # Refresh Elasticsearch indices to make events immediately searchable
+            await elasticsearch_client.indices.refresh(index="events-*")
 
             # Retrieve from server for each stream
             events1 = await server_event_store.get_events(stream1_id)

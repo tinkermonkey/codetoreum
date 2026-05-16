@@ -178,6 +178,8 @@ class ElasticsearchEventStore(IEventStore):
                 # Document
                 doc = EventSerializer.to_dict(event)
                 doc["stream_version"] = stream_version
+                doc["aggregate_id"] = stream_id
+                doc["aggregate_type"] = "unknown"  # Will be set from event data if available
                 bulk_body.append(doc)
 
             # Execute bulk insert
@@ -379,7 +381,12 @@ class ElasticsearchEventStore(IEventStore):
                 aggs={"max_version": {"max": {"field": "stream_version"}}},
             )
 
-            max_version = response["aggregations"]["max_version"].get("value")
+            # Handle case where aggregations might not exist (e.g., no matching indices)
+            aggs = response.get("aggregations", {})
+            if not aggs or "max_version" not in aggs:
+                return 0
+
+            max_version = aggs["max_version"].get("value")
 
             if max_version is None:
                 return 0
@@ -528,7 +535,11 @@ class ElasticsearchEventStore(IEventStore):
                 aggs={"unique_streams": {"terms": {"field": "aggregate_id", "size": 10000}}},
             )
 
-            buckets = response["aggregations"]["unique_streams"]["buckets"]
+            aggs = response.get("aggregations", {})
+            if not aggs or "unique_streams" not in aggs:
+                return []
+
+            buckets = aggs["unique_streams"].get("buckets", [])
             stream_ids = [bucket["key"] for bucket in buckets]
 
             return stream_ids
@@ -637,7 +648,11 @@ class ElasticsearchEventStore(IEventStore):
                     aggs=agg_body,
                 )
 
-                buckets = response["aggregations"]["streams"]["buckets"]
+                aggs = response.get("aggregations", {})
+                if not aggs or "streams" not in aggs:
+                    break
+
+                buckets = aggs["streams"].get("buckets", [])
                 if not buckets:
                     break
 
@@ -654,7 +669,7 @@ class ElasticsearchEventStore(IEventStore):
                     collected += 1
 
                 # Check if there are more results
-                after_key = response["aggregations"]["streams"].get("after_key")
+                after_key = aggs["streams"].get("after_key")
                 if not after_key:
                     break
 
@@ -665,7 +680,11 @@ class ElasticsearchEventStore(IEventStore):
                 size=0,
                 aggs={"unique_streams": {"cardinality": {"field": "aggregate_id"}}},
             )
-            total_count = int(count_response["aggregations"]["unique_streams"]["value"])
+            count_aggs = count_response.get("aggregations", {})
+            if not count_aggs or "unique_streams" not in count_aggs:
+                total_count = 0
+            else:
+                total_count = int(count_aggs["unique_streams"]["value"])
 
             return all_streams, total_count
 
@@ -824,7 +843,10 @@ class ElasticsearchEventStore(IEventStore):
                 size=0,
                 aggs={"unique_streams": {"cardinality": {"field": "aggregate_id"}}},
             )
-            total_streams = streams_response["aggregations"]["unique_streams"]["value"]
+            streams_aggs = streams_response.get("aggregations", {})
+            total_streams = 0
+            if streams_aggs and "unique_streams" in streams_aggs:
+                total_streams = streams_aggs["unique_streams"]["value"]
 
             # Events by type
             types_response = await self.client.search(
@@ -832,10 +854,12 @@ class ElasticsearchEventStore(IEventStore):
                 size=0,
                 aggs={"event_types": {"terms": {"field": "event_type", "size": 100}}},
             )
-            events_by_type = {
-                bucket["key"]: bucket["doc_count"]
-                for bucket in types_response["aggregations"]["event_types"]["buckets"]
-            }
+            types_aggs = types_response.get("aggregations", {})
+            events_by_type = {}
+            if types_aggs and "event_types" in types_aggs:
+                events_by_type = {
+                    bucket["key"]: bucket["doc_count"] for bucket in types_aggs["event_types"].get("buckets", [])
+                }
 
             return {
                 "total_events": total_events,
