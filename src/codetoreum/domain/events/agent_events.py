@@ -4,6 +4,7 @@ All events are immutable frozen dataclasses subclassing CodetoreumEvent.
 """
 
 from dataclasses import dataclass
+from typing import Any
 
 from .adapter_events import CodetoreumEvent, now_iso
 
@@ -25,7 +26,7 @@ class AgentCreatedEvent(CodetoreumEvent):
         if not self.name:
             raise ValueError("name is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update(
             {
@@ -39,7 +40,7 @@ class AgentCreatedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "AgentCreatedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "AgentCreatedEvent":
         return cls(
             type=data.get("type", "agent.created"),
             timestamp=data.get("timestamp", now_iso()),
@@ -67,13 +68,13 @@ class AgentCapabilityAddedEvent(CodetoreumEvent):
         if not self.agent_id:
             raise ValueError("agent_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update({"agent_id": self.agent_id, "skill": self.skill, "proficiency": self.proficiency})
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "AgentCapabilityAddedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "AgentCapabilityAddedEvent":
         return cls(
             type=data.get("type", "agent.capability_added"),
             timestamp=data.get("timestamp", now_iso()),
@@ -98,13 +99,13 @@ class AgentCapabilityRemovedEvent(CodetoreumEvent):
         if not self.agent_id:
             raise ValueError("agent_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update({"agent_id": self.agent_id, "skill": self.skill})
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "AgentCapabilityRemovedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "AgentCapabilityRemovedEvent":
         return cls(
             type=data.get("type", "agent.capability_removed"),
             timestamp=data.get("timestamp", now_iso()),
@@ -130,7 +131,7 @@ class AgentCapabilityUpdatedEvent(CodetoreumEvent):
         if not self.agent_id:
             raise ValueError("agent_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update(
             {
@@ -143,7 +144,7 @@ class AgentCapabilityUpdatedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "AgentCapabilityUpdatedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "AgentCapabilityUpdatedEvent":
         return cls(
             type=data.get("type", "agent.capability_updated"),
             timestamp=data.get("timestamp", now_iso()),
@@ -170,13 +171,13 @@ class AgentModelUpdatedEvent(CodetoreumEvent):
         if not self.agent_id:
             raise ValueError("agent_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update({"agent_id": self.agent_id, "old_model": self.old_model, "new_model": self.new_model})
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "AgentModelUpdatedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "AgentModelUpdatedEvent":
         return cls(
             type=data.get("type", "agent.model_updated"),
             timestamp=data.get("timestamp", now_iso()),
@@ -202,13 +203,13 @@ class AgentTimeoutUpdatedEvent(CodetoreumEvent):
         if not self.agent_id:
             raise ValueError("agent_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update({"agent_id": self.agent_id, "old_timeout": self.old_timeout, "new_timeout": self.new_timeout})
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "AgentTimeoutUpdatedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "AgentTimeoutUpdatedEvent":
         return cls(
             type=data.get("type", "agent.timeout_updated"),
             timestamp=data.get("timestamp", now_iso()),
@@ -234,7 +235,7 @@ class AgentMaxRetriesUpdatedEvent(CodetoreumEvent):
         if not self.agent_id:
             raise ValueError("agent_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update(
             {
@@ -246,7 +247,7 @@ class AgentMaxRetriesUpdatedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "AgentMaxRetriesUpdatedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "AgentMaxRetriesUpdatedEvent":
         return cls(
             type=data.get("type", "agent.max_retries_updated"),
             timestamp=data.get("timestamp", now_iso()),
@@ -274,7 +275,7 @@ class AgentConstraintsUpdatedEvent(CodetoreumEvent):
         object.__setattr__(self, "old_constraints", tuple(self.old_constraints))
         object.__setattr__(self, "new_constraints", tuple(self.new_constraints))
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update(
             {
@@ -286,7 +287,7 @@ class AgentConstraintsUpdatedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "AgentConstraintsUpdatedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "AgentConstraintsUpdatedEvent":
         return cls(
             type=data.get("type", "agent.constraints_updated"),
             timestamp=data.get("timestamp", now_iso()),
@@ -311,13 +312,13 @@ class AgentMcpServerAddedEvent(CodetoreumEvent):
         if not self.agent_id:
             raise ValueError("agent_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update({"agent_id": self.agent_id, "server_name": self.server_name})
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "AgentMcpServerAddedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "AgentMcpServerAddedEvent":
         return cls(
             type=data.get("type", "agent.mcp_server_added"),
             timestamp=data.get("timestamp", now_iso()),
@@ -341,13 +342,13 @@ class AgentMcpServerRemovedEvent(CodetoreumEvent):
         if not self.agent_id:
             raise ValueError("agent_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update({"agent_id": self.agent_id, "server_name": self.server_name})
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "AgentMcpServerRemovedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "AgentMcpServerRemovedEvent":
         return cls(
             type=data.get("type", "agent.mcp_server_removed"),
             timestamp=data.get("timestamp", now_iso()),

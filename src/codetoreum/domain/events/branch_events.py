@@ -6,7 +6,7 @@ decision (exact match, parent issue detection, sibling reuse, fuzzy matching, et
 """
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 from uuid import uuid4
 
 from codetoreum.domain.value_objects import (
@@ -106,7 +106,7 @@ class BranchResolvedEvent(CodetoreumEvent):
             msg = "BranchResolvedEvent: resolution_strategy='parent_issue' requires parent_issue_id to be set"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -124,7 +124,7 @@ class BranchResolvedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "BranchResolvedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "BranchResolvedEvent":
         """Deserialize from dictionary.
 
         Raises:
@@ -223,7 +223,7 @@ class BranchReusedEvent(CodetoreumEvent):
             msg = "BranchReusedEvent: resolution_strategy='parent_issue' requires parent_issue_id to be set"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -240,7 +240,7 @@ class BranchReusedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "BranchReusedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "BranchReusedEvent":
         """Deserialize from dictionary.
 
         Raises:
@@ -333,7 +333,7 @@ class BranchResolutionCreatedEvent(CodetoreumEvent):
             msg = f"resolution_strategy must be 'new' for BranchResolutionCreatedEvent, got {self.resolution_strategy}"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -350,7 +350,7 @@ class BranchResolutionCreatedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "BranchResolutionCreatedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "BranchResolutionCreatedEvent":
         """Deserialize from dictionary.
 
         Raises:

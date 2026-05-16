@@ -9,7 +9,7 @@ Terminology (vendor-agnostic):
 """
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
@@ -77,7 +77,7 @@ class ReviewStatusChangedEvent(CodetoreumEvent):
             msg = f"Invalid new_status: {self.new_status}"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -93,7 +93,7 @@ class ReviewStatusChangedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ReviewStatusChangedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ReviewStatusChangedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "review.status_changed"),
@@ -156,7 +156,7 @@ class ReviewCommentAddedEvent(CodetoreumEvent):
         # Note: comment is optional and can be None
         # Do not auto-initialize it as this prevents tests from checking None handling
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -170,7 +170,7 @@ class ReviewCommentAddedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ReviewCommentAddedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ReviewCommentAddedEvent":
         """Deserialize from dictionary."""
         comment = Comment.from_dict(data.get("comment", {})) if data.get("comment") else None
 

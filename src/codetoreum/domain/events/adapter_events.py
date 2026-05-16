@@ -17,6 +17,7 @@ Terminology mapping:
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
 
@@ -117,7 +118,7 @@ class CodetoreumEvent:
         """
         return self.__class__.__name__
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize event to dictionary for storage/transmission.
 
         Returns:
@@ -133,7 +134,7 @@ class CodetoreumEvent:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "CodetoreumEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "CodetoreumEvent":
         """Deserialize event from dictionary.
 
         Args:

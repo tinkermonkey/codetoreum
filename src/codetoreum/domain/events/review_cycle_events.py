@@ -14,7 +14,7 @@ serve as the single source of truth for the system's history.
 """
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
@@ -80,7 +80,7 @@ class ReviewCycleStartedEvent(CodetoreumEvent):
             msg = "max_iterations must be greater than 0"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -96,7 +96,7 @@ class ReviewCycleStartedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ReviewCycleStartedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ReviewCycleStartedEvent":
         """Deserialize from dictionary.
 
         Raises:
@@ -170,7 +170,7 @@ class ReviewCycleIterationCompletedEvent(CodetoreumEvent):
             msg = "blocking_count must be non-negative"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -185,7 +185,7 @@ class ReviewCycleIterationCompletedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ReviewCycleIterationCompletedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ReviewCycleIterationCompletedEvent":
         """Deserialize from dictionary.
 
         Raises:
@@ -247,7 +247,7 @@ class ReviewCycleMakerRevisionEvent(CodetoreumEvent):
             msg = "iteration must be greater than 0"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -260,7 +260,7 @@ class ReviewCycleMakerRevisionEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ReviewCycleMakerRevisionEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ReviewCycleMakerRevisionEvent":
         """Deserialize from dictionary.
 
         Raises:
@@ -328,7 +328,7 @@ class ReviewCycleEscalatedToHumanEvent(CodetoreumEvent):
             msg = "blocking_count must be non-negative"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -343,7 +343,7 @@ class ReviewCycleEscalatedToHumanEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ReviewCycleEscalatedToHumanEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ReviewCycleEscalatedToHumanEvent":
         """Deserialize from dictionary.
 
         Raises:
@@ -406,7 +406,7 @@ class ReviewCycleHumanFeedbackReceivedEvent(CodetoreumEvent):
             msg = "feedback is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -419,7 +419,7 @@ class ReviewCycleHumanFeedbackReceivedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ReviewCycleHumanFeedbackReceivedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ReviewCycleHumanFeedbackReceivedEvent":
         """Deserialize from dictionary.
 
         Raises:
@@ -480,7 +480,7 @@ class ReviewCycleMaxIterationsReachedEvent(CodetoreumEvent):
             msg = "max_iterations must be greater than 0"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -493,7 +493,7 @@ class ReviewCycleMaxIterationsReachedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ReviewCycleMaxIterationsReachedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ReviewCycleMaxIterationsReachedEvent":
         """Deserialize from dictionary.
 
         Raises:
@@ -551,7 +551,7 @@ class ReviewCycleApprovedEvent(CodetoreumEvent):
             msg = "total_iterations must be greater than 0"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -564,7 +564,7 @@ class ReviewCycleApprovedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ReviewCycleApprovedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ReviewCycleApprovedEvent":
         """Deserialize from dictionary.
 
         Raises:
@@ -631,7 +631,7 @@ class ReviewCycleCreatedEvent(CodetoreumEvent):
             msg = "max_iterations must be greater than 0"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -647,7 +647,7 @@ class ReviewCycleCreatedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ReviewCycleCreatedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ReviewCycleCreatedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "review_cycle.created"),
@@ -697,7 +697,7 @@ class ReviewCycleIterationStartedEvent(CodetoreumEvent):
             msg = "maker_execution_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -710,7 +710,7 @@ class ReviewCycleIterationStartedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ReviewCycleIterationStartedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ReviewCycleIterationStartedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "review_cycle.iteration_started"),
@@ -764,7 +764,7 @@ class ReviewCycleFeedbackSubmittedEvent(CodetoreumEvent):
             msg = "reviewer_execution_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -779,7 +779,7 @@ class ReviewCycleFeedbackSubmittedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ReviewCycleFeedbackSubmittedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ReviewCycleFeedbackSubmittedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "review_cycle.feedback_submitted"),
@@ -828,7 +828,7 @@ class ReviewCycleRejectedEvent(CodetoreumEvent):
             msg = "rejection_reason is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -841,7 +841,7 @@ class ReviewCycleRejectedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ReviewCycleRejectedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ReviewCycleRejectedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "review_cycle.rejected"),

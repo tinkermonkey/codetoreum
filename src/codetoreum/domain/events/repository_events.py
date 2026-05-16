@@ -5,6 +5,7 @@ and staged files.
 """
 
 from dataclasses import dataclass
+from typing import Any
 from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
@@ -56,7 +57,7 @@ class FilesStagedEvent(CodetoreumEvent):
         if isinstance(self.file_paths, list):
             object.__setattr__(self, "file_paths", tuple(self.file_paths))
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -69,7 +70,7 @@ class FilesStagedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "FilesStagedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "FilesStagedEvent":
         """Deserialize from dictionary."""
         file_paths = data.get("file_paths", [])
         return cls(
@@ -145,7 +146,7 @@ class CommitCreatedEvent(CodetoreumEvent):
         if isinstance(self.changed_files, list):
             object.__setattr__(self, "changed_files", tuple(self.changed_files))
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -161,7 +162,7 @@ class CommitCreatedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "CommitCreatedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "CommitCreatedEvent":
         """Deserialize from dictionary."""
         changed_files = data.get("changed_files", [])
         return cls(
@@ -228,7 +229,7 @@ class BranchCreatedEvent(CodetoreumEvent):
             msg = "base_commit is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -242,7 +243,7 @@ class BranchCreatedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "BranchCreatedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "BranchCreatedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "repository.branch_created"),
@@ -300,7 +301,7 @@ class BranchPushedEvent(CodetoreumEvent):
             msg = "branch_name is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -313,7 +314,7 @@ class BranchPushedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "BranchPushedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "BranchPushedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "repository.branch_pushed"),

@@ -7,6 +7,7 @@ All events use dot-notation type strings and typed fields.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 from uuid import uuid4
 
 from codetoreum.domain.events.adapter_events import CodetoreumEvent
@@ -37,7 +38,7 @@ class WorkflowCreatedEvent(CodetoreumEvent):
         if not self.work_item_id:
             raise ValueError("work_item_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         data = super().to_dict()
         data.update(
             {
@@ -51,7 +52,7 @@ class WorkflowCreatedEvent(CodetoreumEvent):
         return data
 
     @classmethod
-    def from_dict(cls, data: dict) -> WorkflowCreatedEvent:
+    def from_dict(cls, data: dict[str, Any]) -> WorkflowCreatedEvent:
         return cls(
             type=data.get("type", "workflow.created"),
             timestamp=data.get("timestamp", ""),
@@ -87,7 +88,7 @@ class WorkflowStartedEvent(CodetoreumEvent):
         if not self.work_item_id:
             raise ValueError("work_item_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         data = super().to_dict()
         data.update(
             {
@@ -99,7 +100,7 @@ class WorkflowStartedEvent(CodetoreumEvent):
         return data
 
     @classmethod
-    def from_dict(cls, data: dict) -> WorkflowStartedEvent:
+    def from_dict(cls, data: dict[str, Any]) -> WorkflowStartedEvent:
         return cls(
             type=data.get("type", "workflow.started"),
             timestamp=data.get("timestamp", ""),
@@ -135,7 +136,7 @@ class WorkflowStageAdvancedEvent(CodetoreumEvent):
         if not self.work_item_id:
             raise ValueError("work_item_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         data = super().to_dict()
         data.update(
             {
@@ -148,7 +149,7 @@ class WorkflowStageAdvancedEvent(CodetoreumEvent):
         return data
 
     @classmethod
-    def from_dict(cls, data: dict) -> WorkflowStageAdvancedEvent:
+    def from_dict(cls, data: dict[str, Any]) -> WorkflowStageAdvancedEvent:
         return cls(
             type=data.get("type", "workflow.stage_advanced"),
             timestamp=data.get("timestamp", ""),
@@ -185,7 +186,7 @@ class WorkflowCompletedEvent(CodetoreumEvent):
         if not self.work_item_id:
             raise ValueError("work_item_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         data = super().to_dict()
         data.update(
             {
@@ -198,7 +199,7 @@ class WorkflowCompletedEvent(CodetoreumEvent):
         return data
 
     @classmethod
-    def from_dict(cls, data: dict) -> WorkflowCompletedEvent:
+    def from_dict(cls, data: dict[str, Any]) -> WorkflowCompletedEvent:
         return cls(
             type=data.get("type", "workflow.completed"),
             timestamp=data.get("timestamp", ""),
@@ -237,7 +238,7 @@ class WorkflowFailedEvent(CodetoreumEvent):
         if not self.work_item_id:
             raise ValueError("work_item_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         data = super().to_dict()
         data.update(
             {
@@ -251,7 +252,7 @@ class WorkflowFailedEvent(CodetoreumEvent):
         return data
 
     @classmethod
-    def from_dict(cls, data: dict) -> WorkflowFailedEvent:
+    def from_dict(cls, data: dict[str, Any]) -> WorkflowFailedEvent:
         return cls(
             type=data.get("type", "workflow.failed"),
             timestamp=data.get("timestamp", ""),
@@ -289,7 +290,7 @@ class WorkflowCancelledEvent(CodetoreumEvent):
         if not self.work_item_id:
             raise ValueError("work_item_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         data = super().to_dict()
         data.update(
             {
@@ -302,7 +303,7 @@ class WorkflowCancelledEvent(CodetoreumEvent):
         return data
 
     @classmethod
-    def from_dict(cls, data: dict) -> WorkflowCancelledEvent:
+    def from_dict(cls, data: dict[str, Any]) -> WorkflowCancelledEvent:
         return cls(
             type=data.get("type", "workflow.cancelled"),
             timestamp=data.get("timestamp", ""),
@@ -339,7 +340,7 @@ class WorkflowPausedEvent(CodetoreumEvent):
         if not self.work_item_id:
             raise ValueError("work_item_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         data = super().to_dict()
         data.update(
             {
@@ -352,7 +353,7 @@ class WorkflowPausedEvent(CodetoreumEvent):
         return data
 
     @classmethod
-    def from_dict(cls, data: dict) -> WorkflowPausedEvent:
+    def from_dict(cls, data: dict[str, Any]) -> WorkflowPausedEvent:
         return cls(
             type=data.get("type", "workflow.paused"),
             timestamp=data.get("timestamp", ""),
@@ -389,7 +390,7 @@ class WorkflowResumedEvent(CodetoreumEvent):
         if not self.work_item_id:
             raise ValueError("work_item_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         data = super().to_dict()
         data.update(
             {
@@ -402,7 +403,7 @@ class WorkflowResumedEvent(CodetoreumEvent):
         return data
 
     @classmethod
-    def from_dict(cls, data: dict) -> WorkflowResumedEvent:
+    def from_dict(cls, data: dict[str, Any]) -> WorkflowResumedEvent:
         return cls(
             type=data.get("type", "workflow.resumed"),
             timestamp=data.get("timestamp", ""),
@@ -435,7 +436,7 @@ class WorkflowAttachedEvent(CodetoreumEvent):
         if not self.work_item_id:
             raise ValueError("work_item_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         data = super().to_dict()
         data.update(
             {
@@ -447,7 +448,7 @@ class WorkflowAttachedEvent(CodetoreumEvent):
         return data
 
     @classmethod
-    def from_dict(cls, data: dict) -> WorkflowAttachedEvent:
+    def from_dict(cls, data: dict[str, Any]) -> WorkflowAttachedEvent:
         return cls(
             type=data.get("type", "workflow.attached"),
             timestamp=data.get("timestamp", ""),
@@ -483,7 +484,7 @@ class WorkflowBranchSelectedEvent(CodetoreumEvent):
         if not self.work_item_id:
             raise ValueError("work_item_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         data = super().to_dict()
         data.update(
             {
@@ -496,7 +497,7 @@ class WorkflowBranchSelectedEvent(CodetoreumEvent):
         return data
 
     @classmethod
-    def from_dict(cls, data: dict) -> WorkflowBranchSelectedEvent:
+    def from_dict(cls, data: dict[str, Any]) -> WorkflowBranchSelectedEvent:
         return cls(
             type=data.get("type", "workflow.branch_selected"),
             timestamp=data.get("timestamp", ""),
@@ -535,7 +536,7 @@ class WorkflowStageStatusUpdatedEvent(CodetoreumEvent):
         if not self.work_item_id:
             raise ValueError("work_item_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         data = super().to_dict()
         data.update(
             {
@@ -549,7 +550,7 @@ class WorkflowStageStatusUpdatedEvent(CodetoreumEvent):
         return data
 
     @classmethod
-    def from_dict(cls, data: dict) -> WorkflowStageStatusUpdatedEvent:
+    def from_dict(cls, data: dict[str, Any]) -> WorkflowStageStatusUpdatedEvent:
         return cls(
             type=data.get("type", "workflow.stage_status_updated"),
             timestamp=data.get("timestamp", ""),
@@ -578,7 +579,7 @@ class PipelineStageStartedEvent(CodetoreumEvent):
         if not self.pipeline_id:
             raise ValueError("pipeline_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update(
             {
@@ -591,7 +592,7 @@ class PipelineStageStartedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> PipelineStageStartedEvent:
+    def from_dict(cls, data: dict[str, Any]) -> PipelineStageStartedEvent:
         return cls(
             type=data.get("type", "pipeline.stage.started"),
             timestamp=data.get("timestamp", ""),
@@ -619,7 +620,7 @@ class PipelineStageCompletedEvent(CodetoreumEvent):
         if not self.pipeline_id:
             raise ValueError("pipeline_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update(
             {
@@ -632,7 +633,7 @@ class PipelineStageCompletedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> PipelineStageCompletedEvent:
+    def from_dict(cls, data: dict[str, Any]) -> PipelineStageCompletedEvent:
         return cls(
             type=data.get("type", "pipeline.stage.completed"),
             timestamp=data.get("timestamp", ""),
@@ -660,7 +661,7 @@ class PipelineStageFailedEvent(CodetoreumEvent):
         if not self.pipeline_id:
             raise ValueError("pipeline_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update(
             {
@@ -673,7 +674,7 @@ class PipelineStageFailedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> PipelineStageFailedEvent:
+    def from_dict(cls, data: dict[str, Any]) -> PipelineStageFailedEvent:
         return cls(
             type=data.get("type", "pipeline.stage.failed"),
             timestamp=data.get("timestamp", ""),
@@ -702,7 +703,7 @@ class PipelineCompletedEvent(CodetoreumEvent):
             raise ValueError("pipeline_id is required")
         object.__setattr__(self, "completed_stages", tuple(self.completed_stages))
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update(
             {
@@ -715,7 +716,7 @@ class PipelineCompletedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> PipelineCompletedEvent:
+    def from_dict(cls, data: dict[str, Any]) -> PipelineCompletedEvent:
         return cls(
             type=data.get("type", "pipeline.completed"),
             timestamp=data.get("timestamp", ""),
@@ -745,7 +746,7 @@ class PipelineFailedEvent(CodetoreumEvent):
             raise ValueError("pipeline_id is required")
         object.__setattr__(self, "completed_stages", tuple(self.completed_stages))
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update(
             {
@@ -759,7 +760,7 @@ class PipelineFailedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> PipelineFailedEvent:
+    def from_dict(cls, data: dict[str, Any]) -> PipelineFailedEvent:
         return cls(
             type=data.get("type", "pipeline.failed"),
             timestamp=data.get("timestamp", ""),

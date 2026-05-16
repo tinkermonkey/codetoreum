@@ -8,7 +8,7 @@ audit trail integrity and enable observability integration.
 """
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
@@ -66,7 +66,7 @@ class ContainerRecoveredEvent(CodetoreumEvent):
             msg = "recovery_action must be one of: reconnect_with_monitoring, reconnect_limited"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -84,7 +84,7 @@ class ContainerRecoveredEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ContainerRecoveredEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ContainerRecoveredEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "container_recovery.recovered"),
@@ -187,7 +187,7 @@ class ContainerKilledEvent(CodetoreumEvent):
             msg = f"kill_reason must be one of: {', '.join(valid_reasons)}"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -205,7 +205,7 @@ class ContainerKilledEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ContainerKilledEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ContainerKilledEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "container_recovery.killed"),
@@ -277,7 +277,7 @@ class ContainerRecoveryCompletedEvent(CodetoreumEvent):
             msg = "duration_seconds must be >= 0"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -294,7 +294,7 @@ class ContainerRecoveryCompletedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ContainerRecoveryCompletedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ContainerRecoveryCompletedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "container_recovery.completed"),

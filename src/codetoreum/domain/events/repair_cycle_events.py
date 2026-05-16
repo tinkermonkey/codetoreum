@@ -19,6 +19,7 @@ about test execution and repair steps—they cannot be modified after creation.
 import logging
 import warnings
 from dataclasses import dataclass
+from typing import Any
 from uuid import uuid4
 
 from ..repair_cycle_types import (
@@ -66,7 +67,7 @@ class RepairCycleStartedEvent(CodetoreumEvent):
             msg = "workflow_run_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -79,7 +80,7 @@ class RepairCycleStartedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "RepairCycleStartedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "RepairCycleStartedEvent":
         """Deserialize from dictionary with backward compatibility."""
         test_types = tuple(RepairTestType(t) if isinstance(t, str) else t for t in data.get("test_types", []))
         # Backward compatibility: Support both old and new field names
@@ -147,7 +148,7 @@ class RepairCycleTestExecutionStartedEvent(CodetoreumEvent):
             msg = "workflow_run_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -163,7 +164,7 @@ class RepairCycleTestExecutionStartedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "RepairCycleTestExecutionStartedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "RepairCycleTestExecutionStartedEvent":
         """Deserialize from dictionary with backward compatibility.
 
         Raises:
@@ -265,7 +266,7 @@ class RepairCycleTestExecutionCompletedEvent(CodetoreumEvent):
             msg = f"failed count ({self.failed}) must match len(failures) ({len(self.failures)})"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -285,7 +286,7 @@ class RepairCycleTestExecutionCompletedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "RepairCycleTestExecutionCompletedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "RepairCycleTestExecutionCompletedEvent":
         """Deserialize from dictionary with backward compatibility.
 
         Raises:
@@ -375,7 +376,7 @@ class RepairCycleFixCycleStartedEvent(CodetoreumEvent):
             msg = "workflow_run_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -391,7 +392,7 @@ class RepairCycleFixCycleStartedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "RepairCycleFixCycleStartedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "RepairCycleFixCycleStartedEvent":
         """Deserialize from dictionary with backward compatibility.
 
         Raises:
@@ -464,7 +465,7 @@ class RepairCycleFileFixStartedEvent(CodetoreumEvent):
             msg = "workflow_run_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -479,7 +480,7 @@ class RepairCycleFileFixStartedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "RepairCycleFileFixStartedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "RepairCycleFileFixStartedEvent":
         """Deserialize from dictionary with backward compatibility.
 
         Raises:
@@ -553,7 +554,7 @@ class RepairCycleFileFixCompletedEvent(CodetoreumEvent):
             msg = "workflow_run_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -569,7 +570,7 @@ class RepairCycleFileFixCompletedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "RepairCycleFileFixCompletedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "RepairCycleFileFixCompletedEvent":
         """Deserialize from dictionary with backward compatibility.
 
         Raises:
@@ -644,7 +645,7 @@ class RepairCycleWarningReviewStartedEvent(CodetoreumEvent):
             msg = "workflow_run_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -660,7 +661,7 @@ class RepairCycleWarningReviewStartedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "RepairCycleWarningReviewStartedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "RepairCycleWarningReviewStartedEvent":
         """Deserialize from dictionary with backward compatibility.
 
         Raises:
@@ -742,7 +743,7 @@ class RepairCycleWarningReviewCompletedEvent(CodetoreumEvent):
             msg = "workflow_run_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -758,7 +759,7 @@ class RepairCycleWarningReviewCompletedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "RepairCycleWarningReviewCompletedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "RepairCycleWarningReviewCompletedEvent":
         """Deserialize from dictionary with backward compatibility.
 
         Raises:
@@ -845,7 +846,7 @@ class RepairCycleTestCycleCompletedEvent(CodetoreumEvent):
             msg = "workflow_run_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -864,7 +865,7 @@ class RepairCycleTestCycleCompletedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "RepairCycleTestCycleCompletedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "RepairCycleTestCycleCompletedEvent":
         """Deserialize from dictionary with backward compatibility.
 
         Raises:
@@ -930,7 +931,7 @@ class RepairCycleFastFailEvent(CodetoreumEvent):
             msg = "workflow_run_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -943,7 +944,7 @@ class RepairCycleFastFailEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "RepairCycleFastFailEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "RepairCycleFastFailEvent":
         """Deserialize from dictionary with backward compatibility."""
         test_type = (
             RepairTestType(data.get("test_type")) if isinstance(data.get("test_type"), str) else RepairTestType.UNIT
@@ -1010,7 +1011,7 @@ class RepairCycleResumedEvent(CodetoreumEvent):
             msg = "agent_calls_so_far must be >= 0"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -1025,7 +1026,7 @@ class RepairCycleResumedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "RepairCycleResumedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "RepairCycleResumedEvent":
         """Deserialize from dictionary with backward compatibility.
 
         Raises:
@@ -1103,7 +1104,7 @@ class RepairCycleCheckpointFailedEvent(CodetoreumEvent):
             msg = "error_message is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -1119,7 +1120,7 @@ class RepairCycleCheckpointFailedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "RepairCycleCheckpointFailedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "RepairCycleCheckpointFailedEvent":
         """Deserialize from dictionary with backward compatibility."""
         # Backward compatibility: Support both old and new field names
         if "pipeline_run_id" in data and "workflow_run_id" not in data:
@@ -1197,7 +1198,7 @@ class RepairCycleMetricsBackendFailedEvent(CodetoreumEvent):
             msg = "consecutive_failures must be >= 0"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -1213,7 +1214,7 @@ class RepairCycleMetricsBackendFailedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "RepairCycleMetricsBackendFailedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "RepairCycleMetricsBackendFailedEvent":
         """Deserialize from dictionary with backward compatibility."""
         # Backward compatibility: Support both old and new field names
         if "pipeline_run_id" in data and "workflow_run_id" not in data:
@@ -1288,7 +1289,7 @@ class RepairCycleCompletedEvent(CodetoreumEvent):
             msg = "workflow_run_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -1317,7 +1318,7 @@ class RepairCycleCompletedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "RepairCycleCompletedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "RepairCycleCompletedEvent":
         """Deserialize from dictionary with backward compatibility."""
         from ..repair_cycle_types import RepairTestResult
 
@@ -1426,7 +1427,7 @@ class SystemicAnalysisStartedEvent(CodetoreumEvent):
             msg = "workflow_run_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -1439,7 +1440,7 @@ class SystemicAnalysisStartedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "SystemicAnalysisStartedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "SystemicAnalysisStartedEvent":
         """Deserialize from dictionary with backward compatibility.
 
         Raises:
@@ -1506,7 +1507,7 @@ class SystemicAnalysisCompletedEvent(CodetoreumEvent):
             msg = "workflow_run_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -1523,7 +1524,7 @@ class SystemicAnalysisCompletedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "SystemicAnalysisCompletedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "SystemicAnalysisCompletedEvent":
         """Deserialize from dictionary with backward compatibility.
 
         Raises:
@@ -1617,7 +1618,7 @@ class SystemicFixStartedEvent(CodetoreumEvent):
             msg = "confidence must be between 0.0 and 1.0"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -1633,7 +1634,7 @@ class SystemicFixStartedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "SystemicFixStartedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "SystemicFixStartedEvent":
         """Deserialize from dictionary with backward compatibility.
 
         Raises:
@@ -1716,7 +1717,7 @@ class SystemicFixCompletedEvent(CodetoreumEvent):
         if not isinstance(self.files_modified, tuple):
             object.__setattr__(self, "files_modified", tuple(self.files_modified))
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -1732,7 +1733,7 @@ class SystemicFixCompletedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "SystemicFixCompletedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "SystemicFixCompletedEvent":
         """Deserialize from dictionary with backward compatibility.
 
         Raises:
@@ -1797,7 +1798,7 @@ class EnvironmentRebuildStartedEvent(CodetoreumEvent):
             msg = "iteration must be >= 1"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -1811,7 +1812,7 @@ class EnvironmentRebuildStartedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "EnvironmentRebuildStartedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "EnvironmentRebuildStartedEvent":
         """Deserialize from dictionary with backward compatibility.
 
         Raises:
@@ -1897,7 +1898,7 @@ class EnvironmentRebuildCompletedEvent(CodetoreumEvent):
             msg = "success=False but error is not set (failure must have explanation for audit trail)"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -1915,7 +1916,7 @@ class EnvironmentRebuildCompletedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "EnvironmentRebuildCompletedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "EnvironmentRebuildCompletedEvent":
         """Deserialize from dictionary with backward compatibility.
 
         Raises:
@@ -1985,7 +1986,7 @@ class EnvironmentVerificationStartedEvent(CodetoreumEvent):
             msg = "iteration must be >= 1"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -1999,7 +2000,7 @@ class EnvironmentVerificationStartedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "EnvironmentVerificationStartedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "EnvironmentVerificationStartedEvent":
         """Deserialize from dictionary with backward compatibility.
 
         Raises:
@@ -2082,7 +2083,7 @@ class EnvironmentVerificationCompletedEvent(CodetoreumEvent):
             msg = f"healthy=True but checks_failed is non-empty: {self.checks_failed} (contradiction)"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -2100,7 +2101,7 @@ class EnvironmentVerificationCompletedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "EnvironmentVerificationCompletedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "EnvironmentVerificationCompletedEvent":
         """Deserialize from dictionary with backward compatibility.
 
         Raises:
@@ -2191,7 +2192,7 @@ class EnvironmentRebuildExhaustedEvent(CodetoreumEvent):
             msg = "error_message is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -2207,7 +2208,7 @@ class EnvironmentRebuildExhaustedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "EnvironmentRebuildExhaustedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "EnvironmentRebuildExhaustedEvent":
         """Deserialize from dictionary with backward compatibility.
 
         Raises:

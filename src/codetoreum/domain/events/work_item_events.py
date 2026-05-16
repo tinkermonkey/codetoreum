@@ -4,6 +4,7 @@ All events are immutable frozen dataclasses subclassing CodetoreumEvent.
 """
 
 from dataclasses import dataclass, field
+from typing import Any
 from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent, now_iso
@@ -37,7 +38,7 @@ class WorkItemCreatedEvent(CodetoreumEvent):
             raise ValueError("title is required")
         object.__setattr__(self, "labels", tuple(self.labels))
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update(
             {
@@ -59,7 +60,7 @@ class WorkItemCreatedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "WorkItemCreatedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "WorkItemCreatedEvent":
         return cls(
             type=data.get("type", "workitem.created"),
             timestamp=data.get("timestamp", now_iso()),
@@ -97,13 +98,13 @@ class WorkItemUpdatedEvent(CodetoreumEvent):
         if not self.project_id:
             raise ValueError("project_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update({"work_item_id": self.work_item_id, "project_id": self.project_id, "changes": self.changes})
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "WorkItemUpdatedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "WorkItemUpdatedEvent":
         return cls(
             type=data.get("type", "workitem.updated"),
             timestamp=data.get("timestamp", now_iso()),
@@ -132,7 +133,7 @@ class AgentAssignedEvent(CodetoreumEvent):
         if not self.agent_id:
             raise ValueError("agent_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update(
             {
@@ -145,7 +146,7 @@ class AgentAssignedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "AgentAssignedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "AgentAssignedEvent":
         return cls(
             type=data.get("type", "workitem.agent_assigned"),
             timestamp=data.get("timestamp", now_iso()),
@@ -172,13 +173,13 @@ class WorkItemStartedEvent(CodetoreumEvent):
         if not self.work_item_id:
             raise ValueError("work_item_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update({"work_item_id": self.work_item_id, "agent_id": self.agent_id, "started_at": self.started_at})
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "WorkItemStartedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "WorkItemStartedEvent":
         return cls(
             type=data.get("type", "workitem.started"),
             timestamp=data.get("timestamp", now_iso()),
@@ -197,13 +198,13 @@ class WorkItemUnderReviewEvent(CodetoreumEvent):
 
     work_item_id: str = ""
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update({"work_item_id": self.work_item_id})
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "WorkItemUnderReviewEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "WorkItemUnderReviewEvent":
         return cls(
             type=data.get("type", "workitem.under_review"),
             timestamp=data.get("timestamp", now_iso()),
@@ -227,13 +228,13 @@ class WorkItemCompletedEvent(CodetoreumEvent):
         if not self.work_item_id:
             raise ValueError("work_item_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update({"work_item_id": self.work_item_id, "agent_id": self.agent_id, "completed_at": self.completed_at})
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "WorkItemCompletedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "WorkItemCompletedEvent":
         return cls(
             type=data.get("type", "workitem.completed"),
             timestamp=data.get("timestamp", now_iso()),
@@ -261,7 +262,7 @@ class WorkItemFailedEvent(CodetoreumEvent):
         if not self.work_item_id:
             raise ValueError("work_item_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update(
             {
@@ -275,7 +276,7 @@ class WorkItemFailedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "WorkItemFailedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "WorkItemFailedEvent":
         return cls(
             type=data.get("type", "workitem.failed"),
             timestamp=data.get("timestamp", now_iso()),
@@ -303,7 +304,7 @@ class WorkItemBlockedEvent(CodetoreumEvent):
         if not self.work_item_id:
             raise ValueError("work_item_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update(
             {
@@ -315,7 +316,7 @@ class WorkItemBlockedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "WorkItemBlockedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "WorkItemBlockedEvent":
         return cls(
             type=data.get("type", "workitem.blocked"),
             timestamp=data.get("timestamp", now_iso()),
@@ -340,13 +341,13 @@ class WorkItemUnblockedEvent(CodetoreumEvent):
         if not self.work_item_id:
             raise ValueError("work_item_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update({"work_item_id": self.work_item_id, "new_status": self.new_status})
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "WorkItemUnblockedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "WorkItemUnblockedEvent":
         return cls(
             type=data.get("type", "workitem.unblocked"),
             timestamp=data.get("timestamp", now_iso()),
@@ -371,13 +372,13 @@ class WorkItemStageUpdatedEvent(CodetoreumEvent):
         if not self.work_item_id:
             raise ValueError("work_item_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update({"work_item_id": self.work_item_id, "old_stage": self.old_stage, "new_stage": self.new_stage})
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "WorkItemStageUpdatedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "WorkItemStageUpdatedEvent":
         return cls(
             type=data.get("type", "workitem.stage_updated"),
             timestamp=data.get("timestamp", now_iso()),
@@ -403,7 +404,7 @@ class WorkItemLabelsUpdatedEvent(CodetoreumEvent):
         object.__setattr__(self, "old_labels", tuple(self.old_labels))
         object.__setattr__(self, "new_labels", tuple(self.new_labels))
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update(
             {
@@ -415,7 +416,7 @@ class WorkItemLabelsUpdatedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "WorkItemLabelsUpdatedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "WorkItemLabelsUpdatedEvent":
         return cls(
             type=data.get("type", "workitem.labels_updated"),
             timestamp=data.get("timestamp", now_iso()),
@@ -441,7 +442,7 @@ class WorkItemPriorityUpdatedEvent(CodetoreumEvent):
         if not self.work_item_id:
             raise ValueError("work_item_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update(
             {
@@ -453,7 +454,7 @@ class WorkItemPriorityUpdatedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "WorkItemPriorityUpdatedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "WorkItemPriorityUpdatedEvent":
         return cls(
             type=data.get("type", "workitem.priority_updated"),
             timestamp=data.get("timestamp", now_iso()),

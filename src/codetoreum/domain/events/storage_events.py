@@ -4,6 +4,7 @@ Events track changes to storage including artifact uploads and deletions.
 """
 
 from dataclasses import dataclass
+from typing import Any
 from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
@@ -58,7 +59,7 @@ class ArtifactUploadedEvent(CodetoreumEvent):
             msg = "content_type is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -72,7 +73,7 @@ class ArtifactUploadedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ArtifactUploadedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ArtifactUploadedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "storage.artifact_uploaded"),
@@ -124,7 +125,7 @@ class ArtifactDeletedEvent(CodetoreumEvent):
             msg = "key is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -136,7 +137,7 @@ class ArtifactDeletedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ArtifactDeletedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ArtifactDeletedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "storage.artifact_deleted"),

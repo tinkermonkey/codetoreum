@@ -5,6 +5,7 @@ and position changes based on board state updates.
 """
 
 from dataclasses import dataclass
+from typing import Any
 from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
@@ -59,7 +60,7 @@ class QueueItemAddedEvent(CodetoreumEvent):
             msg = "position cannot be negative"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -73,7 +74,7 @@ class QueueItemAddedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "QueueItemAddedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "QueueItemAddedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "queue.item_added"),
@@ -131,7 +132,7 @@ class QueueItemRemovedEvent(CodetoreumEvent):
             msg = "item_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -144,7 +145,7 @@ class QueueItemRemovedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "QueueItemRemovedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "QueueItemRemovedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "queue.item_removed"),
@@ -216,7 +217,7 @@ class QueuePositionChangedEvent(CodetoreumEvent):
             msg = "old_position must differ from new_position (position did not actually change)"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -231,7 +232,7 @@ class QueuePositionChangedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "QueuePositionChangedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "QueuePositionChangedEvent":
         """Deserialize from dictionary.
 
         Raises:
@@ -317,7 +318,7 @@ class WorkItemDeadLetterQueuedEvent(CodetoreumEvent):
             msg = "reason is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -333,7 +334,7 @@ class WorkItemDeadLetterQueuedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "WorkItemDeadLetterQueuedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "WorkItemDeadLetterQueuedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "dlq.work_item_queued"),

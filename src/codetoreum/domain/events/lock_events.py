@@ -9,7 +9,7 @@ Terminology (vendor-agnostic):
 """
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
@@ -63,7 +63,7 @@ class LockAcquiredEvent(CodetoreumEvent):
             msg = "work_item_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -77,7 +77,7 @@ class LockAcquiredEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "LockAcquiredEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "LockAcquiredEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "lock.acquired"),
@@ -143,7 +143,7 @@ class LockReleasedEvent(CodetoreumEvent):
             msg = "work_item_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -158,7 +158,7 @@ class LockReleasedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "LockReleasedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "LockReleasedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "lock.released"),
@@ -226,7 +226,7 @@ class StaleLockDetectedEvent(CodetoreumEvent):
             msg = "lock_acquired_at is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -240,7 +240,7 @@ class StaleLockDetectedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "StaleLockDetectedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "StaleLockDetectedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "lock.stale_detected"),
@@ -307,7 +307,7 @@ class PipelineLockAcquiredEvent(CodetoreumEvent):
             msg = "board_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -321,7 +321,7 @@ class PipelineLockAcquiredEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "PipelineLockAcquiredEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "PipelineLockAcquiredEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "pipeline.lock_acquired"),
@@ -387,7 +387,7 @@ class PipelineLockReleasedEvent(CodetoreumEvent):
             msg = "board_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -401,7 +401,7 @@ class PipelineLockReleasedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "PipelineLockReleasedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "PipelineLockReleasedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "pipeline.lock_released"),
@@ -471,7 +471,7 @@ class LockStuckEvent(CodetoreumEvent):
             msg = "reason is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -485,7 +485,7 @@ class LockStuckEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "LockStuckEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "LockStuckEvent":
         """Deserialize from dictionary.
 
         Raises:
@@ -554,7 +554,7 @@ class WorkItemQueuedEvent(CodetoreumEvent):
             msg = "queue_position must be non-negative"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -567,7 +567,7 @@ class WorkItemQueuedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "WorkItemQueuedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "WorkItemQueuedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "workitem.queued"),

@@ -9,6 +9,7 @@ event sourcing.
 """
 
 from dataclasses import dataclass
+from typing import Any
 from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
@@ -69,7 +70,7 @@ class ProjectClonedEvent(CodetoreumEvent):
             msg = "branch is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -83,7 +84,7 @@ class ProjectClonedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ProjectClonedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ProjectClonedEvent":
         """Deserialize from dictionary.
 
         Raises:
@@ -168,7 +169,7 @@ class ProjectCloneFailedEvent(CodetoreumEvent):
             msg = "error_message is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -182,7 +183,7 @@ class ProjectCloneFailedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ProjectCloneFailedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ProjectCloneFailedEvent":
         """Deserialize from dictionary.
 
         Raises:
@@ -249,7 +250,7 @@ class ProjectEnabledEvent(CodetoreumEvent):
             msg = "project_name is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -260,7 +261,7 @@ class ProjectEnabledEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ProjectEnabledEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ProjectEnabledEvent":
         """Deserialize from dictionary.
 
         Raises:
@@ -315,7 +316,7 @@ class ProjectDisabledEvent(CodetoreumEvent):
             msg = "project_name is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -326,7 +327,7 @@ class ProjectDisabledEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ProjectDisabledEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ProjectDisabledEvent":
         """Deserialize from dictionary.
 
         Raises:
@@ -404,7 +405,7 @@ class OrchestrationCycleCompletedEvent(CodetoreumEvent):
             msg = "cycle_duration_ms must be >= 0"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -418,7 +419,7 @@ class OrchestrationCycleCompletedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "OrchestrationCycleCompletedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "OrchestrationCycleCompletedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "orchestration.cycle_completed"),

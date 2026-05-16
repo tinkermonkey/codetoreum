@@ -11,6 +11,7 @@ Terminology (vendor-agnostic):
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
@@ -72,7 +73,7 @@ class Comment:
             msg = f"created_at must be ISO 8601 format: {e}"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         return {
             "id": self.id,
@@ -84,7 +85,7 @@ class Comment:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "Comment":
+    def from_dict(cls, data: dict[str, Any]) -> "Comment":
         """Deserialize from dictionary."""
         return cls(
             id=data.get("id", ""),
@@ -254,7 +255,7 @@ class CommentContext:
             agent_assignment=agent_assignment,
         )
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         return {
             "thread_id": self.thread_id,
@@ -265,7 +266,7 @@ class CommentContext:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "CommentContext":
+    def from_dict(cls, data: dict[str, Any]) -> "CommentContext":
         """Deserialize from dictionary."""
         parent = None
         if data.get("parent_comment"):
@@ -326,7 +327,7 @@ class CommentNeedsResponseEvent(CodetoreumEvent):
         # Note: comment and context are optional and can be None
         # Do not auto-initialize them as this prevents tests from checking None handling
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -340,7 +341,7 @@ class CommentNeedsResponseEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "CommentNeedsResponseEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "CommentNeedsResponseEvent":
         """Deserialize from dictionary."""
         comment = Comment.from_dict(data.get("comment", {})) if data.get("comment") else None
         context = CommentContext.from_dict(data.get("context", {})) if data.get("context") else None
@@ -401,7 +402,7 @@ class CommentPostedEvent(CodetoreumEvent):
             raise ValueError(msg)
         # Note: comment is optional and can be None
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -414,7 +415,7 @@ class CommentPostedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "CommentPostedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "CommentPostedEvent":
         """Deserialize from dictionary."""
         comment = Comment.from_dict(data.get("comment", {})) if data.get("comment") else None
 
@@ -496,7 +497,7 @@ class AgentResponsePostedEvent(CodetoreumEvent):
             msg = "agent_name is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -512,7 +513,7 @@ class AgentResponsePostedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "AgentResponsePostedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "AgentResponsePostedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "agent.response_posted"),
@@ -583,7 +584,7 @@ class ConversationalLoopStartedEvent(CodetoreumEvent):
             msg = "agent_assignment is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -598,7 +599,7 @@ class ConversationalLoopStartedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ConversationalLoopStartedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ConversationalLoopStartedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "conversational_loop.started"),
@@ -660,7 +661,7 @@ class FeedbackListeningStartedEvent(CodetoreumEvent):
             msg = "session_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -673,7 +674,7 @@ class FeedbackListeningStartedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "FeedbackListeningStartedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "FeedbackListeningStartedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "feedback_listening.started"),
@@ -741,7 +742,7 @@ class FeedbackListeningStoppedEvent(CodetoreumEvent):
             msg = f"feedback_type must be one of {valid_feedback_types}, got {self.feedback_type!r}"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -755,7 +756,7 @@ class FeedbackListeningStoppedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "FeedbackListeningStoppedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "FeedbackListeningStoppedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "feedback_listening.stopped"),
