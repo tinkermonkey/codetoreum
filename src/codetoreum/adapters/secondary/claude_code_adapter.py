@@ -179,8 +179,9 @@ class ClaudeCodeAdapter(ILLMProvider):
         model = ctx.model or self.config.default_model
         cmd.extend(["--model", model])
 
-        # Verbose output
-        if self.config.verbose:
+        # Verbose output is required for stream-json format
+        # Claude CLI requires --verbose when using --output-format=stream-json with --print
+        if self.config.verbose or self.config.output_format == "stream-json":
             cmd.append("--verbose")
 
         # MCP configuration
@@ -551,7 +552,26 @@ class ClaudeCodeAdapter(ILLMProvider):
         prompt: str,
         context: ExecutionContext | None = None,
     ) -> AsyncIterator[StreamChunk]:
-        """Stream completion tokens."""
+        """Stream completion tokens.
+
+        This method provides a pure streaming interface and is NOT part of the critical
+        execution path. In the standard pipeline (webhook → column change → agent execute
+        → PR create), the `execute()` method is used with an optional `stream_callback`
+        parameter instead.
+
+        `stream_completion()` is only invoked by the ResilientLLMProviderDecorator
+        (infrastructure/resilience/decorators.py:399, 402) as a fallback mechanism
+        when resilience patterns (circuit breaker, rate limiting) trigger alternative
+        code paths.
+
+        Streaming in normal pipeline execution:
+        - Call: ExecutionService.execute_with_llm() → self.llm_provider.execute()
+        - Streaming: Via stream_callback parameter in execute()
+        - NOT via separate stream_completion() call
+
+        This implementation remains for completeness and for scenarios where pure
+        streaming iteration is preferred over callback-based streaming.
+        """
         ctx = context or ExecutionContext()
 
         # Sanitize input

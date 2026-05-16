@@ -376,8 +376,8 @@ class AdapterFactory:
             version="1.0.0",
             tags=["production", "claude", "anthropic"],
             config_schema=AdapterCredentialRequirement(
-                env_vars=("CLAUDE_CODE_TOKEN",),
-                description="Claude Code authentication token",
+                env_vars=("CLAUDE_CODE_OAUTH_TOKEN",),
+                description="Claude Code OAuth token for authentication",
             ),
             set_as_default=True,
         )

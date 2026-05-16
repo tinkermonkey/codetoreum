@@ -16,10 +16,15 @@ from codetoreum.ports.output.llm_provider import ExecutionContext
 
 @pytest.fixture
 def claude_config():
-    """Create Claude Code configuration from environment."""
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key:
-        pytest.skip("ANTHROPIC_API_KEY environment variable not set")
+    """Create Claude Code configuration from environment.
+
+    Claude Code authenticates via CLAUDE_CODE_OAUTH_TOKEN (OAuth), not ANTHROPIC_API_KEY.
+    The OAuth token is read by EnvironmentCredentialProvider from the server's environment
+    and passed to the Claude CLI subprocess, but NOT injected into agent containers.
+    """
+    oauth_token = os.getenv("CLAUDE_CODE_OAUTH_TOKEN")
+    if not oauth_token:
+        pytest.skip("CLAUDE_CODE_OAUTH_TOKEN environment variable not set")
 
     return ClaudeCodeConfig(
         default_model="claude-sonnet-4-5-20250929",
