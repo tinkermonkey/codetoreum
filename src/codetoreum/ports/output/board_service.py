@@ -38,12 +38,14 @@ class BoardColumn:
         name: Display name (e.g., "Backlog", "In Progress", "Done")
         position: Ordinal position (0 = leftmost/first)
         work_item_ids: IDs of work items currently in this column
+        option_id: GitHub Projects v2 option ID for this column (cached from GraphQL response)
     """
 
     id: str
     name: str
     position: int
     work_item_ids: tuple[str, ...]
+    option_id: str | None = None
 
     def __post_init__(self) -> None:
         """Validate all fields at construction time."""
@@ -138,12 +140,14 @@ class ProjectBoard:
         name: Display name
         project_id: Project this board belongs to
         columns: All columns on the board, ordered by position
+        status_field_id: GitHub Projects v2 Status field ID (cached from GraphQL response)
     """
 
     id: str
     name: str
     project_id: str
     columns: tuple[BoardColumn, ...]
+    status_field_id: str | None = None
 
     def __post_init__(self) -> None:
         """Validate all fields at construction time."""

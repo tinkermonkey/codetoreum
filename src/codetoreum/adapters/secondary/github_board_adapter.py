@@ -827,13 +827,16 @@ class GitHubBoardAdapter(IBoardService):
     ) -> ProjectBoard:
         """Parse GraphQL board response into ProjectBoard.
 
+        Extracts and caches the Status field ID and option IDs to avoid
+        additional GraphQL calls during column moves.
+
         Args:
             project_id: Project ID
             board_id: Board ID
             node: GraphQL node response
 
         Returns:
-            ProjectBoard object
+            ProjectBoard object with cached field and option IDs
 
         Raises:
             ExternalServiceError: Invalid response format
@@ -844,20 +847,26 @@ class GitHubBoardAdapter(IBoardService):
             # Extract fields and options
             fields_data = node.get("fields", {}).get("nodes", [])
             status_field = None
+            status_field_id = None
 
             for field in fields_data:
                 if field.get("name") == "Status":
                     status_field = field
+                    status_field_id = field.get("id")
                     break
 
             if not status_field:
                 msg = "GitHub"
                 raise ExternalServiceError(msg, "Status field not found on board")
 
-            # Build column map
+            # Build column map with option IDs
             columns_by_id: dict[str, str] = {}
+            options_by_name: dict[str, str] = {}
             for option in status_field.get("options", []):
-                columns_by_id[option.get("id", "")] = option.get("name", "")
+                option_id = option.get("id", "")
+                option_name = option.get("name", "")
+                columns_by_id[option_id] = option_name
+                options_by_name[option_name] = option_id
 
             # Extract items and their positions
             items_data = node.get("items", {}).get("nodes", [])
@@ -884,11 +893,12 @@ class GitHubBoardAdapter(IBoardService):
                             # Use issue number as work_item_id
                             columns_by_name[column_name].append(str(issue_number))
 
-            # Create BoardColumn objects ordered by position
+            # Create BoardColumn objects ordered by position with cached option IDs
             columns: list[BoardColumn] = []
             for position, option in enumerate(status_field.get("options", [])):
                 column_name = option.get("name", "")
                 column_id = option.get("id", "")
+                option_id = option.get("id", "")
                 work_items = columns_by_name.get(column_name, [])
 
                 columns.append(
@@ -897,6 +907,7 @@ class GitHubBoardAdapter(IBoardService):
                         name=column_name,
                         position=position,
                         work_item_ids=work_items,
+                        option_id=option_id,
                     )
                 )
 
@@ -905,6 +916,7 @@ class GitHubBoardAdapter(IBoardService):
                 name=board_name,
                 project_id=project_id,
                 columns=columns,
+                status_field_id=status_field_id,
             )
 
         except (KeyError, TypeError) as e:
@@ -914,20 +926,16 @@ class GitHubBoardAdapter(IBoardService):
     def _find_status_field_id(self, board: ProjectBoard) -> str | None:
         """Find status field ID from board data.
 
+        Retrieves the cached Status field ID that was populated when
+        the board was first fetched via _parse_board_response.
+
         Args:
-            board: Project board
+            board: Project board with cached field ID
 
         Returns:
-            Status field ID or None
-
-        Raises:
-            NotImplementedError: Feature requires enhancement to extract field IDs from GraphQL response
+            Status field ID or None if not cached
         """
-        msg = (
-            "Status field ID extraction requires enhancement to extract field IDs from GraphQL response. "
-            "The _parse_board_response method should store field IDs and option IDs in the ProjectBoard dataclass."
-        )
-        raise NotImplementedError(msg)
+        return board.status_field_id
 
     def _find_option_id(
         self,
@@ -937,37 +945,46 @@ class GitHubBoardAdapter(IBoardService):
     ) -> str | None:
         """Find option ID for a column name.
 
+        Retrieves the cached option ID from the matching column.
+        The option ID is populated when the board is first fetched
+        via _parse_board_response.
+
         Args:
-            board: Project board
-            field_id: Status field ID
+            board: Project board with cached option IDs
+            field_id: Status field ID (unused, kept for compatibility)
             column_name: Column name to find
 
         Returns:
-            Option ID or None
-
-        Raises:
-            NotImplementedError: Feature requires enhancement to extract option IDs from GraphQL response
+            Option ID for the column or None if not found
         """
-        msg = (
-            "Option ID extraction requires enhancement to extract option IDs from GraphQL response. "
-            "The _parse_board_response method should store option IDs in the Column dataclass."
-        )
-        raise NotImplementedError(msg)
+        for column in board.columns:
+            if column.name == column_name:
+                return column.option_id
+        return None
 
     async def _create_column(self, board_id: str, column_name: str) -> None:
         """Create a new column on the board.
+
+        NOT ON MVP CRITICAL PATH. This method is only needed for dynamic board
+        configuration (reconcile_board with auto_create_missing=True). In the MVP,
+        the board structure is pre-configured on GitHub and this method is not called.
+
+        Implementation requires a GitHub Projects v2 mutation to add a new option
+        to the Status field, which requires extracting the field ID and building
+        the proper GraphQL mutation.
 
         Args:
             board_id: Board to add column to
             column_name: Name of new column
 
         Raises:
-            NotImplementedError: Feature requires GitHub Projects v2 mutation implementation
+            NotImplementedError: Feature deferred beyond MVP scope
             ExternalServiceError: GraphQL mutation failed
         """
         msg = (
-            "Column creation requires implementation of GitHub Projects v2 mutation to add a new option to the Status field. "
-            "This requires extracting the field ID and building the proper GraphQL mutation."
+            "Column creation is not on the MVP critical path. "
+            "This feature is only needed for auto_create_missing=True in board reconciliation. "
+            "In the MVP, board structure is pre-configured and this method should not be called."
         )
         raise NotImplementedError(msg)
 
