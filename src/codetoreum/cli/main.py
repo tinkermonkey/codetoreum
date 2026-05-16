@@ -21,6 +21,7 @@ import click
 from codetoreum.cli.sim_watch import sim_watch_command
 from codetoreum.cli.simulation_server import main as simulation_server_main
 from codetoreum.cli.smoke_test_docker import smoke_test_docker
+from codetoreum.cli.trigger import main as trigger_main
 from codetoreum.cli.validate_credentials import CredentialValidator
 
 # Conditionally import yaml_import to handle import errors gracefully
@@ -86,6 +87,9 @@ if YAML_IMPORT_AVAILABLE:
 
 # Register the smoke-test-docker command
 cli.add_command(smoke_test_docker, name="smoke-test-docker")
+
+# Register the trigger command
+cli.add_command(trigger_main, name="trigger")
 
 
 @cli.command(name="validate-credentials")

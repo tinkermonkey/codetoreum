@@ -9,6 +9,7 @@ packages = [{include = "codetoreum", from = "src"}]
 [tool.poetry.scripts]
 codetoreum = "codetoreum.cli.main:cli"
 codetoreum-server = "codetoreum.cli.production_server:main"
+codetoreum-trigger = "codetoreum.cli.trigger:main"
 
 [tool.poetry.dependencies]
 python = "^3.11"

@@ -348,6 +348,10 @@ class ProductionApplicationBootstrap:
             logger.info("Phase 5: Creating 11 application services...")
             self.services = await self._create_services()
 
+            # Phase 5b: Initialize codetoreum board configuration
+            logger.info("Phase 5b: Initializing codetoreum board configuration...")
+            await self._initialize_codetoreum_board()
+
             # Phase 6: Create ports
             logger.info("Phase 6: Creating 17 input port implementations...")
             self.ports = self._create_ports()
@@ -765,6 +769,49 @@ class ProductionApplicationBootstrap:
         )
 
         return MockMetricsQueryAdapter(metrics_adapter=self.adapters.metrics)
+
+    # =========================================================================
+    # Phase 5b: Initialize Codetoreum Board Configuration
+    # =========================================================================
+
+    async def _initialize_codetoreum_board(self) -> None:
+        """
+        Initialize the workflow template for the codetoreum repository board.
+
+        This enables dogfooding of the orchestration platform. The board configuration
+        is stored in the workflow_config service (in-memory for MVP, database-backed
+        in future versions).
+
+        Safe to call multiple times (idempotent) — overwrites existing template
+        with the same board_id.
+        """
+        if not self.adapters:
+            message = "Adapters must be created first"
+            raise RuntimeError(message)
+
+        try:
+            from codetoreum.infrastructure.bootstrap.codetoreum_board_setup import (
+                create_codetoreum_board_template,
+            )
+
+            template = create_codetoreum_board_template()
+            await self.adapters.workflow_config.save_board_workflow_template(template)
+
+            logger.info(
+                "Initialized codetoreum board workflow template",
+                extra={
+                    "board_id": template.board_id,
+                    "project_id": template.project_id,
+                    "column_count": len(template.columns),
+                },
+            )
+        except Exception as e:
+            logger.warning(
+                f"Failed to initialize codetoreum board configuration: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+            )
+            # Don't fail bootstrap if board initialization fails (not critical for MVP)
 
     # =========================================================================
     # Phase 7: Create FastAPI Application and Register Event Handlers
