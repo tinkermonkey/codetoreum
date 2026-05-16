@@ -85,8 +85,8 @@ ENV PYTHONUNBUFFERED=1 \
     PATH=/home/orchestrator/.local/bin:$PATH
 
 # Create necessary directories with correct ownership
-RUN mkdir -p /tmp/codetoreum/workspaces && \
-    chown -R orchestrator:orchestrator /tmp/codetoreum
+RUN mkdir -p /workspace/codetoreum/agent-workspaces && \
+    chown -R orchestrator:orchestrator /workspace/codetoreum
 
 # ============================================================================
 # Stage 7: Switch to Non-Root User

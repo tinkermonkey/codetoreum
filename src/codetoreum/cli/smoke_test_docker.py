@@ -120,7 +120,7 @@ class SmokeTestRunner:
             # Step 2: Pre-launch write check
             step_start = time.time()
             try:
-                workspace_base = os.environ.get("AGENT_WORKSPACE_BASE", "/tmp/codetoreum/workspaces")
+                workspace_base = os.environ.get("AGENT_WORKSPACE_BASE", "/workspace/codetoreum/agent-workspaces")
                 Path(workspace_base).mkdir(parents=True, exist_ok=True)
 
                 # Create a test file to verify writability
