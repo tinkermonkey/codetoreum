@@ -456,13 +456,26 @@ class AdapterFactory:
             adapter_type=InMemoryEventStore,
             description="In-memory event store",
             version="1.0.0",
-            tags=["testing", "simulation", "production"],
+            tags=["testing", "simulation"],
             config_schema=AdapterCredentialRequirement(
                 simulation_only=True,
                 description="Simulation-only adapter, no credentials required",
             ),
             set_as_default=True,
         )
+
+        if ElasticsearchEventStore:
+            self._event_store_registry.register(
+                name="elasticsearch",
+                adapter_type=ElasticsearchEventStore,
+                description="Elasticsearch event store for production",
+                version="1.0.0",
+                tags=["production"],
+                config_schema=AdapterCredentialRequirement(
+                    env_vars=("ELASTICSEARCH_URL",),
+                    description="Elasticsearch connection URL (default: http://localhost:9200)",
+                ),
+            )
 
         # Storage Adapters
         self._storage_registry.register(
@@ -1532,7 +1545,24 @@ class AdapterFactory:
             KeyError: If adapter is not registered
             ValueError: If no default adapter is configured
         """
-        return self._create_adapter(self._event_store_registry, adapter_name, "event store", **kwargs)
+        # Determine adapter name
+        resolved_name = adapter_name or self._event_store_registry.get_default_name()
+        if not resolved_name:
+            message = "No default event store adapter configured"
+            raise ValueError(message)
+
+        logger.info(f"Creating event store adapter: {resolved_name}")
+
+        # For Elasticsearch, create the client if not provided
+        if resolved_name == "elasticsearch" and "es_client" not in kwargs:
+            import os
+            from elasticsearch import AsyncElasticsearch
+
+            es_url = os.getenv("ELASTICSEARCH_URL", "http://localhost:9200")
+            logger.debug(f"Creating Elasticsearch client for {es_url}")
+            kwargs["es_client"] = AsyncElasticsearch([es_url])
+
+        return self._event_store_registry.create_instance(resolved_name, **kwargs)
 
     def create_storage(self, adapter_name: str | None = None, **kwargs) -> IStorage:
         """Create a storage adapter instance."""

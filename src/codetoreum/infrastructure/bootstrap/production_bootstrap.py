@@ -225,7 +225,7 @@ class ProductionApplicationBootstrap:
                 version_control="github",
                 container="docker",
                 code_review="github",
-                event_store="in_memory",  # Redis upgrade is post-MVP
+                event_store="elasticsearch",  # Shared event bus for cross-process event distribution
                 # Non-critical slots use mocks (logged as warnings)
                 review_cycle="mock",
                 pr_review_cycle="mock",
