@@ -30,6 +30,9 @@ from codetoreum.adapters.secondary import (
     GitRepositoryAdapter,
     MockEventEmitter,
 )
+from codetoreum.adapters.secondary.github_version_control_adapter import (
+    GitHubVersionControlAdapter,
+)
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
     InMemoryLockService,
 )
@@ -563,6 +566,17 @@ class AdapterFactory:
                 description="Simulation-only adapter, no credentials required",
             ),
             set_as_default=True,
+        )
+        self._version_control_registry.register(
+            name="github",
+            adapter_type=GitHubVersionControlAdapter,
+            description="GitHub version control using Git CLI",
+            version="1.0.0",
+            tags=["production", "git", "github"],
+            config_schema=AdapterCredentialRequirement(
+                env_vars=("GIT_USER", "GIT_EMAIL"),
+                description="Git user credentials for commits",
+            ),
         )
 
         # Metrics Adapters
@@ -1657,6 +1671,7 @@ class AdapterFactory:
     def _build_github_config(self) -> GitHubConfig:
         """Build GitHubConfig from environment variables."""
         import os
+
         token = os.environ.get("GITHUB_TOKEN")
         org = os.environ.get("GITHUB_ORG")
         repo = os.environ.get("GITHUB_REPO", "")
@@ -1685,6 +1700,7 @@ class AdapterFactory:
     def _build_git_config(self) -> GitConfig:
         """Build GitConfig from environment variables."""
         import os
+
         user = os.environ.get("GIT_USER", "codetoreum")
         email = os.environ.get("GIT_EMAIL", "codetoreum@example.com")
 

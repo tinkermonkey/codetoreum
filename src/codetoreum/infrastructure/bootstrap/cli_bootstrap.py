@@ -108,6 +108,33 @@ class CLIBootstrap:
                 logger.error(msg, exc_info=True)
                 raise ValueError(msg) from e
 
+            # Phase 4b: Initialize codetoreum board template (always for in-memory config)
+            logger.debug("Initializing codetoreum board workflow template")
+            try:
+                from codetoreum.infrastructure.bootstrap.codetoreum_board_setup import (
+                    create_codetoreum_board_template,
+                )
+
+                # Always initialize for in-memory config store to ensure template exists
+                # (for persistent stores like Elasticsearch, this would be idempotent)
+                template = create_codetoreum_board_template()
+                await workflow_config_adapter.save_board_workflow_template(template)
+                logger.debug(
+                    "Initialized codetoreum board workflow template",
+                    extra={
+                        "board_id": template.board_id,
+                        "project_id": template.project_id,
+                        "column_count": len(template.columns),
+                    },
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to initialize codetoreum board template: {e}",
+                    exc_info=True,
+                )
+                # Don't fail the entire bootstrap if board init fails
+                # The trigger will report the error more clearly
+
             # Phase 5: Store initialized components
             self.infrastructure = CLIBootstrapInfrastructure(event_bus=event_bus)
             self.adapters = CLIBootstrapAdapters(workflow_config=workflow_config_adapter, board=board_adapter)
