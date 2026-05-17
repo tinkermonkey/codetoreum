@@ -76,16 +76,6 @@ class UpdateStageCommand:
 
 
 @dataclass
-class OnIssueOpenedCommand:
-    """Command to handle newly opened GitHub issue"""
-
-    project_id: str
-    issue_number: str
-    issue_title: str | None = None
-    issue_url: str | None = None
-
-
-@dataclass
 class WorkItemCommandResult:
     """Result of executing a work item command"""
 
@@ -205,20 +195,4 @@ class IWorkItemCommandPort(ABC):
         Returns: Updated work item
 
         Raises: WorkItemNotFoundError: If work item doesn't exist
-        """
-
-    @abstractmethod
-    async def on_issue_opened(self, command: OnIssueOpenedCommand) -> WorkItemCommandResult:
-        """
-        Handle newly opened GitHub issue.
-
-        Places the issue in the initial column on the project's board,
-        which triggers a WorkItemColumnChangedEvent for orchestration.
-
-        Args: command: Command with issue information
-
-        Returns: Result with success status and work item ID
-
-        Raises: ProjectNotFoundError: If project doesn't exist
-                ValidationError: If command parameters invalid
         """

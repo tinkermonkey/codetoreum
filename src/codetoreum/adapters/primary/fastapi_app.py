@@ -1322,15 +1322,6 @@ def create_development_app() -> FastAPI:
                 completed_at=None,
             )
 
-        async def on_issue_opened(self, command):
-            from codetoreum.ports.input.work_item_command import WorkItemCommandResult
-
-            return WorkItemCommandResult(
-                success=True,
-                work_item_id=command.issue_number,
-                message=f"Issue {command.issue_number} accepted for intake (mock)",
-            )
-
     class MockWorkItemQueryPort(IWorkItemQueryPort):
         """Mock work item query port for development."""
 

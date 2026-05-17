@@ -15,7 +15,6 @@ from codetoreum.ports.input.work_item_command import (
     AttachWorkflowCommand,
     CreateWorkItemCommand,
     IWorkItemCommandPort,
-    OnIssueOpenedCommand,
     UpdateLabelsCommand,
     UpdatePriorityCommand,
     UpdateStageCommand,
@@ -238,18 +237,6 @@ class WorkItemService(IWorkItemCommandPort, IWorkItemQueryPort):
         await self._save_work_item(work_item)
 
         return work_item
-
-    async def on_issue_opened(self, command: OnIssueOpenedCommand) -> WorkItemCommandResult:
-        """Handle newly opened GitHub issue.
-
-        Returns success. The actual issue intake (board placement) is handled
-        by IssueIntakeService, which this service does not depend on.
-        """
-        return WorkItemCommandResult(
-            success=True,
-            work_item_id=command.issue_number,
-            message=f"Issue {command.issue_number} accepted for intake",
-        )
 
     # ========================================================================
     # Query Port Implementation
