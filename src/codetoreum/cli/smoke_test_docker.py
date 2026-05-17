@@ -31,6 +31,7 @@ from codetoreum.adapters.secondary.docker_container_adapter import (
     DockerConfig,
     DockerContainerAdapter,
 )
+from codetoreum.ports.exceptions import ContainerError, ContainerExecutionError
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
@@ -320,8 +321,8 @@ class SmokeTestRunner:
                     )
                     if result.exit_code == 0:
                         security_issues.append("Docker socket accessible")
-                except Exception:
-                    pass  # Expected to fail
+                except (ContainerExecutionError, ContainerError):
+                    pass  # Expected to fail - socket check should fail if not present
 
                 # Check 2: No SSH keys
                 try:
@@ -333,8 +334,8 @@ class SmokeTestRunner:
                     )
                     if result.exit_code == 0:
                         security_issues.append("SSH key id_github accessible")
-                except Exception:
-                    pass  # Expected to fail
+                except (ContainerExecutionError, ContainerError):
+                    pass  # Expected to fail - key check should fail if not present
 
                 # Check 3: GITHUB_TOKEN not in environment
                 result = await self.adapter.run(
@@ -412,7 +413,7 @@ class SmokeTestRunner:
                     self._log_step(
                         8,
                         "Cleanup verification",
-                        "PASS",
+                        "SKIP",
                         f"Cleanup verification skipped (Docker connection issue) ({duration:.2f}s)",
                     )
             except Exception as e:
