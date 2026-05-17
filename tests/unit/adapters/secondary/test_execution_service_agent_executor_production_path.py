@@ -15,8 +15,6 @@ Also covers recovery logic:
 - Recovery service failure handling (don't let it crash fire-and-forget task)
 """
 
-import asyncio
-from datetime import UTC, datetime
 from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
@@ -27,6 +25,8 @@ from codetoreum.adapters.secondary.execution_service_agent_executor import (
 from codetoreum.domain.project_context import ProjectContext
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.ports.output.active_workflow_run_registry import ActiveRunInfo
+
+_UNSET = object()
 
 
 class ProductionPathFixture:
@@ -126,7 +126,7 @@ class ProductionPathFixture:
         self.finalize_result.success = True
         self.workspace_router.finalize_workspace.return_value = self.finalize_result
 
-    def make_executor(self, recovery_service=None) -> ExecutionServiceAgentExecutor:
+    def make_executor(self, recovery_service=_UNSET) -> ExecutionServiceAgentExecutor:
         executor = ExecutionServiceAgentExecutor(
             execution_service=self.execution_service,
             workspace_router=self.workspace_router,
@@ -137,7 +137,7 @@ class ProductionPathFixture:
             branch_tracker=self.branch_tracker,
             vcs=self.vcs,
             clock=self.clock,
-            recovery_service=recovery_service or self.recovery_service,
+            recovery_service=self.recovery_service if recovery_service is _UNSET else recovery_service,
         )
         executor.set_completion_handler(self.completion_callback, self.BOARD_ID)
         return executor
@@ -226,9 +226,7 @@ class TestProductionPathStep5BranchTracking:
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
 
-        fx.branch_tracker.set_branch.assert_called_once_with(
-            fx.WORK_ITEM_ID, "feature/issue-123-tracking"
-        )
+        fx.branch_tracker.set_branch.assert_called_once_with(fx.WORK_ITEM_ID, "feature/issue-123-tracking")
         fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, True)
 
     @pytest.mark.asyncio
@@ -680,9 +678,7 @@ class TestCompletionCallbackFailureRecovery:
         """Recovery service failure logged but doesn't propagate in fire-and-forget task."""
         fx = ProductionPathFixture()
         fx.completion_callback.side_effect = RuntimeError("Callback failed")
-        fx.recovery_service.handle_completion_callback_failure.side_effect = RuntimeError(
-            "Recovery service crashed"
-        )
+        fx.recovery_service.handle_completion_callback_failure.side_effect = RuntimeError("Recovery service crashed")
         executor = fx.make_executor(recovery_service=fx.recovery_service)
 
         # Should not raise even though recovery service failed
