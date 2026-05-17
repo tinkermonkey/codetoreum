@@ -1,6 +1,7 @@
 # Project specific
 documentation/claude_thoughts/
 .dr/
+.claude/agent-memory/
 .claude/scheduled_tasks.lock
 .claude/settings.local.json
 
