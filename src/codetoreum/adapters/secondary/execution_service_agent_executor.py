@@ -11,8 +11,10 @@ import logging
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from codetoreum.application.prompt_builder import PromptBuilder
 from codetoreum.domain.project_context import ProjectContext
 from codetoreum.domain.services.execution_context_builder import ExecutionContextBuilder
 from codetoreum.domain.types import WorkItemId
@@ -33,6 +35,7 @@ if TYPE_CHECKING:
     from codetoreum.ports.output.version_control_service import IVersionControlService
     from codetoreum.ports.output.work_item_branch_tracker import IWorkItemBranchTracker
     from codetoreum.ports.output.work_item_service import IWorkItemService
+    from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +93,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         clock: SimulationClock,
         recovery_service: AgentExecutionRecoveryService | None = None,
         execution_delay: float = 0.0,
+        workflow_config_service: IWorkflowConfigService | None = None,
     ) -> None:
         """Initialize ExecutionServiceAgentExecutor.
 
@@ -105,6 +109,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             clock: SimulationClock for consistent time tracking in simulation
             recovery_service: Service for handling completion callback failures
             execution_delay: Optional delay (seconds) before execution for testing
+            workflow_config_service: Optional service for fetching workflow templates
         """
         self._execution_service = execution_service
         self._workspace_router = workspace_router
@@ -117,6 +122,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         self._clock = clock
         self._recovery_service = recovery_service
         self._execution_delay = execution_delay
+        self._workflow_config_service = workflow_config_service
 
         self._completion_callback: Callable[[str, str, bool], Coroutine[Any, Any, None]] | None = None
         self._default_board_id = "board-1"
@@ -401,13 +407,40 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 repository_path=repo_path,
             )
 
-            # Step 8: Create execution
-            prompt = (
-                f"Process work item {work_item_id}: "
-                f"{getattr(work_item, 'title', work_item_id)} "
-                f"— stage: {run_info.stage_name}"
-            )
+            # Step 8: Build comprehensive prompt and create execution
             try:
+                # Fetch workflow template for stage-specific instructions
+                workflow_template = None
+                if self._workflow_config_service:
+                    try:
+                        template = await self._workflow_config_service.get_board_workflow_template(
+                            self._default_board_id
+                        )
+                        workflow_template = template
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to fetch workflow template for board '{self._default_board_id}': {e}",
+                            exc_info=True,
+                        )
+
+                # Build comprehensive prompt using PromptBuilder
+                # Try to load previous stage output from context directory
+                previous_output = None
+                try:
+                    context_file = Path(repo_path) / "context" / "previous_stage.txt"
+                    if context_file.exists():
+                        previous_output = context_file.read_text(encoding="utf-8")
+                except OSError as e:
+                    logger.warning(f"Failed to read previous stage output: {e}")
+
+                prompt = PromptBuilder.build_prompt(
+                    work_item=work_item,
+                    agent=agent,
+                    stage_name=run_info.stage_name,
+                    workflow_template=workflow_template,
+                    previous_output=previous_output,
+                )
+
                 execution = await self._execution_service.create_execution(
                     agent=agent,
                     work_item=work_item,

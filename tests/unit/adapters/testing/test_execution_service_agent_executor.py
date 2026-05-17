@@ -14,6 +14,7 @@ import pytest
 from codetoreum.adapters.testing.execution_service_agent_executor import (
     ExecutionServiceAgentExecutor,
 )
+from codetoreum.domain.agent import AgentType
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.ports.output.active_workflow_run_registry import ActiveRunInfo
 
@@ -28,6 +29,30 @@ class ExecutorFixture:
     WORK_ITEM_ID = "wi-1"
     AGENT_ID = "agent-1"
     BOARD_ID = "board-1"
+
+    @staticmethod
+    def make_agent_mock(requires_docker=False, **overrides):
+        """Create a properly configured agent mock for testing."""
+        agent = MagicMock()
+        agent.id = "agent-1"
+        agent.name = "test-agent"
+        agent.display_name = "Test Agent"
+        agent.agent_type = AgentType.DEVELOPER
+        agent.role_description = "A test agent for testing"
+        agent.system_prompt = "You are a test agent"
+        agent.model = "claude-opus-4-7"
+        agent.timeout_seconds = 60
+        agent.max_retries = 3
+        agent.requires_docker = requires_docker
+        agent.requires_dev_container = False
+        agent.makes_code_changes = False
+        agent.filesystem_write_allowed = False
+        agent.mcp_servers = []
+        agent.capabilities = {}
+        # Apply any overrides
+        for key, value in overrides.items():
+            setattr(agent, key, value)
+        return agent
 
     def __init__(self) -> None:
         self.run_registry = AsyncMock()
@@ -50,17 +75,18 @@ class ExecutorFixture:
         )
         self.run_registry.get_active_run.return_value = self.run_info
 
-        agent = MagicMock()
-        agent.id = "agent-1"
-        agent.requires_docker = False
-        agent.requires_dev_container = False
-        agent.timeout_seconds = 60
-        agent.mcp_servers = []
+        agent = ExecutorFixture.make_agent_mock()
         self.agent_repository.get_by_id.return_value = agent
 
         work_item = MagicMock()
         work_item.id = "wi-1"
         work_item.title = "Test work item"
+        work_item.description = "A test work item"
+        work_item.status = MagicMock(value="new")
+        work_item.priority = MagicMock(value=2)
+        work_item.labels = []
+        work_item.external_url = None
+        work_item.assigned_agent_id = None
         self.work_item_service.get_work_item.return_value = work_item
 
         project_config = MagicMock()
@@ -391,12 +417,7 @@ class TestDockerExecutionPath:
     async def test_docker_path_uses_execute_with_container(self):
         """Agent with requires_docker=True routes to execute_with_container."""
         fx = ExecutorFixture()
-        agent = MagicMock()
-        agent.id = "agent-1"
-        agent.requires_docker = True
-        agent.requires_dev_container = False
-        agent.timeout_seconds = 60
-        agent.mcp_servers = []
+        agent = ExecutorFixture.make_agent_mock(requires_docker=True)
         fx.agent_repository.get_by_id.return_value = agent
 
         container_result = MagicMock()

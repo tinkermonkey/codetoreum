@@ -22,6 +22,7 @@ import pytest
 from codetoreum.adapters.secondary.execution_service_agent_executor import (
     ExecutionServiceAgentExecutor,
 )
+from codetoreum.domain.agent import AgentType
 from codetoreum.domain.project_context import ProjectContext
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.ports.output.active_workflow_run_registry import ActiveRunInfo
@@ -62,16 +63,32 @@ class ProductionPathFixture:
         # Step 2a: Agent
         self.agent = MagicMock()
         self.agent.id = self.AGENT_ID
+        self.agent.name = "coder-agent"
+        self.agent.display_name = "Coder Agent"
+        self.agent.agent_type = AgentType.DEVELOPER
+        self.agent.role_description = "A coding agent for implementation"
+        self.agent.system_prompt = "You are an expert coder"
+        self.agent.model = "claude-opus-4-7"
         self.agent.requires_docker = False
         self.agent.requires_dev_container = False
         self.agent.timeout_seconds = 3600
+        self.agent.max_retries = 3
+        self.agent.makes_code_changes = True
+        self.agent.filesystem_write_allowed = True
         self.agent.mcp_servers = []
+        self.agent.capabilities = {}
         self.agent_repository.get_by_id.return_value = self.agent
 
         # Step 2b: WorkItem
         self.work_item = MagicMock()
         self.work_item.id = self.WORK_ITEM_ID
         self.work_item.title = "Implement feature X"
+        self.work_item.description = "Implement a new feature"
+        self.work_item.status = MagicMock(value="in_progress")
+        self.work_item.priority = MagicMock(value=3)
+        self.work_item.labels = []
+        self.work_item.external_url = None
+        self.work_item.assigned_agent_id = None
         self.work_item_service.get_work_item.return_value = self.work_item
 
         # Step 2c: ProjectConfig
