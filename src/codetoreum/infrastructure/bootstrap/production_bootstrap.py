@@ -90,6 +90,7 @@ from codetoreum.infrastructure.adapters.resolver import (
 from codetoreum.infrastructure.audit.stores import InMemoryAuditStore
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.event_bus import EventBus
+from codetoreum.infrastructure.event_store_poller import EventStorePoller
 from codetoreum.infrastructure.resilience.config import OperationMode
 from codetoreum.infrastructure.resilience.factory import ResilienceFactory
 from codetoreum.infrastructure.simulation.bootstrap import SimulationAdapters
@@ -958,6 +959,14 @@ class ProductionApplicationBootstrap:
         # Create logger adapter
         logger_interface = MockLoggerAdapter()
 
+        # Create event store poller for cross-process event distribution
+        event_store_poller = EventStorePoller(
+            event_store=self.adapters.event_store,
+            event_bus=self.infrastructure.event_bus,
+            poll_interval_seconds=1.0,  # Poll every second
+        )
+        logger.debug("Created event store poller for cross-process event distribution")
+
         # Create FastAPI app
         app = create_app(
             workflow_command_port=self.ports.workflow_command,
@@ -985,6 +994,7 @@ class ProductionApplicationBootstrap:
             cors_origins=None,  # Use environment-based CORS config
             container_recovery_service=self.services.container_recovery_service,
             adapter_slot_info=self._slot_info,
+            event_store_poller=event_store_poller,
         )
 
         logger.info("Created FastAPI application with all ports wired")
