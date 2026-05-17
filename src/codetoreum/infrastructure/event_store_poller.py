@@ -126,8 +126,8 @@ class EventStorePoller:
 
         This method:
         1. Queries the event store for events since last_polled_timestamp
-        2. Updates last_polled_timestamp
-        3. Publishes each event to the event bus
+        2. Publishes each event to the event bus
+        3. Updates last_polled_timestamp after successful processing
         4. Handles errors per-event without stopping the poll
         """
         try:
@@ -139,10 +139,6 @@ class EventStorePoller:
 
             if not events:
                 return
-
-            # Update last polled time to now (before processing)
-            # This ensures we don't re-process events if polling is interrupted
-            self._last_polled_timestamp = datetime.now(UTC)
 
             # Publish each event to the bus
             for event in events:
@@ -166,6 +162,12 @@ class EventStorePoller:
                         },
                     )
                     # Continue publishing other events despite this error
+
+            # Update last polled time after all events have been published
+            # This ensures at-least-once delivery: if publishing fails or polling is
+            # interrupted, the same events will be re-fetched on the next cycle.
+            # Duplicate delivery is safer than permanent event loss.
+            self._last_polled_timestamp = datetime.now(UTC)
 
         except Exception as e:
             logger.error(

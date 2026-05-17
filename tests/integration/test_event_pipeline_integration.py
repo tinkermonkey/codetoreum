@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
 from codetoreum.domain.events import WorkItemColumnChangedEvent
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.event_store_poller import EventStorePoller
@@ -158,8 +159,14 @@ async def test_event_store_poller_queries_with_correct_timestamp(mock_event_stor
 
 
 @pytest.mark.asyncio
-async def test_poller_avoids_duplicate_publication(mock_event_store, event_bus):
-    """Test that poller doesn't republish events after they've been processed."""
+async def test_poller_avoids_duplicate_publication(event_bus):
+    """Test that poller's timestamp cursor prevents re-publication of events.
+
+    This test verifies the poller's deduplication logic: the poller uses its
+    last_polled_timestamp cursor when calling get_events_since() to avoid
+    re-processing events. The event store respects the 'since' parameter to
+    filter out already-processed events.
+    """
     received_events = []
 
     async def capture_event(event):
@@ -167,16 +174,20 @@ async def test_poller_avoids_duplicate_publication(mock_event_store, event_bus):
 
     event_bus.subscribe(None, capture_event)
 
+    # Use a real InMemoryEventStore that respects the 'since' parameter
+    event_store = InMemoryEventStore()
+
     poller = EventStorePoller(
-        event_store=mock_event_store,
+        event_store=event_store,
         event_bus=event_bus,
         poll_interval_seconds=0.05,
     )
 
-    now = datetime.now(UTC)
+    # Create a test event with a specific timestamp
+    event_time = datetime.now(UTC)
     event = WorkItemColumnChangedEvent(
         type="workitem.column_changed",
-        timestamp=now.isoformat(),
+        timestamp=event_time.isoformat(),
         source="trigger_cli",
         work_item_id="issue-123",
         project_id="test-project",
@@ -186,24 +197,19 @@ async def test_poller_avoids_duplicate_publication(mock_event_store, event_bus):
         moved_by="orchestrator",
     )
 
-    # First poll returns the event, subsequent polls return empty list
-    call_count = [0]
-
-    async def get_events_side_effect(*args, **kwargs):
-        call_count[0] += 1
-        if call_count[0] == 1:
-            return [event]
-        return []
-
-    mock_event_store.get_events_since = AsyncMock(side_effect=get_events_side_effect)
+    # Store the event before starting the poller
+    await event_store.append("test-stream", [event])
 
     # Run multiple poll cycles
     await poller.start()
     await asyncio.sleep(0.25)  # Wait for 2-3 polling cycles
     await poller.stop()
 
-    # Event should only be published once
+    # Event should only be published once. The poller's last_polled_timestamp
+    # cursor is passed to get_events_since(), which filters out events already
+    # processed in previous cycles.
     assert len(received_events) == 1
+    assert received_events[0].work_item_id == "issue-123"
 
 
 @pytest.mark.asyncio
