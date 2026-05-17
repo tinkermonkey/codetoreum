@@ -73,6 +73,8 @@ class RedisConfigCache:
         self._listener_task: asyncio.Task | None = None
         self._initialized = False
         self._init_lock = asyncio.Lock()  # Prevent concurrent initialization
+        self._listener_healthy = True  # Health flag for invalidation listener
+        self._listener_error_count = 0  # Track consecutive errors
         self._stats = {
             "hits": 0,
             "misses": 0,
@@ -111,22 +113,50 @@ class RedisConfigCache:
                 raise RedisConfigCacheError(message) from e
 
     async def _listen_for_invalidations(self) -> None:
-        """Listen for cache invalidation messages."""
+        """Listen for cache invalidation messages with automatic recovery."""
+        retry_delay = 1.0
+        max_retry_delay = 60.0
+        consecutive_errors = 0
+
         try:
             while self._initialized:
-                message = await self._pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
-                if message and message["type"] == "message":
-                    key_pattern = message["data"].decode("utf-8")
-                    await self._handle_invalidation(key_pattern)
+                try:
+                    message = await self._pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
+                    if message and message["type"] == "message":
+                        key_pattern = message["data"].decode("utf-8")
+                        await self._handle_invalidation(key_pattern)
+
+                    # Reset error tracking on successful message processing
+                    if message:
+                        consecutive_errors = 0
+                        retry_delay = 1.0
+                        if not self._listener_healthy:
+                            self._listener_healthy = True
+                            self._listener_error_count = 0
+                            logger.info("Cache invalidation listener recovered", extra={"error_id": "INFO_LISTENER_RECOVERED"})
+
+                except Exception as e:
+                    consecutive_errors += 1
+                    self._listener_error_count = consecutive_errors
+                    self._listener_healthy = False
+
+                    logger.error(
+                        f"Error in cache invalidation listener (attempt {consecutive_errors}): {e}",
+                        exc_info=True,
+                        extra={
+                            "error_id": "ERR_CACHE_INVALIDATION_LISTENER_FAILED",
+                            "attempt": consecutive_errors,
+                        },
+                    )
+
+                    # Wait with exponential backoff before retrying
+                    await asyncio.sleep(retry_delay)
+                    retry_delay = min(retry_delay * 2.0, max_retry_delay)
 
         except asyncio.CancelledError:
             logger.info("Cache invalidation listener cancelled")
-        except Exception as e:
-            logger.error(
-                f"Error in cache invalidation listener: {e}",
-                exc_info=True,
-                extra={"error_id": "ERR_CACHE_INVALIDATION_LISTENER_FAILED"},
-            )
+        finally:
+            self._listener_healthy = False
 
     async def _handle_invalidation(self, key_pattern: str) -> None:
         """
@@ -194,7 +224,11 @@ class RedisConfigCache:
             return None
 
         except Exception as e:
-            logger.warning(f"Failed to get project config from cache: {e}")
+            logger.warning(
+                f"Failed to get project config from cache: {e}",
+                exc_info=True,
+                extra={"error_id": "WARN_GET_PROJECT_CONFIG_FAILED"},
+            )
             async with self._stats_lock:
                 self._stats["misses"] += 1
             return None
@@ -227,7 +261,11 @@ class RedisConfigCache:
             return None
 
         except Exception as e:
-            logger.warning(f"Failed to get project config by name from cache: {e}")
+            logger.warning(
+                f"Failed to get project config by name from cache: {e}",
+                exc_info=True,
+                extra={"error_id": "WARN_GET_PROJECT_CONFIG_BY_NAME_FAILED"},
+            )
             async with self._stats_lock:
                 self._stats["misses"] += 1
             return None
@@ -261,7 +299,11 @@ class RedisConfigCache:
             logger.debug(f"Cached project config: {config.id}")
 
         except Exception as e:
-            logger.warning(f"Failed to cache project config: {e}")
+            logger.warning(
+                f"Failed to cache project config: {e}",
+                exc_info=True,
+                extra={"error_id": "WARN_SET_PROJECT_CONFIG_FAILED"},
+            )
 
     async def get_agent_config(self, project_id: str, agent_name: str) -> AgentConfig | None:
         """
@@ -292,7 +334,11 @@ class RedisConfigCache:
             return None
 
         except Exception as e:
-            logger.warning(f"Failed to get agent config from cache: {e}")
+            logger.warning(
+                f"Failed to get agent config from cache: {e}",
+                exc_info=True,
+                extra={"error_id": "WARN_GET_AGENT_CONFIG_FAILED"},
+            )
             async with self._stats_lock:
                 self._stats["misses"] += 1
             return None
@@ -321,7 +367,11 @@ class RedisConfigCache:
             logger.debug(f"Cached agent config: {config.project_id}/{config.agent_name}")
 
         except Exception as e:
-            logger.warning(f"Failed to cache agent config: {e}")
+            logger.warning(
+                f"Failed to cache agent config: {e}",
+                exc_info=True,
+                extra={"error_id": "WARN_SET_AGENT_CONFIG_FAILED"},
+            )
 
     async def get_pipeline_config(self, project_id: str, pipeline_name: str) -> PipelineConfig | None:
         """
@@ -352,7 +402,11 @@ class RedisConfigCache:
             return None
 
         except Exception as e:
-            logger.warning(f"Failed to get pipeline config from cache: {e}")
+            logger.warning(
+                f"Failed to get pipeline config from cache: {e}",
+                exc_info=True,
+                extra={"error_id": "WARN_GET_PIPELINE_CONFIG_FAILED"},
+            )
             async with self._stats_lock:
                 self._stats["misses"] += 1
             return None
@@ -381,7 +435,11 @@ class RedisConfigCache:
             logger.debug(f"Cached pipeline config: {config.project_id}/{config.name}")
 
         except Exception as e:
-            logger.warning(f"Failed to cache pipeline config: {e}")
+            logger.warning(
+                f"Failed to cache pipeline config: {e}",
+                exc_info=True,
+                extra={"error_id": "WARN_SET_PIPELINE_CONFIG_FAILED"},
+            )
 
     async def get_workflow_template(self, template_name: str) -> WorkflowTemplate | None:
         """
@@ -411,7 +469,11 @@ class RedisConfigCache:
             return None
 
         except Exception as e:
-            logger.warning(f"Failed to get workflow template from cache: {e}")
+            logger.warning(
+                f"Failed to get workflow template from cache: {e}",
+                exc_info=True,
+                extra={"error_id": "WARN_GET_WORKFLOW_TEMPLATE_FAILED"},
+            )
             async with self._stats_lock:
                 self._stats["misses"] += 1
             return None
@@ -440,7 +502,11 @@ class RedisConfigCache:
             logger.debug(f"Cached workflow template: {template.name}")
 
         except Exception as e:
-            logger.warning(f"Failed to cache workflow template: {e}")
+            logger.warning(
+                f"Failed to cache workflow template: {e}",
+                exc_info=True,
+                extra={"error_id": "WARN_SET_WORKFLOW_TEMPLATE_FAILED"},
+            )
 
     async def invalidate_project(self, project_id: str) -> None:
         """
@@ -465,7 +531,11 @@ class RedisConfigCache:
             logger.debug(f"Invalidated project cache: {project_id}")
 
         except Exception as e:
-            logger.warning(f"Failed to invalidate project cache: {e}")
+            logger.warning(
+                f"Failed to invalidate project cache: {e}",
+                exc_info=True,
+                extra={"error_id": "WARN_INVALIDATE_PROJECT_FAILED"},
+            )
 
     async def invalidate_agent(self, project_id: str, agent_name: str) -> None:
         """
@@ -488,7 +558,11 @@ class RedisConfigCache:
             logger.debug(f"Invalidated agent cache: {project_id}/{agent_name}")
 
         except Exception as e:
-            logger.warning(f"Failed to invalidate agent cache: {e}")
+            logger.warning(
+                f"Failed to invalidate agent cache: {e}",
+                exc_info=True,
+                extra={"error_id": "WARN_INVALIDATE_AGENT_FAILED"},
+            )
 
     async def invalidate_pipeline(self, project_id: str, pipeline_name: str) -> None:
         """
@@ -511,7 +585,11 @@ class RedisConfigCache:
             logger.debug(f"Invalidated pipeline cache: {project_id}/{pipeline_name}")
 
         except Exception as e:
-            logger.warning(f"Failed to invalidate pipeline cache: {e}")
+            logger.warning(
+                f"Failed to invalidate pipeline cache: {e}",
+                exc_info=True,
+                extra={"error_id": "WARN_INVALIDATE_PIPELINE_FAILED"},
+            )
 
     async def invalidate_workflow(self, template_name: str) -> None:
         """
@@ -529,7 +607,11 @@ class RedisConfigCache:
             logger.debug(f"Invalidated workflow template cache: {template_name}")
 
         except Exception as e:
-            logger.warning(f"Failed to invalidate workflow template cache: {e}")
+            logger.warning(
+                f"Failed to invalidate workflow template cache: {e}",
+                exc_info=True,
+                extra={"error_id": "WARN_INVALIDATE_WORKFLOW_FAILED"},
+            )
 
     async def invalidate_all(self) -> None:
         """Invalidate all configuration cache entries."""
@@ -542,14 +624,18 @@ class RedisConfigCache:
             logger.info("Invalidated all configuration cache")
 
         except Exception as e:
-            logger.warning(f"Failed to invalidate all cache: {e}")
+            logger.warning(
+                f"Failed to invalidate all cache: {e}",
+                exc_info=True,
+                extra={"error_id": "WARN_INVALIDATE_ALL_FAILED"},
+            )
 
     async def get_stats(self) -> dict[str, Any]:
         """
         Get cache statistics.
 
         Returns:
-            Dictionary with cache statistics
+            Dictionary with cache statistics and health status
         """
         total_requests = self._stats["hits"] + self._stats["misses"]
         hit_rate = self._stats["hits"] / total_requests if total_requests > 0 else 0.0
@@ -562,6 +648,8 @@ class RedisConfigCache:
             "total_requests": total_requests,
             "hit_rate": hit_rate,
             "miss_rate": 1.0 - hit_rate,
+            "listener_healthy": self._listener_healthy,
+            "listener_error_count": self._listener_error_count,
         }
 
     async def reset_stats(self) -> None:
