@@ -89,7 +89,7 @@ class ClaudeCodeConfig:
 
     # CLI configuration
     claude_cli_path: str = "claude"  # Path to Claude CLI executable
-    default_model: str = "claude-sonnet-4-5-20250929"
+    default_model: str = "claude-sonnet-4-6"
     permission_mode: str = "bypassPermissions"  # or "askForPermissions"
 
     # Output configuration
@@ -733,10 +733,12 @@ class ClaudeCodeAdapter(ILLMProvider):
         conv_data["last_message_at"] = datetime.now(UTC)
 
         # Store the message and response in history
-        conv_data["message_history"].append({
-            "user": message,
-            "assistant": result.content,
-        })
+        conv_data["message_history"].append(
+            {
+                "user": message,
+                "assistant": result.content,
+            }
+        )
 
         return result
 
