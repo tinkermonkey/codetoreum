@@ -13,7 +13,7 @@ from codetoreum.infrastructure.observability.instrumentation import (
     instrument_async_function,
 )
 from codetoreum.ports.exceptions import PortError
-from codetoreum.ports.output import IEventStore, IAgentExecutor
+from codetoreum.ports.output import IAgentExecutor, IEventStore
 
 logger = logging.getLogger(__name__)
 
@@ -419,7 +419,7 @@ class AgentScheduler:
         self._stop_event.set()
         try:
             await asyncio.wait_for(self._consumer_task, timeout=30.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("Consumer loop did not stop within 30 seconds, cancelling")
             self._consumer_task.cancel()
             try:
@@ -446,6 +446,10 @@ class AgentScheduler:
             message = "Stop event not initialized"
             raise RuntimeError(message)
 
+        if self.agent_executor is None:
+            message = "Agent executor not set"
+            raise RuntimeError(message)
+
         logger.debug("Consumer loop started, polling task queue")
         while not self._stop_event.is_set():
             try:
@@ -460,8 +464,10 @@ class AgentScheduler:
                 # Dispatch task to executor
                 try:
                     logger.debug(f"Dispatching task {task.id} for agent {task.agent}")
+                    work_item_id = task.context.get("work_item_id")
+                    assert isinstance(work_item_id, str), f"work_item_id must be str, got {type(work_item_id)}"
                     await self.agent_executor.execute(
-                        work_item_id=task.context.get("work_item_id"),
+                        work_item_id=work_item_id,
                         agent_id=task.agent,
                     )
                 except Exception as e:
@@ -515,16 +521,12 @@ class InMemoryTaskQueue(ITaskQueue):
         # Find task with highest priority, breaking ties by creation time
         highest_priority_task = None
         for task in self.tasks.values():
-            if highest_priority_task is None:
+            if highest_priority_task is None or task.priority.value > highest_priority_task.priority.value:
                 highest_priority_task = task
-            else:
-                # Compare priority (HIGH=3, MEDIUM=2, LOW=1 in WorkItemPriority)
-                if task.priority.value > highest_priority_task.priority.value:
+            elif task.priority == highest_priority_task.priority:
+                # Same priority, prefer earlier task
+                if task.created_at < highest_priority_task.created_at:
                     highest_priority_task = task
-                elif task.priority == highest_priority_task.priority:
-                    # Same priority, prefer earlier task
-                    if task.created_at < highest_priority_task.created_at:
-                        highest_priority_task = task
 
         if highest_priority_task is None:
             return None
