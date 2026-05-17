@@ -22,6 +22,9 @@ try:
 except ImportError:
     trace = None
 
+from codetoreum.domain.events.adapter_events import now_iso
+from codetoreum.domain.events.discussion_events import Comment, CommentContext, CommentNeedsResponseEvent
+from codetoreum.domain.events.review_events import ReviewStatusChangedEvent
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.observability.instrumentation import (
@@ -582,14 +585,17 @@ class GitHubWebhookAdapter:
     )
     async def _handle_issue_comment_event(self, event: WebhookEvent, project: str) -> list[str]:
         """
-        Handle issue_comment event (agent feedback).
+        Handle issue_comment event (comments requiring agent response).
+
+        When a comment is created on an issue, emits CommentNeedsResponseEvent
+        to trigger the conversational loop orchestrator to generate a response.
 
         Args:
             event: Webhook event
             project: Project name
 
         Returns:
-            List of created command IDs
+            List of created event IDs
         """
         # Add issue comment context to span
         span = self._get_span()
@@ -601,8 +607,68 @@ class GitHubWebhookAdapter:
                 span.set_attribute("github.issue_number", event.payload["issue"]["number"])
             if "comment" in event.payload and "id" in event.payload["comment"]:
                 span.set_attribute("github.comment_id", event.payload["comment"]["id"])
-        # Placeholder for future implementation
-        return []
+
+        payload = event.payload
+        action = payload.get("action")
+
+        # Only handle 'created' action
+        if action != "created":
+            return []
+
+        # Extract issue and comment information
+        issue = payload.get("issue", {})
+        comment = payload.get("comment", {})
+        issue_number = str(issue.get("number", ""))
+
+        if not issue_number or not comment:
+            self.logger.warning("Could not extract issue number or comment from payload")
+            return []
+
+        # Build Comment object from GitHub comment data
+        try:
+            comment_obj = Comment(
+                id=str(comment.get("id", "")),
+                author=comment.get("user", {}).get("login", "unknown"),
+                body=comment.get("body", ""),
+                created_at=comment.get("created_at", datetime.now(UTC).isoformat()),
+                is_bot=comment.get("user", {}).get("type") == "Bot",
+            )
+        except ValueError as e:
+            self.logger.warning("Failed to create Comment object: %s", str(e), exc_info=True)
+            return []
+
+        # Create CommentNeedsResponseEvent with context
+        try:
+            domain_event = CommentNeedsResponseEvent(
+                type="comment.needs_response",
+                timestamp=now_iso(),
+                source="github",
+                work_item_id=issue_number,
+                project_id=project,
+                comment=comment_obj,
+                context=CommentContext.for_initial_request(),
+            )
+        except ValueError as e:
+            self.logger.warning("Failed to create CommentNeedsResponseEvent: %s", str(e), exc_info=True)
+            return []
+
+        # Emit event to event bus
+        try:
+            await self.event_bus.publish(domain_event)
+            self.logger.info(
+                "Emitted CommentNeedsResponseEvent for issue %s comment %s",
+                issue_number,
+                comment_obj.id,
+            )
+            return [domain_event.event_id]
+        except Exception as e:
+            self.logger.error(
+                "Failed to publish CommentNeedsResponseEvent: %s",
+                str(e),
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+            )
+            return []
 
     @instrument_async_function(
         name="github.webhook.handle_pull_request",
@@ -610,14 +676,17 @@ class GitHubWebhookAdapter:
     )
     async def _handle_pull_request_event(self, event: WebhookEvent, project: str) -> list[str]:
         """
-        Handle pull_request event.
+        Handle pull_request event (review status tracking).
+
+        When a PR is opened, closed, merged, or reviewed, emits ReviewStatusChangedEvent
+        to track code review lifecycle changes.
 
         Args:
             event: Webhook event
             project: Project name
 
         Returns:
-            List of created command IDs
+            List of created event IDs
         """
         # Add PR context to span
         span = self._get_span()
@@ -627,8 +696,84 @@ class GitHubWebhookAdapter:
                 span.set_attribute("github.action", event.payload["action"])
             if "number" in event.payload:
                 span.set_attribute("github.pr_number", event.payload["number"])
-        # Placeholder for future implementation
-        return []
+
+        payload = event.payload
+        action = payload.get("action")
+        pr = payload.get("pull_request", {})
+        pr_number = str(pr.get("number", ""))
+
+        if not pr_number:
+            self.logger.warning("Could not extract PR number from payload")
+            return []
+
+        # Map GitHub PR action to review status
+        # Relevant actions: opened, closed, reopened, synchronize, ready_for_review, converted_to_draft
+        # We focus on status-change actions
+        status_mapping = {
+            "opened": "open",
+            "reopened": "open",
+            "closed": "closed",
+            "ready_for_review": "open",
+            "converted_to_draft": "open",
+        }
+
+        if action not in status_mapping:
+            # Ignore other actions (e.g., "synchronize" which is for new commits)
+            return []
+
+        new_status = status_mapping[action]
+
+        # Determine previous status for state transitions
+        # Note: GitHub doesn't always provide previous_status, so we infer from current state
+        pr_merged = pr.get("merged", False)
+
+        # Infer previous status (we use "open" as default for simplicity)
+        previous_status = "open"
+        if action == "closed" and pr_merged:
+            new_status = "merged"
+        elif action == "closed":
+            new_status = "closed"
+
+        # Extract PR author and reviewer info if available
+        reviewer = None
+        if "user" in pr and "login" in pr["user"]:
+            reviewer = pr["user"]["login"]
+
+        # Create ReviewStatusChangedEvent
+        try:
+            domain_event = ReviewStatusChangedEvent(
+                type="review.status_changed",
+                timestamp=now_iso(),
+                source="github",
+                review_id=pr_number,
+                work_item_id=pr_number,  # Link PR to work item with same number
+                project_id=project,
+                previous_status=previous_status,
+                new_status=new_status,
+                reviewer=reviewer,
+            )
+        except ValueError as e:
+            self.logger.warning("Failed to create ReviewStatusChangedEvent: %s", str(e), exc_info=True)
+            return []
+
+        # Emit event to event bus
+        try:
+            await self.event_bus.publish(domain_event)
+            self.logger.info(
+                "Emitted ReviewStatusChangedEvent for PR %s: %s → %s",
+                pr_number,
+                previous_status,
+                new_status,
+            )
+            return [domain_event.event_id]
+        except Exception as e:
+            self.logger.error(
+                "Failed to publish ReviewStatusChangedEvent: %s",
+                str(e),
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+            )
+            return []
 
     @instrument_async_function(
         name="github.webhook.handle_discussion",
@@ -636,14 +781,17 @@ class GitHubWebhookAdapter:
     )
     async def _handle_discussion_event(self, event: WebhookEvent, project: str) -> list[str]:
         """
-        Handle discussion event.
+        Handle discussion event (discussion comments requiring agent response).
+
+        When a comment is created on a discussion, emits CommentNeedsResponseEvent
+        to trigger the conversational loop orchestrator to generate a response.
 
         Args:
             event: Webhook event
             project: Project name
 
         Returns:
-            List of created command IDs
+            List of created event IDs
         """
         # Add discussion context to span
         span = self._get_span()
@@ -651,8 +799,73 @@ class GitHubWebhookAdapter:
             span.set_attribute("github.project", project)
             if "action" in event.payload:
                 span.set_attribute("github.action", event.payload["action"])
-        # Placeholder for future implementation
-        return []
+
+        payload = event.payload
+        action = payload.get("action")
+        discussion = payload.get("discussion", {})
+        discussion_number = str(discussion.get("number", ""))
+
+        if not discussion_number:
+            self.logger.warning("Could not extract discussion number from payload")
+            return []
+
+        # Only handle 'created' action (for new discussion or new comments)
+        if action != "created":
+            return []
+
+        # Extract comment information from discussion
+        # Note: Discussion webhook includes comment data if action is on a comment
+        comment_data = payload.get("comment")
+        if not comment_data:
+            # Action on discussion itself (e.g., discussion created), skip
+            self.logger.debug("Ignoring discussion event action '%s' without comment data", action)
+            return []
+
+        # Build Comment object from GitHub discussion comment data
+        try:
+            comment_obj = Comment(
+                id=str(comment_data.get("id", "")),
+                author=comment_data.get("user", {}).get("login", "unknown"),
+                body=comment_data.get("body", ""),
+                created_at=comment_data.get("created_at", datetime.now(UTC).isoformat()),
+                is_bot=comment_data.get("user", {}).get("type") == "Bot",
+            )
+        except ValueError as e:
+            self.logger.warning("Failed to create Comment object from discussion: %s", str(e), exc_info=True)
+            return []
+
+        # Create CommentNeedsResponseEvent
+        try:
+            domain_event = CommentNeedsResponseEvent(
+                type="comment.needs_response",
+                timestamp=now_iso(),
+                source="github",
+                work_item_id=discussion_number,
+                project_id=project,
+                comment=comment_obj,
+                context=CommentContext.for_initial_request(),
+            )
+        except ValueError as e:
+            self.logger.warning("Failed to create CommentNeedsResponseEvent: %s", str(e), exc_info=True)
+            return []
+
+        # Emit event to event bus
+        try:
+            await self.event_bus.publish(domain_event)
+            self.logger.info(
+                "Emitted CommentNeedsResponseEvent for discussion %s comment %s",
+                discussion_number,
+                comment_obj.id,
+            )
+            return [domain_event.event_id]
+        except Exception as e:
+            self.logger.error(
+                "Failed to publish CommentNeedsResponseEvent from discussion: %s",
+                str(e),
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+            )
+            return []
 
     async def _identify_project(self, repository: str) -> str | None:
         """
