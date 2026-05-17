@@ -147,8 +147,11 @@ See `documentation/architecture/ports/` for complete port specifications.
 
 **Production**:
 - GitHubTicketAdapter, GitHubBoardAdapter, GitHubCodeReviewAdapter
-- ClaudeCodeAdapter (LLM provider)
+- ClaudeCodeAdapter (LLM provider — see note below)
 - DockerContainerAdapter
+
+> **ClaudeCodeAdapter is an autonomous agent launcher, not a prompt→text API wrapper.**
+> It invokes `claude --print` (headless/non-interactive mode), which still runs Claude Code's full agentic loop: reading files, editing code, executing bash commands, and making multi-step decisions. `ExecutionContext.working_directory` aims the agent at the target codebase. The subprocess is synchronous from Codetoreum's perspective (we `await` its completion), but *within* that subprocess Claude Code operates autonomously. Do not confuse "bounded duration" with "bounded capability."
 
 **Testing/Simulation** (`adapters/testing/` + `adapters/primary/input_port_adapters/mock/`):
 - 54 total mock and in-memory adapters for deterministic testing (35 in testing/, 19 in input port mocks)
