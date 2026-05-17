@@ -121,7 +121,7 @@ class DockerContainerAdapter(IContainer):
             with open("/proc/self/mountinfo") as f:
                 for line in f:
                     parts = line.split()
-                    if parts[4] == "/workspace":
+                    if len(parts) > 4 and parts[4] == "/workspace":
                         return parts[3]
         except Exception as e:
             logger.error("Failed to auto-detect host workspace: %s", e, exc_info=True)

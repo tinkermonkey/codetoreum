@@ -89,8 +89,8 @@ services:
       SIMULATION_TIME_SCALE: "${SIMULATION_TIME_SCALE:-10}"
 
     volumes:
-      # Docker socket for container access (read-only by default)
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Docker socket for container access
+      - /var/run/docker.sock:/var/run/docker.sock
       # Project workspace
       - ${WORKSPACE_VOLUME:-./:/workspace}
 
