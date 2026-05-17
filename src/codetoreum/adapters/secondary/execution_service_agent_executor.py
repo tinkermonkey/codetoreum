@@ -431,7 +431,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                     if context_file.exists():
                         previous_output = context_file.read_text(encoding="utf-8")
                 except OSError as e:
-                    logger.warning(f"Failed to read previous stage output: {e}")
+                    logger.warning(f"Failed to read previous stage output: {e}", exc_info=True)
 
                 prompt = PromptBuilder.build_prompt(
                     work_item=work_item,

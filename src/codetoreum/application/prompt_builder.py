@@ -6,7 +6,6 @@ necessary information to execute their task.
 """
 
 import logging
-from pathlib import Path
 
 from codetoreum.domain.agent import Agent
 from codetoreum.domain.board_workflow_template import BoardWorkflowTemplate, ColumnTemplate
@@ -79,15 +78,7 @@ class PromptBuilder:
 
     @staticmethod
     def _build_agent_context_section(agent: Agent) -> str:
-        """
-        Build the agent context section with system prompt and role.
-
-        Args:
-            agent: Agent to describe
-
-        Returns:
-            Formatted agent context section
-        """
+        """Build agent context section with system prompt and role."""
         lines = []
 
         # Add agent system prompt if available
@@ -121,15 +112,7 @@ class PromptBuilder:
 
     @staticmethod
     def _build_work_item_section(work_item: WorkItem) -> str:
-        """
-        Build the work item context section.
-
-        Args:
-            work_item: Work item to describe
-
-        Returns:
-            Formatted work item section
-        """
+        """Build work item context section."""
         lines = [
             "# Work Item",
             "",
@@ -157,14 +140,6 @@ class PromptBuilder:
             lines.append(work_item.description)
             lines.append("")
 
-        # Add acceptance criteria if present (from metadata or description)
-        if hasattr(work_item, "acceptance_criteria") and work_item.acceptance_criteria:
-            lines.append("## Acceptance Criteria")
-            lines.append("")
-            for i, criterion in enumerate(work_item.acceptance_criteria, 1):
-                lines.append(f"{i}. {criterion}")
-            lines.append("")
-
         return "\n".join(lines)
 
     @staticmethod
@@ -172,18 +147,7 @@ class PromptBuilder:
         stage_name: str,
         workflow_template: BoardWorkflowTemplate | None = None,
     ) -> str:
-        """
-        Build stage-specific instructions section.
-
-        Extracts stage-specific guidance from the workflow template if available.
-
-        Args:
-            stage_name: Current stage name
-            workflow_template: Optional workflow configuration
-
-        Returns:
-            Formatted stage instructions section (may be empty)
-        """
+        """Build stage-specific instructions from workflow template."""
         lines = []
 
         lines.append("# Stage Instructions")
@@ -211,15 +175,7 @@ class PromptBuilder:
 
     @staticmethod
     def _extract_column_instructions(column_config: ColumnTemplate) -> str:
-        """
-        Extract task-specific instructions from column configuration.
-
-        Args:
-            column_config: Column template with configuration
-
-        Returns:
-            Formatted instructions (may be empty)
-        """
+        """Extract task-specific instructions from column configuration."""
         lines = []
 
         # Document the execution type
@@ -253,15 +209,7 @@ class PromptBuilder:
 
     @staticmethod
     def _build_previous_output_section(previous_output: str) -> str:
-        """
-        Build the previous stage output section.
-
-        Args:
-            previous_output: Output from previous stage
-
-        Returns:
-            Formatted previous output section
-        """
+        """Build previous stage output section."""
         lines = [
             "# Previous Stage Output",
             "",
@@ -279,19 +227,7 @@ class PromptBuilder:
 
     @staticmethod
     def _build_constraints_section(agent: Agent, work_item: WorkItem) -> str:
-        """
-        Build the constraints and guidelines section.
-
-        Documents what the agent can and cannot do, based on agent configuration
-        and work item context.
-
-        Args:
-            agent: Agent with constraints
-            work_item: Work item being processed
-
-        Returns:
-            Formatted constraints section
-        """
+        """Build constraints and guidelines section."""
         lines = [
             "# Execution Constraints & Guidelines",
             "",
@@ -334,51 +270,3 @@ class PromptBuilder:
         lines.append("")
 
         return "\n".join(lines)
-
-    @staticmethod
-    def build_prompt_from_context_file(
-        repository_path: str,
-        stage_name: str,
-        agent: Agent,
-        work_item: WorkItem,
-        workflow_template: BoardWorkflowTemplate | None = None,
-    ) -> str:
-        """
-        Build prompt by reading previous output from context file on disk.
-
-        Attempts to read /context/previous_stage.txt from the mounted context
-        directory. If the file doesn't exist, builds prompt without previous output.
-
-        Args:
-            repository_path: Local path to repository where context files are mounted
-            stage_name: Current stage name
-            agent: Agent configuration
-            work_item: Work item being processed
-            workflow_template: Optional workflow configuration
-
-        Returns:
-            Comprehensive prompt string
-
-        Raises:
-            Logs warnings if context file reading fails, but does not raise exception
-        """
-        previous_output = None
-
-        try:
-            context_file = Path(repository_path) / "context" / "previous_stage.txt"
-            if context_file.exists():
-                previous_output = context_file.read_text(encoding="utf-8")
-                logger.debug(f"Loaded previous stage output from {context_file}")
-        except OSError as e:
-            logger.warning(
-                f"Failed to read previous stage context from {repository_path}: {e}",
-                exc_info=True,
-            )
-
-        return PromptBuilder.build_prompt(
-            work_item=work_item,
-            agent=agent,
-            stage_name=stage_name,
-            workflow_template=workflow_template,
-            previous_output=previous_output,
-        )
