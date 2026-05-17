@@ -643,7 +643,6 @@ class ExecutionService:
 
             logger.error(
                 f"Container execution {execution.id} failed: {error_message}",
-                exc_info=True,
                 extra={"error_id": "ERR_EXECUTION_CONTAINER_EXIT_FAILURE"},
             )
 
@@ -725,7 +724,6 @@ class ExecutionService:
                     logger.error(
                         f"CRITICAL: Failed to cleanup container {container_id} after retries. "
                         f"Manual intervention may be required.",
-                        exc_info=True,
                         extra={"error_id": "ERR_EXECUTION_CONTAINER_CLEANUP_CRITICAL"},
                     )
 
@@ -754,7 +752,6 @@ class ExecutionService:
                     if not cleanup_success:
                         logger.error(
                             f"Failed to stop container {execution.container_id} during cancellation",
-                            exc_info=True,
                             extra={"error_id": "ERR_EXECUTION_CANCEL_CONTAINER_STOP_FAILURE"},
                         )
 
