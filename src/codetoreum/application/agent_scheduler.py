@@ -1,5 +1,6 @@
 """Agent Scheduler application service."""
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -12,7 +13,7 @@ from codetoreum.infrastructure.observability.instrumentation import (
     instrument_async_function,
 )
 from codetoreum.ports.exceptions import PortError
-from codetoreum.ports.output import IEventStore
+from codetoreum.ports.output import IEventStore, IAgentExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,10 @@ class ITaskQueue:
 
     async def enqueue(self, task: Task) -> str:
         """Enqueue a task and return task_id."""
+        raise NotImplementedError
+
+    async def dequeue(self) -> Task | None:
+        """Dequeue the highest priority task, or None if queue is empty."""
         raise NotImplementedError
 
     async def get_queue_depth(self, agent: str) -> int:
@@ -149,6 +154,7 @@ class AgentScheduler:
         config: IProjectConfiguration,
         scheduling_events: ISchedulingEvents,
         event_store: IEventStore,
+        agent_executor: IAgentExecutor | None = None,
     ):
         """
         Initialize agent scheduler.
@@ -160,6 +166,7 @@ class AgentScheduler:
             config: Configuration service for agent settings
             scheduling_events: Scheduling event emission
             event_store: Event store for domain events
+            agent_executor: Agent executor for dispatching tasks (optional, set via set_executor)
         """
         self.task_queue = task_queue
         self.resource_monitor = resource_monitor
@@ -167,6 +174,11 @@ class AgentScheduler:
         self.config = config
         self.scheduling_events = scheduling_events
         self.event_store = event_store
+        self.agent_executor = agent_executor
+
+        # Lifecycle management
+        self._consumer_task: asyncio.Task[None] | None = None
+        self._stop_event: asyncio.Event | None = None
 
     @instrument_async_function(
         name="agent.schedule_execution",
@@ -363,6 +375,113 @@ class AgentScheduler:
 
         return "Unknown resource constraint"
 
+    def set_executor(self, executor: IAgentExecutor) -> None:
+        """
+        Set the agent executor for task dispatching.
+
+        Args:
+            executor: Agent executor to dispatch tasks to
+        """
+        self.agent_executor = executor
+
+    async def start(self) -> None:
+        """
+        Start the scheduler's consumer loop.
+
+        This starts a background task that continuously polls the task queue
+        and dispatches dequeued tasks to the agent executor.
+
+        Raises:
+            RuntimeError: If executor not set or already started
+        """
+        if self.agent_executor is None:
+            message = "Agent executor not set. Call set_executor() before start()"
+            raise RuntimeError(message)
+
+        if self._consumer_task is not None:
+            message = "Scheduler already started"
+            raise RuntimeError(message)
+
+        self._stop_event = asyncio.Event()
+        self._consumer_task = asyncio.create_task(self._consumer_loop())
+        logger.info("Agent scheduler consumer loop started")
+
+    async def stop(self) -> None:
+        """
+        Stop the scheduler's consumer loop.
+
+        Gracefully shuts down the background task and waits for it to complete.
+        Safe to call even if not started.
+        """
+        if self._consumer_task is None or self._stop_event is None:
+            return
+
+        self._stop_event.set()
+        try:
+            await asyncio.wait_for(self._consumer_task, timeout=30.0)
+        except asyncio.TimeoutError:
+            logger.warning("Consumer loop did not stop within 30 seconds, cancelling")
+            self._consumer_task.cancel()
+            try:
+                await self._consumer_task
+            except asyncio.CancelledError:
+                pass
+        except Exception as e:
+            logger.warning(f"Error stopping consumer loop: {e}", exc_info=True)
+
+        self._consumer_task = None
+        self._stop_event = None
+        logger.info("Agent scheduler consumer loop stopped")
+
+    async def _consumer_loop(self) -> None:
+        """
+        Background task that consumes the task queue and dispatches to executor.
+
+        This runs in a loop until stop() is called. For each dequeued task:
+        1. Dispatches to agent_executor.execute()
+        2. Logs any errors but doesn't fail
+        3. Continues processing remaining tasks
+        """
+        if self._stop_event is None:
+            message = "Stop event not initialized"
+            raise RuntimeError(message)
+
+        logger.debug("Consumer loop started, polling task queue")
+        while not self._stop_event.is_set():
+            try:
+                # Dequeue a task (non-blocking, returns None if queue empty)
+                task = await self.task_queue.dequeue()
+
+                if task is None:
+                    # Queue is empty, sleep briefly before polling again
+                    await asyncio.sleep(0.1)
+                    continue
+
+                # Dispatch task to executor
+                try:
+                    logger.debug(f"Dispatching task {task.id} for agent {task.agent}")
+                    await self.agent_executor.execute(
+                        work_item_id=task.context.get("work_item_id"),
+                        agent_id=task.agent,
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"Error executing task {task.id}: {e}",
+                        exc_info=True,
+                        extra={"error_id": "ERR_SCHEDULER_TASK_EXECUTION_FAILURE"},
+                    )
+
+            except Exception as e:
+                logger.error(
+                    f"Unexpected error in consumer loop: {e}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_SCHEDULER_CONSUMER_LOOP_FAILURE"},
+                )
+                # Continue despite errors to keep consumer loop alive
+                await asyncio.sleep(1.0)
+
+        logger.debug("Consumer loop exiting")
+
 
 # Mock implementations for testing
 
@@ -379,6 +498,44 @@ class InMemoryTaskQueue(ITaskQueue):
         self.tasks[task.id] = task
         self.queue_by_agent[task.agent] = self.queue_by_agent.get(task.agent, 0) + 1
         return task.id
+
+    async def dequeue(self) -> Task | None:
+        """
+        Dequeue the highest priority task.
+
+        Priority order: HIGH > MEDIUM > LOW
+        If multiple tasks have same priority, FIFO (earliest created first).
+
+        Returns:
+            Task with highest priority, or None if queue is empty
+        """
+        if not self.tasks:
+            return None
+
+        # Find task with highest priority, breaking ties by creation time
+        highest_priority_task = None
+        for task in self.tasks.values():
+            if highest_priority_task is None:
+                highest_priority_task = task
+            else:
+                # Compare priority (HIGH=3, MEDIUM=2, LOW=1 in WorkItemPriority)
+                if task.priority.value > highest_priority_task.priority.value:
+                    highest_priority_task = task
+                elif task.priority == highest_priority_task.priority:
+                    # Same priority, prefer earlier task
+                    if task.created_at < highest_priority_task.created_at:
+                        highest_priority_task = task
+
+        if highest_priority_task is None:
+            return None
+
+        # Remove from queue and update counts
+        task_id = highest_priority_task.id
+        agent = highest_priority_task.agent
+        del self.tasks[task_id]
+        self.queue_by_agent[agent] = self.queue_by_agent.get(agent, 1) - 1
+
+        return highest_priority_task
 
     async def get_queue_depth(self, agent: str) -> int:
         """Get queue depth for agent."""

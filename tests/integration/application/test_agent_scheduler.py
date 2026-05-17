@@ -1,5 +1,6 @@
 """Integration tests for AgentScheduler."""
 
+import asyncio
 from datetime import UTC, datetime
 
 import pytest
@@ -14,6 +15,7 @@ from codetoreum.application.agent_scheduler import (
     MockResourceMonitor,
     MockSchedulingEvents,
     ScheduleAction,
+    Task,
 )
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
@@ -406,3 +408,283 @@ async def test_schedule_config_error(scheduler, mock_task_queue, mock_scheduling
     # Should succeed with default config
     assert result.success is True
     assert result.action == ScheduleAction.QUEUED
+
+
+# Lifecycle tests
+
+
+class MockAgentExecutor:
+    """Mock executor for testing scheduler lifecycle."""
+
+    def __init__(self):
+        self.executed_tasks: list[tuple[str, str]] = []  # (work_item_id, agent_id)
+
+    async def execute(self, work_item_id: str, agent_id: str, board_id: str | None = None) -> None:
+        """Record executed task."""
+        self.executed_tasks.append((work_item_id, agent_id))
+
+
+@pytest.mark.asyncio
+async def test_scheduler_lifecycle_start_stop(mock_task_queue):
+    """Test scheduler start/stop lifecycle."""
+    executor = MockAgentExecutor()
+
+    scheduler = AgentScheduler(
+        task_queue=mock_task_queue,
+        resource_monitor=MockResourceMonitor(),
+        rate_limiter=MockRateLimiter(),
+        config=MockProjectConfiguration(),
+        scheduling_events=MockSchedulingEvents(),
+        event_store=InMemoryEventStore(),
+        agent_executor=executor,
+    )
+
+    # Should start without error
+    await scheduler.start()
+
+    try:
+        # Consumer loop should be running
+        assert scheduler._consumer_task is not None
+        assert not scheduler._consumer_task.done()
+    finally:
+        # Should stop without error
+        await scheduler.stop()
+
+    # Consumer task should be cleaned up
+    assert scheduler._consumer_task is None
+
+
+@pytest.mark.asyncio
+async def test_scheduler_start_without_executor_fails():
+    """Test that start() fails if executor not set."""
+    scheduler = AgentScheduler(
+        task_queue=InMemoryTaskQueue(),
+        resource_monitor=MockResourceMonitor(),
+        rate_limiter=MockRateLimiter(),
+        config=MockProjectConfiguration(),
+        scheduling_events=MockSchedulingEvents(),
+        event_store=InMemoryEventStore(),
+        agent_executor=None,  # No executor
+    )
+
+    with pytest.raises(RuntimeError, match="Agent executor not set"):
+        await scheduler.start()
+
+
+@pytest.mark.asyncio
+async def test_scheduler_start_twice_fails():
+    """Test that start() fails if already started."""
+    executor = MockAgentExecutor()
+
+    scheduler = AgentScheduler(
+        task_queue=InMemoryTaskQueue(),
+        resource_monitor=MockResourceMonitor(),
+        rate_limiter=MockRateLimiter(),
+        config=MockProjectConfiguration(),
+        scheduling_events=MockSchedulingEvents(),
+        event_store=InMemoryEventStore(),
+        agent_executor=executor,
+    )
+
+    await scheduler.start()
+    try:
+        with pytest.raises(RuntimeError, match="already started"):
+            await scheduler.start()
+    finally:
+        await scheduler.stop()
+
+
+@pytest.mark.asyncio
+async def test_scheduler_consumes_queued_tasks():
+    """Test that scheduler consumes enqueued tasks and dispatches to executor."""
+    executor = MockAgentExecutor()
+    task_queue = InMemoryTaskQueue()
+
+    scheduler = AgentScheduler(
+        task_queue=task_queue,
+        resource_monitor=MockResourceMonitor(),
+        rate_limiter=MockRateLimiter(),
+        config=MockProjectConfiguration(),
+        scheduling_events=MockSchedulingEvents(),
+        event_store=InMemoryEventStore(),
+        agent_executor=executor,
+    )
+
+    # Start scheduler
+    await scheduler.start()
+
+    try:
+        # Enqueue a task
+        task = Task(
+            id="test-task-1",
+            agent="test-agent",
+            project="test-project",
+            priority=WorkItemPriority.MEDIUM,
+            context={"work_item_id": "work-item-123", "work_item_title": "Test Task"},
+            created_at=datetime.now(UTC),
+        )
+        await task_queue.enqueue(task)
+
+        # Give consumer loop time to process the task
+        await asyncio.sleep(0.5)
+
+        # Executor should have been called
+        assert len(executor.executed_tasks) == 1
+        assert executor.executed_tasks[0] == ("work-item-123", "test-agent")
+
+    finally:
+        await scheduler.stop()
+
+
+@pytest.mark.asyncio
+async def test_scheduler_stop_when_not_started():
+    """Test that stop() is safe to call when not started."""
+    scheduler = AgentScheduler(
+        task_queue=InMemoryTaskQueue(),
+        resource_monitor=MockResourceMonitor(),
+        rate_limiter=MockRateLimiter(),
+        config=MockProjectConfiguration(),
+        scheduling_events=MockSchedulingEvents(),
+        event_store=InMemoryEventStore(),
+        agent_executor=MockAgentExecutor(),
+    )
+
+    # Should not raise
+    await scheduler.stop()
+
+
+@pytest.mark.asyncio
+async def test_scheduler_processes_multiple_tasks_by_priority():
+    """Test that scheduler processes tasks in priority order."""
+    executor = MockAgentExecutor()
+    task_queue = InMemoryTaskQueue()
+
+    scheduler = AgentScheduler(
+        task_queue=task_queue,
+        resource_monitor=MockResourceMonitor(),
+        rate_limiter=MockRateLimiter(),
+        config=MockProjectConfiguration(),
+        scheduling_events=MockSchedulingEvents(),
+        event_store=InMemoryEventStore(),
+        agent_executor=executor,
+    )
+
+    # Enqueue tasks with different priorities BEFORE starting scheduler
+    # to ensure they're all available for priority-based dequeue ordering
+    now = datetime.now(UTC)
+    await task_queue.enqueue(
+        Task(
+            id="low-priority",
+            agent="test-agent",
+            project="test-project",
+            priority=WorkItemPriority.LOW,
+            context={"work_item_id": "work-1"},
+            created_at=now,
+        )
+    )
+
+    await task_queue.enqueue(
+        Task(
+            id="high-priority",
+            agent="test-agent",
+            project="test-project",
+            priority=WorkItemPriority.HIGH,
+            context={"work_item_id": "work-2"},
+            created_at=now,
+        )
+    )
+
+    await task_queue.enqueue(
+        Task(
+            id="medium-priority",
+            agent="test-agent",
+            project="test-project",
+            priority=WorkItemPriority.MEDIUM,
+            context={"work_item_id": "work-3"},
+            created_at=now,
+        )
+    )
+
+    # Start scheduler after all tasks are enqueued
+    await scheduler.start()
+
+    try:
+        # Give consumer loop time to process all tasks
+        await asyncio.sleep(1.0)
+
+        # All tasks should be processed
+        assert len(executor.executed_tasks) == 3
+
+        # HIGH priority should be processed first
+        assert executor.executed_tasks[0][0] == "work-2"
+        # MEDIUM priority next
+        assert executor.executed_tasks[1][0] == "work-3"
+        # LOW priority last
+        assert executor.executed_tasks[2][0] == "work-1"
+
+    finally:
+        await scheduler.stop()
+
+
+@pytest.mark.asyncio
+async def test_scheduler_handles_executor_errors():
+    """Test that scheduler continues processing after executor error."""
+
+    class FailingExecutor:
+        def __init__(self):
+            self.call_count = 0
+
+        async def execute(self, work_item_id: str, agent_id: str, board_id: str | None = None) -> None:
+            self.call_count += 1
+            if self.call_count == 1:
+                raise RuntimeError("Executor error")
+            # Second call succeeds
+
+    executor = FailingExecutor()
+    task_queue = InMemoryTaskQueue()
+
+    scheduler = AgentScheduler(
+        task_queue=task_queue,
+        resource_monitor=MockResourceMonitor(),
+        rate_limiter=MockRateLimiter(),
+        config=MockProjectConfiguration(),
+        scheduling_events=MockSchedulingEvents(),
+        event_store=InMemoryEventStore(),
+        agent_executor=executor,
+    )
+
+    # Start scheduler
+    await scheduler.start()
+
+    try:
+        # Enqueue two tasks
+        await task_queue.enqueue(
+            Task(
+                id="task-1",
+                agent="test-agent",
+                project="test-project",
+                priority=WorkItemPriority.MEDIUM,
+                context={"work_item_id": "work-1"},
+                created_at=datetime.now(UTC),
+            )
+        )
+
+        await task_queue.enqueue(
+            Task(
+                id="task-2",
+                agent="test-agent",
+                project="test-project",
+                priority=WorkItemPriority.MEDIUM,
+                context={"work_item_id": "work-2"},
+                created_at=datetime.now(UTC),
+            )
+        )
+
+        # Give consumer loop time to process both tasks despite error
+        await asyncio.sleep(1.0)
+
+        # Both tasks should have been processed even though first one failed
+        assert executor.call_count == 2
+
+    finally:
+        await scheduler.stop()

@@ -363,6 +363,10 @@ class ProductionApplicationBootstrap:
             logger.info("Phase 5: Creating 11 application services...")
             self.services = await self._create_services()
 
+            # Phase 5a: Start agent scheduler consumer loop
+            logger.info("Phase 5a: Starting agent scheduler consumer loop...")
+            await self.services.agent_scheduler.start()
+
             # Phase 5b: Initialize codetoreum board configuration
             logger.info("Phase 5b: Initializing codetoreum board configuration...")
             await self._initialize_codetoreum_board()
@@ -710,6 +714,7 @@ class ProductionApplicationBootstrap:
             config=project_config,
             scheduling_events=scheduling_events,
             event_store=self.adapters.event_store,
+            agent_executor=execution_service_executor,
         )
 
         # Workflow Orchestrator dependencies
@@ -1107,6 +1112,7 @@ class ProductionApplicationBootstrap:
         Clean up all resources.
 
         Performs cleanup in order:
+        - Stop agent scheduler consumer loop
         - Close event store (closes Elasticsearch client if applicable)
         - Log final event bus statistics
         - Clear adapter references
@@ -1121,6 +1127,19 @@ class ProductionApplicationBootstrap:
 
         try:
             logger.info("Tearing down production bootstrap...")
+
+            # Stop agent scheduler consumer loop
+            if self.services and self.services.agent_scheduler:
+                logger.info("Stopping agent scheduler consumer loop...")
+                try:
+                    await self.services.agent_scheduler.stop()
+                except Exception as e:
+                    logger.error(
+                        f"Error stopping agent scheduler: {e}",
+                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                        exc_info=True,
+                    )
+                    # Continue with other cleanup even if scheduler stop fails
 
             # Close event store (closes Elasticsearch client for production deployments)
             if self.adapters and self.adapters.event_store:
