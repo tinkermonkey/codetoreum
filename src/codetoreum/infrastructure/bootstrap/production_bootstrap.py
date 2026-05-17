@@ -1015,8 +1015,10 @@ class ProductionApplicationBootstrap:
 
         handler = BoardColumnEventHandler(
             board_service=self.adapters.board,
+            lock_service=self.adapters.lock_service,
+            workflow_config=self.adapters.workflow_config,
             agent_executor=self.adapters.agent_executor,
-            workflow_config_service=self.adapters.workflow_config,
+            event_bus=self.infrastructure.event_bus,
             event_emitter=self.adapters.event_emitter,
             recovery_service=self.services.agent_execution_recovery_service,
         )
