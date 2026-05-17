@@ -89,6 +89,9 @@ from codetoreum.infrastructure.adapters.resolver import (
     AdapterResolver,
 )
 from codetoreum.infrastructure.audit.stores import InMemoryAuditStore
+from codetoreum.infrastructure.bootstrap.codetoreum_board_setup import (
+    CODETOREUM_BOARD_ID,
+)
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.event_store_poller import EventStorePoller
@@ -1037,6 +1040,15 @@ class ProductionApplicationBootstrap:
 
         self.infrastructure.event_bus.register_handler(handler)
         logger.info("Registered BoardColumnEventHandler with event bus")
+
+        # Wire completion callback from executor to handler for auto-progression
+        # This ensures that when an agent execution completes, the handler's
+        # handle_agent_completion() method is invoked to auto-progress the work item
+        self.adapters.agent_executor.set_completion_handler(
+            handler.handle_agent_completion,
+            default_board_id=CODETOREUM_BOARD_ID,
+        )
+        logger.info("Wired completion callback from ExecutionServiceAgentExecutor to BoardColumnEventHandler")
 
     def _register_conversational_loop_orchestrator(self) -> None:
         """Register conversational loop orchestrator to handle column changes."""
