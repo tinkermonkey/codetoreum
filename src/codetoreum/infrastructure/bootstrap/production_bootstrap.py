@@ -334,6 +334,10 @@ class ProductionApplicationBootstrap:
 
             self._capture_adapter_slot_info(resolver)
 
+            # Phase 2c: Initialize event store (critical for cross-process event distribution)
+            logger.info("Phase 2c: Initializing event store for cross-process event distribution...")
+            await self._initialize_event_store()
+
             # Phase 3: Critical path enforcement
             logger.info("Phase 3: Validating no mocks on critical execution paths...")
             self._validate_no_mocks_on_critical_path()
@@ -403,6 +407,48 @@ class ProductionApplicationBootstrap:
             event_bus=event_bus,
             failed_event_store=failed_event_store,
         )
+
+    # =========================================================================
+    # Phase 2c: Event Store Initialization
+    # =========================================================================
+
+    async def _initialize_event_store(self) -> None:
+        """
+        Initialize event store for cross-process event distribution.
+
+        This is critical for the trigger CLI and application server to share
+        events across process boundaries. Without initialization:
+        - Elasticsearch indices won't be created
+        - Event publication may fail or events may be lost
+        - The trigger→handler cross-process path will be non-functional
+
+        Raises:
+            RuntimeError: If adapters not resolved or event store initialization fails
+        """
+        if not self.adapters or not self.adapters.event_store:
+            message = "Event store must be created in Phase 2 before initialization"
+            raise RuntimeError(message)
+
+        try:
+            from codetoreum.infrastructure.adapters.event_store_factory import initialize_event_store
+
+            logger.debug(f"Initializing event store: {type(self.adapters.event_store).__name__}")
+            await initialize_event_store(self.adapters.event_store)
+            logger.info(
+                "Event store initialized successfully",
+                extra={
+                    "event_store_type": type(self.adapters.event_store).__name__,
+                    "config": str(self.config.event_store),
+                },
+            )
+        except Exception as e:
+            message = f"Failed to initialize event store ({self.config.event_store}): {e}"
+            logger.error(
+                message,
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+            )
+            raise RuntimeError(message) from e
 
     # =========================================================================
     # Phase 3: Critical Path Enforcement
@@ -822,8 +868,16 @@ class ProductionApplicationBootstrap:
         is stored in the workflow_config service (in-memory for MVP, database-backed
         in future versions).
 
+        CRITICAL: Board initialization failure disables all workflow automation.
+        If the board template cannot be created or saved, BoardColumnEventHandler
+        will receive no configuration (None) for every event and silently skip
+        all automation. This is a hard failure requiring immediate attention.
+
         Safe to call multiple times (idempotent) — overwrites existing template
         with the same board_id.
+
+        Raises:
+            RuntimeError: If board initialization fails (prevents silent automation failure)
         """
         if not self.adapters:
             message = "Adapters must be created first"
@@ -846,12 +900,17 @@ class ProductionApplicationBootstrap:
                 },
             )
         except Exception as e:
-            logger.warning(
-                f"Failed to initialize codetoreum board configuration: {e}",
+            message = (
+                f"Failed to initialize codetoreum board configuration: {e}\n"
+                "This is CRITICAL: Without board configuration, BoardColumnEventHandler "
+                "cannot find the workflow template and will silently skip ALL workflow automation."
+            )
+            logger.error(
+                message,
                 exc_info=True,
                 extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
             )
-            # Don't fail bootstrap if board initialization fails (not critical for MVP)
+            raise RuntimeError(message) from e
 
     # =========================================================================
     # Phase 7: Create FastAPI Application and Register Event Handlers
