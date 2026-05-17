@@ -72,6 +72,7 @@ from codetoreum.application.event_handlers.review_event_handler import (
 )
 from codetoreum.application.execution_service import ExecutionService
 from codetoreum.application.feedback_processor import FeedbackProcessor
+from codetoreum.application.issue_intake_service import IssueIntakeService
 from codetoreum.application.multi_project_orchestrator import MultiProjectOrchestrator
 from codetoreum.application.pipeline_manager import PipelineManager
 from codetoreum.application.review_service import ReviewService
@@ -102,6 +103,7 @@ from codetoreum.ports.input.config_command import IConfigurationCommandPort
 from codetoreum.ports.input.config_query import IConfigurationQueryPort
 from codetoreum.ports.input.execution_command import IExecutionCommandPort
 from codetoreum.ports.input.execution_query import IExecutionQueryPort
+from codetoreum.ports.input.issue_intake import IIssueIntakePort
 from codetoreum.ports.input.metrics_query import IMetricsQueryPort
 from codetoreum.ports.input.orchestration_command import IOrchestrationCommandPort
 from codetoreum.ports.input.task_query import ITaskQueryPort
@@ -967,6 +969,13 @@ class ProductionApplicationBootstrap:
         )
         logger.debug("Created event store poller for cross-process event distribution")
 
+        # Create issue intake service for GitHub webhook event handling
+        issue_intake_service: IIssueIntakePort = IssueIntakeService(
+            board_service=self.adapters.board,
+            workflow_config_service=self.adapters.workflow_config,
+        )
+        logger.debug("Created issue intake service for webhook event handling")
+
         # Create FastAPI app
         app = create_app(
             workflow_command_port=self.ports.workflow_command,
@@ -995,8 +1004,7 @@ class ProductionApplicationBootstrap:
             container_recovery_service=self.services.container_recovery_service,
             adapter_slot_info=self._slot_info,
             event_store_poller=event_store_poller,
-            board_service=self.adapters.board,
-            workflow_config_service=self.adapters.workflow_config,
+            issue_intake_port=issue_intake_service,
         )
 
         logger.info("Created FastAPI application with all ports wired")

@@ -27,14 +27,13 @@ from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.observability.instrumentation import (
     instrument_async_function,
 )
+from codetoreum.ports.input.issue_intake import IIssueIntakePort, IssueOpenedCommand
 from codetoreum.ports.input.workflow_command import (
     IWorkflowCommandPort,
     StartWorkflowCommand,
     TriggerType,
 )
-from codetoreum.ports.output.board_service import IBoardService, MovedByType
 from codetoreum.ports.output.config_store import IConfigStore
-from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 # Type aliases for missing interfaces
 IEventBus = EventBus
@@ -70,17 +69,6 @@ class WebhookProcessingResult:
     commands_created: list[str]
     errors: list[str] | None = None
     processing_time_ms: float = 0.0
-
-
-@dataclass
-class StageInfo:
-    """Information about a pipeline stage"""
-
-    pipeline_name: str
-    board_name: str
-    stage_name: str
-    column_name: str
-    agent_name: str
 
 
 # ============================================================================
@@ -153,8 +141,7 @@ class GitHubWebhookAdapter:
         config_service: IConfigurationService,
         logger: ILogger,
         idempotency_cache_size: int = _DEFAULT_CACHE_SIZE,
-        board_service: IBoardService | None = None,
-        workflow_config_service: IWorkflowConfigService | None = None,
+        issue_intake_port: IIssueIntakePort | None = None,
     ):
         """
         Initialize adapter with dependencies.
@@ -165,15 +152,13 @@ class GitHubWebhookAdapter:
             config_service: Configuration service
             logger: Logging service
             idempotency_cache_size: Maximum size of idempotency cache (bounded, with LRU eviction)
-            board_service: Optional board service for column-to-stage mapping
-            workflow_config_service: Optional workflow config service for stage resolution
+            issue_intake_port: Optional issue intake port for handling opened issues
         """
         self.workflow_port = workflow_command_port
         self.event_bus = event_bus
         self.config = config_service
         self.logger = logger
-        self.board_service = board_service
-        self.workflow_config = workflow_config_service
+        self.issue_intake_port = issue_intake_port
         self._idempotency_cache_size = idempotency_cache_size
 
         # Event handlers by GitHub event type
@@ -502,23 +487,23 @@ class GitHubWebhookAdapter:
             self.logger.warning("Could not extract work item ID from %s", content_url)
             return []
 
-        # Map column ID to stage
-        stage_info = await self._map_column_to_stage(project, column_id)
-        if not stage_info:
-            self.logger.warning("Column %s not mapped for project %s", column_id, project)
-            return []
-
-        # Create workflow command
+        # Create workflow command with column_id for application service to resolve
+        # Note: The application layer (BoardColumnEventHandler) is responsible for
+        # resolving the column_id to stage information and orchestrating execution.
+        # The adapter only extracts raw data from the webhook payload.
         command = StartWorkflowCommand(
             project_name=project,
             work_item_id=work_item_id,
-            pipeline_name=stage_info.pipeline_name,
-            stage_name=stage_info.stage_name,
+            pipeline_name=project,  # Placeholder; actual pipeline determined by app layer
+            stage_name="",  # Placeholder; actual stage determined by app layer
             trigger=TriggerType.CARD_MOVEMENT,
             context={
-                "board_name": stage_info.board_name,
-                "column_name": stage_info.column_name,
-                "previous_column_id": payload.get("changes", {}).get("column_id", {}).get("from"),
+                "column_id": str(column_id),
+                "previous_column_id": (
+                    str(payload.get("changes", {}).get("column_id", {}).get("from"))
+                    if payload.get("changes", {}).get("column_id", {}).get("from")
+                    else None
+                ),
                 "delivery_id": event.delivery_id,
             },
         )
@@ -536,15 +521,16 @@ class GitHubWebhookAdapter:
         """
         Handle issues event (issue created/updated).
 
-        When an issue is opened, places it in the initial column on a board,
-        which triggers a WorkItemColumnChangedEvent that orchestrates execution.
+        When an issue is opened, delegates to the issue intake port to place it
+        in the initial column on a board, which triggers a WorkItemColumnChangedEvent
+        for orchestration.
 
         Args:
             event: Webhook event
             project: Project name
 
         Returns:
-            List of created command IDs
+            List of created work item IDs
         """
         # Add issue context to span
         span = self._get_span()
@@ -563,72 +549,32 @@ class GitHubWebhookAdapter:
         # Extract issue information
         issue = payload.get("issue", {})
         issue_number = str(issue.get("number", ""))
+        issue_title = issue.get("title")
+        issue_url = issue.get("html_url")
 
         if not issue_number:
             self.logger.warning("Could not extract issue number from payload")
             return []
 
-        # If board service not available, we can't place the item
-        if not self.board_service:
-            self.logger.warning("Board service not injected; cannot place opened issue %s on board", issue_number)
+        # If issue intake port not available, we can't process the issue
+        if not self.issue_intake_port:
+            self.logger.warning("Issue intake port not injected; cannot place opened issue %s on board", issue_number)
             return []
 
-        if not self.workflow_config:
-            self.logger.warning("Workflow config service not injected; cannot find initial column for issue %s", issue_number)
-            return []
+        # Delegate to issue intake service via input port
+        command = IssueOpenedCommand(
+            project_id=project,
+            issue_number=issue_number,
+            issue_title=issue_title,
+            issue_url=issue_url,
+        )
 
-        try:
-            # Get project boards to find the board for this project
-            all_boards = await self.board_service.get_all_boards()
-            project_boards = [b for b in all_boards if b.project_id == project]
+        result = await self.issue_intake_port.on_issue_opened(command)
 
-            if not project_boards:
-                self.logger.warning("No boards configured for project %s", project)
-                return []
-
-            # Use the first board (assuming project has at least one)
-            board = project_boards[0]
-
-            # Get workflow template to find the initial column
-            template = await self.workflow_config.get_board_workflow_template(board.id)
-
-            if not template:
-                self.logger.warning("No workflow template configured for board %s", board.id)
-                return []
-
-            # Find the initial column (position 0)
-            initial_column = next((c for c in template.columns if c.position == 0), None)
-
-            if not initial_column:
-                self.logger.warning("No initial column (position 0) found in template for board %s", board.id)
-                return []
-
-            # Place the issue in the initial column
-            # This triggers a WorkItemColumnChangedEvent with from_column=None
-            result = await self.board_service.add_item_to_column(
-                work_item_id=issue_number,
-                target_column=initial_column.name,
-                moved_by=MovedByType.HUMAN,
-            )
-
-            self.logger.info(
-                "Placed newly opened issue %s in column %s on board %s",
-                issue_number,
-                initial_column.name,
-                board.id,
-            )
-
-            return [issue_number]
-
-        except Exception as e:
-            self.logger.error(
-                "Error handling opened issue %s for project %s: %s",
-                issue_number,
-                project,
-                str(e),
-                exc_info=True,
-            )
-            return []
+        if result.success:
+            return [result.work_item_id]
+        self.logger.warning("Failed to intake issue %s: %s", issue_number, result.message)
+        return []
 
     @instrument_async_function(
         name="github.webhook.handle_issue_comment",
@@ -724,110 +670,6 @@ class GitHubWebhookAdapter:
             if repo_full_name == repository:
                 return project_config.id
         return None
-
-    async def _map_column_to_stage(self, project: str, column_id: int) -> StageInfo | None:
-        """
-        Map GitHub project column ID to pipeline stage.
-
-        Maps GitHub project card column ID to a workflow stage by:
-        1. Querying IBoardService to find the column name by ID
-        2. Looking up the workflow template to find the agent for that column
-
-        Args:
-            project: Project name (ID)
-            column_id: GitHub column ID
-
-        Returns:
-            Stage information or None if mapping cannot be completed
-
-        Note:
-            Requires both board_service and workflow_config_service to be injected.
-            If not available, returns None.
-        """
-        if not self.board_service:
-            self.logger.warning(
-                "Board service not injected; column ID to stage mapping not available for project %s column %d",
-                project,
-                column_id,
-            )
-            return None
-
-        if not self.workflow_config:
-            self.logger.warning(
-                "Workflow config service not injected; cannot resolve stage for project %s column %d",
-                project,
-                column_id,
-            )
-            return None
-
-        try:
-            # Get all boards for this project
-            boards = await self.board_service.get_all_boards()
-
-            # Find board and column with matching ID
-            board_with_column = None
-            column_name = None
-
-            for board in boards:
-                if board.project_id != project:
-                    continue
-
-                for col in board.columns:
-                    if col.id == str(column_id):
-                        board_with_column = board
-                        column_name = col.name
-                        break
-
-                if board_with_column:
-                    break
-
-            if not board_with_column or not column_name:
-                self.logger.warning(
-                    "Could not find column %d in any board for project %s",
-                    column_id,
-                    project,
-                )
-                return None
-
-            # Get workflow template for this board
-            template = await self.workflow_config.get_board_workflow_template(board_with_column.id)
-
-            if not template:
-                self.logger.warning(
-                    "No workflow template configured for board %s",
-                    board_with_column.id,
-                )
-                return None
-
-            # Get column configuration
-            col_config = template.get_column_config(column_name)
-
-            if not col_config:
-                self.logger.warning(
-                    "Column %s not found in workflow template for board %s",
-                    column_name,
-                    board_with_column.id,
-                )
-                return None
-
-            # Return stage info
-            return StageInfo(
-                pipeline_name=template.name or board_with_column.name,
-                board_name=board_with_column.name,
-                stage_name=column_name,
-                column_name=column_name,
-                agent_name=col_config.agent_id or "",
-            )
-
-        except Exception as e:
-            self.logger.error(
-                "Error mapping column %d to stage for project %s: %s",
-                column_id,
-                project,
-                str(e),
-                exc_info=True,
-            )
-            return None
 
     def _extract_work_item_id(self, content_url: str) -> str | None:
         """

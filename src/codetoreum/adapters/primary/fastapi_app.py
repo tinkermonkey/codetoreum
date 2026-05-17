@@ -76,6 +76,7 @@ from codetoreum.ports.input.config_command import IConfigurationCommandPort
 from codetoreum.ports.input.config_query import IConfigurationQueryPort
 from codetoreum.ports.input.execution_command import IExecutionCommandPort
 from codetoreum.ports.input.execution_query import IExecutionQueryPort
+from codetoreum.ports.input.issue_intake import IIssueIntakePort
 from codetoreum.ports.input.metrics_query import IMetricsQueryPort
 from codetoreum.ports.input.orchestration_command import IOrchestrationCommandPort
 from codetoreum.ports.input.task_query import ITaskQueryPort
@@ -270,8 +271,7 @@ def create_app(
     container_recovery_service: Any | None = None,
     adapter_slot_info: dict[str, str] | None = None,
     event_store_poller: Any | None = None,
-    board_service: Any | None = None,
-    workflow_config_service: Any | None = None,
+    issue_intake_port: IIssueIntakePort | None = None,
 ) -> FastAPI:
     """
     Create and configure FastAPI application.
@@ -426,8 +426,7 @@ def create_app(
         event_bus=event_bus,
         config_service=config_service,
         logger=logger,
-        board_service=board_service,
-        workflow_config_service=workflow_config_service,
+        issue_intake_port=issue_intake_port,
     )
 
     rest_api_adapter = RestAPIAdapter(
@@ -1321,6 +1320,15 @@ def create_development_app() -> FastAPI:
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
                 completed_at=None,
+            )
+
+        async def on_issue_opened(self, command):
+            from codetoreum.ports.input.work_item_command import WorkItemCommandResult
+
+            return WorkItemCommandResult(
+                success=True,
+                work_item_id=command.issue_number,
+                message=f"Issue {command.issue_number} accepted for intake (mock)",
             )
 
     class MockWorkItemQueryPort(IWorkItemQueryPort):

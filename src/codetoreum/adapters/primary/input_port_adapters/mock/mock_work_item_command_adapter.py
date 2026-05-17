@@ -15,6 +15,7 @@ from codetoreum.ports.input.work_item_command import (
     AttachWorkflowCommand,
     CreateWorkItemCommand,
     IWorkItemCommandPort,
+    OnIssueOpenedCommand,
     UpdateLabelsCommand,
     UpdatePriorityCommand,
     UpdateStageCommand,
@@ -164,6 +165,18 @@ class MockWorkItemCommandAdapter(IWorkItemCommandPort):
             work_item.update_stage(command.stage)
 
             return work_item
+
+    async def on_issue_opened(self, command: OnIssueOpenedCommand) -> WorkItemCommandResult:
+        """Handle newly opened GitHub issue.
+
+        For the mock adapter, simply returns success. The actual issue intake
+        (board placement) is handled by IssueIntakeService in production.
+        """
+        return WorkItemCommandResult(
+            success=True,
+            work_item_id=command.issue_number,
+            message=f"Issue {command.issue_number} accepted for intake",
+        )
 
     def get_work_item(self, work_item_id: str) -> WorkItem:
         """Helper method to get a work item (for testing)."""
