@@ -78,6 +78,7 @@ async def trigger_work_item(
     """
     setup_logging(verbose)
 
+    bootstrap = None
     try:
         # Bootstrap minimal CLI infrastructure (event bus + config + board adapters only)
         click.echo("[*] Bootstrapping CLI environment...")
@@ -195,6 +196,13 @@ async def trigger_work_item(
         click.echo(f"[!] Unexpected error: {e}", err=True)
         logger.error("Unexpected error during trigger execution", exc_info=True)
         return 1
+
+    finally:
+        if bootstrap:
+            try:
+                await bootstrap.teardown()
+            except Exception:
+                logger.error("Error during teardown", exc_info=True)
 
 
 @click.command(name="trigger")

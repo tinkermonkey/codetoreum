@@ -145,7 +145,7 @@ class SmokeTestRunner:
                 # Configure Docker adapter (auto-remove containers after execution)
                 docker_config = DockerConfig(
                     default_user="1000:1000",
-                    default_network=os.environ.get("DOCKER_NETWORK", "bridge"),
+                    agent_network=os.environ.get("DOCKER_NETWORK", "bridge"),
                     remove_on_completion=True,
                 )
                 self.adapter = DockerContainerAdapter(config=docker_config)
@@ -265,7 +265,7 @@ class SmokeTestRunner:
                     redis_adapter = DockerContainerAdapter(
                         config=DockerConfig(
                             default_user="1000:1000",
-                            default_network=compose_network,
+                            agent_network=compose_network,
                             remove_on_completion=True,
                         )
                     )
