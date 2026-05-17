@@ -270,6 +270,8 @@ def create_app(
     container_recovery_service: Any | None = None,
     adapter_slot_info: dict[str, str] | None = None,
     event_store_poller: Any | None = None,
+    board_service: Any | None = None,
+    workflow_config_service: Any | None = None,
 ) -> FastAPI:
     """
     Create and configure FastAPI application.
@@ -424,6 +426,8 @@ def create_app(
         event_bus=event_bus,
         config_service=config_service,
         logger=logger,
+        board_service=board_service,
+        workflow_config_service=workflow_config_service,
     )
 
     rest_api_adapter = RestAPIAdapter(

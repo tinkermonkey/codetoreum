@@ -995,6 +995,8 @@ class ProductionApplicationBootstrap:
             container_recovery_service=self.services.container_recovery_service,
             adapter_slot_info=self._slot_info,
             event_store_poller=event_store_poller,
+            board_service=self.adapters.board,
+            workflow_config_service=self.adapters.workflow_config,
         )
 
         logger.info("Created FastAPI application with all ports wired")
