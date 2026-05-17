@@ -24,6 +24,9 @@ from codetoreum.adapters.secondary.docker_container_adapter import (
 from codetoreum.adapters.secondary.elasticsearch_config_storage import (
     ElasticsearchConfigStorage,
 )
+from codetoreum.adapters.secondary.execution_service_agent_executor import (
+    ExecutionServiceAgentExecutor,
+)
 from codetoreum.adapters.secondary.git_repository_adapter import (
     GitConfig,
     GitRepositoryAdapter,
@@ -67,6 +70,8 @@ __all__ = [
     # Docker Container Runtime
     "DockerContainerAdapter",
     "DockerConfig",
+    # Agent Execution
+    "ExecutionServiceAgentExecutor",
     # Git Repository
     "GitRepositoryAdapter",
     "GitConfig",

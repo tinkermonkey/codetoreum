@@ -9,7 +9,7 @@ CI operations—they cannot be modified after creation.
 """
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
@@ -85,7 +85,7 @@ class CIPipelineStatusCheckedEvent(CodetoreumEvent):
             msg = f"Sum of passed_count ({self.passed_count}) + failed_count ({self.failed_count}) + pending_count ({self.pending_count}) = {sum_of_counts} exceeds check_count ({self.check_count})"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -102,7 +102,7 @@ class CIPipelineStatusCheckedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "CIPipelineStatusCheckedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "CIPipelineStatusCheckedEvent":
         """Deserialize from dictionary.
 
         Raises:
@@ -172,7 +172,7 @@ class CIRunStartedEvent(CodetoreumEvent):
             msg = "checks_planned must be a non-negative integer"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -187,7 +187,7 @@ class CIRunStartedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "CIRunStartedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "CIRunStartedEvent":
         """Deserialize from dictionary.
 
         Raises:
@@ -258,7 +258,7 @@ class CIRunCompletedEvent(CodetoreumEvent):
             msg = "warning_count must be a non-negative integer"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -274,7 +274,7 @@ class CIRunCompletedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "CIRunCompletedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "CIRunCompletedEvent":
         """Deserialize from dictionary.
 
         Raises:

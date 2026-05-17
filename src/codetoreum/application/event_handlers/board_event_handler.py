@@ -551,7 +551,21 @@ class BoardColumnEventHandler(EventHandler):
         )
         try:
             await self.event_store.append(workflow_run_id, [created, started])
-            logger.debug(f"Workflow run {workflow_run_id} started for {work_item_id}")
+            logger.info(
+                f"Starting workflow run {workflow_run_id} for {work_item_id}: "
+                f"stage={column_config.name}, template_id={workflow_config.id}, "
+                f"agent_id={column_config.agent_id or 'none'}, "
+                f"board_id={board_id}",
+                extra={
+                    "workflow_run_id": workflow_run_id,
+                    "work_item_id": work_item_id,
+                    "stage_name": column_config.name,
+                    "template_id": workflow_config.id,
+                    "agent_id": column_config.agent_id or "none",
+                    "board_id": board_id,
+                    "project_id": project_id,
+                },
+            )
         except Exception as e:
             logger.error(
                 f"Failed to persist workflow run start for {work_item_id}: {e}",

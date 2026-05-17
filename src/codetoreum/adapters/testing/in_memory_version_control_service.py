@@ -15,7 +15,6 @@ from codetoreum.ports.exceptions import (
     ResourceNotFoundError,
     ValidationError,
 )
-from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.version_control_service import (
     IVersionControlService,
     Repository,
@@ -48,13 +47,11 @@ class InMemoryVersionControlService(IVersionControlService):
 
     def __init__(
         self,
-        event_emitter: IEventEmitter | None = None,
         time_source: Callable[[], datetime] | None = None,
     ) -> None:
         """Initialize the in-memory version control service.
 
         Args:
-            event_emitter: Optional event emitter for VCS domain events
             time_source: Optional callable returning current datetime for simulation clock control.
                         Defaults to datetime.now(UTC).
         """
@@ -83,7 +80,6 @@ class InMemoryVersionControlService(IVersionControlService):
         # Thread safety for concurrent test execution
         self._lock = threading.Lock()
 
-        self._event_emitter = event_emitter
         self._time_source = time_source or (lambda: datetime.now(UTC))
 
     async def clone_repository(self, url: str, target_path: str, branch: str | None = None) -> None:
@@ -235,22 +231,6 @@ class InMemoryVersionControlService(IVersionControlService):
                     for file_path in committed_files:
                         working_tree.pop(file_path, None)
 
-        # Emit CommitCreatedEvent if event emitter is configured
-        if self._event_emitter:
-            from codetoreum.domain.events.repository_events import CommitCreatedEvent
-
-            event = CommitCreatedEvent(
-                type="repository.commit_created",
-                timestamp=self._time_source().isoformat(),
-                source="in_memory_vcs",
-                repository_id=repo_path,
-                commit_sha=commit_sha,
-                message=message,
-                author="orchestrator",
-                changed_files=tuple(committed_files),
-            )
-            self._event_emitter.emit(event)
-
         return commit_sha
 
     async def push(self, repo_path: str, branch: str) -> None:
@@ -289,19 +269,6 @@ class InMemoryVersionControlService(IVersionControlService):
             # Mark the branch as pushed
             repo["pushed_branches"].add(branch)
 
-        # Emit BranchPushedEvent if event emitter is configured
-        if self._event_emitter:
-            from codetoreum.domain.events.repository_events import BranchPushedEvent
-
-            event = BranchPushedEvent(
-                type="repository.branch_pushed",
-                timestamp=self._time_source().isoformat(),
-                source="in_memory_vcs",
-                repository_id=repo_path,
-                branch_name=branch,
-            )
-            self._event_emitter.emit(event)
-
     async def create_branch(self, repo_path: str, branch_name: str, from_branch: str | None = None) -> None:
         """Create a new branch in the in-memory repository."""
         # Validate inputs before acquiring lock
@@ -318,33 +285,10 @@ class InMemoryVersionControlService(IVersionControlService):
                 raise RepositoryError(msg)
 
             repo = self._repositories[repo_path]
-            branch_is_new = branch_name not in repo["branches"]
-
-            # Get base commit from from_branch or current branch
-            if from_branch and from_branch in repo["commits"]:
-                base_commits = repo["commits"][from_branch]
-            else:
-                current_branch = repo["current_branch"]
-                base_commits = repo["commits"].get(current_branch, ["initial-commit-sha"])
-            base_commit = base_commits[-1] if base_commits else "initial-commit-sha"
 
             repo["branches"].add(branch_name)
             if branch_name not in repo["commits"]:
                 repo["commits"][branch_name] = []
-
-        # Emit BranchCreatedEvent if event emitter is configured
-        if self._event_emitter and branch_is_new:
-            from codetoreum.domain.events.repository_events import BranchCreatedEvent
-
-            event = BranchCreatedEvent(
-                type="repository.branch_created",
-                timestamp=self._time_source().isoformat(),
-                source="in_memory_vcs",
-                repository_id=repo_path,
-                branch_name=branch_name,
-                base_commit=base_commit,
-            )
-            self._event_emitter.emit(event)
 
     async def list_branches(self, repo_path: str, remote: bool = False) -> list[str]:
         """List all branches in the in-memory repository."""

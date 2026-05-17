@@ -8,6 +8,7 @@ audit trail integrity and enable observability integration.
 """
 
 from dataclasses import dataclass
+from typing import Any
 from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
@@ -47,7 +48,7 @@ class ExecutionInitializedEvent(CodetoreumEvent):
             msg = "agent_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -61,7 +62,7 @@ class ExecutionInitializedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ExecutionInitializedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ExecutionInitializedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "execution.initialized"),
@@ -111,7 +112,7 @@ class ExecutionStartedEvent(CodetoreumEvent):
             msg = "agent_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -125,7 +126,7 @@ class ExecutionStartedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ExecutionStartedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ExecutionStartedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "execution.started"),
@@ -177,7 +178,7 @@ class ExecutionCompletedEvent(CodetoreumEvent):
             msg = "agent_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -193,7 +194,7 @@ class ExecutionCompletedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ExecutionCompletedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ExecutionCompletedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "execution.completed"),
@@ -247,7 +248,7 @@ class ExecutionFailedEvent(CodetoreumEvent):
             msg = "agent_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -263,7 +264,7 @@ class ExecutionFailedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ExecutionFailedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ExecutionFailedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "execution.failed"),
@@ -335,7 +336,7 @@ class ExecutionTimedOutEvent(CodetoreumEvent):
             msg = "started_at is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -349,7 +350,7 @@ class ExecutionTimedOutEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ExecutionTimedOutEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ExecutionTimedOutEvent":
         """Deserialize from dictionary.
 
         Raises:
@@ -392,7 +393,7 @@ class ExecutionCancelledEvent(CodetoreumEvent):
         if not self.work_item_id:
             raise ValueError("work_item_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         data = super().to_dict()
         data.update(
             {
@@ -405,7 +406,7 @@ class ExecutionCancelledEvent(CodetoreumEvent):
         return data
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ExecutionCancelledEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ExecutionCancelledEvent":
         return cls(
             type=data.get("type", "execution.cancelled"),
             timestamp=data.get("timestamp", ""),
@@ -442,7 +443,7 @@ class ExecutionPausedEvent(CodetoreumEvent):
         if not self.work_item_id:
             raise ValueError("work_item_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         data = super().to_dict()
         data.update(
             {
@@ -455,7 +456,7 @@ class ExecutionPausedEvent(CodetoreumEvent):
         return data
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ExecutionPausedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ExecutionPausedEvent":
         return cls(
             type=data.get("type", "execution.paused"),
             timestamp=data.get("timestamp", ""),
@@ -492,7 +493,7 @@ class ExecutionResumedEvent(CodetoreumEvent):
         if not self.work_item_id:
             raise ValueError("work_item_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         data = super().to_dict()
         data.update(
             {
@@ -505,7 +506,7 @@ class ExecutionResumedEvent(CodetoreumEvent):
         return data
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ExecutionResumedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ExecutionResumedEvent":
         return cls(
             type=data.get("type", "execution.resumed"),
             timestamp=data.get("timestamp", ""),
@@ -544,7 +545,7 @@ class ExecutionRetryScheduledEvent(CodetoreumEvent):
         if not self.work_item_id:
             raise ValueError("work_item_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         data = super().to_dict()
         data.update(
             {
@@ -558,7 +559,7 @@ class ExecutionRetryScheduledEvent(CodetoreumEvent):
         return data
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ExecutionRetryScheduledEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ExecutionRetryScheduledEvent":
         return cls(
             type=data.get("type", "execution.retry_scheduled"),
             timestamp=data.get("timestamp", ""),

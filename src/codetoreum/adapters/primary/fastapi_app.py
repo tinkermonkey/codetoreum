@@ -165,6 +165,19 @@ async def lifespan(app: FastAPI):
     # Note: OpenTelemetry instrumentation is now done at module level
     # (see bottom of this file, after app = create_development_app())
 
+    # Start event store poller for cross-process event distribution
+    if hasattr(app.state, "event_store_poller"):
+        try:
+            logger.info("Starting event store poller for cross-process event distribution")
+            await app.state.event_store_poller.start()
+        except Exception:
+            logger.error(
+                "Event store poller failed to start",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+            )
+            # Continue startup despite poller failure - handlers will still work for direct events
+
     # Run container recovery on startup if available
     if hasattr(app.state, "container_recovery_service"):
         try:
@@ -206,6 +219,17 @@ async def lifespan(app: FastAPI):
     # Shutdown
     print("Shutting down Codetoreum API Server...")
 
+    # Stop event store poller
+    if hasattr(app.state, "event_store_poller"):
+        try:
+            await app.state.event_store_poller.stop()
+        except Exception:
+            logger.error(
+                "Error stopping event store poller",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+            )
+
     # Close WebSocket adapter and wait for pending background tasks
     if hasattr(app.state, "websocket_adapter"):
         await app.state.websocket_adapter.close()
@@ -244,6 +268,8 @@ def create_app(
     disable_auth: bool = False,
     cors_origins: list | None = None,
     container_recovery_service: Any | None = None,
+    adapter_slot_info: dict[str, str] | None = None,
+    event_store_poller: Any | None = None,
 ) -> FastAPI:
     """
     Create and configure FastAPI application.
@@ -274,6 +300,8 @@ def create_app(
         disable_auth: If True, authentication is disabled (for development/testing only)
         cors_origins: List of allowed CORS origins
         container_recovery_service: Optional container recovery service for startup recovery
+        adapter_slot_info: Optional dictionary mapping adapter slot names to implementation names
+        event_store_poller: Optional event store poller for cross-process event distribution
 
     Returns:
         Configured FastAPI application
@@ -313,6 +341,10 @@ def create_app(
     # Store container recovery service if provided
     if container_recovery_service is not None:
         app.state.container_recovery_service = container_recovery_service
+
+    # Store event store poller if provided
+    if event_store_poller is not None:
+        app.state.event_store_poller = event_store_poller
 
     # Configure rate limiting
     limiter = Limiter(key_func=get_remote_address, default_limits=[rate_limit])
@@ -680,7 +712,7 @@ def create_app(
         summary="Health check endpoint",
         response_model=HealthCheckResponse,
     )
-    async def health_check() -> HealthCheckResponse:
+    async def health_check() -> dict[str, Any]:
         """
         Basic health check endpoint.
 
@@ -688,13 +720,20 @@ def create_app(
         monitoring and load balancer health checks.
 
         Returns:
-            Health status
+            Health status including adapter slot information
         """
-        return HealthCheckResponse(
-            status="healthy",
-            service="codetoreum-api",
-            version="2.0.0",
-        )
+        response: dict[str, Any] = {
+            "status": "healthy",
+            "service": "codetoreum-api",
+            "version": "2.0.0",
+            "timestamp": datetime.now(UTC),
+        }
+
+        # Include adapter slot info if available
+        if adapter_slot_info:
+            response["adapters"] = adapter_slot_info
+
+        return response
 
     @app.get(
         "/api/v2/health/ready",

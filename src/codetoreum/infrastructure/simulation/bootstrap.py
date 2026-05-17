@@ -75,6 +75,9 @@ from codetoreum.adapters.primary.routers.simulation_stream import (
 from codetoreum.adapters.primary.routers.simulation_ticketing import (
     create_simulation_ticketing_router,
 )
+from codetoreum.adapters.secondary.execution_service_agent_executor import (
+    ExecutionServiceAgentExecutor,
+)
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
     InMemoryLockService,
 )
@@ -105,9 +108,6 @@ from codetoreum.adapters.testing import (
     MockProjectManagerAdapter,
     MockReviewCycleAdapter,
     SimpleEncryptionAdapter,
-)
-from codetoreum.adapters.testing.execution_service_agent_executor import (
-    ExecutionServiceAgentExecutor,
 )
 from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
 from codetoreum.adapters.testing.mock_systemic_analysis_adapter import (
@@ -1039,7 +1039,7 @@ class SimulationApplicationBootstrap:
                     # Type guard: agent_executor must be ExecutionServiceAgentExecutor, not None
                     if self.adapters.agent_executor is None:
                         raise RuntimeError("ExecutionServiceAgentExecutor not initialized in Phase 3")
-                    from codetoreum.adapters.testing.execution_service_agent_executor import (
+                    from codetoreum.adapters.secondary.execution_service_agent_executor import (
                         ExecutionServiceAgentExecutor,
                     )
 

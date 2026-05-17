@@ -16,6 +16,7 @@ about review execution and outcomes—they cannot be modified after creation.
 """
 
 from dataclasses import dataclass
+from typing import Any
 from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
@@ -74,7 +75,7 @@ class PRReviewCycleStartedEvent(CodetoreumEvent):
             msg = "workflow_run_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -91,7 +92,7 @@ class PRReviewCycleStartedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "PRReviewCycleStartedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "PRReviewCycleStartedEvent":
         """Deserialize from dictionary with backward compatibility."""
         verifier_context_sources = tuple(data.get("verifier_context_sources", []))
         return cls(
@@ -159,7 +160,7 @@ class PRReviewCyclePhaseStartedEvent(CodetoreumEvent):
             msg = "workflow_run_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -175,7 +176,7 @@ class PRReviewCyclePhaseStartedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "PRReviewCyclePhaseStartedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "PRReviewCyclePhaseStartedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "pr_review_cycle.phase_started"),
@@ -223,7 +224,7 @@ class PRReviewCycleCodeReviewStartedEvent(CodetoreumEvent):
             msg = "timeout_seconds must be > 0"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -236,7 +237,7 @@ class PRReviewCycleCodeReviewStartedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "PRReviewCycleCodeReviewStartedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "PRReviewCycleCodeReviewStartedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "pr_review_cycle.code_review_started"),
@@ -294,7 +295,7 @@ class PRReviewCycleVerificationStartedEvent(CodetoreumEvent):
             msg = "workflow_run_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -309,7 +310,7 @@ class PRReviewCycleVerificationStartedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "PRReviewCycleVerificationStartedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "PRReviewCycleVerificationStartedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "pr_review_cycle.verification_started"),
@@ -368,7 +369,7 @@ class PRReviewCycleCICheckCompletedEvent(CodetoreumEvent):
             msg = "workflow_run_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -384,7 +385,7 @@ class PRReviewCycleCICheckCompletedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "PRReviewCycleCICheckCompletedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "PRReviewCycleCICheckCompletedEvent":
         """Deserialize from dictionary with backward compatibility."""
         # Support both 'passed' and 'ci_passed' for backward compatibility
         passed = bool(data.get("passed") if "passed" in data else data.get("ci_passed", False))
@@ -434,7 +435,7 @@ class PRReviewCycleConsolidationStartedEvent(CodetoreumEvent):
             msg = "workflow_run_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -447,7 +448,7 @@ class PRReviewCycleConsolidationStartedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "PRReviewCycleConsolidationStartedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "PRReviewCycleConsolidationStartedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "pr_review_cycle.consolidation_started"),
@@ -507,7 +508,7 @@ class PRReviewCycleApprovedEvent(CodetoreumEvent):
             msg = "workflow_run_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -523,7 +524,7 @@ class PRReviewCycleApprovedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "PRReviewCycleApprovedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "PRReviewCycleApprovedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "pr_review_cycle.approved"),
@@ -620,7 +621,7 @@ class PRReviewCycleIssuesFoundEvent(CodetoreumEvent):
             msg = "workflow_run_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -642,7 +643,7 @@ class PRReviewCycleIssuesFoundEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "PRReviewCycleIssuesFoundEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "PRReviewCycleIssuesFoundEvent":
         """Deserialize from dictionary with backward compatibility."""
         # Support both 'total' and 'finding_count' for backward compatibility
         total = data.get("total") or data.get("finding_count", 0)
@@ -716,7 +717,7 @@ class PRReviewCycleMaxCyclesReachedEvent(CodetoreumEvent):
             msg = "workflow_run_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -732,7 +733,7 @@ class PRReviewCycleMaxCyclesReachedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "PRReviewCycleMaxCyclesReachedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "PRReviewCycleMaxCyclesReachedEvent":
         """Deserialize from dictionary with backward compatibility."""
         # Support both 'max_cycles' and 'max_outer_cycles' for backward compatibility
         max_cycles = data.get("max_cycles") or data.get("max_outer_cycles", 0)
@@ -787,7 +788,7 @@ class PRReviewCycleEscalatedEvent(CodetoreumEvent):
             msg = "workflow_run_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -801,7 +802,7 @@ class PRReviewCycleEscalatedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "PRReviewCycleEscalatedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "PRReviewCycleEscalatedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "pr_review_cycle.escalated"),
@@ -862,7 +863,7 @@ class PRReviewCycleSubIssuesCreatedEvent(CodetoreumEvent):
             msg = "workflow_run_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -878,7 +879,7 @@ class PRReviewCycleSubIssuesCreatedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "PRReviewCycleSubIssuesCreatedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "PRReviewCycleSubIssuesCreatedEvent":
         """Deserialize from dictionary with backward compatibility."""
         # Support both 'work_item_ids' and 'sub_issue_ids' for backward compatibility
         work_item_ids = tuple(data.get("work_item_ids") or data.get("sub_issue_ids", []))
@@ -940,7 +941,7 @@ class PRReviewCyclePhaseCompletedEvent(CodetoreumEvent):
             msg = "workflow_run_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -956,7 +957,7 @@ class PRReviewCyclePhaseCompletedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "PRReviewCyclePhaseCompletedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "PRReviewCyclePhaseCompletedEvent":
         """Deserialize from dictionary."""
         return cls(
             type=data.get("type", "pr_review_cycle.phase_completed"),
@@ -1033,7 +1034,7 @@ class PRReviewCycleConsolidationCompletedEvent(CodetoreumEvent):
             msg = "workflow_run_id is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -1051,7 +1052,7 @@ class PRReviewCycleConsolidationCompletedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "PRReviewCycleConsolidationCompletedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "PRReviewCycleConsolidationCompletedEvent":
         """Deserialize from dictionary with backward compatibility."""
         return cls(
             type=data.get("type", "pr_review_cycle.consolidation_completed"),

@@ -8,7 +8,7 @@ import re
 import subprocess
 import uuid
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -81,8 +81,10 @@ class ClaudeCodeConfig:
     """Configuration for Claude Code CLI adapter."""
 
     # Authentication (secure references)
-    api_key_credential_name: str = "ANTHROPIC_API_KEY"  # Name of credential in provider
-    oauth_token_credential_name: str = "CLAUDE_CODE_OAUTH_TOKEN"  # Name of OAuth token
+    # Primary: OAuth token (Claude Code native authentication)
+    # Fallback: ANTHROPIC_API_KEY (legacy support, only if OAuth token unavailable)
+    api_key_credential_name: str = "ANTHROPIC_API_KEY"  # Fallback only; OAuth token preferred
+    oauth_token_credential_name: str = "CLAUDE_CODE_OAUTH_TOKEN"  # Primary authentication method
     credential_provider: ICredentialProvider | None = None  # Secure credential provider
 
     # CLI configuration
@@ -92,6 +94,9 @@ class ClaudeCodeConfig:
 
     # Output configuration
     output_format: str = "stream-json"  # or "text"
+    # Note: --verbose is automatically enabled when output_format=="stream-json" because the
+    # Claude CLI requires this flag for stream-json output with --print. When using the
+    # default stream-json format, verbose=False does not disable the flag.
     verbose: bool = False
 
     # Execution limits
@@ -179,8 +184,9 @@ class ClaudeCodeAdapter(ILLMProvider):
         model = ctx.model or self.config.default_model
         cmd.extend(["--model", model])
 
-        # Verbose output
-        if self.config.verbose:
+        # Verbose output is required for stream-json format
+        # Claude CLI requires --verbose when using --output-format=stream-json with --print
+        if self.config.verbose or self.config.output_format == "stream-json":
             cmd.append("--verbose")
 
         # MCP configuration
@@ -225,10 +231,15 @@ class ClaudeCodeAdapter(ILLMProvider):
             )
             raise AuthenticationError(msg)
 
-        if api_key:
-            env["ANTHROPIC_API_KEY"] = api_key
-        elif oauth_token:
+        # OAuth token is preferred; API key used only as fallback
+        if oauth_token:
             env["CLAUDE_CODE_OAUTH_TOKEN"] = oauth_token
+        elif api_key:
+            logger.warning(
+                "Using ANTHROPIC_API_KEY as fallback. "
+                "CLAUDE_CODE_OAUTH_TOKEN is the preferred authentication method."
+            )
+            env["ANTHROPIC_API_KEY"] = api_key
 
         # Add context environment variables
         if context and context.environment_variables:
@@ -551,7 +562,21 @@ class ClaudeCodeAdapter(ILLMProvider):
         prompt: str,
         context: ExecutionContext | None = None,
     ) -> AsyncIterator[StreamChunk]:
-        """Stream completion tokens."""
+        """Stream completion tokens.
+
+        This method implements the ILLMProvider.stream_completion() port contract.
+        It provides a pure streaming interface for callers that prefer iterator-based
+        streaming over callback-based streaming.
+
+        In the current pipeline (webhook → column change → agent execute → PR create),
+        the `execute()` method is used with an optional `stream_callback` parameter
+        instead. The pipeline does not invoke stream_completion() directly.
+
+        When the ResilientLLMProviderDecorator wraps this method, it applies rate
+        limiting and circuit breaker patterns (infrastructure/resilience/decorators.py).
+        However, this is not a fallback mechanism — it is the standard resilience
+        wrapper for all ILLMProvider methods, including stream_completion().
+        """
         ctx = context or ExecutionContext()
 
         # Sanitize input
@@ -652,8 +677,8 @@ class ClaudeCodeAdapter(ILLMProvider):
         """
         Create a new conversation.
 
-        Note: Claude Code CLI manages sessions internally.
-        This creates a local tracking entry.
+        Note: Conversations are tracked locally with message history.
+        Claude Code CLI sessions are subprocess-specific and cannot be reused.
         """
         conversation_id = str(uuid.uuid4())
 
@@ -662,6 +687,7 @@ class ClaudeCodeAdapter(ILLMProvider):
             "parameters": parameters,
             "created_at": datetime.now(UTC),
             "message_count": 0,
+            "message_history": [],  # Track messages for conversation context
         }
 
         return conversation_id
@@ -679,16 +705,38 @@ class ClaudeCodeAdapter(ILLMProvider):
 
         conv_data = self._conversations[conversation_id]
 
-        # Build context with conversation ID
+        # Build context without conversation_id (Claude CLI sessions are subprocess-specific)
+        # Instead, use message history for conversation context
         context = conv_data.get("parameters") or ExecutionContext()
-        context.conversation_id = conversation_id
 
-        # Execute with conversation context
-        result = await self.execute(message, context, stream_callback)
+        # Build conversation history for the system prompt
+        system_prompt = conv_data.get("system_prompt")
+        message_history = conv_data.get("message_history", [])
+
+        # Build the full prompt with conversation history
+        full_prompt = ""
+        if system_prompt:
+            full_prompt = f"System: {system_prompt}\n\n"
+
+        # Add previous messages as context
+        for prev_msg in message_history:
+            full_prompt += f"User: {prev_msg['user']}\nAssistant: {prev_msg['assistant']}\n\n"
+
+        full_prompt += f"User: {message}"
+
+        # Execute without session_id (don't reuse subprocess sessions)
+        context = replace(context, conversation_id=None, system_prompt=None)
+        result = await self.execute(full_prompt, context, stream_callback)
 
         # Update conversation tracking
         conv_data["message_count"] += 1
         conv_data["last_message_at"] = datetime.now(UTC)
+
+        # Store the message and response in history
+        conv_data["message_history"].append({
+            "user": message,
+            "assistant": result.content,
+        })
 
         return result
 

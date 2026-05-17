@@ -1,6 +1,7 @@
 """Configuration domain events using frozen dataclasses."""
 
 from dataclasses import dataclass
+from typing import Any
 
 from .adapter_events import CodetoreumEvent
 
@@ -19,7 +20,7 @@ class ProjectConfigUpdatedEvent(CodetoreumEvent):
         if not self.project_id:
             raise ValueError("project_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update(
             {
@@ -32,7 +33,7 @@ class ProjectConfigUpdatedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ProjectConfigUpdatedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ProjectConfigUpdatedEvent":
         return cls(
             type=data.get("type", "ProjectConfigUpdatedEvent"),
             timestamp=data.get("timestamp", ""),
@@ -60,7 +61,7 @@ class AgentConfigUpdatedEvent(CodetoreumEvent):
         if not self.agent_id:
             raise ValueError("agent_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update(
             {
@@ -73,7 +74,7 @@ class AgentConfigUpdatedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "AgentConfigUpdatedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "AgentConfigUpdatedEvent":
         return cls(
             type=data.get("type", "AgentConfigUpdatedEvent"),
             timestamp=data.get("timestamp", ""),
@@ -99,7 +100,7 @@ class PipelineConfigUpdatedEvent(CodetoreumEvent):
     def __post_init__(self) -> None:
         super().__post_init__()
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update(
             {
@@ -112,7 +113,7 @@ class PipelineConfigUpdatedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "PipelineConfigUpdatedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "PipelineConfigUpdatedEvent":
         return cls(
             type=data.get("type", "PipelineConfigUpdatedEvent"),
             timestamp=data.get("timestamp", ""),
@@ -138,7 +139,7 @@ class EnvironmentVariableChangedEvent(CodetoreumEvent):
     def __post_init__(self) -> None:
         super().__post_init__()
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update(
             {
@@ -151,7 +152,7 @@ class EnvironmentVariableChangedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "EnvironmentVariableChangedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "EnvironmentVariableChangedEvent":
         return cls(
             type=data.get("type", "EnvironmentVariableChangedEvent"),
             timestamp=data.get("timestamp", ""),
@@ -175,13 +176,13 @@ class CommandMountedEvent(CodetoreumEvent):
     def __post_init__(self) -> None:
         super().__post_init__()
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update({"project_id": self.project_id, "command_name": self.command_name})
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "CommandMountedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "CommandMountedEvent":
         return cls(
             type=data.get("type", "CommandMountedEvent"),
             timestamp=data.get("timestamp", ""),
@@ -203,13 +204,13 @@ class CommandUnmountedEvent(CodetoreumEvent):
     def __post_init__(self) -> None:
         super().__post_init__()
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update({"project_id": self.project_id, "command_name": self.command_name})
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "CommandUnmountedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "CommandUnmountedEvent":
         return cls(
             type=data.get("type", "CommandUnmountedEvent"),
             timestamp=data.get("timestamp", ""),
@@ -231,13 +232,13 @@ class SubAgentMountedEvent(CodetoreumEvent):
     def __post_init__(self) -> None:
         super().__post_init__()
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update({"project_id": self.project_id, "agent_id": self.agent_id})
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "SubAgentMountedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "SubAgentMountedEvent":
         return cls(
             type=data.get("type", "SubAgentMountedEvent"),
             timestamp=data.get("timestamp", ""),
@@ -259,13 +260,13 @@ class SubAgentUnmountedEvent(CodetoreumEvent):
     def __post_init__(self) -> None:
         super().__post_init__()
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update({"project_id": self.project_id, "agent_id": self.agent_id})
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "SubAgentUnmountedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "SubAgentUnmountedEvent":
         return cls(
             type=data.get("type", "SubAgentUnmountedEvent"),
             timestamp=data.get("timestamp", ""),

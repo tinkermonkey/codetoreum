@@ -1,6 +1,7 @@
 """Project context domain events using frozen dataclasses."""
 
 from dataclasses import dataclass
+from typing import Any
 
 from .adapter_events import CodetoreumEvent
 
@@ -17,13 +18,13 @@ class ProjectContextCreatedEvent(CodetoreumEvent):
         if not self.project_id:
             raise ValueError("project_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update({"project_id": self.project_id, "name": self.name})
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ProjectContextCreatedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ProjectContextCreatedEvent":
         return cls(
             type=data.get("type", "ProjectContextCreatedEvent"),
             timestamp=data.get("timestamp", ""),
@@ -48,13 +49,13 @@ class ProjectTestConfigUpdatedEvent(CodetoreumEvent):
         if not self.project_id:
             raise ValueError("project_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update({"project_id": self.project_id, "test_command": self.test_command, "test_timeout": self.test_timeout})
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ProjectTestConfigUpdatedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ProjectTestConfigUpdatedEvent":
         return cls(
             type=data.get("type", "ProjectTestConfigUpdatedEvent"),
             timestamp=data.get("timestamp", ""),
@@ -79,13 +80,13 @@ class ProjectDockerConfigUpdatedEvent(CodetoreumEvent):
         if not self.project_id:
             raise ValueError("project_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update({"project_id": self.project_id, "image": self.image})
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ProjectDockerConfigUpdatedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ProjectDockerConfigUpdatedEvent":
         return cls(
             type=data.get("type", "ProjectDockerConfigUpdatedEvent"),
             timestamp=data.get("timestamp", ""),
@@ -110,7 +111,7 @@ class ProjectWorkflowMappingAddedEvent(CodetoreumEvent):
         if not self.project_id:
             raise ValueError("project_id is required")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         d.update(
             {"project_id": self.project_id, "column_name": self.column_name, "workflow_stage": self.workflow_stage}
@@ -118,7 +119,7 @@ class ProjectWorkflowMappingAddedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ProjectWorkflowMappingAddedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ProjectWorkflowMappingAddedEvent":
         return cls(
             type=data.get("type", "ProjectWorkflowMappingAddedEvent"),
             timestamp=data.get("timestamp", ""),

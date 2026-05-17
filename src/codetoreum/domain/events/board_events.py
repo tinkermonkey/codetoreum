@@ -10,7 +10,7 @@ Terminology (vendor-agnostic):
 """
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
@@ -82,7 +82,7 @@ class WorkItemColumnChangedEvent(CodetoreumEvent):
             msg = "to_column is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -98,7 +98,7 @@ class WorkItemColumnChangedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "WorkItemColumnChangedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "WorkItemColumnChangedEvent":
         """Deserialize from dictionary.
 
         Raises:
@@ -192,7 +192,7 @@ class WorkItemPositionChangedEvent(CodetoreumEvent):
             msg = "old_position must differ from new_position (position did not actually change)"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -208,7 +208,7 @@ class WorkItemPositionChangedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "WorkItemPositionChangedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "WorkItemPositionChangedEvent":
         """Deserialize from dictionary.
 
         Raises:
@@ -287,7 +287,7 @@ class BoardReconciledEvent(CodetoreumEvent):
         if isinstance(self.columns_removed, list):
             object.__setattr__(self, "columns_removed", tuple(self.columns_removed))
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -302,7 +302,7 @@ class BoardReconciledEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "BoardReconciledEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "BoardReconciledEvent":
         """Deserialize from dictionary."""
         columns_added = data.get("columns_added", [])
         columns_removed = data.get("columns_removed", [])
@@ -396,7 +396,7 @@ class ColumnSLAExceededEvent(CodetoreumEvent):
             msg = "entered_at is required"
             raise ValueError(msg)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -413,7 +413,7 @@ class ColumnSLAExceededEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ColumnSLAExceededEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ColumnSLAExceededEvent":
         """Deserialize from dictionary.
 
         Raises:

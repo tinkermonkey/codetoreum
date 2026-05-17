@@ -54,32 +54,32 @@ class ExpectedSequenceRegistry:
     """
 
     # Base sequences for common workflow patterns
-    # Names match CodetoreumEvent subclass names (event_type property = __class__.__name__)
+    # Names use shorthand format without "Event" suffix for pattern matching
     WORKFLOW_LIFECYCLE = [
-        "WorkflowCreatedEvent",
-        "WorkflowStartedEvent",
-        "WorkflowStageAdvancedEvent*",  # Zero or more stage transitions
-        "WorkflowCompletedEvent|WorkflowFailedEvent",  # Terminal state (either)
+        "WorkflowCreated",
+        "WorkflowStarted",
+        "WorkflowStageAdvanced*",  # Zero or more stage transitions
+        "WorkflowCompleted|WorkflowFailed",  # Terminal state (either)
     ]
 
     STAGE_EXECUTION = [
-        "ExecutionInitializedEvent",
-        "ExecutionStartedEvent",
-        "ExecutionCompletedEvent|ExecutionFailedEvent|ExecutionTimedOutEvent",
+        "ExecutionInitialized",
+        "ExecutionStarted",
+        "ExecutionCompleted|ExecutionFailed|ExecutionTimeout",
     ]
 
     REVIEW_CYCLE = [
-        "ReviewCycleStartedEvent",
-        "ReviewCycleIterationCompletedEvent+",  # One or more iterations
-        "ReviewCycleMakerRevisionEvent*",
-        "ReviewCycleApproved|ReviewCycleRejectedEvent|ReviewCycleEscalatedToHumanEvent",
+        "ReviewCycleCreated",
+        "ReviewIterationStarted+",  # One or more iterations
+        "ReviewFeedbackSubmitted*",
+        "ReviewCycleApproved|ReviewCycleRejected|ReviewCycleEscalated",
     ]
 
     REPAIR_CYCLE = [
-        "RepairCycleStartedEvent",
-        "RepairCycleTestExecutionStartedEvent",
-        "RepairCycleTestExecutionCompletedEvent|RepairCycleTestCycleCompletedEvent",
-        "RepairCycleCompletedEvent",
+        "RepairCycleCreated",
+        "TestExecutionStarted",
+        "TestExecutionCompleted|TestExecutionFailed",
+        "RepairCycleCompleted|RepairCycleExhausted",
     ]
 
     @classmethod

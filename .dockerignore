@@ -65,6 +65,11 @@ node_modules/
 legacy_ux/node_modules/
 legacy_ux/dist/
 
+# Environment files (may contain secrets)
+.env
+.env.*
+!.env.example
+
 # Temporary files
 tmp/
 temp/

@@ -518,6 +518,10 @@ class ExecutionService:
         """
         Execute agent in Docker container.
 
+        Containers start detached with a bounded wait timeout. Log streaming runs
+        as a background task. DockerContainerRecoveryAdapter handles reconnection
+        if the orchestrator restarts mid-execution.
+
         Args:
             execution: AgentExecution to run
             context: Execution context
@@ -533,7 +537,7 @@ class ExecutionService:
             # Build container labels for recovery tracking
             labels = self._build_container_labels(execution, context)
 
-            # Create container
+            # Create container (detached, non-blocking)
             # Use helper methods to convert immutable types (tuple, Mapping) to mutable types
             # (list, dict) for adapter compatibility, while maintaining domain layer immutability
             container_id = await self.container.create(
@@ -550,14 +554,20 @@ class ExecutionService:
 
             logger.info(f"Created container {container_id} for execution {execution.id}")
 
-            # Start container
+            # Start container (detached, non-blocking)
             await self.container.start(container_id)
 
-            # Stream logs if callback provided
-            if stream_callback:
-                asyncio.create_task(self._stream_container_logs(container_id, execution.id, stream_callback))
+            logger.info(f"Started container {container_id} for execution {execution.id}")
 
-            # Wait for container to complete
+            # Stream logs in background if callback provided
+            # This does not block execution
+            if stream_callback:
+                task = asyncio.create_task(self._stream_container_logs(container_id, execution.id, stream_callback))
+                task.add_done_callback(self._stream_logs_done_callback)
+
+            # Wait for container to complete with bounded timeout
+            # Orchestrator restart drops this task, and DockerContainerRecoveryAdapter
+            # picks up the container on next start
             exit_code = await self.container.wait(container_id, timeout=context.timeout_seconds)
 
             # Get output
@@ -990,6 +1000,26 @@ class ExecutionService:
                 extra={"error_id": "ERR_EXECUTION_STREAM_CONTAINER_LOGS_ERROR"},
             )
 
+    def _stream_logs_done_callback(self, task: asyncio.Task[None]) -> None:
+        """Handle completion of background log streaming task.
+
+        Surfaces any unhandled exceptions from _stream_container_logs so they
+        are not silently swallowed by asyncio's default task exception handler.
+
+        Args:
+            task: The completed asyncio.Task
+        """
+        try:
+            task.result()
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error(
+                f"Unhandled exception in container log streaming: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_EXECUTION_LOG_STREAMING_EXCEPTION"},
+            )
+
     def _extract_token_usage(self, logs: str) -> tuple[int, int]:
         """
         Extract token usage from logs.
@@ -1056,6 +1086,7 @@ class ExecutionService:
                 else:
                     logger.error(
                         f"Failed to cleanup container {container_id} after {max_attempts} attempts",
+                        exc_info=True,
                         extra={"error_id": "ERR_EXECUTION_CLEANUP_FINAL_FAILURE"},
                     )
                     return False

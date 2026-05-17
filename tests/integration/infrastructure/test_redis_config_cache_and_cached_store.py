@@ -53,7 +53,7 @@ def redis_container():
 def elasticsearch_container():
     """Create Elasticsearch testcontainer with resource limits."""
     # Use modern wait strategy (no deprecation warnings)
-    container = ModernElasticsearchContainer("elasticsearch:8.11.0")
+    container = ModernElasticsearchContainer("elasticsearch:8.17.0")
     # Add resource limits to prevent memory exhaustion
     container.with_env("ES_JAVA_OPTS", "-Xms512m -Xmx512m")  # Limit ES heap to 512MB
     container.start()
@@ -536,3 +536,18 @@ async def test_concurrent_cached_store_operations(cached_config_store, sample_pr
     # All reads should succeed
     assert len(results) == 10
     assert all(r.id == sample_project_config.id for r in results)
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_listener_health_status_in_stats(redis_cache):
+    """Test that listener health status is included in cache statistics."""
+    stats = await redis_cache.get_stats()
+
+    # Verify health status fields are present
+    assert "listener_healthy" in stats
+    assert "listener_error_count" in stats
+
+    # Initially, listener should be healthy
+    assert stats["listener_healthy"] is True
+    assert stats["listener_error_count"] == 0

@@ -18,14 +18,20 @@ from typing import Any, TypeVar
 from codetoreum.adapters.secondary import (
     CachedConfigStore,
     ClaudeCodeAdapter,
+    ClaudeCodeConfig,
     DockerContainerAdapter,
     ElasticsearchConfigStorage,
+    GitConfig,
     GitHubBoardAdapter,
     GitHubCIPipelineAdapter,
     GitHubCodeReviewAdapter,
+    GitHubConfig,
     GitHubTicketAdapter,
     GitRepositoryAdapter,
     MockEventEmitter,
+)
+from codetoreum.adapters.secondary.github_version_control_adapter import (
+    GitHubVersionControlAdapter,
 )
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
     InMemoryLockService,
@@ -217,6 +223,7 @@ from codetoreum.infrastructure.adapters.registry_base import (
     AdapterCredentialRequirement,
     AdapterRegistry,
 )
+from codetoreum.infrastructure.adapters.resolver import AdapterConfigurationError
 from codetoreum.infrastructure.resilience import (
     CLAUDE_RESILIENCE_CONFIG,
     CONTAINER_RESILIENCE_CONFIG,
@@ -376,8 +383,8 @@ class AdapterFactory:
             version="1.0.0",
             tags=["production", "claude", "anthropic"],
             config_schema=AdapterCredentialRequirement(
-                env_vars=("CLAUDE_CODE_TOKEN",),
-                description="Claude Code authentication token",
+                env_vars=("CLAUDE_CODE_OAUTH_TOKEN",),
+                description="Claude Code OAuth token for authentication",
             ),
             set_as_default=True,
         )
@@ -449,13 +456,26 @@ class AdapterFactory:
             adapter_type=InMemoryEventStore,
             description="In-memory event store",
             version="1.0.0",
-            tags=["testing", "simulation", "production"],
+            tags=["testing", "simulation"],
             config_schema=AdapterCredentialRequirement(
                 simulation_only=True,
                 description="Simulation-only adapter, no credentials required",
             ),
             set_as_default=True,
         )
+
+        if ElasticsearchEventStore:
+            self._event_store_registry.register(
+                name="elasticsearch",
+                adapter_type=ElasticsearchEventStore,
+                description="Elasticsearch event store for production",
+                version="1.0.0",
+                tags=["production"],
+                config_schema=AdapterCredentialRequirement(
+                    env_vars=("ELASTICSEARCH_URL",),
+                    description="Elasticsearch connection URL (default: http://localhost:9200)",
+                ),
+            )
 
         # Storage Adapters
         self._storage_registry.register(
@@ -559,6 +579,17 @@ class AdapterFactory:
                 description="Simulation-only adapter, no credentials required",
             ),
             set_as_default=True,
+        )
+        self._version_control_registry.register(
+            name="github",
+            adapter_type=GitHubVersionControlAdapter,
+            description="GitHub version control using Git CLI",
+            version="1.0.0",
+            tags=["production", "git", "github"],
+            config_schema=AdapterCredentialRequirement(
+                env_vars=("GIT_USER", "GIT_EMAIL"),
+                description="Git user credentials for commits",
+            ),
         )
 
         # Metrics Adapters
@@ -1303,6 +1334,9 @@ class AdapterFactory:
         # Create base adapter instance
         if adapter_config is not None:
             kwargs["config"] = adapter_config
+        elif adapter_name == "github":
+            # Construct GitHub config from environment variables
+            kwargs["config"] = self._build_github_config()
 
         adapter = self._ticket_system_registry.create_instance(adapter_name, **kwargs)
 
@@ -1349,6 +1383,9 @@ class AdapterFactory:
         # Create base adapter instance
         if adapter_config is not None:
             kwargs["config"] = adapter_config
+        elif adapter_name == "claude_code":
+            # Construct Claude Code config from environment variables
+            kwargs["config"] = self._build_claude_code_config()
 
         # Map 'model' parameter to 'model_name' for backward compatibility with adapters
         if "model" in kwargs:
@@ -1445,6 +1482,9 @@ class AdapterFactory:
         # Create base adapter instance
         if adapter_config is not None:
             kwargs["config"] = adapter_config
+        elif adapter_name == "git":
+            # Construct Git config from environment variables
+            kwargs["config"] = self._build_git_config()
 
         adapter = self._repository_registry.create_instance(adapter_name, **kwargs)
 
@@ -1505,7 +1545,25 @@ class AdapterFactory:
             KeyError: If adapter is not registered
             ValueError: If no default adapter is configured
         """
-        return self._create_adapter(self._event_store_registry, adapter_name, "event store", **kwargs)
+        # Determine adapter name
+        resolved_name = adapter_name or self._event_store_registry.get_default_name()
+        if not resolved_name:
+            message = "No default event store adapter configured"
+            raise ValueError(message)
+
+        logger.info(f"Creating event store adapter: {resolved_name}")
+
+        # For Elasticsearch, create the client if not provided
+        if resolved_name == "elasticsearch" and "es_client" not in kwargs:
+            import os
+
+            from elasticsearch import AsyncElasticsearch
+
+            es_url = os.getenv("ELASTICSEARCH_URL", "http://localhost:9200")
+            logger.debug(f"Creating Elasticsearch client for {es_url}")
+            kwargs["es_client"] = AsyncElasticsearch([es_url])
+
+        return self._event_store_registry.create_instance(resolved_name, **kwargs)
 
     def create_storage(self, adapter_name: str | None = None, **kwargs) -> IStorage:
         """Create a storage adapter instance."""
@@ -1636,6 +1694,51 @@ class AdapterFactory:
     def create_ci_pipeline_service(self, adapter_name: str | None = None, **kwargs) -> ICIPipelineService:
         """Create a CI pipeline service adapter instance."""
         return self._create_adapter(self._ci_pipeline_registry, adapter_name, "CI pipeline service", **kwargs)
+
+    # =========================================================================
+    # Config builders for adapters requiring config objects
+    # =========================================================================
+
+    def _build_github_config(self) -> GitHubConfig:
+        """Build GitHubConfig from environment variables."""
+        import os
+
+        token = os.environ.get("GITHUB_TOKEN")
+        org = os.environ.get("GITHUB_ORG")
+        repo = os.environ.get("GITHUB_REPO", "")
+
+        errors = []
+        if not token:
+            errors.append("github: missing env var 'GITHUB_TOKEN'")
+        if not org:
+            errors.append("github: missing env var 'GITHUB_ORG'")
+
+        if errors:
+            raise AdapterConfigurationError(errors)
+
+        return GitHubConfig(
+            token=token,
+            organization=org,
+            repository=repo,
+        )
+
+    def _build_claude_code_config(self) -> ClaudeCodeConfig:
+        """Build ClaudeCodeConfig from environment variables."""
+        return ClaudeCodeConfig(
+            # Uses default credential_provider which reads from environment
+        )
+
+    def _build_git_config(self) -> GitConfig:
+        """Build GitConfig from environment variables."""
+        import os
+
+        user = os.environ.get("GIT_USER", "codetoreum")
+        email = os.environ.get("GIT_EMAIL", "codetoreum@example.com")
+
+        return GitConfig(
+            user_name=user,
+            user_email=email,
+        )
 
     def _apply_resilience_wrapper(
         self,

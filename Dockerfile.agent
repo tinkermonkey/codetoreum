@@ -3,6 +3,11 @@
 # ============================================================================
 FROM switchyard-orchestrator:latest
 
+# Build argument for host docker group GID (required for non-root Docker socket access)
+# Linux: run `getent group docker | cut -d: -f3` to get the GID
+# macOS: use 0 (Docker group is root)
+ARG DOCKER_GID=984
+
 # The base image already includes:
 # - Claude CLI (REQUIRED - must be present)
 # - Git CLI (REQUIRED - must be present)
@@ -19,13 +24,18 @@ USER root
 # This is a Python-based project, so we don't need additional runtimes
 # The base image already provides Python 3.11
 
-# Install any additional system packages that may be needed for Python dependencies
+# Install system packages needed for Python dependencies and integration tests.
+# - build-essential, libpq-dev: compilation of native Python extensions
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+
+# Add orchestrator user to docker group so testcontainers can access /var/run/docker.sock.
+# The docker-py SDK connects to the socket directly; no Docker CLI binary is needed.
+RUN groupadd -f docker && usermod -aG docker orchestrator
 
 # ============================================================================
 # Stage 3: Pre-install Dependencies (OPTIONAL but RECOMMENDED)
@@ -112,12 +122,27 @@ ENV DBUS_SESSION_BUS_ADDRESS=disabled:
 # ============================================================================
 
 # ============================================================================
+# Stage 4b: Create Non-Root User with Docker Group Access
+# ============================================================================
+# Create docker group matching host GID and non-root user (if not already exists)
+RUN if [ "${DOCKER_GID}" = "0" ]; then \
+        id -u orchestrator >/dev/null 2>&1 || useradd -m -u 1000 -G root orchestrator; \
+    else \
+        groupadd -g ${DOCKER_GID} docker 2>/dev/null || true; \
+        if id -u orchestrator >/dev/null 2>&1; then \
+            usermod -aG docker orchestrator; \
+        else \
+            useradd -m -u 1000 -G docker orchestrator; \
+        fi \
+    fi
+
+# ============================================================================
 # Stage 6: Install Entrypoint Script
 # ============================================================================
-# The entrypoint validates the git environment at startup and repairs common
-# DinD mount corruption (e.g. .gitconfig appearing as a directory).
-COPY scripts/agent-entrypoint.sh /usr/local/bin/agent-entrypoint.sh
-RUN chmod +x /usr/local/bin/agent-entrypoint.sh
+# The entrypoint validates git CLI, handles DinD mount issues, and authenticates GitHub CLI
+# at runtime. Handles both readable and writable .ssh/ mounts gracefully.
+COPY scripts/agent-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 
 # ============================================================================
 # Stage 7: Switch to Runtime User
@@ -156,5 +181,5 @@ RUN ruff --version && \
 # ============================================================================
 # Default command
 # ============================================================================
-ENTRYPOINT ["agent-entrypoint.sh"]
+ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["/bin/bash"]

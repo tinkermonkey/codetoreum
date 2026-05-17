@@ -9,6 +9,7 @@ audit trail integrity and enable observability integration.
 """
 
 from dataclasses import dataclass
+from typing import Any
 from uuid import uuid4
 
 from .adapter_events import CodetoreumEvent
@@ -73,7 +74,7 @@ class ContainerExecutionCompletedEvent(CodetoreumEvent):
         if isinstance(self.output_files, list):
             object.__setattr__(self, "output_files", tuple(self.output_files))
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d = super().to_dict()
         d.update(
@@ -88,7 +89,7 @@ class ContainerExecutionCompletedEvent(CodetoreumEvent):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ContainerExecutionCompletedEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "ContainerExecutionCompletedEvent":
         """Deserialize from dictionary."""
         output_files = data.get("output_files", [])
         return cls(

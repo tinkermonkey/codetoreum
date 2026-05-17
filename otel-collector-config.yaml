@@ -1,0 +1,66 @@
+# OpenTelemetry Collector Configuration
+# Receives telemetry from:
+# - Orchestrator process (via auto-instrumentation)
+# - Agent containers (via OTEL_* environment variables)
+
+receivers:
+  otlp:
+    # OTLP gRPC receiver (default port 4317)
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Batch processor for efficiency
+  batch:
+    send_batch_size: 10
+    timeout: 10s
+    send_batch_max_size: 100
+
+  # Memory limiter to prevent OOM
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+  # Attributes processor to add resource context
+  attributes:
+    actions:
+      - key: deployment.environment
+        value: development
+        action: insert
+
+exporters:
+  # Prometheus exporter for metrics
+  prometheus:
+    endpoint: 0.0.0.0:8888
+
+  # Logging exporter (console) for debugging
+  logging:
+    loglevel: debug
+
+  # Optional: Export to SigNoz or other backend
+  # otlphttp:
+  #   endpoint: http://signoz:3301/api/v1/traces
+
+service:
+  pipelines:
+    # Traces pipeline
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, attributes]
+      exporters: [logging]
+
+    # Metrics pipeline
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus, logging]
+
+    # Logs pipeline
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [logging]

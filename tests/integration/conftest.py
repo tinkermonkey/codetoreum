@@ -1,9 +1,65 @@
 """Common test fixtures and utilities for integration tests."""
 
+import os
+
 import pytest
+from elasticsearch import AsyncElasticsearch
+
+from tests.conftest import ModernElasticsearchContainer, docker_available
 
 # Set default timeout for all integration tests to prevent hanging
 pytestmark = pytest.mark.timeout(30)
+
+
+@pytest.fixture(scope="module")
+def elasticsearch_container():
+    """Start an Elasticsearch 8.17.0 container for integration tests.
+
+    Uses ModernElasticsearchContainer (testcontainers) so tests don't need
+    a pre-running Elasticsearch instance. The container is shared across all
+    tests in the module for efficiency.
+
+    Sets ELASTICSEARCH_URL so CLIBootstrap and other components that read
+    from the environment pick up the container's dynamic port.
+    """
+    container = ModernElasticsearchContainer("elasticsearch:8.17.0")
+    container.with_env("ES_JAVA_OPTS", "-Xms512m -Xmx512m")
+    container.start()
+
+    url = container.get_url()
+    old_url = os.environ.get("ELASTICSEARCH_URL")
+    os.environ["ELASTICSEARCH_URL"] = url
+
+    yield container
+
+    if old_url is None:
+        os.environ.pop("ELASTICSEARCH_URL", None)
+    else:
+        os.environ["ELASTICSEARCH_URL"] = old_url
+
+    container.stop()
+
+
+@pytest.fixture
+async def elasticsearch_client(elasticsearch_container) -> AsyncElasticsearch:
+    """Provide an AsyncElasticsearch client connected to the testcontainer.
+
+    Depends on elasticsearch_container so the container is guaranteed to be
+    running. Tests that use this fixture are automatically skipped when Docker
+    is unavailable (via the docker_available marker on the container fixture).
+    """
+    url = elasticsearch_container.get_url()
+    client = AsyncElasticsearch(
+        [url],
+        verify_certs=False,
+        request_timeout=30,
+    )
+    try:
+        info = await client.info()
+        assert info is not None, "Failed to connect to Elasticsearch"
+        yield client
+    finally:
+        await client.close()
 
 
 @pytest.fixture

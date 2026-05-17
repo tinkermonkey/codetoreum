@@ -160,11 +160,15 @@ class EventSerializer:
                 "event_id": d.get("event_id", ""),
                 "event_type": event.event_type,
                 "event_class": event.__class__.__name__,
+                "type": d.get("type", "unknown.event"),
                 "timestamp": d.get("timestamp", ""),
                 "source": d.get("source", ""),
                 "correlation_id": d.get("correlation_id"),
+                "causation_id": d.get("causation_id"),
                 "data": {
-                    k: v for k, v in d.items() if k not in {"event_id", "type", "timestamp", "source", "correlation_id"}
+                    k: v
+                    for k, v in d.items()
+                    if k not in {"event_id", "type", "timestamp", "source", "correlation_id", "causation_id"}
                 },
             }
 
@@ -197,6 +201,10 @@ class EventSerializer:
                 **payload,
                 "event_id": data.get("event_id", ""),
                 "correlation_id": data.get("correlation_id"),
+                "causation_id": data.get("causation_id"),
+                "type": data.get("type", "unknown.event"),
+                "source": data.get("source", "unknown"),
+                "timestamp": data.get("timestamp", ""),
             }
             return event_class.from_dict(reconstructed)
 

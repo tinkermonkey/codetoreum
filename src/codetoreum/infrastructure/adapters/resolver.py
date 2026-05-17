@@ -319,11 +319,28 @@ class AdapterResolver:
 
     def resolve_version_control(self) -> IVersionControlService:
         """Resolve version control service adapter."""
+        kwargs = {}
+        if self._config.version_control == "in_memory":
+            kwargs["time_source"] = lambda: self._deps.engine.get_clock_for_testing().now()
         return self._factory.create_version_control_service(
             adapter_name=self._config.version_control,
-            event_emitter=self._resolved["event_emitter"],
-            time_source=lambda: self._deps.engine.get_clock_for_testing().now(),
+            **kwargs,
         )
+
+    # FIXME: Latent time_source pattern throughout resolver
+    # The above conditional guard pattern for time_source is also needed in:
+    # - resolve_project_manager (line ~334)
+    # - resolve_code_review (line ~410)
+    # - resolve_container_recovery (line ~417)
+    # - resolve_work_item_service (line ~309)
+    # - resolve_checkpoint_store (line ~290)
+    # - resolve_repository (line ~515)
+    # - resolve_discussion_adapter (line ~270)
+    # - resolve_queue_service (line ~283)
+    # All currently unconditionally pass time_source, which will TypeError when
+    # production adapters are registered for any slot if their constructors don't
+    # accept time_source. See issue #851 fix for the pattern. File a follow-up
+    # issue to apply this pattern systematically across all resolver methods.
 
     def resolve_project_manager(self) -> IProjectManagerService:
         """Resolve project manager service adapter."""
