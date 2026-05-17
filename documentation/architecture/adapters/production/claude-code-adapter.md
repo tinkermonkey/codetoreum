@@ -59,7 +59,7 @@ class ClaudeCodeConfig:
 
     # CLI configuration
     claude_cli_path: str = "claude"              # Path to Claude CLI executable
-    default_model: str = "claude-sonnet-4-5-20250929"
+    default_model: str = "claude-sonnet-4-6"
     permission_mode: str = "bypassPermissions"   # or "askForPermissions"
 
     # Output configuration
@@ -167,7 +167,7 @@ class ClaudeCodeConfig:
 
     # CLI configuration
     claude_cli_path: str = "claude"              # Path to CLI executable (required)
-    default_model: str = "claude-sonnet-4-5-20250929"
+    default_model: str = "claude-sonnet-4-6"
     permission_mode: str = "bypassPermissions"
 
     # Features
@@ -198,7 +198,7 @@ The adapter requires either API key or OAuth token. In production, use secure st
 ### Model Selection
 
 Available Claude models via CLI:
-- **claude-sonnet-4-5-20250929**: Latest Sonnet model (default)
+- **claude-sonnet-4-6**: Latest Sonnet model (default)
 - **claude-sonnet-3-5-20241022**: Previous Sonnet version
 - **claude-opus-4-20250514**: Most capable, slower, more expensive
 - Other models as available in Claude Code CLI
@@ -342,7 +342,7 @@ def llm_adapter(mocker):
 
     config = ClaudeCodeConfig(
         claude_cli_path="claude",
-        default_model="claude-sonnet-4-5-20250929",
+        default_model="claude-sonnet-4-6",
         credential_provider=EnvironmentCredentialProvider()
     )
     return ClaudeCodeAdapter(config)

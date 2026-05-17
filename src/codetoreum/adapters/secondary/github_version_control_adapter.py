@@ -1,7 +1,6 @@
 """GitHub version control adapter implementing IVersionControlService."""
 
 import logging
-import subprocess
 from pathlib import Path
 
 from codetoreum.adapters.secondary.git_repository_adapter import GitConfig, GitRepositoryAdapter
@@ -12,7 +11,19 @@ logger = logging.getLogger(__name__)
 
 
 class GitHubVersionControlAdapter(IVersionControlService):
-    """GitHub version control adapter implementing IVersionControlService."""
+    """GitHub version control adapter implementing IVersionControlService.
+
+    Wraps GitRepositoryAdapter (IRepository) to expose the higher-level
+    IVersionControlService contract consumed by application services such as
+    WorkflowOrchestrator and WorkspaceRouter.
+
+    All git subprocess execution is delegated to GitRepositoryAdapter, which
+    owns argument sanitization, timeout management, and error classification.
+    This adapter is responsible only for:
+    - Translating string-typed port parameters to Path objects expected by IRepository
+    - Projecting the richer RepositoryStatus onto the simplified VCSStatus contract
+    - Constructing the Repository metadata value object for get_repository()
+    """
 
     def __init__(
         self,
@@ -62,7 +73,7 @@ class GitHubVersionControlAdapter(IVersionControlService):
                 path, message, author_name or "", author_email or "", files
             )
             logger.info(f"Created commit {commit_hash} in {repo_path}")
-            return commit_hash
+            return str(commit_hash)
         except Exception as e:
             logger.error(f"Failed to commit: {e}", exc_info=True)
             raise
@@ -88,11 +99,11 @@ class GitHubVersionControlAdapter(IVersionControlService):
     async def status(self, repo_path: str) -> VCSStatus:
         try:
             path = Path(repo_path)
-            status = await self._repository_adapter.get_status(path)
+            repo_status = await self._repository_adapter.status(path)
             return VCSStatus(
-                is_dirty=status.is_dirty,
-                staged_files=status.staged_files,
-                unstaged_files=status.unstaged_files,
+                is_dirty=repo_status.is_dirty,
+                staged_files=repo_status.staged_files,
+                unstaged_files=repo_status.unstaged_files,
             )
         except Exception as e:
             logger.error(f"Failed to get repository status: {e}", exc_info=True)
@@ -109,29 +120,60 @@ class GitHubVersionControlAdapter(IVersionControlService):
 
     async def get_repository(self, identifier: str) -> Repository:
         try:
-            # For MVP, we support repository paths as identifiers
             path = Path(identifier)
             repo_name = path.name
 
-            # Get the remote URL from the repository
-            try:
-                url = subprocess.run(
-                    ["git", "remote", "get-url", "origin"],  # noqa: S607
-                    cwd=path,
-                    capture_output=True,
-                    text=True,
-                    check=True,
-                ).stdout.strip()
-            except (subprocess.CalledProcessError, FileNotFoundError):
-                # Fallback: use file path as URL
+            # Validate the repository path by delegating existence check to the adapter.
+            # status() raises ValidationError if the path does not exist.
+            await self._repository_adapter.status(path)
+
+            # Read the remote URL from .git/config as a plain file read.
+            # All subprocess execution stays inside GitRepositoryAdapter; reading a
+            # static config file is not a subprocess concern.
+            git_config_path = path / ".git" / "config"
+            if git_config_path.exists():
+                url: str = _parse_remote_url(git_config_path.read_text()) or f"file://{path.absolute()}"
+            else:
                 url = f"file://{path.absolute()}"
+
+            default_branch = self._git_config.default_branch
 
             return Repository(
                 id=identifier,
                 name=repo_name,
                 url=url,
-                default_branch="main",
+                default_branch=default_branch,
             )
+        except ResourceNotFoundError:
+            raise
         except Exception as e:
             logger.error(f"Failed to get repository {identifier}: {e}", exc_info=True)
             raise ResourceNotFoundError(f"Repository not found: {identifier}") from e
+
+
+def _parse_remote_url(git_config_text: str) -> str | None:
+    """Extract the origin remote URL from a .git/config file text content.
+
+    Parses the INI-style git config format to find the [remote "origin"] section
+    and return its url value. Returns None if no origin remote is configured.
+
+    Args:
+        git_config_text: Raw text content of a .git/config file.
+
+    Returns:
+        The URL string for the origin remote, or None if not found.
+    """
+    in_origin_section = False
+    for line in git_config_text.splitlines():
+        stripped = line.strip()
+        if stripped == '[remote "origin"]':
+            in_origin_section = True
+            continue
+        if in_origin_section:
+            if stripped.startswith("["):
+                break
+            if stripped.startswith("url"):
+                parts = stripped.split("=", 1)
+                if len(parts) == 2:
+                    return parts[1].strip()
+    return None
