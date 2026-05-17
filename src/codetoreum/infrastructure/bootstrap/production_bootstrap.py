@@ -1019,6 +1019,8 @@ class ProductionApplicationBootstrap:
             workflow_config=self.adapters.workflow_config,
             agent_executor=self.adapters.agent_executor,
             event_bus=self.infrastructure.event_bus,
+            event_store=self.adapters.event_store,
+            run_registry=self.adapters.run_registry,
             event_emitter=self.adapters.event_emitter,
             recovery_service=self.services.agent_execution_recovery_service,
         )
