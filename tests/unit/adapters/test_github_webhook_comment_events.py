@@ -235,6 +235,7 @@ class TestPullRequestEventHandling:
                     "title": "Add feature X",
                     "user": {"login": "developer-1"},
                 },
+                "sender": {"login": "developer-1"},
                 "repository": {
                     "full_name": "test-org/test-repo",
                 },
@@ -254,7 +255,8 @@ class TestPullRequestEventHandling:
         assert published_event.review_id == "42"
         assert published_event.project_id == "proj-1"
         assert published_event.new_status == "open"
-        assert published_event.reviewer == "developer-1"
+        assert published_event.previous_status == "open"
+        assert published_event.reviewer is None
 
     @pytest.mark.asyncio
     async def test_pull_request_closed_emits_event(self, adapter):
@@ -272,6 +274,7 @@ class TestPullRequestEventHandling:
                     "title": "Add feature X",
                     "user": {"login": "developer-1"},
                 },
+                "sender": {"login": "reviewer-user"},
                 "repository": {
                     "full_name": "test-org/test-repo",
                 },
@@ -286,6 +289,8 @@ class TestPullRequestEventHandling:
         assert len(result) == 1
         published_event = adapter.event_bus.published_events[0]
         assert published_event.new_status == "closed"
+        assert published_event.previous_status == "open"
+        assert published_event.reviewer == "reviewer-user"
 
     @pytest.mark.asyncio
     async def test_pull_request_merged_emits_event(self, adapter):
@@ -303,6 +308,7 @@ class TestPullRequestEventHandling:
                     "title": "Add feature X",
                     "user": {"login": "developer-1"},
                 },
+                "sender": {"login": "merger-user"},
                 "repository": {
                     "full_name": "test-org/test-repo",
                 },
@@ -317,6 +323,42 @@ class TestPullRequestEventHandling:
         assert len(result) == 1
         published_event = adapter.event_bus.published_events[0]
         assert published_event.new_status == "merged"
+        assert published_event.previous_status == "open"
+        assert published_event.reviewer == "merger-user"
+
+    @pytest.mark.asyncio
+    async def test_pull_request_reopened_emits_event(self, adapter):
+        """Test that reopened PR emits ReviewStatusChangedEvent with correct previous_status."""
+        event = WebhookEvent(
+            delivery_id="delivery-1",
+            event_type="pull_request",
+            payload={
+                "action": "reopened",
+                "number": 42,
+                "pull_request": {
+                    "number": 42,
+                    "state": "open",
+                    "merged": False,
+                    "title": "Add feature X",
+                    "user": {"login": "developer-1"},
+                },
+                "sender": {"login": "reopener-user"},
+                "repository": {
+                    "full_name": "test-org/test-repo",
+                },
+            },
+            signature="sha256=test",
+            timestamp=datetime.now(UTC),
+            repository="test-org/test-repo",
+        )
+
+        result = await adapter._handle_pull_request_event(event, "proj-1")
+
+        assert len(result) == 1
+        published_event = adapter.event_bus.published_events[0]
+        assert published_event.new_status == "open"
+        assert published_event.previous_status == "closed"
+        assert published_event.reviewer == "reopener-user"
 
     @pytest.mark.asyncio
     async def test_pull_request_synchronize_action_ignored(self, adapter):
@@ -371,7 +413,7 @@ class TestDiscussionEventHandling:
         """Test that created discussion comment emits CommentNeedsResponseEvent."""
         event = WebhookEvent(
             delivery_id="delivery-1",
-            event_type="discussion",
+            event_type="discussion_comment",
             payload={
                 "action": "created",
                 "discussion": {
@@ -412,7 +454,7 @@ class TestDiscussionEventHandling:
         """Test that discussion creation (without comment) is ignored."""
         event = WebhookEvent(
             delivery_id="delivery-1",
-            event_type="discussion",
+            event_type="discussion_comment",
             payload={
                 "action": "created",
                 "discussion": {
@@ -439,7 +481,7 @@ class TestDiscussionEventHandling:
         """Test that labeled action is ignored."""
         event = WebhookEvent(
             delivery_id="delivery-1",
-            event_type="discussion",
+            event_type="discussion_comment",
             payload={
                 "action": "labeled",
                 "discussion": {

@@ -165,12 +165,15 @@ class GitHubWebhookAdapter:
         self._idempotency_cache_size = idempotency_cache_size
 
         # Event handlers by GitHub event type
+        # Note: issue_comment, pull_request, and discussion_comment handlers were implemented in issue #888.
+        # The issues handler (_handle_issues_event) was pre-existing and handles opened issues.
+        # The discussion_comment event type (not "discussion") carries comment payloads for discussion comments.
         self.handlers: dict[str, Callable] = {
             "project_card": self._handle_project_card_event,
             "issues": self._handle_issues_event,
             "issue_comment": self._handle_issue_comment_event,
             "pull_request": self._handle_pull_request_event,
-            "discussion": self._handle_discussion_event,
+            "discussion_comment": self._handle_discussion_event,
         }
 
         # Track processed delivery IDs for idempotency (bounded cache with FIFO eviction)
@@ -727,17 +730,24 @@ class GitHubWebhookAdapter:
         # Note: GitHub doesn't always provide previous_status, so we infer from current state
         pr_merged = pr.get("merged", False)
 
-        # Infer previous status (we use "open" as default for simplicity)
-        previous_status = "open"
+        # Infer previous status based on action
+        # When PR is reopened, previous status is closed (you can only reopen a closed PR)
+        # For other status changes, default to open
+        if action == "reopened":
+            previous_status = "closed"
+        else:
+            previous_status = "open"
+
+        # Handle merged status override (only when closed AND merged)
         if action == "closed" and pr_merged:
             new_status = "merged"
-        elif action == "closed":
-            new_status = "closed"
 
-        # Extract PR author and reviewer info if available
-        reviewer = None
-        if "user" in pr and "login" in pr["user"]:
-            reviewer = pr["user"]["login"]
+        # Extract reviewer info - use the person who performed the action (sender)
+        # For opened events, there is no reviewer yet; for other actions, use the actor
+        if action == "opened":
+            reviewer = None
+        else:
+            reviewer = payload.get("sender", {}).get("login")
 
         # Create ReviewStatusChangedEvent
         try:
@@ -776,15 +786,18 @@ class GitHubWebhookAdapter:
             return []
 
     @instrument_async_function(
-        name="github.webhook.handle_discussion",
-        attributes={"service": "github_webhook", "event_type": "discussion"},
+        name="github.webhook.handle_discussion_comment",
+        attributes={"service": "github_webhook", "event_type": "discussion_comment"},
     )
     async def _handle_discussion_event(self, event: WebhookEvent, project: str) -> list[str]:
         """
-        Handle discussion event (discussion comments requiring agent response).
+        Handle discussion_comment event (comments on discussions requiring agent response).
 
         When a comment is created on a discussion, emits CommentNeedsResponseEvent
         to trigger the conversational loop orchestrator to generate a response.
+
+        GitHub delivers discussion comments via the 'discussion_comment' event type,
+        which has the comment data at the top level of the payload.
 
         Args:
             event: Webhook event
