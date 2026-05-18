@@ -57,6 +57,7 @@ class ProductionPathFixture:
             run_id="run-prod-1",
             stage_name="implementation",
             project_id="proj-1",
+            board_id="board-1",
         )
         self.run_registry.get_active_run.return_value = self.run_info
 

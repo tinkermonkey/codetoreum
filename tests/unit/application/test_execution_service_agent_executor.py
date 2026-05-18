@@ -152,6 +152,7 @@ class TestExecutionServiceAgentExecutorExecution:
             work_item_id="item-1",
             project_id="project-1",
             stage_name="Ready",
+            board_id="board-1",
         )
         executor._run_registry.get_active_run.return_value = run_info
 
@@ -195,6 +196,7 @@ class TestExecutionServiceAgentExecutorExecution:
             work_item_id="item-1",
             project_id="project-1",
             stage_name="Ready",
+            board_id="board-1",
         )
 
         await executor.execute("item-1", "coder", board_id="custom-board")
@@ -345,6 +347,7 @@ class TestExecutionServiceAgentExecutorChainSteps:
             work_item_id="item-1",
             project_id="project-1",
             stage_name="Ready",
+            board_id="board-1",
         )
         executor._run_registry.get_active_run.return_value = run_info
 
@@ -381,6 +384,7 @@ class TestExecutionServiceAgentExecutorChainSteps:
             work_item_id="item-1",
             project_id="project-1",
             stage_name="Ready",
+            board_id="board-1",
         )
         executor._run_registry.get_active_run.return_value = run_info
 
@@ -421,6 +425,7 @@ class TestExecutionServiceAgentExecutorChainSteps:
             work_item_id="item-1",
             project_id="project-1",
             stage_name="Ready",
+            board_id="board-1",
         )
         executor._run_registry.get_active_run.return_value = run_info
 
@@ -533,6 +538,7 @@ class TestExecutionServiceAgentExecutorMultipleExecutions:
             work_item_id="item-1",
             project_id="project-1",
             stage_name="Ready",
+            board_id="board-1",
         )
 
         # Execute multiple times
@@ -574,6 +580,7 @@ class TestExecutionServiceAgentExecutorMultipleExecutions:
             work_item_id="item-1",
             project_id="project-1",
             stage_name="Ready",
+            board_id="board-1",
         )
 
         await executor.execute("item-1", "architect")

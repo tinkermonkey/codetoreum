@@ -72,6 +72,7 @@ class ExecutorFixture:
             run_id="run-1",
             stage_name="coding",
             project_id="proj-1",
+            board_id=self.BOARD_ID,
         )
         self.run_registry.get_active_run.return_value = self.run_info
 

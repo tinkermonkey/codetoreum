@@ -268,6 +268,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             board_id: Board identifier (used as fallback if run_info is not available)
         """
         success = False
+        resolved_board_id = board_id  # fallback; overridden by run_info below
         try:
             if self._execution_delay > 0:
                 await asyncio.sleep(self._execution_delay)
@@ -416,13 +417,11 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 workflow_template = None
                 if self._workflow_config_service:
                     try:
-                        template = await self._workflow_config_service.get_board_workflow_template(
-                            self._default_board_id
-                        )
+                        template = await self._workflow_config_service.get_board_workflow_template(resolved_board_id)
                         workflow_template = template
                     except Exception as e:
                         logger.warning(
-                            f"Failed to fetch workflow template for board '{self._default_board_id}': {e}",
+                            f"Failed to fetch workflow template for board '{resolved_board_id}': {e}",
                             exc_info=True,
                         )
 
