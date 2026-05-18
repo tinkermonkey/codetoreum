@@ -95,6 +95,7 @@ class ExecutionContextBuilder:
             commit_policy=agent.commit_policy,
             repository_path=repository_path,
             previous_session_id=previous_session_id,
+            environment_variables=project.environment_variables or {},
             metadata=metadata,
         )
 

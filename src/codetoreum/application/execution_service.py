@@ -919,7 +919,7 @@ class ExecutionService:
         return LLMExecutionContext(
             model=context.model,
             timeout_seconds=context.timeout_seconds,
-            environment_variables=MappingProxyType({}),
+            environment_variables=MappingProxyType(context.environment_variables or {}),
             session_id=context.previous_session_id,
             execution_id=None,  # Will be set by provider
             metadata=cast("MappingProxyType", context.metadata),

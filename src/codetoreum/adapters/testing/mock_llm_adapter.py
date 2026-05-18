@@ -138,6 +138,9 @@ class MockLLMAdapter(ILLMProvider):
         # Counter for probabilistic failures (deterministic for reproducibility)
         self._execution_counter = 0
 
+        # Context capture for testing
+        self.last_context: ExecutionContext | None = None
+
     def add_response_pattern(
         self,
         pattern: str,
@@ -270,6 +273,9 @@ class MockLLMAdapter(ILLMProvider):
         if not prompt or not prompt.strip():
             msg = "Prompt cannot be empty"
             raise ValidationError(msg)
+
+        # Capture context for testing
+        self.last_context = context
 
         with self._lock:
             if self._simulate_rate_limits and self._total_requests >= 100:
