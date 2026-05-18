@@ -893,10 +893,11 @@ class GitHubWebhookAdapter:
             return []
 
         # Extract comment information from discussion
-        # The discussion_comment webhook validator guarantees comment data is present
+        # While the discussion_comment webhook validator expects comment data for 'created' actions,
+        # we check defensively in case of edge cases or webhook anomalies.
         comment_data = payload.get("comment")
         if not comment_data:
-            # Action on discussion itself (e.g., discussion created), skip
+            # Missing comment data (edge case or webhook anomaly)
             self.logger.debug("Ignoring discussion event action '%s' without comment data", action)
             return []
 
@@ -958,18 +959,9 @@ class GitHubWebhookAdapter:
             repository: GitHub repository (format: 'org/repo')
 
         Returns:
-            Project name or None
+            Project name or None if not found (infrastructure errors propagate)
         """
-        try:
-            projects = await self.config.list_projects()
-        except Exception as e:
-            self.logger.error(
-                "Config store failed to list projects: %s",
-                str(e),
-                exc_info=True,
-                extra={"error_id": ErrorRegistry.ERR_EXTERNAL_SERVICE_ERROR},
-            )
-            return None
+        projects = await self.config.list_projects()
 
         for project_config in projects:
             repo_full_name = f"{project_config.github_org}/{project_config.github_repo}"
