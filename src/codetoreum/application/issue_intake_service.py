@@ -8,6 +8,7 @@ resolution, and item placement.
 import logging
 
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.ports.exceptions import PortError
 from codetoreum.ports.input.issue_intake import (
     IIssueIntakePort,
     IssueIntakeResult,
@@ -125,7 +126,7 @@ class IssueIntakeService(IIssueIntakePort):
                 message=f"Issue {issue_number} placed in column {initial_column.name}",
             )
 
-        except Exception as e:
+        except PortError as e:
             message = f"Error handling opened issue {issue_number} for project {project_id}: {e}"
             logger.error(
                 message,

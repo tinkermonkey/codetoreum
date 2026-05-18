@@ -314,3 +314,31 @@ def test_issue_intake_result_frozen():
 
     with pytest.raises((AttributeError, TypeError)):
         result.success = False
+
+
+@pytest.mark.asyncio
+async def test_on_issue_opened_programming_error_propagates():
+    """Test that programming errors propagate (not caught by service).
+
+    This verifies that the fix for overly broad exception handling works correctly.
+    Only expected port exceptions should be caught; programming errors (like
+    AttributeError, TypeError, KeyError) should propagate for debugging.
+    """
+
+    class BuggyBoardService:
+        async def get_all_boards(self):
+            # Simulate a programming error (accessing non-existent attribute)
+            return None.boards  # type: ignore  # Intentional AttributeError
+
+    board_service = BuggyBoardService()
+    config_service = MockWorkflowConfigService()
+    service = IssueIntakeService(board_service, config_service)
+
+    command = IssueOpenedCommand(
+        project_id="proj-1",
+        issue_number="42",
+    )
+
+    # Programming error should propagate, not be caught
+    with pytest.raises(AttributeError):
+        await service.on_issue_opened(command)
