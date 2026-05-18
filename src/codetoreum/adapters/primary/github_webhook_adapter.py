@@ -163,7 +163,7 @@ class GitHubWebhookAdapter:
 
         # Event handlers by GitHub event type
         # Note: issue_comment, pull_request, and discussion_comment handlers were implemented in issue #888.
-        # The issues handler (_handle_issues_event) was pre-existing and handles opened issues.
+        # The issues handler (_handle_issues_event) handles opened issues (action='opened' only).
         # The discussion_comment event type (not "discussion") carries comment payloads for discussion comments.
         self.handlers: dict[str, Callable] = {
             "project_card": self._handle_project_card_event,
@@ -521,6 +521,18 @@ class GitHubWebhookAdapter:
         previous_column_name = None
         if previous_column_id:
             previous_column_name = await self._resolve_column_id_to_name(project, previous_column_id)
+            if not previous_column_name:
+                self.logger.warning(
+                    "Could not resolve previous column_id %s for project %s; event will have from_column=None",
+                    previous_column_id,
+                    project,
+                    extra={
+                        "error_id": ErrorRegistry.ERR_WEBHOOK_COLUMN_RESOLUTION_FAILED,
+                        "project_id": project,
+                        "column_id": previous_column_id,
+                        "work_item_id": work_item_id,
+                    },
+                )
 
         # Create and emit WorkItemColumnChangedEvent
         try:
@@ -564,11 +576,11 @@ class GitHubWebhookAdapter:
     )
     async def _handle_issues_event(self, event: WebhookEvent, project: str) -> list[str]:
         """
-        Handle issues event (issue created/updated).
+        Handle issues event (issue opened only).
 
         When an issue is opened, delegates to the issue intake port to place it
         in the initial column on a board, which triggers a WorkItemColumnChangedEvent
-        for orchestration.
+        for orchestration. Only handles the 'opened' action; other actions are ignored.
 
         Args:
             event: Webhook event
@@ -844,13 +856,14 @@ class GitHubWebhookAdapter:
     )
     async def _handle_discussion_event(self, event: WebhookEvent, project: str) -> list[str]:
         """
-        Handle discussion_comment event (comments on discussions requiring agent response).
+        Handle discussion_comment event (new comments on discussions requiring agent response).
 
         When a comment is created on a discussion, emits CommentNeedsResponseEvent
         to trigger the conversational loop orchestrator to generate a response.
 
         GitHub delivers discussion comments via the 'discussion_comment' event type,
-        which has the comment data at the top level of the payload.
+        which has the comment data at the top level of the payload. Only handles the
+        'created' action on comments; actions on the discussion itself are ignored.
 
         Args:
             event: Webhook event
@@ -875,12 +888,12 @@ class GitHubWebhookAdapter:
             self.logger.warning("Could not extract discussion number from payload")
             return []
 
-        # Only handle 'created' action (for new discussion or new comments)
+        # Only handle 'created' action
         if action != "created":
             return []
 
         # Extract comment information from discussion
-        # Note: Discussion webhook includes comment data if action is on a comment
+        # The discussion_comment webhook validator guarantees comment data is present
         comment_data = payload.get("comment")
         if not comment_data:
             # Action on discussion itself (e.g., discussion created), skip
@@ -947,7 +960,17 @@ class GitHubWebhookAdapter:
         Returns:
             Project name or None
         """
-        projects = await self.config.list_projects()
+        try:
+            projects = await self.config.list_projects()
+        except Exception as e:
+            self.logger.error(
+                "Config store failed to list projects: %s",
+                str(e),
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_EXTERNAL_SERVICE_ERROR},
+            )
+            return None
+
         for project_config in projects:
             repo_full_name = f"{project_config.github_org}/{project_config.github_repo}"
             if repo_full_name == repository:
