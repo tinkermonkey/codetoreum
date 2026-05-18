@@ -697,7 +697,7 @@ class ProductionApplicationBootstrap:
         resource_monitor = ProductionResourceMonitor()
         rate_limiter = ProductionRateLimiter()
         project_config = ProductionProjectConfiguration()
-        scheduling_events = ProductionSchedulingEvents()
+        scheduling_events = ProductionSchedulingEvents(event_emitter=self.adapters.event_emitter)
 
         agent_scheduler = AgentScheduler(
             task_queue=task_queue,

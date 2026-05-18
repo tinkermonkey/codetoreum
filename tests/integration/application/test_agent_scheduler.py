@@ -762,3 +762,183 @@ async def test_scheduler_handles_invalid_work_item_id():
 
     finally:
         await scheduler.stop()
+
+
+@pytest.mark.asyncio
+async def test_scheduler_emits_task_dispatch_failed_event():
+    """Test that scheduler emits TaskDispatchFailedEvent when task dispatch fails."""
+
+    class FailingExecutor:
+        async def execute(self, work_item_id: str, agent_id: str, board_id: str | None = None) -> None:
+            raise RuntimeError("Executor crashed")
+
+    executor = FailingExecutor()
+    task_queue = InMemoryTaskQueue()
+    scheduling_events = MockSchedulingEvents()
+
+    scheduler = AgentScheduler(
+        task_queue=task_queue,
+        resource_monitor=MockResourceMonitor(),
+        rate_limiter=MockRateLimiter(),
+        config=MockProjectConfiguration(),
+        scheduling_events=scheduling_events,
+        event_store=InMemoryEventStore(),
+        agent_executor=executor,
+    )
+
+    # Start scheduler
+    await scheduler.start()
+
+    try:
+        # Enqueue task that will fail to dispatch
+        await task_queue.enqueue(
+            Task(
+                id="failing-task",
+                agent="test-agent",
+                project="test-project",
+                priority=WorkItemPriority.MEDIUM,
+                context={"work_item_id": "work-item-fail"},
+                created_at=datetime.now(UTC),
+            )
+        )
+
+        # Give consumer loop time to process the task
+        await asyncio.sleep(0.5)
+
+        # Verify that dispatch_failed event was emitted
+        assert len(scheduling_events.dispatch_failed_events) == 1
+        event = scheduling_events.dispatch_failed_events[0]
+        assert event["task_id"] == "failing-task"
+        assert event["work_item_id"] == "work-item-fail"
+        assert event["agent_id"] == "test-agent"
+        assert "crashed" in event["error"]
+
+    finally:
+        await scheduler.stop()
+
+
+@pytest.mark.asyncio
+async def test_scheduler_handles_event_emission_failure():
+    """Test that scheduler continues when emit_task_dispatch_failed raises."""
+
+    class FailingExecutor:
+        async def execute(self, work_item_id: str, agent_id: str, board_id: str | None = None) -> None:
+            raise RuntimeError("Dispatch failed")
+
+    class FailingSchedulingEvents(MockSchedulingEvents):
+        async def emit_task_dispatch_failed(
+            self,
+            task_id: str,
+            work_item_id: str,
+            agent_id: str,
+            error: str,
+        ) -> None:
+            raise RuntimeError("Event emission failed")
+
+    executor = FailingExecutor()
+    task_queue = InMemoryTaskQueue()
+    scheduling_events = FailingSchedulingEvents()
+
+    scheduler = AgentScheduler(
+        task_queue=task_queue,
+        resource_monitor=MockResourceMonitor(),
+        rate_limiter=MockRateLimiter(),
+        config=MockProjectConfiguration(),
+        scheduling_events=scheduling_events,
+        event_store=InMemoryEventStore(),
+        agent_executor=executor,
+    )
+
+    # Start scheduler
+    await scheduler.start()
+
+    try:
+        # Enqueue two tasks
+        await task_queue.enqueue(
+            Task(
+                id="task-1",
+                agent="test-agent",
+                project="test-project",
+                priority=WorkItemPriority.MEDIUM,
+                context={"work_item_id": "work-1"},
+                created_at=datetime.now(UTC),
+            )
+        )
+
+        await task_queue.enqueue(
+            Task(
+                id="task-2",
+                agent="test-agent",
+                project="test-project",
+                priority=WorkItemPriority.MEDIUM,
+                context={"work_item_id": "work-2"},
+                created_at=datetime.now(UTC),
+            )
+        )
+
+        # Give consumer loop time to attempt processing both tasks
+        # Consumer should not exit despite event emission failure
+        await asyncio.sleep(1.0)
+
+        # Consumer loop should still be running
+        assert scheduler._consumer_task is not None
+        assert not scheduler._consumer_task.done()
+
+    finally:
+        await scheduler.stop()
+
+
+@pytest.mark.asyncio
+async def test_schedule_double_fault_emit_task_rejected_failure(mock_config):
+    """Test that schedule returns original result when emit_task_rejected fails (double-fault)."""
+
+    class FailingSchedulingEvents(MockSchedulingEvents):
+        async def emit_task_rejected(self, agent: str, project: str, reason: str) -> None:
+            # Event emission fails
+            raise RuntimeError("Event bus is down")
+
+    resource_monitor = MockResourceMonitor(
+        dev_containers_available={"test-project": True, "blocked-project": False},
+        running_agents={"busy-agent": 3, "available-agent": 0},
+    )
+    scheduling_events = FailingSchedulingEvents()
+
+    scheduler = AgentScheduler(
+        task_queue=InMemoryTaskQueue(),
+        resource_monitor=resource_monitor,
+        rate_limiter=MockRateLimiter(),
+        config=mock_config,
+        scheduling_events=scheduling_events,
+        event_store=InMemoryEventStore(),
+    )
+
+    work_item = WorkItem(
+        id="work-item-1",
+        project_id="blocked-project",
+        title="Test Work Item",
+        description="Test description",
+        status=WorkItemStatus.NEW,
+        priority=WorkItemPriority.MEDIUM,
+        labels=["test"],
+        external_id="123",
+        external_url="https://github.com/test/repo/issues/123",
+        assigned_agent_id=None,
+        assigned_at=None,
+        current_workflow_id=None,
+        current_stage=None,
+        current_column=None,
+        entered_column_at=None,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        completed_at=None,
+    )
+
+    agent = create_test_agent("dev-container-agent", "dev_container_agent", requires_dev_container=True)
+
+    # Schedule should return RESOURCE_UNAVAILABLE result despite event emission failure
+    result = await scheduler.schedule(work_item, agent, WorkItemPriority.MEDIUM)
+
+    assert result.success is False
+    assert result.action == ScheduleAction.RESOURCE_UNAVAILABLE
+    assert "Dev container not available" in result.reason
+    assert result.task_id is None

@@ -8,7 +8,6 @@ from enum import Enum
 from typing import Any
 
 from codetoreum.domain.agent import Agent
-from codetoreum.domain.events.execution_events import ExecutionFailedEvent
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.observability.instrumentation import (
@@ -139,6 +138,16 @@ class ISchedulingEvents:
         """Emit task rejected event."""
         raise NotImplementedError
 
+    async def emit_task_dispatch_failed(
+        self,
+        task_id: str,
+        work_item_id: str,
+        agent_id: str,
+        error: str,
+    ) -> None:
+        """Emit task dispatch failed event for a task that failed to dispatch to execution."""
+        raise NotImplementedError
+
 
 class AgentScheduler:
     """
@@ -241,12 +250,19 @@ class AgentScheduler:
                     f"Agent {agent.id} rate limited, retry after {retry_after}s",
                     extra={"error_id": ErrorRegistry.ERR_SCHEDULER_RATE_LIMIT},
                 )
-                await self.scheduling_events.emit_task_throttled(
-                    agent.id,
-                    work_item.project_id,
-                    "Rate limit exceeded",
-                    retry_after or 60,
-                )
+                try:
+                    await self.scheduling_events.emit_task_throttled(
+                        agent.id,
+                        work_item.project_id,
+                        "Rate limit exceeded",
+                        retry_after or 60,
+                    )
+                except Exception as emit_error:
+                    logger.error(
+                        f"Failed to emit task throttled event: {emit_error}",
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_SCHEDULER_EVENT_EMISSION_FAILURE},
+                    )
                 return ScheduleResult(
                     success=False,
                     action=ScheduleAction.THROTTLED,
@@ -263,7 +279,14 @@ class AgentScheduler:
                 f"Cannot schedule agent {agent.id}: {reason}",
                 extra={"error_id": ErrorRegistry.ERR_SCHEDULER_RESOURCE_UNAVAILABLE},
             )
-            await self.scheduling_events.emit_task_rejected(agent.id, work_item.project_id, reason)
+            try:
+                await self.scheduling_events.emit_task_rejected(agent.id, work_item.project_id, reason)
+            except Exception as emit_error:
+                logger.error(
+                    f"Failed to emit task rejected event for resource unavailable: {emit_error}",
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_SCHEDULER_EVENT_EMISSION_FAILURE},
+                )
             return ScheduleResult(
                 success=False,
                 action=ScheduleAction.RESOURCE_UNAVAILABLE,
@@ -493,26 +516,21 @@ class AgentScheduler:
                         exc_info=True,
                         extra={"error_id": ErrorRegistry.ERR_SCHEDULER_TASK_EXECUTION_FAILURE},
                     )
-                    # Emit domain event to record task dispatch failure
+                    # Emit domain event to record task dispatch failure via event bus
                     work_item_id = task.context.get("work_item_id")
                     if isinstance(work_item_id, str):
-                        event = ExecutionFailedEvent(
-                            type="execution.failed",
-                            timestamp=datetime.now(UTC).isoformat(),
-                            source="agent_scheduler",
-                            execution_id=task.id,
-                            work_item_id=work_item_id,
-                            agent_id=task.agent,
-                            error=f"Task dispatch failed: {str(e)}",
-                            error_message=f"Task dispatch failed: {str(e)}",
-                        )
                         try:
-                            await self.event_store.append(work_item_id, [event])
-                        except Exception as store_error:
+                            await self.scheduling_events.emit_task_dispatch_failed(
+                                task_id=task.id,
+                                work_item_id=work_item_id,
+                                agent_id=task.agent,
+                                error=f"Task dispatch failed: {e!s}",
+                            )
+                        except Exception as emit_error:
                             logger.error(
-                                f"Failed to record task dispatch failure event for {task.id}: {store_error}",
+                                f"Failed to emit task dispatch failure event for {task.id}: {emit_error}",
                                 exc_info=True,
-                                extra={"error_id": ErrorRegistry.ERR_SCHEDULER_EVENT_STORAGE_FAILURE},
+                                extra={"error_id": ErrorRegistry.ERR_SCHEDULER_EVENT_EMISSION_FAILURE},
                             )
 
             except Exception as e:
@@ -647,6 +665,7 @@ class MockSchedulingEvents(ISchedulingEvents):
         self.queued_events: list = []
         self.throttled_events: list = []
         self.rejected_events: list = []
+        self.dispatch_failed_events: list = []
 
     async def emit_task_queued(
         self,
@@ -681,3 +700,20 @@ class MockSchedulingEvents(ISchedulingEvents):
     async def emit_task_rejected(self, agent: str, project: str, reason: str) -> None:
         """Emit task rejected event."""
         self.rejected_events.append({"agent": agent, "project": project, "reason": reason})
+
+    async def emit_task_dispatch_failed(
+        self,
+        task_id: str,
+        work_item_id: str,
+        agent_id: str,
+        error: str,
+    ) -> None:
+        """Emit task dispatch failed event."""
+        self.dispatch_failed_events.append(
+            {
+                "task_id": task_id,
+                "work_item_id": work_item_id,
+                "agent_id": agent_id,
+                "error": error,
+            }
+        )
