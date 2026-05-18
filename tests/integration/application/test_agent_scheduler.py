@@ -690,6 +690,7 @@ async def test_scheduler_handles_executor_errors():
         await scheduler.stop()
 
 
+@pytest.mark.asyncio
 async def test_scheduler_handles_invalid_work_item_id():
     """Test that scheduler handles missing/invalid work_item_id gracefully."""
 
