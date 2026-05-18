@@ -289,3 +289,20 @@ async def test_project_card_event_handler_exits_on_column_resolution_failure(web
     # Assert handler returns empty list and does not publish event
     assert result == []
     mock_dependencies["event_bus"].publish.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_resolve_column_id_to_name_with_zero_column_id(webhook_adapter, mock_dependencies):
+    """Verify _resolve_column_id_to_name correctly handles column_id=0 as valid."""
+    from types import MappingProxyType
+
+    # Setup config with board_columns that includes column_id 0
+    mock_project_config = MagicMock()
+    mock_project_config.metadata = MappingProxyType({"board_columns": {"0": "Todo", "1": "In Progress"}})
+    mock_dependencies["config"].get_project_config = AsyncMock(return_value=mock_project_config)
+
+    # Execute - column_id=0 should be treated as a valid ID, not as None/missing
+    result = await webhook_adapter._resolve_column_id_to_name("test-project", 0)
+
+    # Assert returns the column name for ID 0
+    assert result == "Todo"

@@ -614,12 +614,22 @@ class GitHubWebhookAdapter:
             issue_url=issue_url,
         )
 
-        result = await self.issue_intake_port.on_issue_opened(command)
+        try:
+            result = await self.issue_intake_port.on_issue_opened(command)
 
-        if result.success:
-            return [result.work_item_id]
-        self.logger.warning("Failed to intake issue %s: %s", issue_number, result.message)
-        return []
+            if result.success:
+                return [result.work_item_id]
+            self.logger.warning("Failed to intake issue %s: %s", issue_number, result.message)
+            return []
+        except Exception as e:
+            self.logger.error(
+                "Failed to open issue %s: %s",
+                issue_number,
+                str(e),
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+            )
+            return []
 
     @instrument_async_function(
         name="github.webhook.handle_issue_comment",
@@ -677,6 +687,10 @@ class GitHubWebhookAdapter:
             )
         except ValueError as e:
             self.logger.warning("Failed to create Comment object: %s", str(e), exc_info=True)
+            return []
+
+        # Skip bot-authored comments to prevent infinite feedback loops
+        if comment_obj.is_bot:
             return []
 
         # Create CommentNeedsResponseEvent with context
@@ -886,6 +900,10 @@ class GitHubWebhookAdapter:
             self.logger.warning("Failed to create Comment object from discussion: %s", str(e), exc_info=True)
             return []
 
+        # Skip bot-authored comments to prevent infinite feedback loops
+        if comment_obj.is_bot:
+            return []
+
         # Create CommentNeedsResponseEvent
         try:
             domain_event = CommentNeedsResponseEvent(
@@ -951,7 +969,7 @@ class GitHubWebhookAdapter:
         Returns:
             Column name string, or None if mapping not found or resolution fails
         """
-        if not column_id:
+        if column_id is None:
             return None
 
         try:

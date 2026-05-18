@@ -168,8 +168,8 @@ class TestIssueCommentEventHandling:
         assert len(adapter.event_bus.published_events) == 0
 
     @pytest.mark.asyncio
-    async def test_issue_comment_bot_is_marked(self, adapter):
-        """Test that bot comments are marked correctly."""
+    async def test_issue_comment_bot_is_skipped(self, adapter):
+        """Test that bot comments are skipped to prevent infinite feedback loops."""
         event = WebhookEvent(
             delivery_id="delivery-1",
             event_type="issue_comment",
@@ -195,9 +195,8 @@ class TestIssueCommentEventHandling:
 
         result = await adapter._handle_issue_comment_event(event, "proj-1")
 
-        assert len(result) == 1
-        published_event = adapter.event_bus.published_events[0]
-        assert published_event.comment.is_bot is True
+        assert result == []
+        assert len(adapter.event_bus.published_events) == 0
 
 
 class TestPullRequestEventHandling:
