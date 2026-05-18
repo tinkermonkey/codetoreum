@@ -389,6 +389,30 @@ class TestProductionPathStep8CreateExecution:
         # Completion called with failure
         fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, False)
 
+    @pytest.mark.asyncio
+    async def test_prompt_build_failure_finalizes_and_fails(self):
+        """Step 8: PromptBuilder.build_prompt raises → finalize_workspace, completion=False."""
+        fx = ProductionPathFixture()
+        executor = fx.make_executor()
+
+        with patch(
+            "codetoreum.adapters.secondary.execution_service_agent_executor.PromptBuilder"
+        ) as mock_prompt_builder:
+            mock_prompt_builder.build_prompt.side_effect = AttributeError("None agent field")
+
+            await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+            # Finalize should be called on prompt build failure
+            fx.workspace_router.finalize_workspace.assert_called_once()
+            finalize_args = fx.workspace_router.finalize_workspace.call_args
+            assert finalize_args.args[2]["success"] is False
+
+            # Completion called with failure
+            fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, False)
+
+            # create_execution should never be called
+            fx.execution_service.create_execution.assert_not_called()
+
 
 class TestProductionPathStep9StartExecution:
     """Test Step 9: Start execution and validate result."""

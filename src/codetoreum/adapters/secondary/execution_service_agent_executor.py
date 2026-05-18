@@ -435,7 +435,6 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 except OSError as e:
                     logger.warning(f"Failed to read previous stage output: {e}", exc_info=True)
 
-                # Build prompt with dedicated error handling
                 try:
                     prompt = PromptBuilder.build_prompt(
                         work_item=work_item,
