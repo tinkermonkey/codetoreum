@@ -199,3 +199,93 @@ async def test_github_webhook_complete_trace_chain(tracer_provider, webhook_adap
     assert process_span.attributes["github.event_type"] == "project_card"
     assert process_span.attributes["github.delivery_id"] == "delivery-comprehensive"
     assert process_span.attributes["github.repository"] == "acme/platform"
+
+
+# ============================================================================
+# Column Resolution Failure Tests
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_resolve_column_id_to_name_column_not_in_mapping(webhook_adapter, mock_dependencies):
+    """Verify _resolve_column_id_to_name returns None when column_id not in mapping."""
+    from types import MappingProxyType
+
+    # Setup config with board_columns that doesn't include the requested column_id
+    mock_project_config = MagicMock()
+    mock_project_config.metadata = MappingProxyType({"board_columns": {"456": "In Progress", "789": "Backlog"}})
+    mock_dependencies["config"].get_project_config = AsyncMock(return_value=mock_project_config)
+
+    # Execute - request a column_id that's not in the mapping
+    result = await webhook_adapter._resolve_column_id_to_name("test-project", "999")
+
+    # Assert returns None and logs warning
+    assert result is None
+    mock_dependencies["logger"].warning.assert_called()
+
+
+@pytest.mark.asyncio
+async def test_resolve_column_id_to_name_project_config_not_found(webhook_adapter, mock_dependencies):
+    """Verify _resolve_column_id_to_name returns None when project config not found."""
+    # Setup config to return None
+    mock_dependencies["config"].get_project_config = AsyncMock(return_value=None)
+
+    # Execute
+    result = await webhook_adapter._resolve_column_id_to_name("missing-project", "456")
+
+    # Assert returns None and logs warning
+    assert result is None
+    mock_dependencies["logger"].warning.assert_called()
+
+
+@pytest.mark.asyncio
+async def test_resolve_column_id_to_name_exception_during_resolution(webhook_adapter, mock_dependencies):
+    """Verify _resolve_column_id_to_name returns None on exception during resolution."""
+    # Setup config to raise exception
+    mock_dependencies["config"].get_project_config = AsyncMock(side_effect=Exception("Config service error"))
+
+    # Execute
+    result = await webhook_adapter._resolve_column_id_to_name("test-project", "456")
+
+    # Assert returns None and logs error with exc_info
+    assert result is None
+    mock_dependencies["logger"].error.assert_called()
+
+
+@pytest.mark.asyncio
+async def test_project_card_event_handler_exits_on_column_resolution_failure(webhook_adapter, mock_dependencies):
+    """Verify project_card handler exits without publishing event when column resolution fails."""
+    from types import MappingProxyType
+
+    # Setup config with empty board_columns mapping
+    mock_project_config = MagicMock()
+    mock_project_config.metadata = MappingProxyType({"board_columns": {}})
+    mock_dependencies["config"].get_project_config = AsyncMock(return_value=mock_project_config)
+
+    # Mock event_bus.publish
+    mock_dependencies["event_bus"].publish = AsyncMock()
+
+    # Create webhook event with column_id not in mapping
+    event = WebhookEvent(
+        delivery_id="delivery-failure",
+        event_type="project_card",
+        payload={
+            "action": "moved",
+            "repository": {"full_name": "org/repo"},
+            "project_card": {
+                "id": 1,
+                "content_url": "https://api.github.com/repos/org/repo/issues/123",
+                "column_id": 999,  # Not in mapping
+            },
+        },
+        signature="sha256=test",
+        timestamp=datetime.now(UTC),
+        repository="org/repo",
+    )
+
+    # Execute
+    result = await webhook_adapter._handle_project_card_event(event, "test-project")
+
+    # Assert handler returns empty list and does not publish event
+    assert result == []
+    mock_dependencies["event_bus"].publish.assert_not_called()

@@ -32,11 +32,7 @@ from codetoreum.infrastructure.observability.instrumentation import (
     instrument_async_function,
 )
 from codetoreum.ports.input.issue_intake import IIssueIntakePort, IssueOpenedCommand
-from codetoreum.ports.input.workflow_command import (
-    IWorkflowCommandPort,
-    StartWorkflowCommand,
-    TriggerType,
-)
+from codetoreum.ports.input.workflow_command import IWorkflowCommandPort
 from codetoreum.ports.output.config_store import IConfigStore
 
 # Type aliases for missing interfaces
@@ -416,7 +412,7 @@ class GitHubWebhookAdapter:
 
     def _validate_discussion_payload(self, payload: dict[str, Any]) -> bool:
         """Validate discussion event payload"""
-        return "action" in payload and "discussion" in payload
+        return "action" in payload and "discussion" in payload and "comment" in payload
 
     @instrument_async_function(name="github.webhook.process_event", attributes={"service": "github_webhook"})
     async def _process_event(self, event: WebhookEvent, project_id: str) -> WebhookProcessingResult:
@@ -501,7 +497,6 @@ class GitHubWebhookAdapter:
         # Resolve column_id to column_name
         # The column_id is a numeric GitHub Projects column identifier that must be resolved
         # to a column name that matches the board workflow template.
-        # For now, use column_id as a fallback column name if mapping is not available.
         column_name = await self._resolve_column_id_to_name(project, column_id)
         if not column_name:
             self.logger.warning(
@@ -509,7 +504,7 @@ class GitHubWebhookAdapter:
                 column_id,
                 project,
                 extra={
-                    "error_id": "ERR_WEBHOOK_COLUMN_RESOLUTION_FAILED",
+                    "error_id": ErrorRegistry.ERR_WEBHOOK_COLUMN_RESOLUTION_FAILED,
                     "project_id": project,
                     "column_id": column_id,
                     "work_item_id": work_item_id,
@@ -980,7 +975,7 @@ class GitHubWebhookAdapter:
                 column_id,
                 project_id,
                 extra={
-                    "error_id": "ERR_WEBHOOK_COLUMN_MAPPING_NOT_FOUND",
+                    "error_id": ErrorRegistry.ERR_WEBHOOK_COLUMN_MAPPING_NOT_FOUND,
                     "project_id": project_id,
                     "column_id": column_id,
                 },
@@ -995,7 +990,7 @@ class GitHubWebhookAdapter:
                 str(e),
                 exc_info=True,
                 extra={
-                    "error_id": "ERR_WEBHOOK_COLUMN_RESOLUTION_ERROR",
+                    "error_id": ErrorRegistry.ERR_WEBHOOK_COLUMN_RESOLUTION_ERROR,
                     "project_id": project_id,
                     "column_id": column_id,
                 },
