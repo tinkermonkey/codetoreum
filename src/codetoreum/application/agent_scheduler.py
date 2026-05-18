@@ -8,6 +8,7 @@ from enum import Enum
 from typing import Any
 
 from codetoreum.domain.agent import Agent
+from codetoreum.domain.events.execution_events import ExecutionFailedEvent
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.observability.instrumentation import (
@@ -216,7 +217,14 @@ class AgentScheduler:
                 exc_info=True,
                 extra={"error_id": ErrorRegistry.ERR_SCHEDULER_AGENT_CONFIG_LOAD_FAILURE},
             )
-            await self.scheduling_events.emit_task_rejected(agent.id, work_item.project_id, f"Config error: {e}")
+            try:
+                await self.scheduling_events.emit_task_rejected(agent.id, work_item.project_id, f"Config error: {e}")
+            except Exception as emit_error:
+                logger.error(
+                    f"Failed to emit task rejected event for config failure: {emit_error}",
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_SCHEDULER_EVENT_EMISSION_FAILURE},
+                )
             return ScheduleResult(
                 success=False,
                 action=ScheduleAction.REJECTED,
@@ -290,7 +298,14 @@ class AgentScheduler:
                 exc_info=True,
                 extra={"error_id": ErrorRegistry.ERR_SCHEDULER_ENQUEUE_FAILURE},
             )
-            await self.scheduling_events.emit_task_rejected(agent.id, work_item.project_id, f"Queue error: {e}")
+            try:
+                await self.scheduling_events.emit_task_rejected(agent.id, work_item.project_id, f"Queue error: {e}")
+            except Exception as emit_error:
+                logger.error(
+                    f"Failed to emit task rejected event for enqueue failure: {emit_error}",
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_SCHEDULER_EVENT_EMISSION_FAILURE},
+                )
             return ScheduleResult(
                 success=False,
                 action=ScheduleAction.REJECTED,
@@ -478,6 +493,27 @@ class AgentScheduler:
                         exc_info=True,
                         extra={"error_id": ErrorRegistry.ERR_SCHEDULER_TASK_EXECUTION_FAILURE},
                     )
+                    # Emit domain event to record task dispatch failure
+                    work_item_id = task.context.get("work_item_id")
+                    if isinstance(work_item_id, str):
+                        event = ExecutionFailedEvent(
+                            type="execution.failed",
+                            timestamp=datetime.now(UTC).isoformat(),
+                            source="agent_scheduler",
+                            execution_id=task.id,
+                            work_item_id=work_item_id,
+                            agent_id=task.agent,
+                            error=f"Task dispatch failed: {str(e)}",
+                            error_message=f"Task dispatch failed: {str(e)}",
+                        )
+                        try:
+                            await self.event_store.append(work_item_id, [event])
+                        except Exception as store_error:
+                            logger.error(
+                                f"Failed to record task dispatch failure event for {task.id}: {store_error}",
+                                exc_info=True,
+                                extra={"error_id": ErrorRegistry.ERR_SCHEDULER_EVENT_STORAGE_FAILURE},
+                            )
 
             except Exception as e:
                 logger.error(
