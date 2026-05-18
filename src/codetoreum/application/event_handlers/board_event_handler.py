@@ -581,6 +581,7 @@ class BoardColumnEventHandler(EventHandler):
                     run_id=workflow_run_id,
                     stage_name=column_config.name,
                     project_id=project_id,
+                    board_id=board_id,
                 )
             except Exception as e:
                 logger.error(
@@ -724,6 +725,7 @@ class BoardColumnEventHandler(EventHandler):
                     run_id=run_info.run_id,
                     stage_name=column_config.name,
                     project_id=run_info.project_id,
+                    board_id=run_info.board_id,
                 )
             except Exception as e:
                 logger.error(

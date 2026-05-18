@@ -17,6 +17,7 @@ class ActiveRunInfo:
     run_id: str
     stage_name: str
     project_id: str
+    board_id: str
 
     def __post_init__(self) -> None:
         """Validate all fields at construction time."""
@@ -32,6 +33,9 @@ class ActiveRunInfo:
         if not self.project_id:
             msg = "project_id must be non-empty"
             raise ValueError(msg)
+        if not self.board_id:
+            msg = "board_id must be non-empty"
+            raise ValueError(msg)
 
 
 class IActiveWorkflowRunRegistry(ABC):
@@ -44,6 +48,7 @@ class IActiveWorkflowRunRegistry(ABC):
         run_id: str,
         stage_name: str,
         project_id: str,
+        board_id: str,
     ) -> None:
         """Register an active workflow run for a work item.
 
@@ -52,6 +57,7 @@ class IActiveWorkflowRunRegistry(ABC):
             run_id: Workflow run identifier
             stage_name: Current stage name
             project_id: Project identifier
+            board_id: Board identifier
         """
 
     @abstractmethod
