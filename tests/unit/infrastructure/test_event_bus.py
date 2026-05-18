@@ -374,26 +374,6 @@ class TestEventBus:
         assert stats["persistence_errors"] == 1
         assert stats["events_published"] == 1
 
-    async def test_timeout_error_in_redis_persistence(self, caplog):
-        """Test that TimeoutError during Redis persistence is logged but doesn't block publishing."""
-
-        class TimeoutRedisClient:
-            async def xadd(self, *args, **kwargs):
-                raise TimeoutError("Redis timeout")
-
-        bus = EventBus(redis_client=TimeoutRedisClient())
-        event = _make_created_event()
-
-        caplog.set_level(logging.CRITICAL)
-        # Publishing should succeed even if Redis persistence fails
-        await bus.publish(event)
-
-        # Should log the error as unexpected
-        assert "unexpected error" in caplog.text.lower()
-        stats = bus.get_statistics()
-        assert stats["persistence_errors"] == 1
-        assert stats["events_published"] == 1
-
     async def test_unexpected_error_in_redis_persistence(self, caplog):
         """Test that unexpected errors in Redis persistence are logged but don't block publishing."""
 

@@ -499,3 +499,161 @@ class TestDiscussionEventHandling:
 
         assert result == []
         assert len(adapter.event_bus.published_events) == 0
+
+
+class TestEventBusPublishFailures:
+    """Tests for event_bus.publish() failure paths in webhook handlers."""
+
+    class FailingEventBus:
+        """Mock event bus that raises on publish."""
+
+        def __init__(self, error_message="Event bus publish failed"):
+            self.error_message = error_message
+
+        async def publish(self, event):
+            raise RuntimeError(self.error_message)
+
+        def subscribe(self, event_type, handler):
+            pass
+
+    @pytest.mark.asyncio
+    async def test_issue_comment_event_bus_publish_failure(self):
+        """Test that issue comment handler gracefully handles event_bus.publish() failure."""
+        workflow_port = MockWorkflowCommandPort()
+        event_bus = self.FailingEventBus()
+        config_service = MockConfigService()
+        logger = MockLogger()
+
+        adapter = GitHubWebhookAdapter(
+            workflow_command_port=workflow_port,
+            event_bus=event_bus,
+            config_service=config_service,
+            logger=logger,
+        )
+
+        event = WebhookEvent(
+            delivery_id="delivery-1",
+            event_type="issue_comment",
+            payload={
+                "action": "created",
+                "issue": {
+                    "number": 42,
+                    "title": "Test Issue",
+                    "state": "open",
+                },
+                "comment": {
+                    "id": 123456,
+                    "user": {"login": "test-user", "type": "User"},
+                    "body": "This looks good!",
+                    "created_at": "2025-01-14T10:30:00Z",
+                },
+                "repository": {
+                    "full_name": "test-org/test-repo",
+                },
+            },
+            signature="sha256=test",
+            timestamp=datetime.now(UTC),
+            repository="test-org/test-repo",
+        )
+
+        result = await adapter._handle_issue_comment_event(event, "proj-1")
+
+        # Should return empty list on publish failure
+        assert result == []
+        # Should have logged the error
+        assert len(logger.errors) > 0
+        assert "Failed to publish CommentNeedsResponseEvent" in logger.errors[0][0]
+
+    @pytest.mark.asyncio
+    async def test_pull_request_event_bus_publish_failure(self):
+        """Test that PR handler gracefully handles event_bus.publish() failure."""
+        workflow_port = MockWorkflowCommandPort()
+        event_bus = self.FailingEventBus()
+        config_service = MockConfigService()
+        logger = MockLogger()
+
+        adapter = GitHubWebhookAdapter(
+            workflow_command_port=workflow_port,
+            event_bus=event_bus,
+            config_service=config_service,
+            logger=logger,
+        )
+
+        event = WebhookEvent(
+            delivery_id="delivery-1",
+            event_type="pull_request",
+            payload={
+                "action": "opened",
+                "number": 42,
+                "pull_request": {
+                    "number": 42,
+                    "state": "open",
+                    "merged": False,
+                    "title": "Add feature X",
+                    "user": {"login": "developer-1"},
+                },
+                "sender": {"login": "developer-1"},
+                "repository": {
+                    "full_name": "test-org/test-repo",
+                },
+            },
+            signature="sha256=test",
+            timestamp=datetime.now(UTC),
+            repository="test-org/test-repo",
+        )
+
+        result = await adapter._handle_pull_request_event(event, "proj-1")
+
+        # Should return empty list on publish failure
+        assert result == []
+        # Should have logged the error
+        assert len(logger.errors) > 0
+        assert "Failed to publish ReviewStatusChangedEvent" in logger.errors[0][0]
+
+    @pytest.mark.asyncio
+    async def test_discussion_comment_event_bus_publish_failure(self):
+        """Test that discussion handler gracefully handles event_bus.publish() failure."""
+        workflow_port = MockWorkflowCommandPort()
+        event_bus = self.FailingEventBus()
+        config_service = MockConfigService()
+        logger = MockLogger()
+
+        adapter = GitHubWebhookAdapter(
+            workflow_command_port=workflow_port,
+            event_bus=event_bus,
+            config_service=config_service,
+            logger=logger,
+        )
+
+        event = WebhookEvent(
+            delivery_id="delivery-1",
+            event_type="discussion_comment",
+            payload={
+                "action": "created",
+                "discussion": {
+                    "number": 10,
+                    "title": "Discussion about feature",
+                    "state": "open",
+                },
+                "comment": {
+                    "id": 789012,
+                    "user": {"login": "community-member", "type": "User"},
+                    "body": "What's the timeline?",
+                    "created_at": "2025-01-14T11:00:00Z",
+                },
+                "repository": {
+                    "full_name": "test-org/test-repo",
+                },
+            },
+            signature="sha256=test",
+            timestamp=datetime.now(UTC),
+            repository="test-org/test-repo",
+        )
+
+        result = await adapter._handle_discussion_event(event, "proj-1")
+
+        # Should return empty list on publish failure
+        assert result == []
+        # Should have logged the error
+        assert len(logger.errors) > 0
+        assert "Failed to publish CommentNeedsResponseEvent from discussion" in logger.errors[0][0]
