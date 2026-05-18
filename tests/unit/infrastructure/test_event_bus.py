@@ -353,3 +353,109 @@ class TestEventBus:
             await bus.publish(event)
 
         assert "cancelled" in caplog.text.lower()
+
+    async def test_connection_error_in_redis_persistence(self, caplog):
+        """Test that ConnectionError during Redis persistence is logged but doesn't block publishing."""
+
+        class FailingRedisClient:
+            async def xadd(self, *args, **kwargs):
+                raise ConnectionError("Redis connection failed")
+
+        bus = EventBus(redis_client=FailingRedisClient())
+        event = _make_created_event()
+
+        caplog.set_level(logging.ERROR)
+        # Publishing should succeed even if Redis persistence fails
+        await bus.publish(event)
+
+        # Should log the error
+        assert "connection error" in caplog.text.lower()
+        stats = bus.get_statistics()
+        assert stats["persistence_errors"] == 1
+        assert stats["events_published"] == 1
+
+    async def test_timeout_error_in_redis_persistence(self, caplog):
+        """Test that TimeoutError during Redis persistence is logged but doesn't block publishing."""
+
+        class TimeoutRedisClient:
+            async def xadd(self, *args, **kwargs):
+                raise TimeoutError("Redis timeout")
+
+        bus = EventBus(redis_client=TimeoutRedisClient())
+        event = _make_created_event()
+
+        caplog.set_level(logging.CRITICAL)
+        # Publishing should succeed even if Redis persistence fails
+        await bus.publish(event)
+
+        # Should log the error as unexpected
+        assert "unexpected error" in caplog.text.lower()
+        stats = bus.get_statistics()
+        assert stats["persistence_errors"] == 1
+        assert stats["events_published"] == 1
+
+    async def test_unexpected_error_in_redis_persistence(self, caplog):
+        """Test that unexpected errors in Redis persistence are logged but don't block publishing."""
+
+        class FailingRedisClient:
+            async def xadd(self, *args, **kwargs):
+                raise RuntimeError("Unexpected Redis error")
+
+        bus = EventBus(redis_client=FailingRedisClient())
+        event = _make_created_event()
+
+        caplog.set_level(logging.CRITICAL)
+        # Publishing should succeed even if Redis persistence fails
+        await bus.publish(event)
+
+        # Should log the error as unexpected
+        assert "unexpected error" in caplog.text.lower()
+        stats = bus.get_statistics()
+        assert stats["persistence_errors"] == 1
+        assert stats["events_published"] == 1
+
+    async def test_handler_error_is_recorded_in_stats(self, caplog):
+        """Test that handler errors are recorded in statistics and logged."""
+
+        class FailingHandler(EventHandler):
+            async def handle(self, event: CodetoreumEvent) -> None:
+                message = "Handler failed"
+                raise RuntimeError(message)
+
+            def get_event_types(self):
+                return ["WorkItemCreatedEvent"]
+
+        bus = EventBus()
+        handler = FailingHandler()
+        bus.register_handler(handler)
+
+        event = _make_created_event()
+
+        caplog.set_level(logging.ERROR)
+        # Publish should not raise; handler errors are caught and logged
+        await bus.publish(event)
+
+        stats = bus.get_statistics()
+        assert stats["handler_errors"] == 1
+        assert stats["events_published"] == 1
+        assert "Handler failed" in caplog.text
+
+    async def test_callback_error_is_recorded_in_stats(self, caplog):
+        """Test that callback errors are recorded in statistics and logged."""
+
+        async def failing_callback(event: CodetoreumEvent) -> None:
+            message = "Callback failed"
+            raise ValueError(message)
+
+        bus = EventBus()
+        bus.subscribe("WorkItemCreatedEvent", failing_callback)
+
+        event = _make_created_event()
+
+        caplog.set_level(logging.WARNING)
+        # Publish should not raise; callback errors are caught and logged
+        await bus.publish(event)
+
+        stats = bus.get_statistics()
+        assert stats["handler_errors"] == 1
+        assert "Callback failed" in caplog.text

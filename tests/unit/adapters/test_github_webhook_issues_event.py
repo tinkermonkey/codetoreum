@@ -240,3 +240,95 @@ async def test_handle_issues_event_intake_failure():
     result = await adapter._handle_issues_event(event, "proj-1")
 
     assert result == []
+
+
+class FailingIssueIntakePortWithException:
+    """Issue intake port that throws an exception."""
+
+    async def on_issue_opened(self, command):
+        """Throw exception during issue intake."""
+        raise RuntimeError(f"Failed to intake issue {command.issue_number}")
+
+
+@pytest.mark.asyncio
+async def test_handle_issues_event_opened_exception_handling():
+    """Test that exceptions from issue_intake_port are caught and logged."""
+    workflow_port = MockWorkflowCommandPort()
+    event_bus = MockEventBus()
+    config_service = MockConfigService()
+    logger = MockLogger()
+    issue_intake_port = FailingIssueIntakePortWithException()
+
+    adapter = GitHubWebhookAdapter(
+        workflow_command_port=workflow_port,
+        event_bus=event_bus,
+        config_service=config_service,
+        logger=logger,
+        issue_intake_port=issue_intake_port,
+    )
+
+    event = WebhookEvent(
+        delivery_id="delivery-1",
+        event_type="issues",
+        payload={
+            "action": "opened",
+            "issue": {
+                "number": 42,
+            },
+        },
+        signature="sha256=test",
+        timestamp=datetime.now(UTC),
+        repository="test-org/test-repo",
+    )
+
+    # Should not raise; exceptions are caught and logged
+    result = await adapter._handle_issues_event(event, "proj-1")
+
+    # Should return empty list on exception
+    assert result == []
+
+
+class TimeoutIssueIntakePort:
+    """Issue intake port that times out."""
+
+    async def on_issue_opened(self, command):
+        """Simulate timeout."""
+        raise TimeoutError(f"Timeout while intake issue {command.issue_number}")
+
+
+@pytest.mark.asyncio
+async def test_handle_issues_event_opened_timeout():
+    """Test that timeouts from issue_intake_port are caught and logged."""
+    workflow_port = MockWorkflowCommandPort()
+    event_bus = MockEventBus()
+    config_service = MockConfigService()
+    logger = MockLogger()
+    issue_intake_port = TimeoutIssueIntakePort()
+
+    adapter = GitHubWebhookAdapter(
+        workflow_command_port=workflow_port,
+        event_bus=event_bus,
+        config_service=config_service,
+        logger=logger,
+        issue_intake_port=issue_intake_port,
+    )
+
+    event = WebhookEvent(
+        delivery_id="delivery-1",
+        event_type="issues",
+        payload={
+            "action": "opened",
+            "issue": {
+                "number": 42,
+            },
+        },
+        signature="sha256=test",
+        timestamp=datetime.now(UTC),
+        repository="test-org/test-repo",
+    )
+
+    # Should not raise; exceptions are caught and logged
+    result = await adapter._handle_issues_event(event, "proj-1")
+
+    # Should return empty list on timeout
+    assert result == []

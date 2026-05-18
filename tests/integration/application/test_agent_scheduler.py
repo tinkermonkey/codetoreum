@@ -10,6 +10,7 @@ from codetoreum.application.agent_scheduler import (
     AgentConfig,
     AgentScheduler,
     InMemoryTaskQueue,
+    IProjectConfiguration,
     MockProjectConfiguration,
     MockRateLimiter,
     MockResourceMonitor,
@@ -942,3 +943,89 @@ async def test_schedule_double_fault_emit_task_rejected_failure(mock_config):
     assert result.action == ScheduleAction.RESOURCE_UNAVAILABLE
     assert "Dev container not available" in result.reason
     assert result.task_id is None
+
+
+# Error path tests
+
+
+class FailingProjectConfiguration(IProjectConfiguration):
+    """Configuration that throws PortError."""
+
+    def __init__(self, failing_agents: set[str] | None = None):
+        self.failing_agents = failing_agents or set()
+
+    async def get_agent_config(self, agent_name: str) -> AgentConfig:
+        """Throw PortError for specified agents."""
+        if agent_name in self.failing_agents:
+            from codetoreum.ports.exceptions import PortError
+
+            message = f"Failed to load config for agent {agent_name}"
+            raise PortError(message)
+
+        # Return default config for others
+        return AgentConfig(
+            id=agent_name,
+            name=agent_name,
+            max_concurrent=3,
+            requires_dev_container=False,
+            rate_limit_rpm=None,
+        )
+
+
+@pytest.mark.asyncio
+async def test_schedule_config_port_error(sample_work_item):
+    """Test scheduling when config port throws PortError."""
+    from codetoreum.ports.exceptions import PortError
+
+    failing_config = FailingProjectConfiguration(failing_agents={"failing-agent"})
+    scheduler = AgentScheduler(
+        task_queue=InMemoryTaskQueue(),
+        resource_monitor=MockResourceMonitor(),
+        rate_limiter=MockRateLimiter(),
+        config=failing_config,
+        scheduling_events=MockSchedulingEvents(),
+        event_store=InMemoryEventStore(),
+    )
+
+    failing_agent = create_test_agent("failing-agent", "failing_agent")
+
+    result = await scheduler.schedule(sample_work_item, failing_agent, WorkItemPriority.MEDIUM)
+
+    # Should fail with proper error message
+    assert result.success is False
+    assert result.action == ScheduleAction.REJECTED
+    assert result.task_id is None
+    assert "Failed to load agent config" in result.reason
+
+
+@pytest.mark.asyncio
+async def test_schedule_config_port_error_with_event_emission_failure(sample_work_item):
+    """Test that scheduling fails gracefully when config port error occurs and event emission also fails."""
+
+    class FailingSchedulingEvents(MockSchedulingEvents):
+        """Scheduling events that fail."""
+
+        async def emit_task_rejected(self, agent: str, project: str, reason: str) -> None:
+            """Throw exception during event emission."""
+            message = f"Event bus unavailable while rejecting task for {agent}"
+            raise RuntimeError(message)
+
+    failing_config = FailingProjectConfiguration(failing_agents={"failing-agent"})
+    scheduler = AgentScheduler(
+        task_queue=InMemoryTaskQueue(),
+        resource_monitor=MockResourceMonitor(),
+        rate_limiter=MockRateLimiter(),
+        config=failing_config,
+        scheduling_events=FailingSchedulingEvents(),
+        event_store=InMemoryEventStore(),
+    )
+
+    failing_agent = create_test_agent("failing-agent", "failing_agent")
+
+    result = await scheduler.schedule(sample_work_item, failing_agent, WorkItemPriority.MEDIUM)
+
+    # Should still return REJECTED even though event emission failed
+    assert result.success is False
+    assert result.action == ScheduleAction.REJECTED
+    assert result.task_id is None
+    assert "Failed to load agent config" in result.reason
