@@ -133,7 +133,9 @@ class RedisConfigCache:
                         if not self._listener_healthy:
                             self._listener_healthy = True
                             self._listener_error_count = 0
-                            logger.info("Cache invalidation listener recovered", extra={"error_id": "INFO_LISTENER_RECOVERED"})
+                            logger.info(
+                                "Cache invalidation listener recovered", extra={"error_id": "INFO_LISTENER_RECOVERED"}
+                            )
 
                 except Exception as e:
                     consecutive_errors += 1
