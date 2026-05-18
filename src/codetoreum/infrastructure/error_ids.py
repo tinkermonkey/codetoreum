@@ -45,6 +45,8 @@ class ErrorCategory(str, Enum):
     PR_REVIEW_CYCLE = "PR_REVIEW_CYCLE"
     WEBHOOK = "WEBHOOK"
     DEBUG = "DEBUG"
+    SCHEDULER = "SCHEDULER"
+    BOARD = "BOARD"
 
 
 class ErrorRegistry:
@@ -302,6 +304,10 @@ def get_error_id_category(error_id: str) -> ErrorCategory:
     """
     Determine the category of an error based on its ID.
 
+    Handles both single-word and multi-word prefixes:
+    - Single-word: ERR_VALIDATION_FAILED -> VALIDATION
+    - Multi-word: ERR_EXEC_CHAIN_* -> EXECUTION, ERR_BOARD_EVENT_* -> BOARD
+
     Args:
         error_id: The error ID to categorize
 
@@ -311,7 +317,6 @@ def get_error_id_category(error_id: str) -> ErrorCategory:
     Raises:
         ValueError: If the error ID is not recognized
     """
-    # Extract category from error ID (e.g., ERR_VALIDATION_FAILED -> VALIDATION)
     if not error_id.startswith("ERR_"):
         message = f"Invalid error ID format: {error_id}"
         raise ValueError(message)
@@ -321,9 +326,21 @@ def get_error_id_category(error_id: str) -> ErrorCategory:
         message = f"Invalid error ID format: {error_id}"
         raise ValueError(message)
 
-    # Try to find matching category
-    category_name = parts[1]
+    # Multi-word prefix mappings: tuple of prefix words -> ErrorCategory
+    multi_word_mappings = {
+        ("EXEC", "CHAIN"): ErrorCategory.EXECUTION,
+        ("BOARD", "EVENT"): ErrorCategory.BOARD,
+        ("PR", "REVIEW", "CYCLE"): ErrorCategory.PR_REVIEW_CYCLE,
+    }
 
+    # Try matching multi-word prefixes (longest match first)
+    for prefix_tuple, category in multi_word_mappings.items():
+        prefix_len = len(prefix_tuple)
+        if len(parts) > prefix_len and tuple(parts[1 : 1 + prefix_len]) == prefix_tuple:
+            return category
+
+    # Try single-word category match
+    category_name = parts[1]
     for category in ErrorCategory:
         if category.value == category_name:
             return category
