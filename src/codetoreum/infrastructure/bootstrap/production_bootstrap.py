@@ -652,19 +652,11 @@ class ProductionApplicationBootstrap:
             failed_event_store=self.infrastructure.failed_event_store,
         )
 
-        # For production, use the execution service executor with a system clock
+        # For production, use the execution service executor with a real time clock
         from codetoreum.adapters.secondary.execution_service_agent_executor import (
             ExecutionServiceAgentExecutor,
         )
-
-        # Create a simple system clock wrapper that returns current UTC time
-        class SystemClock:
-            """System clock wrapper that uses real time instead of simulation clock."""
-
-            @staticmethod
-            def now() -> datetime:
-                """Return current UTC time."""
-                return datetime.now(UTC)
+        from codetoreum.infrastructure.simulation.simulation_clock import RealTimeClock
 
         execution_service_executor = ExecutionServiceAgentExecutor(
             execution_service=execution_service,
@@ -675,7 +667,7 @@ class ProductionApplicationBootstrap:
             run_registry=self.adapters.run_registry,
             branch_tracker=self.adapters.branch_tracker,
             vcs=self.adapters.version_control,
-            clock=SystemClock(),  # type: ignore  # System clock in production
+            clock=RealTimeClock(),  # Production clock using real system time
             recovery_service=recovery_service,
         )
         self.adapters.agent_executor = execution_service_executor

@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     )
     from codetoreum.application.execution_service import ExecutionService
     from codetoreum.application.workspace_router import WorkspaceRouter
-    from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
+    from codetoreum.infrastructure.simulation.simulation_clock import ClockProtocol
     from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
     from codetoreum.ports.output.agent_repository import IAgentRepository
     from codetoreum.ports.output.config_store import IConfigStore
@@ -90,7 +90,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         run_registry: IActiveWorkflowRunRegistry,
         branch_tracker: IWorkItemBranchTracker,
         vcs: IVersionControlService,
-        clock: SimulationClock,
+        clock: ClockProtocol,
         recovery_service: AgentExecutionRecoveryService | None = None,
         execution_delay: float = 0.0,
         workflow_config_service: IWorkflowConfigService | None = None,
@@ -106,7 +106,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             run_registry: Tracks active workflow runs per work item
             branch_tracker: Tracks VCS branches per work item
             vcs: Version control service for repository operations
-            clock: SimulationClock for consistent time tracking in simulation
+            clock: Clock implementation (IClock protocol) for time tracking
             recovery_service: Service for handling completion callback failures
             execution_delay: Optional delay (seconds) before execution for testing
             workflow_config_service: Optional service for fetching workflow templates

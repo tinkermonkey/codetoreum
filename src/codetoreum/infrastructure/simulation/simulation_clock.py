@@ -70,7 +70,7 @@ class ClockProtocol(Protocol):
         ...
 
 
-class SimulationClock:
+class SimulationClock(ClockProtocol):
     """
     Simulated clock for deterministic time in tests.
 
@@ -419,7 +419,7 @@ class SimulationClock:
         return f"SimulationClock(current_time={self._current_time.isoformat()}, speed={self._speed_multiplier}x)"
 
 
-class RealTimeClock:
+class RealTimeClock(ClockProtocol):
     """
     Real-time clock adapter that implements the ClockProtocol.
 
