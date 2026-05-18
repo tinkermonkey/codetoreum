@@ -34,7 +34,7 @@ class IssueIntakeResult:
     success: bool
     work_item_id: str
     message: str
-    errors: tuple[str, ...] | None = None
+    errors: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         """Validate all fields at construction time."""

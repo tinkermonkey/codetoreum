@@ -226,12 +226,30 @@ def test_issue_opened_command_validation_empty_project_id():
         )
 
 
+def test_issue_opened_command_validation_whitespace_project_id():
+    """Test that IssueOpenedCommand rejects whitespace-only project_id."""
+    with pytest.raises(ValueError, match="project_id must be non-empty"):
+        IssueOpenedCommand(
+            project_id="   ",
+            issue_number="42",
+        )
+
+
 def test_issue_opened_command_validation_empty_issue_number():
     """Test that IssueOpenedCommand rejects empty issue_number."""
     with pytest.raises(ValueError, match="issue_number must be non-empty"):
         IssueOpenedCommand(
             project_id="proj-1",
             issue_number="",
+        )
+
+
+def test_issue_opened_command_validation_whitespace_issue_number():
+    """Test that IssueOpenedCommand rejects whitespace-only issue_number."""
+    with pytest.raises(ValueError, match="issue_number must be non-empty"):
+        IssueOpenedCommand(
+            project_id="proj-1",
+            issue_number="   ",
         )
 
 
@@ -256,6 +274,16 @@ def test_issue_intake_result_validation_empty_work_item_id():
         )
 
 
+def test_issue_intake_result_validation_whitespace_work_item_id():
+    """Test that IssueIntakeResult rejects whitespace-only work_item_id."""
+    with pytest.raises(ValueError, match="work_item_id must be non-empty"):
+        IssueIntakeResult(
+            success=True,
+            work_item_id="   ",
+            message="Success",
+        )
+
+
 def test_issue_intake_result_validation_empty_message():
     """Test that IssueIntakeResult rejects empty message."""
     with pytest.raises(ValueError, match="message must be non-empty"):
@@ -263,6 +291,16 @@ def test_issue_intake_result_validation_empty_message():
             success=True,
             work_item_id="42",
             message="",
+        )
+
+
+def test_issue_intake_result_validation_whitespace_message():
+    """Test that IssueIntakeResult rejects whitespace-only message."""
+    with pytest.raises(ValueError, match="message must be non-empty"):
+        IssueIntakeResult(
+            success=True,
+            work_item_id="42",
+            message="   ",
         )
 
 
