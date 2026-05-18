@@ -10,12 +10,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class IssueOpenedCommand:
-    """Command to handle newly opened GitHub issue.
-
-    Immutable command at the port boundary. All fields are validated at
-    construction to ensure contract integrity. Frozen to prevent accidental
-    mutation after creation.
-    """
+    """Command to handle newly opened GitHub issue."""
 
     project_id: str
     issue_number: str
@@ -24,34 +19,29 @@ class IssueOpenedCommand:
 
     def __post_init__(self) -> None:
         """Validate all fields at construction time."""
-        if not self.project_id:
+        if not self.project_id or not self.project_id.strip():
             msg = "project_id must be non-empty"
             raise ValueError(msg)
-        if not self.issue_number:
+        if not self.issue_number or not self.issue_number.strip():
             msg = "issue_number must be non-empty"
             raise ValueError(msg)
 
 
 @dataclass(frozen=True)
 class IssueIntakeResult:
-    """Result of issue intake operation.
-
-    Immutable result at the port boundary. All fields are validated at
-    construction to ensure contract integrity. Frozen to prevent accidental
-    mutation after creation.
-    """
+    """Result of issue intake operation."""
 
     success: bool
     work_item_id: str
     message: str
-    errors: list[str] | None = None
+    errors: tuple[str, ...] | None = None
 
     def __post_init__(self) -> None:
         """Validate all fields at construction time."""
-        if not self.work_item_id:
+        if not self.work_item_id or not self.work_item_id.strip():
             msg = "work_item_id must be non-empty"
             raise ValueError(msg)
-        if not self.message:
+        if not self.message or not self.message.strip():
             msg = "message must be non-empty"
             raise ValueError(msg)
 

@@ -72,7 +72,7 @@ class IssueIntakeService(IIssueIntakePort):
                     success=False,
                     work_item_id=issue_number,
                     message=message,
-                    errors=[message],
+                    errors=(message,),
                 )
 
             # Use the first board (assuming project has at least one)
@@ -88,7 +88,7 @@ class IssueIntakeService(IIssueIntakePort):
                     success=False,
                     work_item_id=issue_number,
                     message=message,
-                    errors=[message],
+                    errors=(message,),
                 )
 
             # Find the initial column (position 0)
@@ -101,7 +101,7 @@ class IssueIntakeService(IIssueIntakePort):
                     success=False,
                     work_item_id=issue_number,
                     message=message,
-                    errors=[message],
+                    errors=(message,),
                 )
 
             # Place the issue in the initial column
@@ -136,5 +136,5 @@ class IssueIntakeService(IIssueIntakePort):
                 success=False,
                 work_item_id=issue_number,
                 message=message,
-                errors=[str(e)],
+                errors=(str(e),),
             )
