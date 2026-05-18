@@ -771,3 +771,183 @@ class TestProductionPathProjectContextBuilding:
             # Check the call
             call_kwargs = mock_context_class.call_args.kwargs
             assert call_kwargs["repository_url"] == "https://github.com/my-org/my-repo.git"
+
+
+class TestPromptBuilderIntegration:
+    """Test PromptBuilder integration with workflow_config_service in execution chain."""
+
+    @pytest.mark.asyncio
+    async def test_workflow_template_fetched_when_config_service_provided(self):
+        """Step 8: workflow_config_service.get_board_workflow_template called when service injected."""
+        fx = ProductionPathFixture()
+        workflow_config_service = AsyncMock()
+        mock_template = MagicMock()
+        mock_template.stages = {"implementation": "Implement the feature"}
+        workflow_config_service.get_board_workflow_template.return_value = mock_template
+
+        executor = ExecutionServiceAgentExecutor(
+            execution_service=fx.execution_service,
+            workspace_router=fx.workspace_router,
+            config_store=fx.config_store,
+            agent_repository=fx.agent_repository,
+            work_item_service=fx.work_item_service,
+            run_registry=fx.run_registry,
+            branch_tracker=fx.branch_tracker,
+            vcs=fx.vcs,
+            clock=fx.clock,
+            recovery_service=fx.recovery_service,
+            workflow_config_service=workflow_config_service,
+        )
+        executor.set_completion_handler(fx.completion_callback, fx.BOARD_ID)
+
+        await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+        # Verify workflow template was fetched
+        workflow_config_service.get_board_workflow_template.assert_called_once_with(fx.BOARD_ID)
+
+    @pytest.mark.asyncio
+    async def test_prompt_built_with_workflow_template_when_service_provided(self):
+        """Step 8: PromptBuilder.build_prompt called with workflow_template parameter."""
+        fx = ProductionPathFixture()
+        workflow_config_service = AsyncMock()
+        mock_template = MagicMock()
+        mock_template.stages = {"implementation": "Implement the feature"}
+        workflow_config_service.get_board_workflow_template.return_value = mock_template
+
+        with patch(
+            "codetoreum.adapters.secondary.execution_service_agent_executor.PromptBuilder"
+        ) as mock_prompt_builder:
+            mock_prompt = "Test prompt"
+            mock_prompt_builder.build_prompt.return_value = mock_prompt
+
+            executor = ExecutionServiceAgentExecutor(
+                execution_service=fx.execution_service,
+                workspace_router=fx.workspace_router,
+                config_store=fx.config_store,
+                agent_repository=fx.agent_repository,
+                work_item_service=fx.work_item_service,
+                run_registry=fx.run_registry,
+                branch_tracker=fx.branch_tracker,
+                vcs=fx.vcs,
+                clock=fx.clock,
+                recovery_service=fx.recovery_service,
+                workflow_config_service=workflow_config_service,
+            )
+            executor.set_completion_handler(fx.completion_callback, fx.BOARD_ID)
+
+            await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+            # Verify PromptBuilder.build_prompt was called with workflow_template
+            assert mock_prompt_builder.build_prompt.called
+            call_kwargs = mock_prompt_builder.build_prompt.call_args.kwargs
+            assert call_kwargs["workflow_template"] == mock_template
+
+    @pytest.mark.asyncio
+    async def test_prompt_built_without_template_when_service_not_provided(self):
+        """Step 8: PromptBuilder.build_prompt called with workflow_template=None when service not provided."""
+        fx = ProductionPathFixture()
+
+        with patch(
+            "codetoreum.adapters.secondary.execution_service_agent_executor.PromptBuilder"
+        ) as mock_prompt_builder:
+            mock_prompt = "Test prompt"
+            mock_prompt_builder.build_prompt.return_value = mock_prompt
+
+            executor = ExecutionServiceAgentExecutor(
+                execution_service=fx.execution_service,
+                workspace_router=fx.workspace_router,
+                config_store=fx.config_store,
+                agent_repository=fx.agent_repository,
+                work_item_service=fx.work_item_service,
+                run_registry=fx.run_registry,
+                branch_tracker=fx.branch_tracker,
+                vcs=fx.vcs,
+                clock=fx.clock,
+                recovery_service=fx.recovery_service,
+                workflow_config_service=None,
+            )
+            executor.set_completion_handler(fx.completion_callback, fx.BOARD_ID)
+
+            await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+            # Verify PromptBuilder.build_prompt was called with workflow_template=None
+            assert mock_prompt_builder.build_prompt.called
+            call_kwargs = mock_prompt_builder.build_prompt.call_args.kwargs
+            assert call_kwargs["workflow_template"] is None
+
+    @pytest.mark.asyncio
+    async def test_workflow_template_fetch_failure_logged_but_prompt_built(self):
+        """Step 8: workflow_template fetch failure logged as warning, prompt still built with None."""
+        fx = ProductionPathFixture()
+        workflow_config_service = AsyncMock()
+        workflow_config_service.get_board_workflow_template.side_effect = RuntimeError("Service unavailable")
+
+        with patch(
+            "codetoreum.adapters.secondary.execution_service_agent_executor.PromptBuilder"
+        ) as mock_prompt_builder:
+            with patch("codetoreum.adapters.secondary.execution_service_agent_executor.logger") as mock_logger:
+                mock_prompt = "Test prompt"
+                mock_prompt_builder.build_prompt.return_value = mock_prompt
+
+                executor = ExecutionServiceAgentExecutor(
+                    execution_service=fx.execution_service,
+                    workspace_router=fx.workspace_router,
+                    config_store=fx.config_store,
+                    agent_repository=fx.agent_repository,
+                    work_item_service=fx.work_item_service,
+                    run_registry=fx.run_registry,
+                    branch_tracker=fx.branch_tracker,
+                    vcs=fx.vcs,
+                    clock=fx.clock,
+                    recovery_service=fx.recovery_service,
+                    workflow_config_service=workflow_config_service,
+                )
+                executor.set_completion_handler(fx.completion_callback, fx.BOARD_ID)
+
+                await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+                # Verify warning was logged
+                assert mock_logger.warning.called
+                warning_call = mock_logger.warning.call_args
+                assert "Failed to fetch workflow template" in warning_call.args[0]
+
+                # Verify PromptBuilder still called with workflow_template=None
+                assert mock_prompt_builder.build_prompt.called
+                call_kwargs = mock_prompt_builder.build_prompt.call_args.kwargs
+                assert call_kwargs["workflow_template"] is None
+
+    @pytest.mark.asyncio
+    async def test_prompt_building_handles_missing_previous_stage_output(self):
+        """Step 8: PromptBuilder.build_prompt called even when previous_stage.txt missing."""
+        fx = ProductionPathFixture()
+
+        with patch(
+            "codetoreum.adapters.secondary.execution_service_agent_executor.PromptBuilder"
+        ) as mock_prompt_builder:
+            with patch(
+                "codetoreum.adapters.secondary.execution_service_agent_executor.Path.exists",
+                return_value=False,
+            ):
+                mock_prompt = "Test prompt"
+                mock_prompt_builder.build_prompt.return_value = mock_prompt
+
+                executor = ExecutionServiceAgentExecutor(
+                    execution_service=fx.execution_service,
+                    workspace_router=fx.workspace_router,
+                    config_store=fx.config_store,
+                    agent_repository=fx.agent_repository,
+                    work_item_service=fx.work_item_service,
+                    run_registry=fx.run_registry,
+                    branch_tracker=fx.branch_tracker,
+                    vcs=fx.vcs,
+                    clock=fx.clock,
+                    recovery_service=fx.recovery_service,
+                )
+                executor.set_completion_handler(fx.completion_callback, fx.BOARD_ID)
+
+                await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+                # Verify PromptBuilder still called with previous_output=None
+                assert mock_prompt_builder.build_prompt.called
+                call_kwargs = mock_prompt_builder.build_prompt.call_args.kwargs
+                assert call_kwargs["previous_output"] is None

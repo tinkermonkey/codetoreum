@@ -668,6 +668,7 @@ class ProductionApplicationBootstrap:
             vcs=self.adapters.version_control,
             clock=RealTimeClock(),  # Production clock using real system time
             recovery_service=recovery_service,
+            workflow_config_service=self.adapters.workflow_config,
         )
         self.adapters.agent_executor = execution_service_executor
 
