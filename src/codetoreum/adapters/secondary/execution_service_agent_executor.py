@@ -435,13 +435,26 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 except OSError as e:
                     logger.warning(f"Failed to read previous stage output: {e}", exc_info=True)
 
-                prompt = PromptBuilder.build_prompt(
-                    work_item=work_item,
-                    agent=agent,
-                    stage_name=run_info.stage_name,
-                    workflow_template=workflow_template,
-                    previous_output=previous_output,
-                )
+                # Build prompt with dedicated error handling
+                try:
+                    prompt = PromptBuilder.build_prompt(
+                        work_item=work_item,
+                        agent=agent,
+                        stage_name=run_info.stage_name,
+                        workflow_template=workflow_template,
+                        previous_output=previous_output,
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"Failed to build prompt for '{work_item_id}': {e}",
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_EXEC_CHAIN_PROMPT_BUILD_FAILURE},
+                    )
+                    await self._workspace_router.finalize_workspace(
+                        workspace, project_context, {"success": False}, repo_path
+                    )
+                    await self._call_completion(work_item_id, resolved_board_id, False)
+                    return
 
                 execution = await self._execution_service.create_execution(
                     agent=agent,
