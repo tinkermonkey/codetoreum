@@ -144,7 +144,7 @@ class ProductionPathFixture:
         self.finalize_result.success = True
         self.workspace_router.finalize_workspace.return_value = self.finalize_result
 
-    def make_executor(self, recovery_service=_UNSET) -> ExecutionServiceAgentExecutor:
+    def make_executor(self, recovery_service=_UNSET, workflow_config_service=_UNSET) -> ExecutionServiceAgentExecutor:
         executor = ExecutionServiceAgentExecutor(
             execution_service=self.execution_service,
             workspace_router=self.workspace_router,
@@ -156,6 +156,7 @@ class ProductionPathFixture:
             vcs=self.vcs,
             clock=self.clock,
             recovery_service=self.recovery_service if recovery_service is _UNSET else recovery_service,
+            workflow_config_service=None if workflow_config_service is _UNSET else workflow_config_service,
         )
         executor.set_completion_handler(self.completion_callback, self.BOARD_ID)
         return executor
@@ -785,20 +786,7 @@ class TestPromptBuilderIntegration:
         mock_template.stages = {"implementation": "Implement the feature"}
         workflow_config_service.get_board_workflow_template.return_value = mock_template
 
-        executor = ExecutionServiceAgentExecutor(
-            execution_service=fx.execution_service,
-            workspace_router=fx.workspace_router,
-            config_store=fx.config_store,
-            agent_repository=fx.agent_repository,
-            work_item_service=fx.work_item_service,
-            run_registry=fx.run_registry,
-            branch_tracker=fx.branch_tracker,
-            vcs=fx.vcs,
-            clock=fx.clock,
-            recovery_service=fx.recovery_service,
-            workflow_config_service=workflow_config_service,
-        )
-        executor.set_completion_handler(fx.completion_callback, fx.BOARD_ID)
+        executor = fx.make_executor(workflow_config_service=workflow_config_service)
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
 
@@ -820,20 +808,7 @@ class TestPromptBuilderIntegration:
             mock_prompt = "Test prompt"
             mock_prompt_builder.build_prompt.return_value = mock_prompt
 
-            executor = ExecutionServiceAgentExecutor(
-                execution_service=fx.execution_service,
-                workspace_router=fx.workspace_router,
-                config_store=fx.config_store,
-                agent_repository=fx.agent_repository,
-                work_item_service=fx.work_item_service,
-                run_registry=fx.run_registry,
-                branch_tracker=fx.branch_tracker,
-                vcs=fx.vcs,
-                clock=fx.clock,
-                recovery_service=fx.recovery_service,
-                workflow_config_service=workflow_config_service,
-            )
-            executor.set_completion_handler(fx.completion_callback, fx.BOARD_ID)
+            executor = fx.make_executor(workflow_config_service=workflow_config_service)
 
             await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
 
@@ -853,20 +828,7 @@ class TestPromptBuilderIntegration:
             mock_prompt = "Test prompt"
             mock_prompt_builder.build_prompt.return_value = mock_prompt
 
-            executor = ExecutionServiceAgentExecutor(
-                execution_service=fx.execution_service,
-                workspace_router=fx.workspace_router,
-                config_store=fx.config_store,
-                agent_repository=fx.agent_repository,
-                work_item_service=fx.work_item_service,
-                run_registry=fx.run_registry,
-                branch_tracker=fx.branch_tracker,
-                vcs=fx.vcs,
-                clock=fx.clock,
-                recovery_service=fx.recovery_service,
-                workflow_config_service=None,
-            )
-            executor.set_completion_handler(fx.completion_callback, fx.BOARD_ID)
+            executor = fx.make_executor()
 
             await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
 
@@ -889,20 +851,7 @@ class TestPromptBuilderIntegration:
                 mock_prompt = "Test prompt"
                 mock_prompt_builder.build_prompt.return_value = mock_prompt
 
-                executor = ExecutionServiceAgentExecutor(
-                    execution_service=fx.execution_service,
-                    workspace_router=fx.workspace_router,
-                    config_store=fx.config_store,
-                    agent_repository=fx.agent_repository,
-                    work_item_service=fx.work_item_service,
-                    run_registry=fx.run_registry,
-                    branch_tracker=fx.branch_tracker,
-                    vcs=fx.vcs,
-                    clock=fx.clock,
-                    recovery_service=fx.recovery_service,
-                    workflow_config_service=workflow_config_service,
-                )
-                executor.set_completion_handler(fx.completion_callback, fx.BOARD_ID)
+                executor = fx.make_executor(workflow_config_service=workflow_config_service)
 
                 await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
 
@@ -931,19 +880,7 @@ class TestPromptBuilderIntegration:
                 mock_prompt = "Test prompt"
                 mock_prompt_builder.build_prompt.return_value = mock_prompt
 
-                executor = ExecutionServiceAgentExecutor(
-                    execution_service=fx.execution_service,
-                    workspace_router=fx.workspace_router,
-                    config_store=fx.config_store,
-                    agent_repository=fx.agent_repository,
-                    work_item_service=fx.work_item_service,
-                    run_registry=fx.run_registry,
-                    branch_tracker=fx.branch_tracker,
-                    vcs=fx.vcs,
-                    clock=fx.clock,
-                    recovery_service=fx.recovery_service,
-                )
-                executor.set_completion_handler(fx.completion_callback, fx.BOARD_ID)
+                executor = fx.make_executor()
 
                 await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
 
