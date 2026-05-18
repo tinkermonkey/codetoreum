@@ -465,7 +465,8 @@ class AgentScheduler:
                 try:
                     logger.debug(f"Dispatching task {task.id} for agent {task.agent}")
                     work_item_id = task.context.get("work_item_id")
-                    assert isinstance(work_item_id, str), f"work_item_id must be str, got {type(work_item_id)}"
+                    if not isinstance(work_item_id, str):
+                        raise ValueError(f"work_item_id must be str, got {type(work_item_id).__name__}")
                     await self.agent_executor.execute(
                         work_item_id=work_item_id,
                         agent_id=task.agent,

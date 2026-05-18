@@ -688,3 +688,76 @@ async def test_scheduler_handles_executor_errors():
 
     finally:
         await scheduler.stop()
+
+
+async def test_scheduler_handles_invalid_work_item_id():
+    """Test that scheduler handles missing/invalid work_item_id gracefully."""
+
+    class TrackingExecutor:
+        def __init__(self):
+            self.call_count = 0
+
+        async def execute(self, work_item_id: str, agent_id: str, board_id: str | None = None) -> None:
+            self.call_count += 1
+
+    executor = TrackingExecutor()
+    task_queue = InMemoryTaskQueue()
+
+    scheduler = AgentScheduler(
+        task_queue=task_queue,
+        resource_monitor=MockResourceMonitor(),
+        rate_limiter=MockRateLimiter(),
+        config=MockProjectConfiguration(),
+        scheduling_events=MockSchedulingEvents(),
+        event_store=InMemoryEventStore(),
+        agent_executor=executor,
+    )
+
+    # Start scheduler
+    await scheduler.start()
+
+    try:
+        # Enqueue task with missing work_item_id
+        await task_queue.enqueue(
+            Task(
+                id="task-bad-1",
+                agent="test-agent",
+                project="test-project",
+                priority=WorkItemPriority.MEDIUM,
+                context={"wrong_key": "value"},  # Missing work_item_id
+                created_at=datetime.now(UTC),
+            )
+        )
+
+        # Enqueue task with invalid work_item_id type
+        await task_queue.enqueue(
+            Task(
+                id="task-bad-2",
+                agent="test-agent",
+                project="test-project",
+                priority=WorkItemPriority.MEDIUM,
+                context={"work_item_id": 123},  # Invalid type (int instead of str)
+                created_at=datetime.now(UTC),
+            )
+        )
+
+        # Enqueue valid task
+        await task_queue.enqueue(
+            Task(
+                id="task-good-1",
+                agent="test-agent",
+                project="test-project",
+                priority=WorkItemPriority.MEDIUM,
+                context={"work_item_id": "work-1"},
+                created_at=datetime.now(UTC),
+            )
+        )
+
+        # Give consumer loop time to process all tasks
+        await asyncio.sleep(1.0)
+
+        # Only the valid task should have been executed
+        assert executor.call_count == 1
+
+    finally:
+        await scheduler.stop()
