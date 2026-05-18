@@ -8,24 +8,52 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 
-@dataclass
+@dataclass(frozen=True)
 class IssueOpenedCommand:
-    """Command to handle newly opened GitHub issue"""
+    """Command to handle newly opened GitHub issue.
+
+    Immutable command at the port boundary. All fields are validated at
+    construction to ensure contract integrity. Frozen to prevent accidental
+    mutation after creation.
+    """
 
     project_id: str
     issue_number: str
     issue_title: str | None = None
     issue_url: str | None = None
 
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not self.project_id:
+            msg = "project_id must be non-empty"
+            raise ValueError(msg)
+        if not self.issue_number:
+            msg = "issue_number must be non-empty"
+            raise ValueError(msg)
 
-@dataclass
+
+@dataclass(frozen=True)
 class IssueIntakeResult:
-    """Result of issue intake operation"""
+    """Result of issue intake operation.
+
+    Immutable result at the port boundary. All fields are validated at
+    construction to ensure contract integrity. Frozen to prevent accidental
+    mutation after creation.
+    """
 
     success: bool
     work_item_id: str
     message: str
     errors: list[str] | None = None
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not self.work_item_id:
+            msg = "work_item_id must be non-empty"
+            raise ValueError(msg)
+        if not self.message:
+            msg = "message must be non-empty"
+            raise ValueError(msg)
 
 
 class IIssueIntakePort(ABC):

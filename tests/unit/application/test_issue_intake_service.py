@@ -12,7 +12,10 @@ from codetoreum.domain.board_workflow_template import (
     ColumnTemplate,
     ColumnType,
 )
-from codetoreum.ports.input.issue_intake import IssueOpenedCommand
+from codetoreum.ports.input.issue_intake import (
+    IssueIntakeResult,
+    IssueOpenedCommand,
+)
 from codetoreum.ports.output.board_service import BoardColumn
 
 
@@ -212,3 +215,64 @@ async def test_on_issue_opened_no_initial_column():
     assert not result.success
     assert "workflow template" in result.message.lower()
     assert result.errors
+
+
+def test_issue_opened_command_validation_empty_project_id():
+    """Test that IssueOpenedCommand rejects empty project_id."""
+    with pytest.raises(ValueError, match="project_id must be non-empty"):
+        IssueOpenedCommand(
+            project_id="",
+            issue_number="42",
+        )
+
+
+def test_issue_opened_command_validation_empty_issue_number():
+    """Test that IssueOpenedCommand rejects empty issue_number."""
+    with pytest.raises(ValueError, match="issue_number must be non-empty"):
+        IssueOpenedCommand(
+            project_id="proj-1",
+            issue_number="",
+        )
+
+
+def test_issue_opened_command_frozen():
+    """Test that IssueOpenedCommand is immutable."""
+    command = IssueOpenedCommand(
+        project_id="proj-1",
+        issue_number="42",
+    )
+
+    with pytest.raises((AttributeError, TypeError)):
+        command.project_id = "proj-2"
+
+
+def test_issue_intake_result_validation_empty_work_item_id():
+    """Test that IssueIntakeResult rejects empty work_item_id."""
+    with pytest.raises(ValueError, match="work_item_id must be non-empty"):
+        IssueIntakeResult(
+            success=True,
+            work_item_id="",
+            message="Success",
+        )
+
+
+def test_issue_intake_result_validation_empty_message():
+    """Test that IssueIntakeResult rejects empty message."""
+    with pytest.raises(ValueError, match="message must be non-empty"):
+        IssueIntakeResult(
+            success=True,
+            work_item_id="42",
+            message="",
+        )
+
+
+def test_issue_intake_result_frozen():
+    """Test that IssueIntakeResult is immutable."""
+    result = IssueIntakeResult(
+        success=True,
+        work_item_id="42",
+        message="Success",
+    )
+
+    with pytest.raises((AttributeError, TypeError)):
+        result.success = False
