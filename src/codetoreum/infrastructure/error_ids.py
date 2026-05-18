@@ -330,11 +330,15 @@ def get_error_id_category(error_id: str) -> ErrorCategory:
     multi_word_mappings = {
         ("EXEC", "CHAIN"): ErrorCategory.EXECUTION,
         ("BOARD", "EVENT"): ErrorCategory.BOARD,
+        ("EXTERNAL", "SERVICE"): ErrorCategory.EXTERNAL_SERVICE,
+        ("EVENT", "BUS"): ErrorCategory.EVENT_BUS,
+        ("REPAIR", "CYCLE"): ErrorCategory.REPAIR_CYCLE,
         ("PR", "REVIEW", "CYCLE"): ErrorCategory.PR_REVIEW_CYCLE,
     }
 
     # Try matching multi-word prefixes (longest match first)
-    for prefix_tuple, category in multi_word_mappings.items():
+    # Sort by prefix length descending to ensure longer prefixes are matched before shorter ones
+    for prefix_tuple, category in sorted(multi_word_mappings.items(), key=lambda x: len(x[0]), reverse=True):
         prefix_len = len(prefix_tuple)
         if len(parts) > prefix_len and tuple(parts[1 : 1 + prefix_len]) == prefix_tuple:
             return category
