@@ -23,6 +23,7 @@ except ImportError:
     trace = None
 
 from codetoreum.domain.events.adapter_events import now_iso
+from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.domain.events.discussion_events import Comment, CommentContext, CommentNeedsResponseEvent
 from codetoreum.domain.events.review_events import ReviewStatusChangedEvent
 from codetoreum.infrastructure.error_ids import ErrorRegistry
@@ -387,7 +388,7 @@ class GitHubWebhookAdapter:
             "issues": self._validate_issues_payload,
             "issue_comment": self._validate_issue_comment_payload,
             "pull_request": self._validate_pull_request_payload,
-            "discussion": self._validate_discussion_payload,
+            "discussion_comment": self._validate_discussion_payload,
         }
 
         validator = validators.get(event.event_type)
@@ -462,12 +463,15 @@ class GitHubWebhookAdapter:
         """
         Handle project_card event (card movement).
 
+        Emits WorkItemColumnChangedEvent when a card moves to a new column.
+        The event is processed by BoardColumnEventHandler for workflow automation.
+
         Args:
             event: Webhook event
-            project: Project name
+            project: Project name (project_id in domain)
 
         Returns:
-            List of created command IDs
+            List of created event IDs
         """
         # Add project card context to span
         span = self._get_span()
@@ -475,6 +479,7 @@ class GitHubWebhookAdapter:
             span.set_attribute("github.project", project)
             if "action" in event.payload:
                 span.set_attribute("github.action", event.payload["action"])
+
         payload = event.payload
         action = payload.get("action")
 
@@ -493,31 +498,70 @@ class GitHubWebhookAdapter:
             self.logger.warning("Could not extract work item ID from %s", content_url)
             return []
 
-        # Create workflow command with column_id for application service to resolve
-        # Note: The application layer (BoardColumnEventHandler) is responsible for
-        # resolving the column_id to stage information and orchestrating execution.
-        # The adapter only extracts raw data from the webhook payload.
-        command = StartWorkflowCommand(
-            project_name=project,
-            work_item_id=work_item_id,
-            pipeline_name=project,  # Placeholder; actual pipeline determined by app layer
-            stage_name="",  # Placeholder; actual stage determined by app layer
-            trigger=TriggerType.CARD_MOVEMENT,
-            context={
-                "column_id": str(column_id),
-                "previous_column_id": (
-                    str(payload.get("changes", {}).get("column_id", {}).get("from"))
-                    if payload.get("changes", {}).get("column_id", {}).get("from")
-                    else None
-                ),
-                "delivery_id": event.delivery_id,
-            },
+        # Resolve column_id to column_name
+        # The column_id is a numeric GitHub Projects column identifier that must be resolved
+        # to a column name that matches the board workflow template.
+        # For now, use column_id as a fallback column name if mapping is not available.
+        column_name = await self._resolve_column_id_to_name(project, column_id)
+        if not column_name:
+            self.logger.warning(
+                "Could not resolve column_id %s for project %s; card movement will not trigger automation",
+                column_id,
+                project,
+                extra={
+                    "error_id": "ERR_WEBHOOK_COLUMN_RESOLUTION_FAILED",
+                    "project_id": project,
+                    "column_id": column_id,
+                    "work_item_id": work_item_id,
+                },
+            )
+            return []
+
+        # Get previous column name if available
+        previous_column_id = (
+            payload.get("changes", {}).get("column_id", {}).get("from")
+            if payload.get("changes", {}).get("column_id", {}).get("from")
+            else None
         )
+        previous_column_name = None
+        if previous_column_id:
+            previous_column_name = await self._resolve_column_id_to_name(project, previous_column_id)
 
-        # Execute command via port
-        result = await self.workflow_port.start_workflow(command)
+        # Create and emit WorkItemColumnChangedEvent
+        try:
+            domain_event = WorkItemColumnChangedEvent(
+                type="workitem.column_changed",
+                timestamp=now_iso(),
+                source="github",
+                work_item_id=work_item_id,
+                project_id=project,
+                board_id=project,  # Using project as board_id (GitHub Projects are per-repository)
+                from_column=previous_column_name,
+                to_column=column_name,
+                moved_by="human",  # Card moved by human via GitHub UI
+            )
+        except ValueError as e:
+            self.logger.warning("Failed to create WorkItemColumnChangedEvent: %s", str(e), exc_info=True)
+            return []
 
-        return [result.workflow_run_id]
+        # Publish event to event bus
+        try:
+            await self.event_bus.publish(domain_event)
+            self.logger.info(
+                "Emitted WorkItemColumnChangedEvent for work_item %s: %s -> %s",
+                work_item_id,
+                previous_column_name,
+                column_name,
+            )
+            return [domain_event.event_id]
+        except Exception as e:
+            self.logger.error(
+                "Failed to publish WorkItemColumnChangedEvent: %s",
+                str(e),
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+            )
+            return []
 
     @instrument_async_function(
         name="github.webhook.handle_issues",
@@ -896,6 +940,67 @@ class GitHubWebhookAdapter:
             if repo_full_name == repository:
                 return project_config.id
         return None
+
+    async def _resolve_column_id_to_name(self, project_id: str, column_id: int) -> str | None:
+        """
+        Resolve GitHub Projects column ID to column name.
+
+        Attempts to resolve the numeric column ID to a human-readable column name
+        using the project configuration's board column mapping. The mapping should be
+        stored in the project configuration metadata.
+
+        Args:
+            project_id: Project ID
+            column_id: GitHub Projects numeric column ID
+
+        Returns:
+            Column name string, or None if mapping not found or resolution fails
+        """
+        if not column_id:
+            return None
+
+        try:
+            project_config = await self.config.get_project_config(project_id)
+            if not project_config:
+                self.logger.warning("Project config not found for %s", project_id)
+                return None
+
+            # Try to find column mapping in project metadata
+            # Expected format: metadata.board_columns = {column_id: "column_name", ...}
+            board_columns = project_config.metadata.get("board_columns", {})
+            column_name = board_columns.get(str(column_id))
+
+            if column_name:
+                return column_name
+
+            # If mapping not found, log warning but don't fail hard
+            self.logger.warning(
+                "Column ID mapping not found for column_id=%s in project %s. "
+                "Please configure board_columns mapping in project configuration metadata.",
+                column_id,
+                project_id,
+                extra={
+                    "error_id": "ERR_WEBHOOK_COLUMN_MAPPING_NOT_FOUND",
+                    "project_id": project_id,
+                    "column_id": column_id,
+                },
+            )
+            return None
+
+        except Exception as e:
+            self.logger.error(
+                "Error resolving column ID %s for project %s: %s",
+                column_id,
+                project_id,
+                str(e),
+                exc_info=True,
+                extra={
+                    "error_id": "ERR_WEBHOOK_COLUMN_RESOLUTION_ERROR",
+                    "project_id": project_id,
+                    "column_id": column_id,
+                },
+            )
+            return None
 
     def _extract_work_item_id(self, content_url: str) -> str | None:
         """

@@ -67,35 +67,18 @@ def webhook_adapter(mock_dependencies):
 
 @pytest.mark.asyncio
 async def test_github_webhook_process_event_project_card(tracer_provider, webhook_adapter, mock_dependencies):
-    """Verify GitHubWebhookAdapter._process_event captures webhook metadata."""
-    # Setup mocks
+    """Verify GitHubWebhookAdapter._process_event captures webhook metadata for project_card events."""
+    # Setup mocks - config must return ProjectConfig with metadata containing board column mappings
+    from types import MappingProxyType
+
+    mock_project_config = MagicMock()
+    mock_project_config.metadata = MappingProxyType({"board_columns": {"456": "In Progress", "789": "Backlog"}})
+
     mock_dependencies["config"].list_projects = AsyncMock(return_value=["test-project"])
-    mock_dependencies["config"].get_project_config = AsyncMock(
-        return_value=MagicMock(
-            github=MagicMock(org="org", repo="repo"),
-            pipelines=[
-                MagicMock(
-                    name="main-pipeline",
-                    board_name="main",
-                    workflow="main-workflow",
-                )
-            ],
-        )
-    )
-    mock_dependencies["config"].load_github_state = AsyncMock(
-        return_value={"boards": {"main": {"columns": {"in-progress": 456}}}}
-    )
-    mock_dependencies["config"].get_workflow_template = AsyncMock(
-        return_value=MagicMock(
-            columns=[
-                MagicMock(
-                    name="in-progress",
-                    agent="dev-agent",
-                )
-            ]
-        )
-    )
-    mock_dependencies["workflow_port"].start_workflow = AsyncMock(return_value=MagicMock(workflow_run_id="run-001"))
+    mock_dependencies["config"].get_project_config = AsyncMock(return_value=mock_project_config)
+
+    # Mock event_bus.publish to track event emission
+    mock_dependencies["event_bus"].publish = AsyncMock()
 
     # Create webhook event
     event = WebhookEvent(
@@ -119,6 +102,16 @@ async def test_github_webhook_process_event_project_card(tracer_provider, webhoo
     # Execute
     result = await webhook_adapter._process_event(event, "test-project")
 
+    # Assert event was published
+    mock_dependencies["event_bus"].publish.assert_called_once()
+    published_event = mock_dependencies["event_bus"].publish.call_args[0][0]
+
+    # Verify it's a WorkItemColumnChangedEvent with correct data
+    assert published_event.event_type == "WorkItemColumnChangedEvent"
+    assert published_event.work_item_id == "123"
+    assert published_event.to_column == "In Progress"
+    assert published_event.from_column == "Backlog"
+
     # Assert span was created with correct attributes
     spans = tracer_provider.get_finished_spans()
     process_span = next(
@@ -141,29 +134,17 @@ async def test_github_webhook_process_event_project_card(tracer_provider, webhoo
 @pytest.mark.asyncio
 async def test_github_webhook_complete_trace_chain(tracer_provider, webhook_adapter, mock_dependencies):
     """Verify webhook spans include complete business context for tracing."""
-    # Setup mocks
+    # Setup mocks - config must return ProjectConfig with board column mappings
+    from types import MappingProxyType
+
+    mock_project_config = MagicMock()
+    mock_project_config.metadata = MappingProxyType({"board_columns": {"123": "Ready", "456": "Todo"}})
+
     mock_dependencies["config"].list_projects = AsyncMock(return_value=["test-project"])
-    mock_dependencies["config"].get_project_config = AsyncMock(
-        return_value=MagicMock(
-            github=MagicMock(org="acme", repo="platform"),
-            pipelines=[
-                MagicMock(
-                    name="main-pipeline",
-                    board_name="main",
-                    workflow="main-workflow",
-                )
-            ],
-        )
-    )
-    mock_dependencies["config"].load_github_state = AsyncMock(
-        return_value={"boards": {"main": {"columns": {"ready": 123}}}}
-    )
-    mock_dependencies["config"].get_workflow_template = AsyncMock(
-        return_value=MagicMock(columns=[MagicMock(name="ready", agent="scheduler")])
-    )
-    mock_dependencies["workflow_port"].start_workflow = AsyncMock(
-        return_value=MagicMock(workflow_run_id="run-comprehensive")
-    )
+    mock_dependencies["config"].get_project_config = AsyncMock(return_value=mock_project_config)
+
+    # Mock event_bus.publish
+    mock_dependencies["event_bus"].publish = AsyncMock()
 
     # Create webhook event with full metadata
     event = WebhookEvent(
@@ -186,6 +167,12 @@ async def test_github_webhook_complete_trace_chain(tracer_provider, webhook_adap
 
     # Execute
     result = await webhook_adapter._process_event(event, "test-project")
+
+    # Assert event was published
+    mock_dependencies["event_bus"].publish.assert_called_once()
+    published_event = mock_dependencies["event_bus"].publish.call_args[0][0]
+    assert published_event.work_item_id == "555"
+    assert published_event.to_column == "Ready"
 
     # Assert all expected spans with complete context
     spans = tracer_provider.get_finished_spans()
