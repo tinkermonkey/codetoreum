@@ -9,6 +9,7 @@ from typing import Any
 
 from codetoreum.domain.agent import Agent
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.observability.instrumentation import (
     instrument_async_function,
 )
@@ -213,7 +214,7 @@ class AgentScheduler:
             logger.error(
                 f"Failed to load agent config: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_SCHEDULER_AGENT_CONFIG_LOAD_FAILURE"},
+                extra={"error_id": ErrorRegistry.ERR_SCHEDULER_AGENT_CONFIG_LOAD_FAILURE},
             )
             await self.scheduling_events.emit_task_rejected(agent.id, work_item.project_id, f"Config error: {e}")
             return ScheduleResult(
@@ -230,7 +231,7 @@ class AgentScheduler:
                 retry_after = await self.rate_limiter.get_retry_after(agent.id)
                 logger.warning(
                     f"Agent {agent.id} rate limited, retry after {retry_after}s",
-                    extra={"error_id": "ERR_SCHEDULER_RATE_LIMIT"},
+                    extra={"error_id": ErrorRegistry.ERR_SCHEDULER_RATE_LIMIT},
                 )
                 await self.scheduling_events.emit_task_throttled(
                     agent.id,
@@ -252,7 +253,7 @@ class AgentScheduler:
             reason = await self._get_unavailability_reason(agent_config, work_item.project_id)
             logger.warning(
                 f"Cannot schedule agent {agent.id}: {reason}",
-                extra={"error_id": "ERR_SCHEDULER_RESOURCE_UNAVAILABLE"},
+                extra={"error_id": ErrorRegistry.ERR_SCHEDULER_RESOURCE_UNAVAILABLE},
             )
             await self.scheduling_events.emit_task_rejected(agent.id, work_item.project_id, reason)
             return ScheduleResult(
@@ -287,7 +288,7 @@ class AgentScheduler:
             logger.error(
                 f"Failed to enqueue task: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_SCHEDULER_ENQUEUE_FAILURE"},
+                extra={"error_id": ErrorRegistry.ERR_SCHEDULER_ENQUEUE_FAILURE},
             )
             await self.scheduling_events.emit_task_rejected(agent.id, work_item.project_id, f"Queue error: {e}")
             return ScheduleResult(
@@ -475,14 +476,14 @@ class AgentScheduler:
                     logger.error(
                         f"Error executing task {task.id}: {e}",
                         exc_info=True,
-                        extra={"error_id": "ERR_SCHEDULER_TASK_EXECUTION_FAILURE"},
+                        extra={"error_id": ErrorRegistry.ERR_SCHEDULER_TASK_EXECUTION_FAILURE},
                     )
 
             except Exception as e:
                 logger.error(
                     f"Unexpected error in consumer loop: {e}",
                     exc_info=True,
-                    extra={"error_id": "ERR_SCHEDULER_CONSUMER_LOOP_FAILURE"},
+                    extra={"error_id": ErrorRegistry.ERR_SCHEDULER_CONSUMER_LOOP_FAILURE},
                 )
                 # Continue despite errors to keep consumer loop alive
                 await asyncio.sleep(1.0)
