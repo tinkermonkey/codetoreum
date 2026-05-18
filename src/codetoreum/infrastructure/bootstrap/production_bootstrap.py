@@ -1104,6 +1104,7 @@ class ProductionApplicationBootstrap:
 
         Performs cleanup in order:
         - Stop agent scheduler consumer loop
+        - Stop multi-project orchestrator poll loop
         - Close event store (closes Elasticsearch client if applicable)
         - Log final event bus statistics
         - Clear adapter references
@@ -1131,6 +1132,19 @@ class ProductionApplicationBootstrap:
                         exc_info=True,
                     )
                     # Continue with other cleanup even if scheduler stop fails
+
+            # Stop multi-project orchestrator poll loop
+            if self.services and self.services.multi_project_orchestrator:
+                logger.info("Stopping multi-project orchestrator poll loop...")
+                try:
+                    await self.services.multi_project_orchestrator.stop()
+                except Exception as e:
+                    logger.error(
+                        f"Error stopping multi-project orchestrator: {e}",
+                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                        exc_info=True,
+                    )
+                    # Continue with other cleanup even if orchestrator stop fails
 
             # Close event store (closes Elasticsearch client for production deployments)
             if self.adapters and self.adapters.event_store:
