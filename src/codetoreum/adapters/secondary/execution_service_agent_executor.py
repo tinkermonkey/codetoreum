@@ -11,8 +11,10 @@ import logging
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from codetoreum.application.prompt_builder import PromptBuilder
 from codetoreum.domain.project_context import ProjectContext
 from codetoreum.domain.services.execution_context_builder import ExecutionContextBuilder
 from codetoreum.domain.types import WorkItemId
@@ -26,13 +28,14 @@ if TYPE_CHECKING:
     )
     from codetoreum.application.execution_service import ExecutionService
     from codetoreum.application.workspace_router import WorkspaceRouter
-    from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
+    from codetoreum.infrastructure.simulation.simulation_clock import ClockProtocol
     from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
     from codetoreum.ports.output.agent_repository import IAgentRepository
     from codetoreum.ports.output.config_store import IConfigStore
     from codetoreum.ports.output.version_control_service import IVersionControlService
     from codetoreum.ports.output.work_item_branch_tracker import IWorkItemBranchTracker
     from codetoreum.ports.output.work_item_service import IWorkItemService
+    from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 logger = logging.getLogger(__name__)
 
@@ -87,9 +90,10 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         run_registry: IActiveWorkflowRunRegistry,
         branch_tracker: IWorkItemBranchTracker,
         vcs: IVersionControlService,
-        clock: SimulationClock,
+        clock: ClockProtocol,
         recovery_service: AgentExecutionRecoveryService | None = None,
         execution_delay: float = 0.0,
+        workflow_config_service: IWorkflowConfigService | None = None,
     ) -> None:
         """Initialize ExecutionServiceAgentExecutor.
 
@@ -102,9 +106,10 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             run_registry: Tracks active workflow runs per work item
             branch_tracker: Tracks VCS branches per work item
             vcs: Version control service for repository operations
-            clock: SimulationClock for consistent time tracking in simulation
+            clock: Clock implementation (IClock protocol) for time tracking
             recovery_service: Service for handling completion callback failures
             execution_delay: Optional delay (seconds) before execution for testing
+            workflow_config_service: Optional service for fetching workflow templates
         """
         self._execution_service = execution_service
         self._workspace_router = workspace_router
@@ -117,6 +122,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         self._clock = clock
         self._recovery_service = recovery_service
         self._execution_delay = execution_delay
+        self._workflow_config_service = workflow_config_service
 
         self._completion_callback: Callable[[str, str, bool], Coroutine[Any, Any, None]] | None = None
         self._default_board_id = "board-1"
@@ -259,9 +265,10 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         Args:
             work_item_id: Work item to process
             agent_id: Agent identifier
-            board_id: Board identifier
+            board_id: Board identifier (used as fallback if run_info is not available)
         """
         success = False
+        resolved_board_id = board_id  # fallback; overridden by run_info below
         try:
             if self._execution_delay > 0:
                 await asyncio.sleep(self._execution_delay)
@@ -271,10 +278,13 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             if run_info is None:
                 logger.error(
                     f"No active run found for work item '{work_item_id}'. Cannot execute.",
-                    extra={"error_id": "ERR_EXEC_CHAIN_NO_ACTIVE_RUN"},
+                    extra={"error_id": ErrorRegistry.ERR_EXEC_CHAIN_NO_ACTIVE_RUN},
                 )
                 await self._call_completion(work_item_id, board_id, False)
                 return
+
+            # Resolve board_id dynamically from run_info instead of using static default
+            resolved_board_id = run_info.board_id
 
             # Step 2: Load domain objects
             try:
@@ -283,9 +293,9 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 logger.error(
                     f"Failed to load agent '{agent_id}': {e}",
                     exc_info=True,
-                    extra={"error_id": "ERR_EXEC_CHAIN_AGENT_LOAD_FAILURE"},
+                    extra={"error_id": ErrorRegistry.ERR_EXEC_CHAIN_AGENT_LOAD_FAILURE},
                 )
-                await self._call_completion(work_item_id, board_id, False)
+                await self._call_completion(work_item_id, resolved_board_id, False)
                 return
 
             try:
@@ -294,9 +304,9 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 logger.error(
                     f"Failed to load work item '{work_item_id}': {e}",
                     exc_info=True,
-                    extra={"error_id": "ERR_EXEC_CHAIN_WORK_ITEM_LOAD_FAILURE"},
+                    extra={"error_id": ErrorRegistry.ERR_EXEC_CHAIN_WORK_ITEM_LOAD_FAILURE},
                 )
-                await self._call_completion(work_item_id, board_id, False)
+                await self._call_completion(work_item_id, resolved_board_id, False)
                 return
 
             try:
@@ -305,9 +315,9 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 logger.error(
                     f"Failed to load project config '{run_info.project_id}': {e}",
                     exc_info=True,
-                    extra={"error_id": "ERR_EXEC_CHAIN_PROJECT_CONFIG_LOAD_FAILURE"},
+                    extra={"error_id": ErrorRegistry.ERR_EXEC_CHAIN_PROJECT_CONFIG_LOAD_FAILURE},
                 )
-                await self._call_completion(work_item_id, board_id, False)
+                await self._call_completion(work_item_id, resolved_board_id, False)
                 return
 
             # Build ProjectContext from ProjectConfig
@@ -347,9 +357,9 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 logger.error(
                     f"VCS clone failed for '{work_item_id}': {e}",
                     exc_info=True,
-                    extra={"error_id": "ERR_EXEC_CHAIN_VCS_CLONE_FAILURE"},
+                    extra={"error_id": ErrorRegistry.ERR_EXEC_CHAIN_VCS_CLONE_FAILURE},
                 )
-                await self._call_completion(work_item_id, board_id, False)
+                await self._call_completion(work_item_id, resolved_board_id, False)
                 return
 
             # Step 4: Route workspace
@@ -359,9 +369,9 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 logger.error(
                     f"Workspace routing failed for '{work_item_id}': {e}",
                     exc_info=True,
-                    extra={"error_id": "ERR_EXEC_CHAIN_WORKSPACE_ROUTE_FAILURE"},
+                    extra={"error_id": ErrorRegistry.ERR_EXEC_CHAIN_WORKSPACE_ROUTE_FAILURE},
                 )
-                await self._call_completion(work_item_id, board_id, False)
+                await self._call_completion(work_item_id, resolved_board_id, False)
                 return
 
             # Step 5: Track branch
@@ -372,9 +382,9 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                     logger.error(
                         f"Branch tracker set_branch failed for '{work_item_id}': {e}",
                         exc_info=True,
-                        extra={"error_id": "ERR_EXEC_CHAIN_BRANCH_TRACKER_FAILURE"},
+                        extra={"error_id": ErrorRegistry.ERR_EXEC_CHAIN_BRANCH_TRACKER_FAILURE},
                     )
-                    await self._call_completion(work_item_id, board_id, False)
+                    await self._call_completion(work_item_id, resolved_board_id, False)
                     return
 
             # Step 6: Prepare workspace
@@ -384,9 +394,9 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             if not prep_result.success:
                 logger.error(
                     f"Workspace preparation failed for '{work_item_id}': {prep_result.reason}",
-                    extra={"error_id": "ERR_EXEC_CHAIN_WORKSPACE_PREPARE_FAILURE"},
+                    extra={"error_id": ErrorRegistry.ERR_EXEC_CHAIN_WORKSPACE_PREPARE_FAILURE},
                 )
-                await self._call_completion(work_item_id, board_id, False)
+                await self._call_completion(work_item_id, resolved_board_id, False)
                 return
 
             # Step 7: Build execution context — pass repo_path so ExecutionService
@@ -401,13 +411,51 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 repository_path=repo_path,
             )
 
-            # Step 8: Create execution
-            prompt = (
-                f"Process work item {work_item_id}: "
-                f"{getattr(work_item, 'title', work_item_id)} "
-                f"— stage: {run_info.stage_name}"
-            )
+            # Step 8: Build comprehensive prompt and create execution
             try:
+                # Fetch workflow template for stage-specific instructions
+                workflow_template = None
+                if self._workflow_config_service:
+                    try:
+                        template = await self._workflow_config_service.get_board_workflow_template(resolved_board_id)
+                        workflow_template = template
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to fetch workflow template for board '{resolved_board_id}': {e}",
+                            exc_info=True,
+                        )
+
+                # Build comprehensive prompt using PromptBuilder
+                # Try to load previous stage output from context directory
+                previous_output = None
+                try:
+                    context_file = Path(repo_path) / "context" / "previous_stage.txt"
+                    exists = await asyncio.to_thread(context_file.exists)
+                    if exists:
+                        previous_output = await asyncio.to_thread(context_file.read_text, encoding="utf-8")
+                except OSError as e:
+                    logger.warning(f"Failed to read previous stage output: {e}", exc_info=True)
+
+                try:
+                    prompt = PromptBuilder.build_prompt(
+                        work_item=work_item,
+                        agent=agent,
+                        stage_name=run_info.stage_name,
+                        workflow_template=workflow_template,
+                        previous_output=previous_output,
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"Failed to build prompt for '{work_item_id}': {e}",
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_EXEC_CHAIN_PROMPT_BUILD_FAILURE},
+                    )
+                    await self._workspace_router.finalize_workspace(
+                        workspace, project_context, {"success": False}, repo_path
+                    )
+                    await self._call_completion(work_item_id, resolved_board_id, False)
+                    return
+
                 execution = await self._execution_service.create_execution(
                     agent=agent,
                     work_item=work_item,
@@ -419,12 +467,12 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 logger.error(
                     f"create_execution failed for '{work_item_id}': {e}",
                     exc_info=True,
-                    extra={"error_id": "ERR_EXEC_CHAIN_CREATE_EXECUTION_FAILURE"},
+                    extra={"error_id": ErrorRegistry.ERR_EXEC_CHAIN_CREATE_EXECUTION_FAILURE},
                 )
                 await self._workspace_router.finalize_workspace(
                     workspace, project_context, {"success": False}, repo_path
                 )
-                await self._call_completion(work_item_id, board_id, False)
+                await self._call_completion(work_item_id, resolved_board_id, False)
                 return
 
             # Step 9: Start execution
@@ -432,12 +480,12 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             if not start_result.success:
                 logger.error(
                     f"Failed to start execution for '{work_item_id}': {start_result.error}",
-                    extra={"error_id": "ERR_EXEC_CHAIN_EXECUTION_START_FAILURE"},
+                    extra={"error_id": ErrorRegistry.ERR_EXEC_CHAIN_EXECUTION_START_FAILURE},
                 )
                 await self._workspace_router.finalize_workspace(
                     workspace, project_context, {"success": False}, repo_path
                 )
-                await self._call_completion(work_item_id, board_id, False)
+                await self._call_completion(work_item_id, resolved_board_id, False)
                 return
 
             # Step 10: Execute via LLM or Container
@@ -457,7 +505,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 logger.error(
                     f"ExecutionServiceAgentExecutor: execution call failed for '{work_item_id}': {exec_err}",
                     exc_info=True,
-                    extra={"error_id": "ERR_EXEC_CHAIN_EXECUTION_FAILURE"},
+                    extra={"error_id": ErrorRegistry.ERR_EXEC_CHAIN_EXECUTION_FAILURE},
                 )
 
             # Step 11: Finalize workspace (always runs, even on execution failure,
@@ -477,7 +525,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 logger.error(
                     f"ExecutionServiceAgentExecutor: finalize_workspace failed for '{work_item_id}': {finalize_err}",
                     exc_info=True,
-                    extra={"error_id": "ERR_EXEC_CHAIN_FINALIZE_FAILURE"},
+                    extra={"error_id": ErrorRegistry.ERR_EXEC_CHAIN_FINALIZE_FAILURE},
                 )
 
             success = exec_succeeded
@@ -487,13 +535,13 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
 
         except asyncio.CancelledError:
             logger.info(f"ExecutionServiceAgentExecutor: execution cancelled for '{work_item_id}'")
-            await self._call_completion(work_item_id, board_id, False)
+            await self._call_completion(work_item_id, resolved_board_id, False)
             raise
         except Exception as e:
             logger.error(
                 f"ExecutionServiceAgentExecutor: unexpected error for '{work_item_id}': {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_EXEC_CHAIN_UNEXPECTED_FAILURE"},
+                extra={"error_id": ErrorRegistry.ERR_EXEC_CHAIN_UNEXPECTED_FAILURE},
             )
             success = False
         finally:
@@ -507,10 +555,10 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                     f"Failed to clean up registry/branch-tracker for '{work_item_id}' "
                     "after execution — work item may be stuck",
                     exc_info=True,
-                    extra={"error_id": "ERR_EXEC_CHAIN_CLEANUP_FAILURE"},
+                    extra={"error_id": ErrorRegistry.ERR_EXEC_CHAIN_CLEANUP_FAILURE},
                 )
 
-        await self._call_completion(work_item_id, board_id, success)
+        await self._call_completion(work_item_id, resolved_board_id, success)
 
     async def _call_completion(self, work_item_id: str, board_id: str, success: bool) -> None:
         """Invoke completion callback with error handling and recovery.
@@ -536,7 +584,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 logger.error(
                     f"Completion callback failed for '{work_item_id}': {e}",
                     exc_info=True,
-                    extra={"error_id": "ERR_EXEC_CHAIN_COMPLETION_CALLBACK_FAILURE"},
+                    extra={"error_id": ErrorRegistry.ERR_EXEC_CHAIN_COMPLETION_CALLBACK_FAILURE},
                 )
                 # Use recovery service to handle the failure (queue for manual recovery,
                 # fail workflow)
@@ -562,5 +610,5 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 f"No completion callback set for ExecutionServiceAgentExecutor. "
                 f"Work item '{work_item_id}' completed with success={success} but auto-progression will not occur. "
                 f"Call set_completion_handler() to wire the callback before executing.",
-                extra={"error_id": "ERR_EXEC_CHAIN_NO_COMPLETION_CALLBACK"},
+                extra={"error_id": ErrorRegistry.ERR_EXEC_CHAIN_NO_COMPLETION_CALLBACK},
             )

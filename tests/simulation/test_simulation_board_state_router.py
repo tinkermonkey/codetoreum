@@ -160,6 +160,7 @@ class TestSimulationBoardStateRouter:
             run_id="agent-executor-001",
             stage_name="analysis",
             project_id="proj-1",
+            board_id="board-test",
         )
 
         # Query board state

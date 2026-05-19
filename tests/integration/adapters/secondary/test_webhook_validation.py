@@ -20,16 +20,14 @@ class TestWebhookSignatureValidation:
     def adapter(self):
         """Create a GitHubWebhookAdapter for testing."""
         workflow_port = AsyncMock()
-        board_service = AsyncMock()
         config = AsyncMock()
         event_bus = AsyncMock()
         logger = MagicMock()
 
         adapter = GitHubWebhookAdapter(
             workflow_command_port=workflow_port,
-            board_service=board_service,
-            config_service=config,
             event_bus=event_bus,
+            config_service=config,
             logger=logger,
         )
 
@@ -181,16 +179,14 @@ class TestTimingAttackPrevention:
     def adapter(self):
         """Create a GitHubWebhookAdapter for testing."""
         workflow_port = AsyncMock()
-        board_service = AsyncMock()
         config = AsyncMock()
         event_bus = AsyncMock()
         logger = MagicMock()
 
         adapter = GitHubWebhookAdapter(
             workflow_command_port=workflow_port,
-            board_service=board_service,
-            config_service=config,
             event_bus=event_bus,
+            config_service=config,
             logger=logger,
         )
 
@@ -255,16 +251,14 @@ class TestReplayAttackPrevention:
     def adapter(self):
         """Create a GitHubWebhookAdapter for testing."""
         workflow_port = AsyncMock()
-        board_service = AsyncMock()
         config = AsyncMock()
         event_bus = AsyncMock()
         logger = MagicMock()
 
         adapter = GitHubWebhookAdapter(
             workflow_command_port=workflow_port,
-            board_service=board_service,
-            config_service=config,
             event_bus=event_bus,
+            config_service=config,
             logger=logger,
         )
 
@@ -286,16 +280,14 @@ class TestWebhookSignatureEdgeCases:
     def adapter(self):
         """Create a GitHubWebhookAdapter for testing."""
         workflow_port = AsyncMock()
-        board_service = AsyncMock()
         config = AsyncMock()
         event_bus = AsyncMock()
         logger = MagicMock()
 
         adapter = GitHubWebhookAdapter(
             workflow_command_port=workflow_port,
-            board_service=board_service,
-            config_service=config,
             event_bus=event_bus,
+            config_service=config,
             logger=logger,
         )
 

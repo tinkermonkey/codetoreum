@@ -91,6 +91,7 @@ class TestAgentExecutionRecoveryService:
             run_id=run_id,
             stage_name=stage_name,
             project_id="proj-1",
+            board_id=board_id,
         )
         recovery_service._run_registry.get_active_run.return_value = run_info
 
@@ -125,6 +126,7 @@ class TestAgentExecutionRecoveryService:
             run_id=run_id,
             stage_name=stage_name,
             project_id="proj-1",
+            board_id=board_id,
         )
         recovery_service._run_registry.get_active_run.return_value = run_info
 
@@ -232,6 +234,7 @@ class TestAgentExecutionRecoveryService:
             run_id=run_id,
             stage_name=stage_name,
             project_id="proj-1",
+            board_id=board_id,
         )
         recovery_service._run_registry.get_active_run.return_value = run_info
 
@@ -266,6 +269,7 @@ class TestAgentExecutionRecoveryService:
             run_id=run_id,
             stage_name=stage_name,
             project_id="proj-1",
+            board_id=board_id,
         )
         recovery_service._run_registry.get_active_run.return_value = run_info
 
@@ -303,6 +307,7 @@ class TestAgentExecutionRecoveryService:
             run_id=run_id,
             stage_name=stage_name,
             project_id="proj-1",
+            board_id=board_id,
         )
         recovery_service._run_registry.get_active_run.return_value = run_info
 
@@ -345,6 +350,7 @@ class TestAgentExecutionRecoveryService:
             run_id=run_id,
             stage_name=stage_name,
             project_id="proj-1",
+            board_id=board_id,
         )
         recovery_service._run_registry.get_active_run.return_value = run_info
 

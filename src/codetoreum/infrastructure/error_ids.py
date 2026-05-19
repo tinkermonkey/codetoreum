@@ -43,7 +43,10 @@ class ErrorCategory(str, Enum):
     CONVERSATIONAL = "CONVERSATIONAL"
     REPAIR_CYCLE = "REPAIR_CYCLE"
     PR_REVIEW_CYCLE = "PR_REVIEW_CYCLE"
+    WEBHOOK = "WEBHOOK"
     DEBUG = "DEBUG"
+    SCHEDULER = "SCHEDULER"
+    BOARD = "BOARD"
 
 
 class ErrorRegistry:
@@ -251,6 +254,40 @@ class ErrorRegistry:
     ERR_BRANCH_RESOLUTION_ERROR = "ERR_BRANCH_RESOLUTION_ERROR"
     ERR_BRANCH_RESOLUTION_FALLBACK = "ERR_BRANCH_RESOLUTION_FALLBACK"
 
+    # Webhook errors
+    ERR_WEBHOOK_COLUMN_RESOLUTION_FAILED = "ERR_WEBHOOK_COLUMN_RESOLUTION_FAILED"
+    ERR_WEBHOOK_COLUMN_MAPPING_NOT_FOUND = "ERR_WEBHOOK_COLUMN_MAPPING_NOT_FOUND"
+    ERR_WEBHOOK_COLUMN_RESOLUTION_ERROR = "ERR_WEBHOOK_COLUMN_RESOLUTION_ERROR"
+
+    # Execution chain errors
+    ERR_EXEC_CHAIN_NO_ACTIVE_RUN = "ERR_EXEC_CHAIN_NO_ACTIVE_RUN"
+    ERR_EXEC_CHAIN_AGENT_LOAD_FAILURE = "ERR_EXEC_CHAIN_AGENT_LOAD_FAILURE"
+    ERR_EXEC_CHAIN_WORK_ITEM_LOAD_FAILURE = "ERR_EXEC_CHAIN_WORK_ITEM_LOAD_FAILURE"
+    ERR_EXEC_CHAIN_PROJECT_CONFIG_LOAD_FAILURE = "ERR_EXEC_CHAIN_PROJECT_CONFIG_LOAD_FAILURE"
+    ERR_EXEC_CHAIN_VCS_CLONE_FAILURE = "ERR_EXEC_CHAIN_VCS_CLONE_FAILURE"
+    ERR_EXEC_CHAIN_WORKSPACE_ROUTE_FAILURE = "ERR_EXEC_CHAIN_WORKSPACE_ROUTE_FAILURE"
+    ERR_EXEC_CHAIN_BRANCH_TRACKER_FAILURE = "ERR_EXEC_CHAIN_BRANCH_TRACKER_FAILURE"
+    ERR_EXEC_CHAIN_WORKSPACE_PREPARE_FAILURE = "ERR_EXEC_CHAIN_WORKSPACE_PREPARE_FAILURE"
+    ERR_EXEC_CHAIN_PROMPT_BUILD_FAILURE = "ERR_EXEC_CHAIN_PROMPT_BUILD_FAILURE"
+    ERR_EXEC_CHAIN_CREATE_EXECUTION_FAILURE = "ERR_EXEC_CHAIN_CREATE_EXECUTION_FAILURE"
+    ERR_EXEC_CHAIN_EXECUTION_START_FAILURE = "ERR_EXEC_CHAIN_EXECUTION_START_FAILURE"
+    ERR_EXEC_CHAIN_EXECUTION_FAILURE = "ERR_EXEC_CHAIN_EXECUTION_FAILURE"
+    ERR_EXEC_CHAIN_FINALIZE_FAILURE = "ERR_EXEC_CHAIN_FINALIZE_FAILURE"
+    ERR_EXEC_CHAIN_UNEXPECTED_FAILURE = "ERR_EXEC_CHAIN_UNEXPECTED_FAILURE"
+    ERR_EXEC_CHAIN_CLEANUP_FAILURE = "ERR_EXEC_CHAIN_CLEANUP_FAILURE"
+    ERR_EXEC_CHAIN_COMPLETION_CALLBACK_FAILURE = "ERR_EXEC_CHAIN_COMPLETION_CALLBACK_FAILURE"
+    ERR_EXEC_CHAIN_NO_COMPLETION_CALLBACK = "ERR_EXEC_CHAIN_NO_COMPLETION_CALLBACK"
+
+    # Scheduler errors
+    ERR_SCHEDULER_AGENT_CONFIG_LOAD_FAILURE = "ERR_SCHEDULER_AGENT_CONFIG_LOAD_FAILURE"
+    ERR_SCHEDULER_RATE_LIMIT = "ERR_SCHEDULER_RATE_LIMIT"
+    ERR_SCHEDULER_RESOURCE_UNAVAILABLE = "ERR_SCHEDULER_RESOURCE_UNAVAILABLE"
+    ERR_SCHEDULER_ENQUEUE_FAILURE = "ERR_SCHEDULER_ENQUEUE_FAILURE"
+    ERR_SCHEDULER_TASK_EXECUTION_FAILURE = "ERR_SCHEDULER_TASK_EXECUTION_FAILURE"
+    ERR_SCHEDULER_CONSUMER_LOOP_FAILURE = "ERR_SCHEDULER_CONSUMER_LOOP_FAILURE"
+    ERR_SCHEDULER_EVENT_EMISSION_FAILURE = "ERR_SCHEDULER_EVENT_EMISSION_FAILURE"
+    ERR_SCHEDULER_EVENT_STORAGE_FAILURE = "ERR_SCHEDULER_EVENT_STORAGE_FAILURE"
+
     @classmethod
     def get_all_error_ids(cls) -> set[str]:
         """Get all registered error IDs."""
@@ -270,6 +307,10 @@ def get_error_id_category(error_id: str) -> ErrorCategory:
     """
     Determine the category of an error based on its ID.
 
+    Handles both single-word and multi-word prefixes:
+    - Single-word: ERR_VALIDATION_FAILED -> VALIDATION
+    - Multi-word: ERR_EXEC_CHAIN_* -> EXECUTION, ERR_BOARD_EVENT_* -> BOARD
+
     Args:
         error_id: The error ID to categorize
 
@@ -279,7 +320,6 @@ def get_error_id_category(error_id: str) -> ErrorCategory:
     Raises:
         ValueError: If the error ID is not recognized
     """
-    # Extract category from error ID (e.g., ERR_VALIDATION_FAILED -> VALIDATION)
     if not error_id.startswith("ERR_"):
         message = f"Invalid error ID format: {error_id}"
         raise ValueError(message)
@@ -289,9 +329,25 @@ def get_error_id_category(error_id: str) -> ErrorCategory:
         message = f"Invalid error ID format: {error_id}"
         raise ValueError(message)
 
-    # Try to find matching category
-    category_name = parts[1]
+    # Multi-word prefix mappings: tuple of prefix words -> ErrorCategory
+    multi_word_mappings = {
+        ("EXEC", "CHAIN"): ErrorCategory.EXECUTION,
+        ("BOARD", "EVENT"): ErrorCategory.BOARD,
+        ("EXTERNAL", "SERVICE"): ErrorCategory.EXTERNAL_SERVICE,
+        ("EVENT", "BUS"): ErrorCategory.EVENT_BUS,
+        ("REPAIR", "CYCLE"): ErrorCategory.REPAIR_CYCLE,
+        ("PR", "REVIEW", "CYCLE"): ErrorCategory.PR_REVIEW_CYCLE,
+    }
 
+    # Try matching multi-word prefixes (longest match first)
+    # Sort by prefix length descending to ensure longer prefixes are matched before shorter ones
+    for prefix_tuple, category in sorted(multi_word_mappings.items(), key=lambda x: len(x[0]), reverse=True):
+        prefix_len = len(prefix_tuple)
+        if len(parts) > prefix_len and tuple(parts[1 : 1 + prefix_len]) == prefix_tuple:
+            return category
+
+    # Try single-word category match
+    category_name = parts[1]
     for category in ErrorCategory:
         if category.value == category_name:
             return category

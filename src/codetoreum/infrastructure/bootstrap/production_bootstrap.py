@@ -21,7 +21,6 @@ This bootstrap ensures:
 
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import FastAPI
@@ -72,6 +71,7 @@ from codetoreum.application.event_handlers.review_event_handler import (
 )
 from codetoreum.application.execution_service import ExecutionService
 from codetoreum.application.feedback_processor import FeedbackProcessor
+from codetoreum.application.issue_intake_service import IssueIntakeService
 from codetoreum.application.multi_project_orchestrator import MultiProjectOrchestrator
 from codetoreum.application.pipeline_manager import PipelineManager
 from codetoreum.application.review_service import ReviewService
@@ -88,6 +88,9 @@ from codetoreum.infrastructure.adapters.resolver import (
     AdapterResolver,
 )
 from codetoreum.infrastructure.audit.stores import InMemoryAuditStore
+from codetoreum.infrastructure.bootstrap.codetoreum_board_setup import (
+    CODETOREUM_BOARD_ID,
+)
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.event_store_poller import EventStorePoller
@@ -102,6 +105,7 @@ from codetoreum.ports.input.config_command import IConfigurationCommandPort
 from codetoreum.ports.input.config_query import IConfigurationQueryPort
 from codetoreum.ports.input.execution_command import IExecutionCommandPort
 from codetoreum.ports.input.execution_query import IExecutionQueryPort
+from codetoreum.ports.input.issue_intake import IIssueIntakePort
 from codetoreum.ports.input.metrics_query import IMetricsQueryPort
 from codetoreum.ports.input.orchestration_command import IOrchestrationCommandPort
 from codetoreum.ports.input.task_query import ITaskQueryPort
@@ -357,6 +361,10 @@ class ProductionApplicationBootstrap:
             # Phase 5: Create services
             logger.info("Phase 5: Creating 11 application services...")
             self.services = await self._create_services()
+
+            # Phase 5a: Start agent scheduler consumer loop
+            logger.info("Phase 5a: Starting agent scheduler consumer loop...")
+            await self.services.agent_scheduler.start()
 
             # Phase 5b: Initialize codetoreum board configuration
             logger.info("Phase 5b: Initializing codetoreum board configuration...")
@@ -643,19 +651,11 @@ class ProductionApplicationBootstrap:
             failed_event_store=self.infrastructure.failed_event_store,
         )
 
-        # For production, use the execution service executor with a system clock
+        # For production, use the execution service executor with a real time clock
         from codetoreum.adapters.secondary.execution_service_agent_executor import (
             ExecutionServiceAgentExecutor,
         )
-
-        # Create a simple system clock wrapper that returns current UTC time
-        class SystemClock:
-            """System clock wrapper that uses real time instead of simulation clock."""
-
-            @staticmethod
-            def now() -> datetime:
-                """Return current UTC time."""
-                return datetime.now(UTC)
+        from codetoreum.infrastructure.simulation.simulation_clock import RealTimeClock
 
         execution_service_executor = ExecutionServiceAgentExecutor(
             execution_service=execution_service,
@@ -666,8 +666,9 @@ class ProductionApplicationBootstrap:
             run_registry=self.adapters.run_registry,
             branch_tracker=self.adapters.branch_tracker,
             vcs=self.adapters.version_control,
-            clock=SystemClock(),  # type: ignore  # System clock in production
+            clock=RealTimeClock(),  # Production clock using real system time
             recovery_service=recovery_service,
+            workflow_config_service=self.adapters.workflow_config,
         )
         self.adapters.agent_executor = execution_service_executor
 
@@ -696,7 +697,7 @@ class ProductionApplicationBootstrap:
         resource_monitor = ProductionResourceMonitor()
         rate_limiter = ProductionRateLimiter()
         project_config = ProductionProjectConfiguration()
-        scheduling_events = ProductionSchedulingEvents()
+        scheduling_events = ProductionSchedulingEvents(event_emitter=self.adapters.event_emitter)
 
         agent_scheduler = AgentScheduler(
             task_queue=task_queue,
@@ -705,6 +706,7 @@ class ProductionApplicationBootstrap:
             config=project_config,
             scheduling_events=scheduling_events,
             event_store=self.adapters.event_store,
+            agent_executor=execution_service_executor,
         )
 
         # Workflow Orchestrator dependencies
@@ -967,6 +969,13 @@ class ProductionApplicationBootstrap:
         )
         logger.debug("Created event store poller for cross-process event distribution")
 
+        # Create issue intake service for GitHub webhook event handling
+        issue_intake_service: IIssueIntakePort = IssueIntakeService(
+            board_service=self.adapters.board,
+            workflow_config_service=self.adapters.workflow_config,
+        )
+        logger.debug("Created issue intake service for webhook event handling")
+
         # Create FastAPI app
         app = create_app(
             workflow_command_port=self.ports.workflow_command,
@@ -995,6 +1004,7 @@ class ProductionApplicationBootstrap:
             container_recovery_service=self.services.container_recovery_service,
             adapter_slot_info=self._slot_info,
             event_store_poller=event_store_poller,
+            issue_intake_port=issue_intake_service,
         )
 
         logger.info("Created FastAPI application with all ports wired")
@@ -1015,14 +1025,27 @@ class ProductionApplicationBootstrap:
 
         handler = BoardColumnEventHandler(
             board_service=self.adapters.board,
+            lock_service=self.adapters.lock_service,
+            workflow_config=self.adapters.workflow_config,
             agent_executor=self.adapters.agent_executor,
-            workflow_config_service=self.adapters.workflow_config,
+            event_bus=self.infrastructure.event_bus,
+            event_store=self.adapters.event_store,
+            run_registry=self.adapters.run_registry,
             event_emitter=self.adapters.event_emitter,
             recovery_service=self.services.agent_execution_recovery_service,
         )
 
         self.infrastructure.event_bus.register_handler(handler)
         logger.info("Registered BoardColumnEventHandler with event bus")
+
+        # Wire completion callback from executor to handler for auto-progression
+        # This ensures that when an agent execution completes, the handler's
+        # handle_agent_completion() method is invoked to auto-progress the work item
+        self.adapters.agent_executor.set_completion_handler(
+            handler.handle_agent_completion,
+            default_board_id=CODETOREUM_BOARD_ID,
+        )
+        logger.info("Wired completion callback from ExecutionServiceAgentExecutor to BoardColumnEventHandler")
 
     def _register_conversational_loop_orchestrator(self) -> None:
         """Register conversational loop orchestrator to handle column changes."""
@@ -1081,6 +1104,8 @@ class ProductionApplicationBootstrap:
         Clean up all resources.
 
         Performs cleanup in order:
+        - Stop agent scheduler consumer loop
+        - Stop multi-project orchestrator poll loop
         - Close event store (closes Elasticsearch client if applicable)
         - Log final event bus statistics
         - Clear adapter references
@@ -1095,6 +1120,32 @@ class ProductionApplicationBootstrap:
 
         try:
             logger.info("Tearing down production bootstrap...")
+
+            # Stop agent scheduler consumer loop
+            if self.services and self.services.agent_scheduler:
+                logger.info("Stopping agent scheduler consumer loop...")
+                try:
+                    await self.services.agent_scheduler.stop()
+                except Exception as e:
+                    logger.error(
+                        f"Error stopping agent scheduler: {e}",
+                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                        exc_info=True,
+                    )
+                    # Continue with other cleanup even if scheduler stop fails
+
+            # Stop multi-project orchestrator poll loop
+            if self.services and self.services.multi_project_orchestrator:
+                logger.info("Stopping multi-project orchestrator poll loop...")
+                try:
+                    await self.services.multi_project_orchestrator.stop()
+                except Exception as e:
+                    logger.error(
+                        f"Error stopping multi-project orchestrator: {e}",
+                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                        exc_info=True,
+                    )
+                    # Continue with other cleanup even if orchestrator stop fails
 
             # Close event store (closes Elasticsearch client for production deployments)
             if self.adapters and self.adapters.event_store:

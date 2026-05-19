@@ -135,6 +135,7 @@ class TestSimulationExecutionsRouter:
             run_id="run-456",
             stage_name="analysis",
             project_id="proj-789",
+            board_id="board-test",
         )
 
         async with AsyncClient(app=app, base_url="http://test", follow_redirects=True) as client:
@@ -162,18 +163,21 @@ class TestSimulationExecutionsRouter:
             run_id="run-1",
             stage_name="stage1",
             project_id="proj-1",
+            board_id="board-test",
         )
         await run_registry.set_active_run(
             work_item_id="item-2",
             run_id="run-2",
             stage_name="stage2",
             project_id="proj-2",
+            board_id="board-test",
         )
         await run_registry.set_active_run(
             work_item_id="item-3",
             run_id="run-3",
             stage_name="stage3",
             project_id="proj-3",
+            board_id="board-test",
         )
 
         async with AsyncClient(app=app, base_url="http://test", follow_redirects=True) as client:
@@ -196,6 +200,7 @@ class TestSimulationExecutionsRouter:
             run_id="run-active-filter",
             stage_name="analysis",
             project_id="proj-789",
+            board_id="board-test",
         )
 
         # Add a completed event to verify it's excluded when filtering by active
@@ -248,6 +253,7 @@ class TestSimulationExecutionsRouter:
             run_id="run-active",
             stage_name="analysis",
             project_id="proj-1",
+            board_id="board-test",
         )
 
         # Add a completed event
@@ -276,6 +282,7 @@ class TestSimulationExecutionsRouter:
             run_id="run-active",
             stage_name="analysis",
             project_id="proj-1",
+            board_id="board-test",
         )
 
         # Add a completed event
@@ -372,6 +379,7 @@ class TestSimulationExecutionsRouter:
             run_id="run-456",
             stage_name="analysis",
             project_id="proj-789",
+            board_id="board-test",
         )
 
         async with AsyncClient(app=app, base_url="http://test", follow_redirects=True) as client:
@@ -548,6 +556,7 @@ class TestSimulationExecutionsRouter:
             run_id="run-combined-active",
             stage_name="analysis",
             project_id="proj-combined",
+            board_id="board-test",
         )
 
         # Add completed event with unique ID
@@ -592,6 +601,7 @@ class TestSimulationExecutionsRouter:
             run_id=run_id,
             stage_name="analysis",
             project_id=project_id,
+            board_id="board-test",
         )
 
         # 2. Create and append an AgentExecutionStarted event with the expected agent_id
@@ -639,6 +649,7 @@ class TestSimulationExecutionsRouter:
             run_id=run_id,
             stage_name="analysis",
             project_id=project_id,
+            board_id="board-test",
         )
 
         # 2. Create event with a specific timestamp (5 minutes ago)

@@ -175,6 +175,7 @@ async def test_poller_handles_publish_error_gracefully(mock_event_store, event_b
 
     # Mock event bus to fail on publish
     original_publish = event_bus.publish
+
     async def failing_publish(*args, **kwargs):
         raise Exception("Publish error")
 

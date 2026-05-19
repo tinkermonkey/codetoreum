@@ -22,6 +22,7 @@ class MovedByType(Enum):
 
     HUMAN = "human"
     ORCHESTRATOR = "orchestrator"
+    GITHUB_WEBHOOK = "github_webhook"
 
 
 @dataclass(frozen=True)

@@ -7,6 +7,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum
+from pathlib import Path
 from types import MappingProxyType
 from typing import Any, cast
 
@@ -918,10 +919,11 @@ class ExecutionService:
         return LLMExecutionContext(
             model=context.model,
             timeout_seconds=context.timeout_seconds,
-            environment_variables=MappingProxyType({}),
+            environment_variables=MappingProxyType(context.environment_variables or {}),
             session_id=context.previous_session_id,
             execution_id=None,  # Will be set by provider
             metadata=cast("MappingProxyType", context.metadata),
+            working_directory=Path(context.repository_path) if context.repository_path else None,
         )
 
     def _create_stream_callback(

@@ -22,17 +22,17 @@ try:
 except ImportError:
     trace = None
 
+from codetoreum.domain.events.adapter_events import now_iso
+from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
+from codetoreum.domain.events.discussion_events import Comment, CommentContext, CommentNeedsResponseEvent
+from codetoreum.domain.events.review_events import ReviewStatusChangedEvent
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.observability.instrumentation import (
     instrument_async_function,
 )
-from codetoreum.ports.input.workflow_command import (
-    IWorkflowCommandPort,
-    StartWorkflowCommand,
-    TriggerType,
-)
-from codetoreum.ports.output.board_service import IBoardService
+from codetoreum.ports.input.issue_intake import IIssueIntakePort, IssueOpenedCommand
+from codetoreum.ports.input.workflow_command import IWorkflowCommandPort
 from codetoreum.ports.output.config_store import IConfigStore
 
 # Type aliases for missing interfaces
@@ -69,17 +69,6 @@ class WebhookProcessingResult:
     commands_created: list[str]
     errors: list[str] | None = None
     processing_time_ms: float = 0.0
-
-
-@dataclass
-class StageInfo:
-    """Information about a pipeline stage"""
-
-    pipeline_name: str
-    board_name: str
-    stage_name: str
-    column_name: str
-    agent_name: str
 
 
 # ============================================================================
@@ -152,7 +141,7 @@ class GitHubWebhookAdapter:
         config_service: IConfigurationService,
         logger: ILogger,
         idempotency_cache_size: int = _DEFAULT_CACHE_SIZE,
-        board_service: IBoardService | None = None,
+        issue_intake_port: IIssueIntakePort | None = None,
     ):
         """
         Initialize adapter with dependencies.
@@ -163,22 +152,25 @@ class GitHubWebhookAdapter:
             config_service: Configuration service
             logger: Logging service
             idempotency_cache_size: Maximum size of idempotency cache (bounded, with LRU eviction)
-            board_service: Optional board service for column-to-stage mapping
+            issue_intake_port: Optional issue intake port for handling opened issues
         """
         self.workflow_port = workflow_command_port
         self.event_bus = event_bus
         self.config = config_service
         self.logger = logger
-        self.board_service = board_service
+        self.issue_intake_port = issue_intake_port
         self._idempotency_cache_size = idempotency_cache_size
 
         # Event handlers by GitHub event type
+        # Note: issue_comment, pull_request, and discussion_comment handlers were implemented in issue #888.
+        # The issues handler (_handle_issues_event) handles opened issues (action='opened' only).
+        # The discussion_comment event type (not "discussion") carries comment payloads for discussion comments.
         self.handlers: dict[str, Callable] = {
             "project_card": self._handle_project_card_event,
             "issues": self._handle_issues_event,
             "issue_comment": self._handle_issue_comment_event,
             "pull_request": self._handle_pull_request_event,
-            "discussion": self._handle_discussion_event,
+            "discussion_comment": self._handle_discussion_event,
         }
 
         # Track processed delivery IDs for idempotency (bounded cache with FIFO eviction)
@@ -392,7 +384,7 @@ class GitHubWebhookAdapter:
             "issues": self._validate_issues_payload,
             "issue_comment": self._validate_issue_comment_payload,
             "pull_request": self._validate_pull_request_payload,
-            "discussion": self._validate_discussion_payload,
+            "discussion_comment": self._validate_discussion_payload,
         }
 
         validator = validators.get(event.event_type)
@@ -420,7 +412,7 @@ class GitHubWebhookAdapter:
 
     def _validate_discussion_payload(self, payload: dict[str, Any]) -> bool:
         """Validate discussion event payload"""
-        return "action" in payload and "discussion" in payload
+        return "action" in payload and "discussion" in payload and "comment" in payload
 
     @instrument_async_function(name="github.webhook.process_event", attributes={"service": "github_webhook"})
     async def _process_event(self, event: WebhookEvent, project_id: str) -> WebhookProcessingResult:
@@ -467,12 +459,15 @@ class GitHubWebhookAdapter:
         """
         Handle project_card event (card movement).
 
+        Emits WorkItemColumnChangedEvent when a card moves to a new column.
+        The event is processed by BoardColumnEventHandler for workflow automation.
+
         Args:
             event: Webhook event
-            project: Project name
+            project: Project name (project_id in domain)
 
         Returns:
-            List of created command IDs
+            List of created event IDs
         """
         # Add project card context to span
         span = self._get_span()
@@ -480,6 +475,7 @@ class GitHubWebhookAdapter:
             span.set_attribute("github.project", project)
             if "action" in event.payload:
                 span.set_attribute("github.action", event.payload["action"])
+
         payload = event.payload
         action = payload.get("action")
 
@@ -498,31 +494,81 @@ class GitHubWebhookAdapter:
             self.logger.warning("Could not extract work item ID from %s", content_url)
             return []
 
-        # Map column ID to stage
-        stage_info = await self._map_column_to_stage(project, column_id)
-        if not stage_info:
-            self.logger.warning("Column %s not mapped for project %s", column_id, project)
+        # Resolve column_id to column_name
+        # The column_id is a numeric GitHub Projects column identifier that must be resolved
+        # to a column name that matches the board workflow template.
+        column_name = await self._resolve_column_id_to_name(project, column_id)
+        if not column_name:
+            self.logger.warning(
+                "Could not resolve column_id %s for project %s; card movement will not trigger automation",
+                column_id,
+                project,
+                extra={
+                    "error_id": ErrorRegistry.ERR_WEBHOOK_COLUMN_RESOLUTION_FAILED,
+                    "project_id": project,
+                    "column_id": column_id,
+                    "work_item_id": work_item_id,
+                },
+            )
             return []
 
-        # Create workflow command
-        command = StartWorkflowCommand(
-            project_name=project,
-            work_item_id=work_item_id,
-            pipeline_name=stage_info.pipeline_name,
-            stage_name=stage_info.stage_name,
-            trigger=TriggerType.CARD_MOVEMENT,
-            context={
-                "board_name": stage_info.board_name,
-                "column_name": stage_info.column_name,
-                "previous_column_id": payload.get("changes", {}).get("column_id", {}).get("from"),
-                "delivery_id": event.delivery_id,
-            },
+        # Get previous column name if available
+        previous_column_id = (
+            payload.get("changes", {}).get("column_id", {}).get("from")
+            if payload.get("changes", {}).get("column_id", {}).get("from")
+            else None
         )
+        previous_column_name = None
+        if previous_column_id:
+            previous_column_name = await self._resolve_column_id_to_name(project, previous_column_id)
+            if not previous_column_name:
+                self.logger.warning(
+                    "Could not resolve previous column_id %s for project %s; event will have from_column=None",
+                    previous_column_id,
+                    project,
+                    extra={
+                        "error_id": ErrorRegistry.ERR_WEBHOOK_COLUMN_RESOLUTION_FAILED,
+                        "project_id": project,
+                        "column_id": previous_column_id,
+                        "work_item_id": work_item_id,
+                    },
+                )
 
-        # Execute command via port
-        result = await self.workflow_port.start_workflow(command)
+        # Create and emit WorkItemColumnChangedEvent
+        try:
+            domain_event = WorkItemColumnChangedEvent(
+                type="workitem.column_changed",
+                timestamp=now_iso(),
+                source="github",
+                work_item_id=work_item_id,
+                project_id=project,
+                board_id=project,  # Using project as board_id (GitHub Projects are per-repository)
+                from_column=previous_column_name,
+                to_column=column_name,
+                moved_by="human",  # Card moved by human via GitHub UI
+            )
+        except ValueError as e:
+            self.logger.warning("Failed to create WorkItemColumnChangedEvent: %s", str(e), exc_info=True)
+            return []
 
-        return [result.workflow_run_id]
+        # Publish event to event bus
+        try:
+            await self.event_bus.publish(domain_event)
+            self.logger.info(
+                "Emitted WorkItemColumnChangedEvent for work_item %s: %s -> %s",
+                work_item_id,
+                previous_column_name,
+                column_name,
+            )
+            return [domain_event.event_id]
+        except Exception as e:
+            self.logger.error(
+                "Failed to publish WorkItemColumnChangedEvent: %s",
+                str(e),
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+            )
+            return []
 
     @instrument_async_function(
         name="github.webhook.handle_issues",
@@ -530,14 +576,18 @@ class GitHubWebhookAdapter:
     )
     async def _handle_issues_event(self, event: WebhookEvent, project: str) -> list[str]:
         """
-        Handle issues event (issue created/updated).
+        Handle issues event (issue opened only).
+
+        When an issue is opened, delegates to the issue intake port to place it
+        in the initial column on a board, which triggers a WorkItemColumnChangedEvent
+        for orchestration. Only handles the 'opened' action; other actions are ignored.
 
         Args:
             event: Webhook event
             project: Project name
 
         Returns:
-            List of created command IDs
+            List of created work item IDs
         """
         # Add issue context to span
         span = self._get_span()
@@ -545,8 +595,53 @@ class GitHubWebhookAdapter:
             span.set_attribute("github.project", project)
             if "action" in event.payload:
                 span.set_attribute("github.action", event.payload["action"])
-        # Placeholder for future implementation
-        return []
+
+        payload = event.payload
+        action = payload.get("action")
+
+        # Only handle 'opened' action
+        if action != "opened":
+            return []
+
+        # Extract issue information
+        issue = payload.get("issue", {})
+        issue_number = str(issue.get("number", ""))
+        issue_title = issue.get("title")
+        issue_url = issue.get("html_url")
+
+        if not issue_number:
+            self.logger.warning("Could not extract issue number from payload")
+            return []
+
+        # If issue intake port not available, we can't process the issue
+        if not self.issue_intake_port:
+            self.logger.warning("Issue intake port not injected; cannot place opened issue %s on board", issue_number)
+            return []
+
+        # Delegate to issue intake service via input port
+        command = IssueOpenedCommand(
+            project_id=project,
+            issue_number=issue_number,
+            issue_title=issue_title,
+            issue_url=issue_url,
+        )
+
+        try:
+            result = await self.issue_intake_port.on_issue_opened(command)
+
+            if result.success:
+                return [result.work_item_id]
+            self.logger.warning("Failed to intake issue %s: %s", issue_number, result.message)
+            return []
+        except Exception as e:
+            self.logger.error(
+                "Failed to open issue %s: %s",
+                issue_number,
+                str(e),
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+            )
+            return []
 
     @instrument_async_function(
         name="github.webhook.handle_issue_comment",
@@ -554,14 +649,17 @@ class GitHubWebhookAdapter:
     )
     async def _handle_issue_comment_event(self, event: WebhookEvent, project: str) -> list[str]:
         """
-        Handle issue_comment event (agent feedback).
+        Handle issue_comment event (comments requiring agent response).
+
+        When a comment is created on an issue, emits CommentNeedsResponseEvent
+        to trigger the conversational loop orchestrator to generate a response.
 
         Args:
             event: Webhook event
             project: Project name
 
         Returns:
-            List of created command IDs
+            List of created event IDs
         """
         # Add issue comment context to span
         span = self._get_span()
@@ -573,8 +671,72 @@ class GitHubWebhookAdapter:
                 span.set_attribute("github.issue_number", event.payload["issue"]["number"])
             if "comment" in event.payload and "id" in event.payload["comment"]:
                 span.set_attribute("github.comment_id", event.payload["comment"]["id"])
-        # Placeholder for future implementation
-        return []
+
+        payload = event.payload
+        action = payload.get("action")
+
+        # Only handle 'created' action
+        if action != "created":
+            return []
+
+        # Extract issue and comment information
+        issue = payload.get("issue", {})
+        comment = payload.get("comment", {})
+        issue_number = str(issue.get("number", ""))
+
+        if not issue_number or not comment:
+            self.logger.warning("Could not extract issue number or comment from payload")
+            return []
+
+        # Build Comment object from GitHub comment data
+        try:
+            comment_obj = Comment(
+                id=str(comment.get("id", "")),
+                author=comment.get("user", {}).get("login", "unknown"),
+                body=comment.get("body", ""),
+                created_at=comment.get("created_at", datetime.now(UTC).isoformat()),
+                is_bot=comment.get("user", {}).get("type") == "Bot",
+            )
+        except ValueError as e:
+            self.logger.warning("Failed to create Comment object: %s", str(e), exc_info=True)
+            return []
+
+        # Skip bot-authored comments to prevent infinite feedback loops
+        if comment_obj.is_bot:
+            return []
+
+        # Create CommentNeedsResponseEvent with context
+        try:
+            domain_event = CommentNeedsResponseEvent(
+                type="comment.needs_response",
+                timestamp=now_iso(),
+                source="github",
+                work_item_id=issue_number,
+                project_id=project,
+                comment=comment_obj,
+                context=CommentContext.for_initial_request(),
+            )
+        except ValueError as e:
+            self.logger.warning("Failed to create CommentNeedsResponseEvent: %s", str(e), exc_info=True)
+            return []
+
+        # Emit event to event bus
+        try:
+            await self.event_bus.publish(domain_event)
+            self.logger.info(
+                "Emitted CommentNeedsResponseEvent for issue %s comment %s",
+                issue_number,
+                comment_obj.id,
+            )
+            return [domain_event.event_id]
+        except Exception as e:
+            self.logger.error(
+                "Failed to publish CommentNeedsResponseEvent: %s",
+                str(e),
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+            )
+            return []
 
     @instrument_async_function(
         name="github.webhook.handle_pull_request",
@@ -582,14 +744,17 @@ class GitHubWebhookAdapter:
     )
     async def _handle_pull_request_event(self, event: WebhookEvent, project: str) -> list[str]:
         """
-        Handle pull_request event.
+        Handle pull_request event (review status tracking).
+
+        When a PR is opened, closed, merged, or reviewed, emits ReviewStatusChangedEvent
+        to track code review lifecycle changes.
 
         Args:
             event: Webhook event
             project: Project name
 
         Returns:
-            List of created command IDs
+            List of created event IDs
         """
         # Add PR context to span
         span = self._get_span()
@@ -599,23 +764,113 @@ class GitHubWebhookAdapter:
                 span.set_attribute("github.action", event.payload["action"])
             if "number" in event.payload:
                 span.set_attribute("github.pr_number", event.payload["number"])
-        # Placeholder for future implementation
-        return []
+
+        payload = event.payload
+        action = payload.get("action")
+        pr = payload.get("pull_request", {})
+        pr_number = str(pr.get("number", ""))
+
+        if not pr_number:
+            self.logger.warning("Could not extract PR number from payload")
+            return []
+
+        # Map GitHub PR action to review status
+        # Relevant actions: opened, closed, reopened, synchronize, ready_for_review, converted_to_draft
+        # We focus on status-change actions
+        status_mapping = {
+            "opened": "open",
+            "reopened": "open",
+            "closed": "closed",
+            "ready_for_review": "open",
+            "converted_to_draft": "open",
+        }
+
+        if action not in status_mapping:
+            # Ignore other actions (e.g., "synchronize" which is for new commits)
+            return []
+
+        new_status = status_mapping[action]
+
+        # Determine previous status for state transitions
+        # Note: GitHub doesn't always provide previous_status, so we infer from current state
+        pr_merged = pr.get("merged", False)
+
+        # Infer previous status based on action
+        # When PR is reopened, previous status is closed (you can only reopen a closed PR)
+        # For other status changes, default to open
+        if action == "reopened":
+            previous_status = "closed"
+        else:
+            previous_status = "open"
+
+        # Handle merged status override (only when closed AND merged)
+        if action == "closed" and pr_merged:
+            new_status = "merged"
+
+        # Extract reviewer info - use the person who performed the action (sender)
+        # For opened events, there is no reviewer yet; for other actions, use the actor
+        if action == "opened":
+            reviewer = None
+        else:
+            reviewer = payload.get("sender", {}).get("login")
+
+        # Create ReviewStatusChangedEvent
+        try:
+            domain_event = ReviewStatusChangedEvent(
+                type="review.status_changed",
+                timestamp=now_iso(),
+                source="github",
+                review_id=pr_number,
+                work_item_id=pr_number,  # Link PR to work item with same number
+                project_id=project,
+                previous_status=previous_status,
+                new_status=new_status,
+                reviewer=reviewer,
+            )
+        except ValueError as e:
+            self.logger.warning("Failed to create ReviewStatusChangedEvent: %s", str(e), exc_info=True)
+            return []
+
+        # Emit event to event bus
+        try:
+            await self.event_bus.publish(domain_event)
+            self.logger.info(
+                "Emitted ReviewStatusChangedEvent for PR %s: %s → %s",
+                pr_number,
+                previous_status,
+                new_status,
+            )
+            return [domain_event.event_id]
+        except Exception as e:
+            self.logger.error(
+                "Failed to publish ReviewStatusChangedEvent: %s",
+                str(e),
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+            )
+            return []
 
     @instrument_async_function(
-        name="github.webhook.handle_discussion",
-        attributes={"service": "github_webhook", "event_type": "discussion"},
+        name="github.webhook.handle_discussion_comment",
+        attributes={"service": "github_webhook", "event_type": "discussion_comment"},
     )
     async def _handle_discussion_event(self, event: WebhookEvent, project: str) -> list[str]:
         """
-        Handle discussion event.
+        Handle discussion_comment event (new comments on discussions requiring agent response).
+
+        When a comment is created on a discussion, emits CommentNeedsResponseEvent
+        to trigger the conversational loop orchestrator to generate a response.
+
+        GitHub delivers discussion comments via the 'discussion_comment' event type,
+        which has the comment data at the top level of the payload. Only handles the
+        'created' action on comments; actions on the discussion itself are ignored.
 
         Args:
             event: Webhook event
             project: Project name
 
         Returns:
-            List of created command IDs
+            List of created event IDs
         """
         # Add discussion context to span
         span = self._get_span()
@@ -623,8 +878,78 @@ class GitHubWebhookAdapter:
             span.set_attribute("github.project", project)
             if "action" in event.payload:
                 span.set_attribute("github.action", event.payload["action"])
-        # Placeholder for future implementation
-        return []
+
+        payload = event.payload
+        action = payload.get("action")
+        discussion = payload.get("discussion", {})
+        discussion_number = str(discussion.get("number", ""))
+
+        if not discussion_number:
+            self.logger.warning("Could not extract discussion number from payload")
+            return []
+
+        # Only handle 'created' action
+        if action != "created":
+            return []
+
+        # Extract comment information from discussion
+        # While the discussion_comment webhook validator expects comment data for 'created' actions,
+        # we check defensively in case of edge cases or webhook anomalies.
+        comment_data = payload.get("comment")
+        if not comment_data:
+            # Missing comment data (edge case or webhook anomaly)
+            self.logger.debug("Ignoring discussion event action '%s' without comment data", action)
+            return []
+
+        # Build Comment object from GitHub discussion comment data
+        try:
+            comment_obj = Comment(
+                id=str(comment_data.get("id", "")),
+                author=comment_data.get("user", {}).get("login", "unknown"),
+                body=comment_data.get("body", ""),
+                created_at=comment_data.get("created_at", datetime.now(UTC).isoformat()),
+                is_bot=comment_data.get("user", {}).get("type") == "Bot",
+            )
+        except ValueError as e:
+            self.logger.warning("Failed to create Comment object from discussion: %s", str(e), exc_info=True)
+            return []
+
+        # Skip bot-authored comments to prevent infinite feedback loops
+        if comment_obj.is_bot:
+            return []
+
+        # Create CommentNeedsResponseEvent
+        try:
+            domain_event = CommentNeedsResponseEvent(
+                type="comment.needs_response",
+                timestamp=now_iso(),
+                source="github",
+                work_item_id=discussion_number,
+                project_id=project,
+                comment=comment_obj,
+                context=CommentContext.for_initial_request(),
+            )
+        except ValueError as e:
+            self.logger.warning("Failed to create CommentNeedsResponseEvent: %s", str(e), exc_info=True)
+            return []
+
+        # Emit event to event bus
+        try:
+            await self.event_bus.publish(domain_event)
+            self.logger.info(
+                "Emitted CommentNeedsResponseEvent for discussion %s comment %s",
+                discussion_number,
+                comment_obj.id,
+            )
+            return [domain_event.event_id]
+        except Exception as e:
+            self.logger.error(
+                "Failed to publish CommentNeedsResponseEvent from discussion: %s",
+                str(e),
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+            )
+            return []
 
     async def _identify_project(self, repository: str) -> str | None:
         """
@@ -634,53 +959,76 @@ class GitHubWebhookAdapter:
             repository: GitHub repository (format: 'org/repo')
 
         Returns:
-            Project name or None
+            Project name or None if not found (infrastructure errors propagate)
         """
         projects = await self.config.list_projects()
+
         for project_config in projects:
             repo_full_name = f"{project_config.github_org}/{project_config.github_repo}"
             if repo_full_name == repository:
                 return project_config.id
         return None
 
-    async def _map_column_to_stage(self, project: str, column_id: int) -> StageInfo | None:
+    async def _resolve_column_id_to_name(self, project_id: str, column_id: int) -> str | None:
         """
-        Map GitHub project column ID to pipeline stage.
+        Resolve GitHub Projects column ID to column name.
 
-        Maps GitHub project card column ID to a workflow stage by:
-        1. Querying IBoardService to find the column name by ID
-        2. Looking up the workflow template to find the agent for that column
+        Attempts to resolve the numeric column ID to a human-readable column name
+        using the project configuration's board column mapping. The mapping should be
+        stored in the project configuration metadata.
 
         Args:
-            project: Project name (ID)
-            column_id: GitHub column ID
+            project_id: Project ID
+            column_id: GitHub Projects numeric column ID
 
         Returns:
-            Stage information or None if mapping cannot be completed
-
-        Note:
-            Requires board_service to be injected. If not available, returns None.
-            TODO #370: Implement board ID resolution from GitHub project card events
+            Column name string, or None if mapping not found or resolution fails
         """
-        if not self.board_service:
+        if column_id is None:
+            return None
+
+        try:
+            project_config = await self.config.get_project_config(project_id)
+            if not project_config:
+                self.logger.warning("Project config not found for %s", project_id)
+                return None
+
+            # Try to find column mapping in project metadata
+            # Expected format: metadata.board_columns = {column_id: "column_name", ...}
+            board_columns = project_config.metadata.get("board_columns", {})
+            column_name = board_columns.get(str(column_id))
+
+            if column_name:
+                return column_name
+
+            # If mapping not found, log warning but don't fail hard
             self.logger.warning(
-                "Board service not injected; column ID to stage mapping not available " "for project %s column %s",
-                project,
+                "Column ID mapping not found for column_id=%s in project %s. "
+                "Please configure board_columns mapping in project configuration metadata.",
                 column_id,
+                project_id,
+                extra={
+                    "error_id": ErrorRegistry.ERR_WEBHOOK_COLUMN_MAPPING_NOT_FOUND,
+                    "project_id": project_id,
+                    "column_id": column_id,
+                },
             )
             return None
 
-        # TODO #370: Get board ID from project configuration or GitHub event
-        # For now, we cannot reliably map GitHub project IDs to our board IDs
-        # without additional configuration or the board_id in the webhook event
-        self.logger.warning(
-            "Column ID to stage mapping requires board_id resolution; "
-            "not implemented for project %s column %s. "
-            "See #370 for tracking.",
-            project,
-            column_id,
-        )
-        return None
+        except Exception as e:
+            self.logger.error(
+                "Error resolving column ID %s for project %s: %s",
+                column_id,
+                project_id,
+                str(e),
+                exc_info=True,
+                extra={
+                    "error_id": ErrorRegistry.ERR_WEBHOOK_COLUMN_RESOLUTION_ERROR,
+                    "project_id": project_id,
+                    "column_id": column_id,
+                },
+            )
+            return None
 
     def _extract_work_item_id(self, content_url: str) -> str | None:
         """

@@ -506,6 +506,9 @@ class ExecutionContext:
     # Session continuity
     previous_session_id: str | None = None
 
+    # Environment variables (from project config)
+    environment_variables: Mapping[str, str] | None = None
+
     # Metadata
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -523,6 +526,9 @@ class ExecutionContext:
         if not self.agent_id:
             msg = "Agent ID cannot be empty"
             raise DomainError(msg)
+        # Wrap environment_variables dict in MappingProxyType for immutability
+        if self.environment_variables is not None:
+            object.__setattr__(self, "environment_variables", MappingProxyType(self.environment_variables))
         # Wrap metadata dict in MappingProxyType for immutability
         object.__setattr__(self, "metadata", MappingProxyType(self.metadata))
 
@@ -546,6 +552,7 @@ class ExecutionContext:
             "requires_docker": self.requires_docker,
             "mcp_servers": list(self.mcp_servers),
             "previous_session_id": self.previous_session_id,
+            "environment_variables": dict(self.environment_variables) if self.environment_variables else None,
             "metadata": dict(self.metadata),
         }
 

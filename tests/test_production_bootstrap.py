@@ -136,3 +136,77 @@ async def test_validate_event_emitter_passes_with_non_capturing_adapter() -> Non
 
     # Should not raise any exception
     bootstrap._validate_event_emitter_is_production()
+
+
+@pytest.mark.asyncio
+async def test_graceful_shutdown_stops_background_loops() -> None:
+    """Verify that teardown() stops all background loops cleanly.
+
+    This test verifies:
+    1. teardown() calls stop() on agent_scheduler
+    2. teardown() calls stop() on multi_project_orchestrator
+    3. teardown() is safe to call and properly cleans up state
+
+    This is a unit test that mocks the services to avoid requiring
+    full production adapter credentials.
+    """
+
+    class MockAgentScheduler:
+        """Mock agent scheduler with stop tracking."""
+
+        def __init__(self):
+            self.stop_called = False
+
+        async def stop(self):
+            self.stop_called = True
+
+    class MockMultiProjectOrchestrator:
+        """Mock multi-project orchestrator with stop tracking."""
+
+        def __init__(self):
+            self.stop_called = False
+
+        async def stop(self):
+            self.stop_called = True
+
+    class MockServices:
+        """Mock services container."""
+
+        def __init__(self):
+            self.agent_scheduler = MockAgentScheduler()
+            self.multi_project_orchestrator = MockMultiProjectOrchestrator()
+
+    bootstrap = ProductionApplicationBootstrap()
+
+    # Manually set up minimal state for teardown testing
+    bootstrap._is_setup = True
+    mock_services = MockServices()
+    bootstrap.services = mock_services
+    bootstrap.ports = None
+    bootstrap.infrastructure = None
+    bootstrap.adapters = None
+
+    # Call teardown and verify both services were stopped
+    await bootstrap.teardown()
+
+    # Verify that both services' stop() methods were called
+    assert mock_services.agent_scheduler.stop_called, "agent_scheduler.stop() should have been called"
+    assert (
+        mock_services.multi_project_orchestrator.stop_called
+    ), "multi_project_orchestrator.stop() should have been called"
+
+    # Verify state was properly cleaned up
+    assert bootstrap.services is None, "Services should be cleared after teardown"
+    assert bootstrap._is_setup is False, "Bootstrap should be marked as not set up after teardown"
+
+
+@pytest.mark.asyncio
+async def test_teardown_safe_when_not_setup() -> None:
+    """Verify that teardown() is safe to call even if setup was not completed."""
+    bootstrap = ProductionApplicationBootstrap()
+
+    # teardown() should not raise even if setup was never called
+    await bootstrap.teardown()
+
+    # Verify it's still safe to call again
+    await bootstrap.teardown()

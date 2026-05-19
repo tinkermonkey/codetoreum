@@ -1,4 +1,6 @@
 import logging
+from datetime import UTC
+from typing import TYPE_CHECKING
 
 from codetoreum.application.agent_scheduler import (
     AgentConfig,
@@ -8,6 +10,10 @@ from codetoreum.application.agent_scheduler import (
     ISchedulingEvents,
     WorkItemPriority,
 )
+from codetoreum.domain.events import TaskDispatchFailedEvent
+
+if TYPE_CHECKING:
+    from codetoreum.ports.output.event_emitter import IEventEmitter
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +57,16 @@ class ProductionProjectConfiguration(IProjectConfiguration):
 
 
 class ProductionSchedulingEvents(ISchedulingEvents):
-    """MVP scheduling events — logs but does not emit to event bus."""
+    """Production scheduling events implementation."""
+
+    def __init__(self, event_emitter: "IEventEmitter | None" = None) -> None:
+        """Initialize with optional event emitter for event distribution.
+
+        Args:
+            event_emitter: Optional IEventEmitter for event bus distribution.
+                          If None, events are only logged.
+        """
+        self.event_emitter = event_emitter
 
     async def emit_task_queued(
         self,
@@ -68,3 +83,34 @@ class ProductionSchedulingEvents(ISchedulingEvents):
 
     async def emit_task_rejected(self, agent: str, project: str, reason: str) -> None:
         logger.error(f"Task rejected: {agent}/{project} (reason={reason})")
+
+    async def emit_task_dispatch_failed(
+        self,
+        task_id: str,
+        work_item_id: str,
+        agent_id: str,
+        error: str,
+    ) -> None:
+        """Emit task dispatch failed event through event bus.
+
+        Args:
+            task_id: ID of the scheduled task
+            work_item_id: ID of the associated work item
+            agent_id: ID of the agent that failed to execute
+            error: Error description from the dispatch failure
+        """
+        logger.error(f"Task dispatch failed: {task_id} (work_item={work_item_id}, agent={agent_id}, error={error})")
+
+        if self.event_emitter:
+            from datetime import datetime
+
+            event = TaskDispatchFailedEvent(
+                type="scheduling.task_dispatch_failed",
+                timestamp=datetime.now(UTC).isoformat(),
+                source="agent_scheduler",
+                task_id=task_id,
+                work_item_id=work_item_id,
+                agent_id=agent_id,
+                error=error,
+            )
+            self.event_emitter.emit(event)

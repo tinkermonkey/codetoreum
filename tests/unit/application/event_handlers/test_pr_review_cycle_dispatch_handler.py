@@ -142,6 +142,7 @@ class TestPRReviewCycleDispatchHandlerColumnChangeWithConfig:
             run_id="run-1",
             stage_name="review",
             project_id="proj-1",
+            board_id="board-1",
         )
         mock_registry.get_active_run = AsyncMock(return_value=active_run)
 
@@ -202,6 +203,7 @@ class TestPRReviewCycleDispatchHandlerColumnChangeWithConfig:
             run_id="run-1",
             stage_name="review",
             project_id="proj-1",
+            board_id="board-1",
         )
         mock_registry.get_active_run = AsyncMock(return_value=active_run)
 
@@ -258,6 +260,7 @@ class TestPRReviewCycleDispatchHandlerColumnChangeWithConfig:
             run_id="run-1",
             stage_name="review",
             project_id="proj-1",
+            board_id="board-1",
         )
         mock_registry.get_active_run = AsyncMock(return_value=active_run)
 
@@ -390,6 +393,7 @@ class TestPRReviewCycleDispatchHandlerErrorHandling:
             run_id="run-1",
             stage_name="review",
             project_id="proj-1",
+            board_id="board-1",
         )
         mock_registry.get_active_run = AsyncMock(return_value=active_run)
 
@@ -476,6 +480,7 @@ class TestPRReviewCycleDispatchHandlerErrorHandling:
             run_id="different-run-id-not-item-id",
             stage_name="review",
             project_id="proj-1",
+            board_id="board-1",
         )
         mock_registry.get_active_run = AsyncMock(return_value=active_run)
 

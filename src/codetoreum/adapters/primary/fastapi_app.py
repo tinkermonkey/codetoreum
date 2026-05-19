@@ -76,6 +76,7 @@ from codetoreum.ports.input.config_command import IConfigurationCommandPort
 from codetoreum.ports.input.config_query import IConfigurationQueryPort
 from codetoreum.ports.input.execution_command import IExecutionCommandPort
 from codetoreum.ports.input.execution_query import IExecutionQueryPort
+from codetoreum.ports.input.issue_intake import IIssueIntakePort
 from codetoreum.ports.input.metrics_query import IMetricsQueryPort
 from codetoreum.ports.input.orchestration_command import IOrchestrationCommandPort
 from codetoreum.ports.input.task_query import ITaskQueryPort
@@ -270,6 +271,7 @@ def create_app(
     container_recovery_service: Any | None = None,
     adapter_slot_info: dict[str, str] | None = None,
     event_store_poller: Any | None = None,
+    issue_intake_port: IIssueIntakePort | None = None,
 ) -> FastAPI:
     """
     Create and configure FastAPI application.
@@ -424,6 +426,7 @@ def create_app(
         event_bus=event_bus,
         config_service=config_service,
         logger=logger,
+        issue_intake_port=issue_intake_port,
     )
 
     rest_api_adapter = RestAPIAdapter(

@@ -367,6 +367,72 @@ async def test_stream_logs_done_callback_handles_exceptions(execution_service):
         assert "log streaming" in str(call_args).lower()
 
 
+def test_build_llm_context_maps_repository_path_to_working_directory(execution_service):
+    """Test that _build_llm_context correctly maps repository_path to working_directory."""
+    from pathlib import Path
+
+    context = ExecutionContext(
+        work_item_id="issue-123",
+        workflow_id="workflow-123",
+        stage_name="development",
+        agent_id="agent-123",
+        model="claude-3-5-sonnet-20250219",
+        timeout_seconds=300,
+        workspace_type="issues",
+        branch_name="feature/test",
+        discussion_id=None,
+        project_id="project-123",
+        repository_url="https://github.com/test/repo",
+        tech_stack=["python"],
+        filesystem_write_allowed=True,
+        can_make_commits=True,
+        requires_docker=False,
+        mcp_servers=[],
+        previous_session_id="session-456",
+        metadata={"key": "value"},
+        repository_path="/tmp/test-repo",  # Path to cloned repository
+    )
+
+    llm_context = execution_service._build_llm_context(context)
+
+    # Verify working_directory is set to the repository path
+    assert llm_context.working_directory == Path("/tmp/test-repo")
+    # Verify other context fields are copied correctly
+    assert llm_context.model == context.model
+    assert llm_context.timeout_seconds == context.timeout_seconds
+    assert llm_context.session_id == context.previous_session_id
+
+
+def test_build_llm_context_handles_none_repository_path(execution_service):
+    """Test that _build_llm_context handles None repository_path correctly."""
+    context = ExecutionContext(
+        work_item_id="issue-123",
+        workflow_id="workflow-123",
+        stage_name="development",
+        agent_id="agent-123",
+        model="claude-3-5-sonnet-20250219",
+        timeout_seconds=300,
+        workspace_type="issues",
+        branch_name="feature/test",
+        discussion_id=None,
+        project_id="project-123",
+        repository_url="https://github.com/test/repo",
+        tech_stack=["python"],
+        filesystem_write_allowed=True,
+        can_make_commits=True,
+        requires_docker=False,
+        mcp_servers=[],
+        previous_session_id=None,
+        metadata={},
+        repository_path=None,  # No repository path
+    )
+
+    llm_context = execution_service._build_llm_context(context)
+
+    # Verify working_directory is None when repository_path is None
+    assert llm_context.working_directory is None
+
+
 @pytest.mark.asyncio
 async def test_stream_logs_done_callback_ignores_cancelled_error(execution_service):
     """Test that _stream_logs_done_callback suppresses CancelledError."""
@@ -388,3 +454,127 @@ async def test_stream_logs_done_callback_ignores_cancelled_error(execution_servi
     with patch("codetoreum.application.execution_service.logger") as mock_logger:
         execution_service._stream_logs_done_callback(task)
         mock_logger.error.assert_not_called()
+
+
+def test_build_llm_context_passes_environment_variables(execution_service):
+    """Test that _build_llm_context passes project environment variables to LLM context."""
+    context = ExecutionContext(
+        work_item_id="issue-123",
+        workflow_id="workflow-123",
+        stage_name="development",
+        agent_id="agent-123",
+        model="claude-3-5-sonnet-20250219",
+        timeout_seconds=300,
+        workspace_type="issues",
+        branch_name="feature/test",
+        discussion_id=None,
+        project_id="project-123",
+        repository_url="https://github.com/test/repo",
+        tech_stack=["python"],
+        filesystem_write_allowed=True,
+        can_make_commits=True,
+        requires_docker=False,
+        mcp_servers=[],
+        previous_session_id=None,
+        environment_variables={
+            "API_KEY": "secret-key-123",
+            "FEATURE_FLAG": "enabled",
+            "DEBUG_MODE": "false",
+        },
+        metadata={},
+    )
+
+    llm_context = execution_service._build_llm_context(context)
+
+    # Verify environment variables are passed to LLM context
+    assert llm_context.environment_variables is not None
+    assert "API_KEY" in llm_context.environment_variables
+    assert llm_context.environment_variables["API_KEY"] == "secret-key-123"
+    assert llm_context.environment_variables["FEATURE_FLAG"] == "enabled"
+    assert llm_context.environment_variables["DEBUG_MODE"] == "false"
+
+
+def test_build_llm_context_handles_empty_environment_variables(execution_service):
+    """Test that _build_llm_context handles empty environment variables correctly."""
+    context = ExecutionContext(
+        work_item_id="issue-123",
+        workflow_id="workflow-123",
+        stage_name="development",
+        agent_id="agent-123",
+        model="claude-3-5-sonnet-20250219",
+        timeout_seconds=300,
+        workspace_type="issues",
+        branch_name="feature/test",
+        discussion_id=None,
+        project_id="project-123",
+        repository_url="https://github.com/test/repo",
+        tech_stack=["python"],
+        filesystem_write_allowed=True,
+        can_make_commits=True,
+        requires_docker=False,
+        mcp_servers=[],
+        previous_session_id=None,
+        environment_variables=None,  # No environment variables
+        metadata={},
+    )
+
+    llm_context = execution_service._build_llm_context(context)
+
+    # Verify empty environment variables are handled
+    assert llm_context.environment_variables is not None
+    assert len(llm_context.environment_variables) == 0
+
+
+@pytest.mark.asyncio
+async def test_execute_with_llm_forwards_environment_variables(
+    execution_service,
+    sample_agent,
+    sample_work_item,
+    mock_event_store,
+    mock_llm_provider,
+):
+    """Test that execute_with_llm forwards environment variables to the LLM provider."""
+    execution = await execution_service.create_execution(
+        agent=sample_agent,
+        work_item=sample_work_item,
+        workflow_id="workflow-123",
+        stage_name="development",
+        prompt="Implement the feature",
+    )
+
+    context = ExecutionContext(
+        work_item_id=sample_work_item.id,
+        workflow_id="workflow-123",
+        stage_name="development",
+        agent_id=sample_agent.id,
+        model=sample_agent.model,
+        timeout_seconds=300,
+        workspace_type="issues",
+        branch_name="feature/test",
+        discussion_id=None,
+        project_id="project-123",
+        repository_url="https://github.com/test/repo",
+        tech_stack=["python"],
+        filesystem_write_allowed=True,
+        can_make_commits=True,
+        requires_docker=False,
+        mcp_servers=[],
+        previous_session_id=None,
+        environment_variables={
+            "API_KEY": "test-api-key",
+            "DB_HOST": "localhost",
+        },
+        metadata={},
+    )
+
+    await execution_service.start_execution(execution, context)
+    result = await execution_service.execute_with_llm(execution, context)
+
+    # Verify execution succeeded
+    assert result.success
+
+    # Verify the LLM provider received the environment variables
+    assert mock_llm_provider.last_context is not None
+    assert "API_KEY" in mock_llm_provider.last_context.environment_variables
+    assert mock_llm_provider.last_context.environment_variables["API_KEY"] == "test-api-key"
+    assert mock_llm_provider.last_context.environment_variables["DB_HOST"] == "localhost"

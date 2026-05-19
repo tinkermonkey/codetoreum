@@ -254,6 +254,93 @@ class QueuePositionChangedEvent(CodetoreumEvent):
 
 
 @dataclass(frozen=True)
+class TaskDispatchFailedEvent(CodetoreumEvent):
+    """Emitted when a scheduled task fails to dispatch to execution.
+
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Events represent immutable facts—attempting to modify any field
+    will raise `FrozenInstanceError`. This immutability is essential because
+    events are the permanent record of state changes in the system and must
+    never be altered once created.
+
+    Represents a failure in the AgentScheduler's consumer loop when attempting
+    to dispatch a dequeued task to execution. Unlike ExecutionFailedEvent
+    (which represents an agent execution failure), this event indicates that
+    the task never reached the execution service due to dispatcher failure.
+
+    Attributes:
+        type (str): Fixed to "scheduling.task_dispatch_failed"
+        task_id (str): ID of the scheduled task that failed to dispatch
+        work_item_id (str): ID of the work item associated with the task
+        agent_id (str): ID of the agent that should have executed
+        error (str): Error description from the dispatch failure
+        source (str): Always "agent_scheduler"
+
+    Example:
+        >>> event = TaskDispatchFailedEvent(
+        ...     type="scheduling.task_dispatch_failed",
+        ...     timestamp="2025-01-14T10:30:00+00:00",
+        ...     source="agent_scheduler",
+        ...     task_id="task-1",
+        ...     work_item_id="item-1",
+        ...     agent_id="agent-1",
+        ...     error="Connection timeout to container service"
+        ... )
+        >>> event.error = "other"  # ❌ Raises FrozenInstanceError
+    """
+
+    task_id: str = ""
+    work_item_id: str = ""
+    agent_id: str = ""
+    error: str = ""
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
+        if not self.task_id:
+            msg = "task_id is required"
+            raise ValueError(msg)
+        if not self.work_item_id:
+            msg = "work_item_id is required"
+            raise ValueError(msg)
+        if not self.agent_id:
+            msg = "agent_id is required"
+            raise ValueError(msg)
+        if not self.error:
+            msg = "error is required"
+            raise ValueError(msg)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update(
+            {
+                "task_id": self.task_id,
+                "work_item_id": self.work_item_id,
+                "agent_id": self.agent_id,
+                "error": self.error,
+            }
+        )
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "TaskDispatchFailedEvent":
+        """Deserialize from dictionary."""
+        return cls(
+            type=data.get("type", "scheduling.task_dispatch_failed"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", "agent_scheduler"),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            task_id=data.get("task_id", ""),
+            work_item_id=data.get("work_item_id", ""),
+            agent_id=data.get("agent_id", ""),
+            error=data.get("error", ""),
+        )
+
+
+@dataclass(frozen=True)
 class WorkItemDeadLetterQueuedEvent(CodetoreumEvent):
     """Emitted when a work item is queued to the dead letter queue.
 
