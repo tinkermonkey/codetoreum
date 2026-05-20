@@ -53,6 +53,7 @@ from codetoreum.adapters.primary.routers.executions import create_executions_rou
 from codetoreum.adapters.primary.routers.metrics import create_metrics_router
 from codetoreum.adapters.primary.routers.orchestrator import create_orchestrator_router
 from codetoreum.adapters.primary.routers.scheduler import create_scheduler_router
+from codetoreum.adapters.primary.routers.trigger import create_trigger_router
 from codetoreum.adapters.primary.routers.work_items import create_work_items_router
 from codetoreum.adapters.primary.routers.workflow_runs import (
     create_workflow_runs_router,
@@ -585,6 +586,13 @@ def create_app(
         auth_deps=auth_deps,
     )
     app.include_router(workspace_router)
+
+    # Include Trigger router (dev/testing: manual column-change trigger)
+    trigger_router = create_trigger_router(
+        event_bus=event_bus,
+        auth_deps=auth_deps,
+    )
+    app.include_router(trigger_router)
 
     # Include Audit router (if audit_query_port is provided)
     if audit_query_port is not None:
