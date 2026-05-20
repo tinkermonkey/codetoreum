@@ -21,7 +21,7 @@ from codetoreum.infrastructure.simulation.bootstrap import (
 from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
 from codetoreum.ports.output.board_service import MovedByType
 from tests.conftest import assert_condition, wait_for_condition
-from tests.simulation.helpers import wait_for_column
+from tests.simulation.helpers import filter_events_by_aggregate, get_aggregate_id, wait_for_column
 
 # ============================================================================
 # Fixtures
@@ -81,13 +81,11 @@ async def test_item_cascades_from_trigger_to_exit(e2e_env):
     async def workflow_completed():
         event_store = adapters.event_store
         all_events = event_store.get_all_events_list()
-        workflow_run_id_events = [
-            e for e in all_events if e.aggregate_type == "Workflow" and e.payload.get("work_item_id") == work_item_id
-        ]
+        workflow_run_id_events = filter_events_by_aggregate(all_events, "Workflow", work_item_id)
         if not workflow_run_id_events:
             return False
-        workflow_run_id = workflow_run_id_events[0].aggregate_id
-        workflow_events = [e for e in all_events if e.aggregate_id == workflow_run_id]
+        workflow_run_id = get_aggregate_id(workflow_run_id_events[0])
+        workflow_events = [e for e in all_events if get_aggregate_id(e) == workflow_run_id]
         return any(e.event_type == "WorkflowCompletedEvent" for e in workflow_events)
 
     await wait_for_condition(
@@ -128,24 +126,22 @@ async def test_item_cascades_from_trigger_to_exit(e2e_env):
     all_events = event_store.get_all_events_list()
 
     # Find the workflow run ID for this work item by locating events with work_item_id in payload
-    workflow_run_id_events = [
-        e for e in all_events if e.aggregate_type == "Workflow" and e.payload.get("work_item_id") == work_item_id
-    ]
+    workflow_run_id_events = filter_events_by_aggregate(all_events, "Workflow", work_item_id)
     assert len(workflow_run_id_events) > 0, "No workflow lifecycle events found for this work item in EventStore"
 
     # All workflow events for this run share the same aggregate_id (workflow_run_id)
-    workflow_run_id = workflow_run_id_events[0].aggregate_id
+    workflow_run_id = get_aggregate_id(workflow_run_id_events[0])
 
     # Retrieve all events for this workflow run stream
-    workflow_events = [e for e in all_events if e.aggregate_id == workflow_run_id]
+    workflow_events = [e for e in all_events if get_aggregate_id(e) == workflow_run_id]
     event_types = [e.event_type for e in workflow_events]
 
-    assert "WorkflowCreated" in event_types, f"WorkflowCreated not found, got: {event_types}"
+    assert "WorkflowCreatedEvent" in event_types, f"WorkflowCreatedEvent not found, got: {event_types}"
     assert "WorkflowStartedEvent" in event_types, f"WorkflowStarted not found, got: {event_types}"
     assert "WorkflowCompletedEvent" in event_types, f"WorkflowCompleted not found, got: {event_types}"
 
     # Verify stage advances happened (3 stages = 3 advances)
-    stage_advances = [e for e in workflow_events if e.event_type == "WorkflowStageAdvanced"]
+    stage_advances = [e for e in workflow_events if e.event_type == "WorkflowStageAdvancedEvent"]
     assert len(stage_advances) == 3, f"Expected 3 stage advances (one per agent), got {len(stage_advances)}"
 
 
@@ -363,13 +359,11 @@ async def test_autonomous_progression_via_api_single_http_call(e2e_env):
     # 5. Verify workflow lifecycle events in event store
     async def workflow_completed():
         all_events = event_store.get_all_events_list()
-        workflow_run_id_events = [
-            e for e in all_events if e.aggregate_type == "Workflow" and e.payload.get("work_item_id") == work_item_id
-        ]
+        workflow_run_id_events = filter_events_by_aggregate(all_events, "Workflow", work_item_id)
         if not workflow_run_id_events:
             return False
-        workflow_run_id = workflow_run_id_events[0].aggregate_id
-        workflow_events = [e for e in all_events if e.aggregate_id == workflow_run_id]
+        workflow_run_id = get_aggregate_id(workflow_run_id_events[0])
+        workflow_events = [e for e in all_events if get_aggregate_id(e) == workflow_run_id]
         return any(e.event_type == "WorkflowCompletedEvent" for e in workflow_events)
 
     await wait_for_condition(
@@ -380,22 +374,20 @@ async def test_autonomous_progression_via_api_single_http_call(e2e_env):
 
     # Verify the workflow events
     all_events = event_store.get_all_events_list()
-    workflow_run_id_events = [
-        e for e in all_events if e.aggregate_type == "Workflow" and e.payload.get("work_item_id") == work_item_id
-    ]
+    workflow_run_id_events = filter_events_by_aggregate(all_events, "Workflow", work_item_id)
     assert len(workflow_run_id_events) > 0, "No workflow lifecycle events found for this work item in EventStore"
 
-    workflow_run_id = workflow_run_id_events[0].aggregate_id
-    workflow_events = [e for e in all_events if e.aggregate_id == workflow_run_id]
+    workflow_run_id = get_aggregate_id(workflow_run_id_events[0])
+    workflow_events = [e for e in all_events if get_aggregate_id(e) == workflow_run_id]
     event_types = [e.event_type for e in workflow_events]
 
     # Verify critical lifecycle events
-    assert "WorkflowCreated" in event_types, f"WorkflowCreated event not found. Event types: {event_types}"
+    assert "WorkflowCreatedEvent" in event_types, f"WorkflowCreated event not found. Event types: {event_types}"
     assert "WorkflowStartedEvent" in event_types, f"WorkflowStarted event not found. Event types: {event_types}"
     assert "WorkflowCompletedEvent" in event_types, f"WorkflowCompleted event not found. Event types: {event_types}"
 
     # 6. Verify stage advances (3 stages = 3 advances)
-    stage_advances = [e for e in workflow_events if e.event_type == "WorkflowStageAdvanced"]
+    stage_advances = [e for e in workflow_events if e.event_type == "WorkflowStageAdvancedEvent"]
     assert len(stage_advances) == 3, (
         f"Expected 3 WorkflowStageAdvanced events (one per agent execution), " f"got {len(stage_advances)}"
     )
@@ -546,9 +538,7 @@ async def test_autonomous_progression_via_clock_tick(e2e_env):
 
     # Verify workflow completed (event sourcing validation)
     all_events = event_store.get_all_events_list()
-    workflow_events = [
-        e for e in all_events if e.aggregate_type == "Workflow" and e.payload.get("work_item_id") == work_item_id
-    ]
+    workflow_events = filter_events_by_aggregate(all_events, "Workflow", work_item_id)
     assert len(workflow_events) > 0, "No workflow events found"
 
     event_types = [e.event_type for e in workflow_events]

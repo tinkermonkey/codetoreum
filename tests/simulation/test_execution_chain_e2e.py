@@ -20,6 +20,7 @@ from typing import cast
 
 import pytest
 
+from codetoreum.infrastructure.event_serialization import infer_aggregate_id_and_type
 from codetoreum.infrastructure.simulation.bootstrap import (
     SimulationAdapters,
     SimulationApplicationBootstrap,
@@ -219,10 +220,11 @@ async def test_execution_chain_workflow_completes(exec_chain_env):
 
     # Wait for workflow events to be recorded
     async def workflow_events_recorded():
-        # For simulation, event_store is InMemoryEventStore which has get_all_events_list()
         all_events = event_store.get_all_events_list()
         workflow_events = [
-            e for e in all_events if e.aggregate_type == "Workflow" and e.payload.get("work_item_id") == work_item_id
+            e
+            for e in all_events
+            if infer_aggregate_id_and_type(e)[1] == "Workflow" and getattr(e, "work_item_id", None) == work_item_id
         ]
         return len(workflow_events) > 0
 
@@ -236,21 +238,23 @@ async def test_execution_chain_workflow_completes(exec_chain_env):
     # Find workflow events for this work item
     all_events = event_store.get_all_events_list()
     workflow_events_for_item = [
-        e for e in all_events if e.aggregate_type == "Workflow" and e.payload.get("work_item_id") == work_item_id
+        e
+        for e in all_events
+        if infer_aggregate_id_and_type(e)[1] == "Workflow" and getattr(e, "work_item_id", None) == work_item_id
     ]
     assert len(workflow_events_for_item) > 0, (
         f"No Workflow events found for work_item_id={work_item_id!r} in EventStore. "
-        f"Aggregate types present: {sorted({e.aggregate_type for e in all_events})}"
+        f"Aggregate types present: {sorted({infer_aggregate_id_and_type(e)[1] for e in all_events})}"
     )
 
     # All workflow events for this run share the same aggregate_id (workflow_run_id)
-    workflow_run_id = workflow_events_for_item[0].aggregate_id
-    run_events = [e for e in all_events if e.aggregate_id == workflow_run_id]
+    workflow_run_id = infer_aggregate_id_and_type(workflow_events_for_item[0])[0]
+    run_events = [e for e in all_events if infer_aggregate_id_and_type(e)[0] == workflow_run_id]
     event_types = [e.event_type for e in run_events]
 
-    assert "WorkflowCreated" in event_types, f"WorkflowCreated missing; got: {event_types}"
-    assert "WorkflowStartedEvent" in event_types, f"WorkflowStarted missing; got: {event_types}"
-    assert "WorkflowCompletedEvent" in event_types, f"WorkflowCompleted missing; got: {event_types}"
+    assert "WorkflowCreatedEvent" in event_types, f"WorkflowCreatedEvent missing; got: {event_types}"
+    assert "WorkflowStartedEvent" in event_types, f"WorkflowStartedEvent missing; got: {event_types}"
+    assert "WorkflowCompletedEvent" in event_types, f"WorkflowCompletedEvent missing; got: {event_types}"
 
 
 @pytest.mark.asyncio

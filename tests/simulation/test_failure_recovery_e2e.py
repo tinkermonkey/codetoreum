@@ -13,6 +13,7 @@ from typing import Any, cast
 import pytest
 
 from codetoreum.domain.repair_cycle_types import RepairTestRunConfig, RepairTestType
+from codetoreum.infrastructure.event_serialization import infer_aggregate_id_and_type
 from codetoreum.infrastructure.simulation.bootstrap import (
     SimulationAdapters,
     SimulationApplicationBootstrap,
@@ -21,7 +22,7 @@ from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
 from codetoreum.ports.output.board_service import MovedByType
 from codetoreum.ports.output.review_cycle_service import ReviewCycleRequest
 from tests.conftest import assert_condition
-from tests.simulation.helpers import wait_for_column
+from tests.simulation.helpers import filter_events_by_aggregate, get_aggregate_id, wait_for_column
 
 # ============================================================================
 # Fixtures
@@ -100,7 +101,10 @@ async def test_agent_failure_emits_workflow_failed_event(
     # _fail_workflow_run() which persists the WorkflowFailed event.
     async def workflow_failed_recorded():
         all_events_poll = event_store.get_all_events_list()
-        return any(e.event_type == "WorkflowFailed" and e.aggregate_type == "Workflow" for e in all_events_poll)
+        return any(
+            e.event_type == "WorkflowFailedEvent" and infer_aggregate_id_and_type(e)[1] == "Workflow"
+            for e in all_events_poll
+        )
 
     await assert_condition(
         workflow_failed_recorded,
@@ -117,18 +121,16 @@ async def test_agent_failure_emits_workflow_failed_event(
     all_events = event_store.get_all_events_list()
 
     # Find workflow lifecycle events for this work item
-    workflow_events_for_item = [
-        e for e in all_events if e.aggregate_type == "Workflow" and e.payload.get("work_item_id") == work_item_id
-    ]
+    workflow_events_for_item = filter_events_by_aggregate(all_events, "Workflow", work_item_id)
     assert len(workflow_events_for_item) > 0, "No Workflow-aggregate events found for this work item in EventStore"
 
     # All events for this run share the same aggregate_id (workflow_run_id)
-    workflow_run_id = workflow_events_for_item[0].aggregate_id
-    run_events = [e for e in all_events if e.aggregate_id == workflow_run_id]
+    workflow_run_id = get_aggregate_id(workflow_events_for_item[0])
+    run_events = [e for e in all_events if get_aggregate_id(e) == workflow_run_id]
     run_event_types = [e.event_type for e in run_events]
 
     # WorkflowFailed MUST be present
-    assert "WorkflowFailed" in run_event_types, (
+    assert "WorkflowFailedEvent" in run_event_types, (
         f"Expected WorkflowFailed in EventStore for run {workflow_run_id}, " f"but only found: {run_event_types}"
     )
 

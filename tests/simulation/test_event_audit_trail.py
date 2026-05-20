@@ -12,6 +12,7 @@ from typing import cast
 
 import pytest
 
+from codetoreum.infrastructure.event_serialization import infer_aggregate_id_and_type
 from codetoreum.infrastructure.simulation.bootstrap import (
     SimulationAdapters,
     SimulationApplicationBootstrap,
@@ -19,7 +20,7 @@ from codetoreum.infrastructure.simulation.bootstrap import (
 from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
 from codetoreum.ports.output.board_service import MovedByType
 from tests.conftest import assert_condition
-from tests.simulation.helpers import wait_for_column
+from tests.simulation.helpers import filter_events_by_aggregate, get_aggregate_id, wait_for_column
 
 
 @pytest.mark.asyncio
@@ -58,7 +59,10 @@ async def test_full_workflow_event_audit_trail(
         event_store = adapters.event_store
         all_events = event_store.get_all_events_list()
         # Wait for WorkflowCompleted event
-        return any(e.event_type == "WorkflowCompletedEvent" for e in all_events if e.aggregate_type == "Workflow")
+        return any(
+            e.event_type == "WorkflowCompletedEvent" and infer_aggregate_id_and_type(e)[1] == "Workflow"
+            for e in all_events
+        )
 
     await assert_condition(
         workflow_events_ready, timeout=2.0, poll_interval=0.05, message="WorkflowCompleted event should be recorded"
@@ -74,24 +78,23 @@ async def test_full_workflow_event_audit_trail(
     # WorkflowCreated / WorkflowStarted / WorkflowCompleted all carry work_item_id
     # in their payload.  WorkflowStageAdvanced events share the same aggregate_id
     # (workflow_run_id) but may not repeat work_item_id in their own payload.
-    seed_events = [
-        e for e in all_events if e.aggregate_type == "Workflow" and e.payload.get("work_item_id") == work_item_id
-    ]
+    seed_events = filter_events_by_aggregate(all_events, "Workflow", work_item_id)
     assert len(seed_events) > 0, (
         f"No workflow events found in EventStore for work_item_id={work_item_id}. "
         f"Total events in store: {len(all_events)}. "
-        f"Aggregate types present: {list({e.aggregate_type for e in all_events})}. "
         f"Event types present: {list({e.event_type for e in all_events})}"
     )
 
     # Step 2: Retrieve ALL events for this workflow run using the shared aggregate_id
-    workflow_run_id = seed_events[0].aggregate_id
-    workflow_events = [e for e in all_events if e.aggregate_id == workflow_run_id]
+    workflow_run_id = get_aggregate_id(seed_events[0])
+    workflow_events = [e for e in all_events if get_aggregate_id(e) == workflow_run_id]
 
     event_types_in_order = [e.event_type for e in workflow_events]
 
     # Must have all lifecycle events
-    assert "WorkflowCreated" in event_types_in_order, f"WorkflowCreated missing. Events found: {event_types_in_order}"
+    assert (
+        "WorkflowCreatedEvent" in event_types_in_order
+    ), f"WorkflowCreated missing. Events found: {event_types_in_order}"
     assert (
         "WorkflowStartedEvent" in event_types_in_order
     ), f"WorkflowStarted missing. Events found: {event_types_in_order}"
@@ -100,7 +103,7 @@ async def test_full_workflow_event_audit_trail(
     ), f"WorkflowCompleted missing. Events found: {event_types_in_order}"
 
     # Stage advances — one per agent (architect, coder, tester = 3)
-    stage_advances = [e for e in workflow_events if e.event_type == "WorkflowStageAdvanced"]
+    stage_advances = [e for e in workflow_events if e.event_type == "WorkflowStageAdvancedEvent"]
     assert len(stage_advances) == 3, (
         f"Expected 3 WorkflowStageAdvanced events (one per agent), "
         f"got {len(stage_advances)}. All events: {event_types_in_order}"
@@ -115,7 +118,7 @@ async def test_full_workflow_event_audit_trail(
         )
 
     # WorkflowCreated must be first
-    assert event_types_in_order[0] == "WorkflowCreated", (
+    assert event_types_in_order[0] == "WorkflowCreatedEvent", (
         f"Expected WorkflowCreated as first event, got {event_types_in_order[0]}. "
         f"Full sequence: {event_types_in_order}"
     )
@@ -186,7 +189,7 @@ async def test_event_store_chronological_across_all_streams(
     # Group events by aggregate_id (stream)
     streams: dict[str, list] = {}
     for event in all_events:
-        streams.setdefault(event.aggregate_id, []).append(event)
+        streams.setdefault(get_aggregate_id(event), []).append(event)
 
     for stream_id, stream_events in streams.items():
         for i in range(1, len(stream_events)):

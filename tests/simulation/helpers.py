@@ -7,6 +7,7 @@ from typing import Any
 
 from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
 from codetoreum.domain.events import CodetoreumEvent, now_iso
+from codetoreum.infrastructure.event_serialization import infer_aggregate_id_and_type
 from codetoreum.infrastructure.simulation import SimulationRunner
 
 
@@ -267,6 +268,42 @@ def print_notifications_summary(runner: SimulationRunner) -> None:
 
     print(f"\nTotal: {len(notifications)} notifications")
     print("=" * 80)
+
+
+def filter_events_by_aggregate(
+    events: list[CodetoreumEvent],
+    aggregate_type: str,
+    work_item_id: str | None = None,
+) -> list[CodetoreumEvent]:
+    """Filter events from InMemoryEventStore.get_all_events_list() by aggregate type.
+
+    CodetoreumEvent does not carry aggregate_type or aggregate_id attributes directly;
+    those are inferred by the event store via infer_aggregate_id_and_type(). This
+    helper centralises that inference so test code doesn't need to import it directly.
+
+    Args:
+        events: List of CodetoreumEvent instances from get_all_events_list().
+        aggregate_type: Aggregate type to filter on (e.g. "Workflow", "AgentExecution").
+        work_item_id: Optional secondary filter on the event's work_item_id field.
+
+    Returns:
+        Filtered list of events whose inferred aggregate_type matches.
+    """
+    result = []
+    for e in events:
+        agg_id, agg_type = infer_aggregate_id_and_type(e)
+        if agg_type != aggregate_type:
+            continue
+        if work_item_id is not None and getattr(e, "work_item_id", None) != work_item_id:
+            continue
+        result.append(e)
+    return result
+
+
+def get_aggregate_id(event: CodetoreumEvent) -> str:
+    """Return the inferred aggregate_id for an event from get_all_events_list()."""
+    agg_id, _ = infer_aggregate_id_and_type(event)
+    return str(agg_id)
 
 
 async def wait_for_column(

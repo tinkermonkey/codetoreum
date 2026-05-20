@@ -10,11 +10,13 @@ import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
 
+from codetoreum.domain.events.repository_events import BranchCreatedEvent
 from codetoreum.ports.exceptions import (
     RepositoryError,
     ResourceNotFoundError,
     ValidationError,
 )
+from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.version_control_service import (
     IVersionControlService,
     Repository,
@@ -48,12 +50,14 @@ class InMemoryVersionControlService(IVersionControlService):
     def __init__(
         self,
         time_source: Callable[[], datetime] | None = None,
+        event_emitter: IEventEmitter | None = None,
     ) -> None:
         """Initialize the in-memory version control service.
 
         Args:
             time_source: Optional callable returning current datetime for simulation clock control.
                         Defaults to datetime.now(UTC).
+            event_emitter: Optional event emitter for broadcasting domain events (e.g. BranchCreatedEvent).
         """
         # Map of (repo_path) -> {
         #     'url': str,
@@ -81,6 +85,7 @@ class InMemoryVersionControlService(IVersionControlService):
         self._lock = threading.Lock()
 
         self._time_source = time_source or (lambda: datetime.now(UTC))
+        self._event_emitter = event_emitter
 
     async def clone_repository(self, url: str, target_path: str, branch: str | None = None) -> None:
         """Clone a repository to local path.
@@ -279,6 +284,7 @@ class InMemoryVersionControlService(IVersionControlService):
             msg = "Branch name cannot be empty"
             raise ValidationError(msg)
 
+        base_commit_sha: str = "initial-commit-sha"
         with self._lock:
             if repo_path not in self._repositories:
                 msg = f"Repository not found at path: {repo_path}"
@@ -286,9 +292,26 @@ class InMemoryVersionControlService(IVersionControlService):
 
             repo = self._repositories[repo_path]
 
+            source_branch = from_branch or "main"
+            source_commits = repo["commits"].get(source_branch, ["initial-commit-sha"])
+            base_commit_sha = source_commits[-1] if source_commits else "initial-commit-sha"
+
             repo["branches"].add(branch_name)
             if branch_name not in repo["commits"]:
                 repo["commits"][branch_name] = []
+
+        if self._event_emitter:
+            self._event_emitter.emit(
+                BranchCreatedEvent(
+                    type="repository.branch_created",
+                    timestamp=self._time_source().isoformat(),
+                    source="in_memory_vcs",
+                    repository_id=repo_path,
+                    branch_name=branch_name,
+                    base_commit=base_commit_sha,
+                    project_id=None,
+                )
+            )
 
     async def list_branches(self, repo_path: str, remote: bool = False) -> list[str]:
         """List all branches in the in-memory repository."""
