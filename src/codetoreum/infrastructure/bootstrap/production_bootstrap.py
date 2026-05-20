@@ -233,9 +233,9 @@ class ProductionApplicationBootstrap:
                 event_store="elasticsearch",  # Shared event bus for cross-process event distribution
                 event_emitter="mock",  # Use mock emitter (in-memory, not capturing for tests)
                 # Non-critical slots use mocks (logged as warnings)
-                review_cycle="mock",
-                pr_review_cycle="mock",
-                systemic_analysis="mock",
+                review_cycle="basic",
+                pr_review_cycle="basic",
+                systemic_analysis="llm",
                 environment_repair="mock",
             )
 

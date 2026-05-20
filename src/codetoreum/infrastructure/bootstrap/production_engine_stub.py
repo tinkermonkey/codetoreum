@@ -1,12 +1,12 @@
 import logging
 from datetime import UTC, datetime
 
+from codetoreum.adapters.secondary.basic_pr_review_cycle_adapter import BasicPRReviewCycleAdapter
+from codetoreum.adapters.secondary.basic_review_cycle_adapter import BasicReviewCycleAdapter
+from codetoreum.adapters.secondary.llm_systemic_analysis_adapter import LLMSystemicAnalysisAdapter
 from codetoreum.adapters.testing import (
     MockEnvironmentRepairAdapter,
-    MockPRReviewCycleAdapter,
     MockRepairCycleAdapter,
-    MockReviewCycleAdapter,
-    MockSystemicAnalysisAdapter,
 )
 
 logger = logging.getLogger(__name__)
@@ -32,20 +32,24 @@ class ProductionEngineStub:
         return self._clock
 
     def create_review_cycle_adapter(self, llm_adapter=None):
-        logger.debug("Creating MockReviewCycleAdapter for production (non-critical path)")
-        return MockReviewCycleAdapter(clock=None, llm_adapter=llm_adapter)
+        logger.debug("Creating BasicReviewCycleAdapter for production")
+        return BasicReviewCycleAdapter()
 
     def create_pr_review_cycle_adapter(self):
-        logger.debug("Creating MockPRReviewCycleAdapter for production (non-critical path)")
-        return MockPRReviewCycleAdapter(clock=None)
+        logger.debug("Creating BasicPRReviewCycleAdapter for production")
+        return BasicPRReviewCycleAdapter()
 
     def create_repair_cycle_adapter(self, llm_factory=None, checkpoint_store=None, container_adapter=None):
         logger.debug("Creating MockRepairCycleAdapter for production (non-critical path)")
         return MockRepairCycleAdapter(clock=None)
 
     def create_systemic_analysis_adapter(self, llm_adapter=None):
-        logger.debug("Creating MockSystemicAnalysisAdapter for production (non-critical path)")
-        return MockSystemicAnalysisAdapter(clock=None, llm_adapter=llm_adapter)
+        logger.debug("Creating LLMSystemicAnalysisAdapter for production")
+
+        async def _factory(agent_name: str):
+            return llm_adapter
+
+        return LLMSystemicAnalysisAdapter(llm_factory=_factory)
 
     def create_environment_repair_adapter(self, llm_adapter=None):
         logger.debug("Creating MockEnvironmentRepairAdapter for production (non-critical path)")

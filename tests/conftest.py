@@ -9,7 +9,7 @@ from dataclasses import dataclass
 import docker
 import pytest
 from testcontainers.core.container import DockerContainer
-from testcontainers.core.wait_strategies import HttpWaitStrategy, PortWaitStrategy
+from testcontainers.core.wait_strategies import HttpWaitStrategy, PortWaitStrategy, WaitStrategy
 
 # Disable OpenTelemetry for tests to prevent daemon threads from hanging event loops
 # This must happen before any codetoreum imports that trigger fastapi_app import
@@ -338,6 +338,38 @@ class ModernElasticsearchContainer(DockerContainer):
         return f"http://{host}:{port}"
 
 
+class _RedisPingWaitStrategy(WaitStrategy):
+    """Wait strategy that verifies Redis is ready by issuing a PING command.
+
+    PortWaitStrategy only checks that the TCP port accepts connections, which can
+    succeed before Redis has finished initializing and is ready to process commands.
+    This strategy connects via raw socket and sends a Redis PING, retrying until
+    Redis responds with +PONG.
+    """
+
+    def __init__(self, port: int = 6379) -> None:
+        super().__init__()
+        self.port = port
+
+    def wait_until_ready(self, container: "DockerContainer") -> None:
+        import socket
+
+        host = container.get_container_host_ip()
+        mapped_port = int(container.get_exposed_port(self.port))
+        deadline = time.monotonic() + self._startup_timeout
+        while time.monotonic() < deadline:
+            try:
+                with socket.create_connection((host, mapped_port), timeout=1.0) as sock:
+                    sock.sendall(b"PING\r\n")
+                    response = sock.recv(16)
+                    if response.startswith(b"+PONG"):
+                        return
+            except OSError:
+                pass
+            time.sleep(self._poll_interval)
+        raise TimeoutError(f"Redis on {host}:{mapped_port} did not respond to PING within {self._startup_timeout}s")
+
+
 class ModernRedisContainer(DockerContainer):
     """Redis container using modern wait strategy API.
 
@@ -368,8 +400,8 @@ class ModernRedisContainer(DockerContainer):
         self.with_exposed_ports(self.port)
         if self.password:
             self.with_command(f"redis-server --requirepass {self.password}")
-        # Use PortWaitStrategy instead of deprecated @wait_container_is_ready decorator
-        self.waiting_for(PortWaitStrategy(self.port))
+        # Use PING-based wait strategy to ensure Redis is fully ready (not just TCP-open)
+        self.waiting_for(_RedisPingWaitStrategy(self.port))
 
 
 @pytest.fixture(scope="function", autouse=True)

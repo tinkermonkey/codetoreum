@@ -362,6 +362,13 @@ class AdapterResolver:
             # Engine creates time-aware mock with optional LLM adapter
             llm_adapter = self._resolved.get("llm")
             return self._deps.engine.create_review_cycle_adapter(llm_adapter=llm_adapter)
+        if self._config.review_cycle == "basic":
+            from codetoreum.adapters.secondary.basic_review_cycle_adapter import BasicReviewCycleAdapter
+
+            return BasicReviewCycleAdapter(
+                event_emitter=self._resolved.get("event_emitter"),
+                event_bus=self._deps.event_bus,
+            )
         # Real adapter: bypass engine, use factory directly
         return self._factory.create_review_cycle_service(adapter_name=self._config.review_cycle)
 
@@ -381,6 +388,15 @@ class AdapterResolver:
             # Engine creates time-aware mock with None dependencies initially
             # Dependencies are injected in bootstrap post-processing
             return self._deps.engine.create_pr_review_cycle_adapter()
+        if self._config.pr_review_cycle == "basic":
+            from codetoreum.adapters.secondary.basic_pr_review_cycle_adapter import BasicPRReviewCycleAdapter
+
+            return BasicPRReviewCycleAdapter(
+                ticket_system=self._resolved.get("ticket"),
+                board_service=self._resolved.get("board"),
+                event_emitter=self._resolved.get("event_emitter"),
+                event_bus=self._deps.event_bus,
+            )
         # Real adapter: bypass engine, use factory directly
         return self._factory.create_pr_review_cycle_service(adapter_name=self._config.pr_review_cycle)
 
