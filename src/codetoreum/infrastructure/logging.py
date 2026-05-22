@@ -130,9 +130,17 @@ class SensitiveDataFilter(logging.Filter):
         if record.msg:
             record.msg = self._scrub(str(record.msg))
 
-        # Scrub args
+        # Scrub args — Python's LogRecord unwraps a 1-tuple Mapping into the dict itself,
+        # so record.args may be a dict (%(key)s style) or a tuple (positional %s style).
         if record.args:
-            record.args = tuple(self._scrub(str(arg)) if isinstance(arg, (str, bytes)) else arg for arg in record.args)
+            if isinstance(record.args, dict):
+                record.args = {
+                    k: self._scrub(str(v)) if isinstance(v, (str, bytes)) else v for k, v in record.args.items()
+                }
+            else:
+                record.args = tuple(
+                    self._scrub(str(arg)) if isinstance(arg, (str, bytes)) else arg for arg in record.args
+                )
 
         return True
 
