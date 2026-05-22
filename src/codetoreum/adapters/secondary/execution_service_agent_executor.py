@@ -274,6 +274,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         """
         success = False
         resolved_board_id = board_id  # fallback; overridden by run_info below
+        run_info = None
         try:
             if self._execution_delay > 0:
                 await asyncio.sleep(self._execution_delay)
@@ -563,9 +564,13 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                     extra={"error_id": ErrorRegistry.ERR_EXEC_CHAIN_CLEANUP_FAILURE},
                 )
 
-        await self._call_completion(work_item_id, resolved_board_id, success)
+        await self._call_completion(
+            work_item_id, resolved_board_id, success, project_id=run_info.project_id if run_info else None
+        )
 
-    async def _call_completion(self, work_item_id: str, board_id: str, success: bool) -> None:
+    async def _call_completion(
+        self, work_item_id: str, board_id: str, success: bool, project_id: str | None = None
+    ) -> None:
         """Invoke completion callback with error handling and recovery.
 
         If the completion callback (auto-progression) fails, the work item is stuck
@@ -600,6 +605,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                             board_id=board_id,
                             success=success,
                             error=e,
+                            project_id=project_id,
                         )
                     except Exception as recovery_error:
                         # Recovery service itself failed (e.g., DLQ add failure,

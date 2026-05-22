@@ -195,7 +195,7 @@ class GitHubBoardAdapter(IBoardService):
         if key in self._monitoring:
             self._monitoring[key].state = MonitoringState.STOPPED
 
-    def get_monitoring_status(self, project_id: str) -> MonitoringStatus:
+    async def get_monitoring_status(self, project_id: str) -> MonitoringStatus:
         """Get monitoring status for a project.
 
         Args:

@@ -21,6 +21,7 @@ This bootstrap ensures:
 
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI
@@ -41,9 +42,10 @@ from codetoreum.adapters.primary.input_port_adapters.mock import (
     MockWorkflowCommandAdapter,
     MockWorkflowDefinitionCommandAdapter,
     MockWorkflowQueryAdapter,
-    MockWorkItemCommandAdapter,
-    MockWorkItemQueryAdapter,
     MockWorkspaceQueryAdapter,
+)
+from codetoreum.adapters.secondary.failed_event_store_adapter import (
+    DeadLetterQueueFailedEventStoreAdapter,
 )
 from codetoreum.application.agent_execution_recovery_service import (
     AgentExecutionRecoveryService,
@@ -91,6 +93,7 @@ from codetoreum.infrastructure.audit.stores import InMemoryAuditStore
 from codetoreum.infrastructure.bootstrap.codetoreum_board_setup import (
     CODETOREUM_BOARD_ID,
 )
+from codetoreum.infrastructure.dead_letter_queue import DeadLetterQueue
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.event_store_poller import EventStorePoller
@@ -189,6 +192,7 @@ class ProductionInfrastructure:
 
     event_bus: EventBus
     failed_event_store: Any
+    audit_store: Any
 
 
 class ProductionApplicationBootstrap:
@@ -295,6 +299,12 @@ class ProductionApplicationBootstrap:
         try:
             logger.info("Starting production bootstrap...")
 
+            # Phase 0: Register all domain event types so the event store can deserialize them.
+            from codetoreum.infrastructure.event_serialization import auto_register_event_types
+
+            auto_register_event_types()
+            logger.info("Phase 0: Registered all domain event types with EventSerializer.")
+
             # Phase 1: Create infrastructure (event bus first for subscriptions)
             logger.info("Phase 1a: Creating infrastructure...")
             self.infrastructure = self._create_infrastructure()
@@ -370,6 +380,18 @@ class ProductionApplicationBootstrap:
             logger.info("Phase 5b: Initializing codetoreum board configuration...")
             await self._initialize_codetoreum_board()
 
+            # Phase 5c: Load user-registered project bootstrap configurations
+            logger.info("Phase 5c: Loading project bootstrap configurations...")
+            await self._load_bootstrap_projects()
+
+            # Phase 5d: Wire event-store-backed WorkItemService to executor
+            # The executor was created in Phase 3 with MockWorkItemService because
+            # WorkItemService (backed by Redis event store) didn't exist yet. Now that
+            # services are ready, replace the placeholder so work items created via the
+            # REST API (persisted to the event store) are visible to the executor.
+            logger.info("Phase 5d: Wiring WorkItemService to executor...")
+            self.adapters.agent_executor._work_item_service = self.services.work_item_service
+
             # Phase 6: Create ports
             logger.info("Phase 6: Creating 17 input port implementations...")
             self.ports = self._create_ports()
@@ -410,11 +432,14 @@ class ProductionApplicationBootstrap:
             ProductionInfrastructure with event bus and failed event store
         """
         event_bus = EventBus()
-        failed_event_store = InMemoryAuditStore()
+        audit_store = InMemoryAuditStore()
+        dead_letter_queue = DeadLetterQueue()
+        failed_event_store = DeadLetterQueueFailedEventStoreAdapter(dead_letter_queue)
 
         return ProductionInfrastructure(
             event_bus=event_bus,
             failed_event_store=failed_event_store,
+            audit_store=audit_store,
         )
 
     # =========================================================================
@@ -652,11 +677,15 @@ class ProductionApplicationBootstrap:
         )
 
         # For production, use the execution service executor with a real time clock
+        import os as _os
+
         from codetoreum.adapters.secondary.execution_service_agent_executor import (
             ExecutionServiceAgentExecutor,
         )
         from codetoreum.infrastructure.simulation.simulation_clock import RealTimeClock
 
+        _workspace_base = _os.getenv("AGENT_WORKSPACE_BASE", "/tmp/codetoreum-workspaces")
+        Path(_workspace_base).mkdir(parents=True, exist_ok=True)
         execution_service_executor = ExecutionServiceAgentExecutor(
             execution_service=execution_service,
             workspace_router=workspace_router,
@@ -666,9 +695,10 @@ class ProductionApplicationBootstrap:
             run_registry=self.adapters.run_registry,
             branch_tracker=self.adapters.branch_tracker,
             vcs=self.adapters.version_control,
-            clock=RealTimeClock(),  # Production clock using real system time
+            clock=RealTimeClock(),
             recovery_service=recovery_service,
             workflow_config_service=self.adapters.workflow_config,
+            workspace_base_dir=_workspace_base,
         )
         self.adapters.agent_executor = execution_service_executor
 
@@ -741,6 +771,7 @@ class ProductionApplicationBootstrap:
             board_service=self.adapters.board,
             workflow_config=self.adapters.workflow_config,
             conversational_loop_orchestrator=conversational_loop_orchestrator,
+            dispatch_via_task_queue=False,  # BoardColumnEventHandler owns dispatch in production
         )
 
         # Work Item Service
@@ -796,11 +827,10 @@ class ProductionApplicationBootstrap:
             message = "Adapters and services must be created first"
             raise RuntimeError(message)
 
-        # Create mock port adapters
-        work_item_command = MockWorkItemCommandAdapter()
-        work_item_query = MockWorkItemQueryAdapter(
-            ticket_adapter=self.adapters.ticket_system,
-        )
+        # Use event-store-backed WorkItemService for both command and query ports
+        # so REST API callers and the executor share the same persistence layer.
+        work_item_command = self.services.work_item_service
+        work_item_query = self.services.work_item_service
         agent_command = MockAgentCommandAdapter()
         agent_query = MockAgentQueryAdapter()
         execution_command = MockExecutionCommandAdapter()
@@ -822,7 +852,7 @@ class ProductionApplicationBootstrap:
         workflow_definition_command = MockWorkflowDefinitionCommandAdapter()
         config_command = MockConfigCommandAdapter()
         task_query = MockTaskQueryAdapter()
-        audit_query = MockAuditQueryAdapter(audit_store=self.infrastructure.failed_event_store)
+        audit_query = MockAuditQueryAdapter(audit_store=self.infrastructure.audit_store)
 
         logger.info("Created all 17 input port implementations")
 
@@ -858,6 +888,33 @@ class ProductionApplicationBootstrap:
         )
 
         return MockMetricsQueryAdapter(metrics_adapter=self.adapters.metrics)
+
+    # =========================================================================
+    # Phase 5c: Load User-Registered Bootstrap Projects
+    # =========================================================================
+
+    async def _load_bootstrap_projects(self) -> None:
+        """Load project registrations from bootstrap/ JSON files into in-memory services."""
+        from pathlib import Path
+
+        from codetoreum.infrastructure.bootstrap.project_bootstrap_loader import load_bootstrap_dir
+
+        bootstrap_dir = Path(__file__).parents[4] / "bootstrap"
+        try:
+            count = await load_bootstrap_dir(
+                bootstrap_dir,
+                agent_repository=self.adapters.agent_repository,
+                workflow_config=self.adapters.workflow_config,
+                config_store=self.adapters.config_store,
+            )
+            if count:
+                logger.info(f"Loaded {count} project bootstrap configuration(s) from {bootstrap_dir}")
+        except Exception as e:
+            logger.warning(
+                f"Failed to load bootstrap projects: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_BOOTSTRAP_PROJECT_LOAD_FAILURE"},
+            )
 
     # =========================================================================
     # Phase 5b: Initialize Codetoreum Board Configuration
@@ -977,6 +1034,8 @@ class ProductionApplicationBootstrap:
         logger.debug("Created issue intake service for webhook event handling")
 
         # Create FastAPI app
+        import os as _os
+
         app = create_app(
             workflow_command_port=self.ports.workflow_command,
             task_query_port=self.ports.task_query,
@@ -999,6 +1058,7 @@ class ProductionApplicationBootstrap:
             config_service=config_service_interface,
             logger=logger_interface,
             audit_query_port=self.ports.audit_query,
+            auth_secret_key=_os.getenv("CODETOREUM_SECRET_KEY"),
             disable_auth=False,  # Production auth enabled
             cors_origins=None,  # Use environment-based CORS config
             container_recovery_service=self.services.container_recovery_service,
@@ -1067,7 +1127,9 @@ class ProductionApplicationBootstrap:
         # PR Review Cycle Dispatch Handler
         pr_dispatch_handler = PRReviewCycleDispatchHandler(
             pr_review_cycle=self.adapters.pr_review_cycle,
-            workflow_config_service=self.adapters.workflow_config,
+            workflow_config=self.adapters.workflow_config,
+            work_item_service=self.services.work_item_service,
+            active_workflow_run_registry=self.adapters.run_registry,
         )
         self.infrastructure.event_bus.register_handler(pr_dispatch_handler)
         logger.info("Registered PRReviewCycleDispatchHandler with event bus")
@@ -1075,8 +1137,6 @@ class ProductionApplicationBootstrap:
         # PR Review Cycle Event Handler
         pr_event_handler = PRReviewCycleEventHandler(
             board_service=self.adapters.board,
-            pr_review_cycle=self.adapters.pr_review_cycle,
-            event_emitter=self.adapters.event_emitter,
         )
         self.infrastructure.event_bus.register_handler(pr_event_handler)
         logger.info("Registered PRReviewCycleEventHandler with event bus")
@@ -1088,9 +1148,8 @@ class ProductionApplicationBootstrap:
             return
 
         handler = ReviewEventHandler(
-            review_cycle=self.adapters.review_cycle,
+            review_service=self.services.review_service,
             ci_pipeline_service=self.adapters.ci_pipeline,
-            event_emitter=self.adapters.event_emitter,
         )
         self.infrastructure.event_bus.register_handler(handler)
         logger.info("Registered ReviewEventHandler with event bus")

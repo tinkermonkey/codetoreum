@@ -467,7 +467,9 @@ async def test_route_workspace_with_branch_resolution_create(
         resolution_strategy="new",
         parent_issue_id=None,
     )
-    mock_branch_resolution_service.configure_resolution(sample_project.id, sample_work_item.id, resolution)
+    mock_branch_resolution_service.configure_resolution(
+        sample_project.id, sample_work_item.external_id or sample_work_item.id, resolution
+    )
 
     # Act
     context = await workspace_router_with_resolution.route_workspace(
@@ -504,7 +506,9 @@ async def test_route_workspace_with_branch_resolution_reuse(
         resolution_strategy="parent_issue",
         parent_issue_id=parent_issue_id,
     )
-    mock_branch_resolution_service.configure_resolution(sample_project.id, sample_work_item.id, resolution)
+    mock_branch_resolution_service.configure_resolution(
+        sample_project.id, sample_work_item.external_id or sample_work_item.id, resolution
+    )
 
     # Act
     context = await workspace_router_with_resolution.route_workspace(
@@ -542,7 +546,9 @@ async def test_prepare_workspace_with_branch_resolution_create(
         resolution_strategy="new",
         parent_issue_id=None,
     )
-    mock_branch_resolution_service.configure_resolution(sample_project.id, sample_work_item.id, resolution)
+    mock_branch_resolution_service.configure_resolution(
+        sample_project.id, sample_work_item.external_id or sample_work_item.id, resolution
+    )
 
     # Mock list_branches to return no existing branches
     mock_repository.list_branches.return_value = []
@@ -593,7 +599,9 @@ async def test_prepare_workspace_with_branch_resolution_reuse(
         resolution_strategy="parent_issue",
         parent_issue_id="100",
     )
-    mock_branch_resolution_service.configure_resolution(sample_project.id, sample_work_item.id, resolution)
+    mock_branch_resolution_service.configure_resolution(
+        sample_project.id, sample_work_item.external_id or sample_work_item.id, resolution
+    )
 
     # Route the workspace to populate the branch resolution cache
     context = await workspace_router_with_resolution.route_workspace(
@@ -759,7 +767,9 @@ async def test_finalize_workspace_with_branch_resolution_reuse_pushes_resolved_b
         resolution_strategy="parent_issue",
         parent_issue_id="100",
     )
-    mock_branch_resolution_service.configure_resolution(sample_project.id, sample_work_item.id, resolution)
+    mock_branch_resolution_service.configure_resolution(
+        sample_project.id, sample_work_item.external_id or sample_work_item.id, resolution
+    )
 
     # Mock repository status with changes
     mock_repository.status.return_value = RepositoryStatus(
@@ -852,7 +862,9 @@ async def test_finalize_workspace_with_branch_resolution_create_pushes_resolved_
         resolution_strategy="new",
         parent_issue_id=None,
     )
-    mock_branch_resolution_service.configure_resolution(sample_project.id, sample_work_item.id, resolution)
+    mock_branch_resolution_service.configure_resolution(
+        sample_project.id, sample_work_item.external_id or sample_work_item.id, resolution
+    )
 
     # Mock repository status with changes
     mock_repository.status.return_value = RepositoryStatus(

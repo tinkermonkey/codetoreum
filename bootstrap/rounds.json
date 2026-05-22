@@ -1,0 +1,70 @@
+{
+  "project": {
+    "id": "rounds",
+    "name": "rounds",
+    "github_org": "tinkermonkey",
+    "github_repo": "rounds",
+    "description": "Semi-automated software medic",
+    "default_branch": "main"
+  },
+  "agents": [
+    {
+      "name": "senior_software_engineer",
+      "description": "Implements features and fixes bugs with full codebase access",
+      "model": "claude-sonnet-4-6",
+      "timeout": 3600,
+      "requires_docker": false,
+      "makes_code_changes": true,
+      "capabilities": ["code_generation", "debugging", "refactoring", "testing"],
+      "commit_policy": "on_success"
+    }
+  ],
+  "board": {
+    "id": "rounds-board-1",
+    "name": "Rounds Development Pipeline",
+    "columns": [
+      {
+        "name": "Backlog",
+        "type": "manual",
+        "agent_id": null,
+        "is_pipeline_trigger": false,
+        "is_exit_column": false,
+        "auto_progress_on_completion": false
+      },
+      {
+        "name": "Ready",
+        "type": "manual",
+        "agent_id": null,
+        "is_pipeline_trigger": true,
+        "is_exit_column": false,
+        "auto_progress_on_completion": false
+      },
+      {
+        "name": "In Progress",
+        "type": "automated",
+        "agent_id": "senior_software_engineer",
+        "is_pipeline_trigger": false,
+        "is_exit_column": false,
+        "auto_progress_on_completion": true,
+        "sla_seconds": 3600,
+        "on_failure_column": "Backlog"
+      },
+      {
+        "name": "In Review",
+        "type": "manual",
+        "agent_id": null,
+        "is_pipeline_trigger": false,
+        "is_exit_column": false,
+        "auto_progress_on_completion": false
+      },
+      {
+        "name": "Done",
+        "type": "manual",
+        "agent_id": null,
+        "is_pipeline_trigger": false,
+        "is_exit_column": true,
+        "auto_progress_on_completion": false
+      }
+    ]
+  }
+}

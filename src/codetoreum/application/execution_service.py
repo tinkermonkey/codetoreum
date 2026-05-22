@@ -110,7 +110,7 @@ class ExecutionService:
         container: IContainer,
         event_store: IEventStore,
         storage: IStorage,
-        max_retries: int = 3,
+        max_retries: int = 1,
         retry_delay_seconds: float = 5,
         vcs: IVersionControlService | None = None,
     ):

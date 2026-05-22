@@ -437,6 +437,17 @@ class AdapterResolver:
 
     def resolve_code_review(self) -> ICodeReviewService:
         """Resolve code review service adapter."""
+        if self._config.code_review == "github":
+            import os
+
+            from codetoreum.adapters.secondary.github_code_review_adapter import GitHubCodeReviewAdapter
+            from codetoreum.infrastructure.http.github_graphql_client import GitHubGraphQLClient, GitHubGraphQLConfig
+
+            graphql_client = GitHubGraphQLClient(GitHubGraphQLConfig(token=os.environ.get("GITHUB_TOKEN", "")))
+            return GitHubCodeReviewAdapter(
+                ticket_adapter=self._resolved.get("ticket"),
+                graphql_client=graphql_client,
+            )
         return self._factory.create_code_review_service(
             adapter_name=self._config.code_review,
             time_source=lambda: self._deps.engine.get_clock_for_testing().now(),

@@ -86,6 +86,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
         ticket_adapter: GitHubTicketAdapter,
         graphql_client: GitHubGraphQLClient,
         webhook_enabled: bool = True,
+        time_source: Callable[[], datetime] | None = None,
     ):
         """Initialize GitHub code review adapter.
 
@@ -93,6 +94,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
             ticket_adapter: GitHub ticket adapter for issue metadata and linking
             graphql_client: GitHub GraphQL client for PR queries and mutations
             webhook_enabled: If False, use polling fallback for change detection
+            time_source: Optional time source for clock injection (unused; accepted for factory compatibility)
         """
         self._ticket_adapter = ticket_adapter
         self._graphql = graphql_client

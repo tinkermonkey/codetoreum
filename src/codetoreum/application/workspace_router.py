@@ -562,7 +562,7 @@ class WorkspaceRouter:
                 # Call branch resolution service with actual repository path
                 resolution = await self.branch_resolution_service.resolve_branch(
                     project_id=project.id,
-                    issue_id=work_item.id,
+                    issue_id=work_item.external_id or work_item.id,
                     issue_metadata=issue_metadata,
                     repo_path=repository_path,
                 )

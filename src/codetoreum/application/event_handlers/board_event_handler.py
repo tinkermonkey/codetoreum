@@ -41,7 +41,7 @@ from codetoreum.ports.output.active_workflow_run_registry import (
     IActiveWorkflowRunRegistry,
 )
 from codetoreum.ports.output.agent_executor import IAgentExecutor
-from codetoreum.ports.output.board_service import IBoardService, MovedByType
+from codetoreum.ports.output.board_service import IBoardService, MovedByType, WorkItemPosition
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.event_store import IEventStore
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
@@ -234,6 +234,13 @@ class BoardColumnEventHandler(EventHandler):
                 and not column_config.pr_review_cycle_config
                 and getattr(column_config, "execution_type", "task_queue") != "conversational"
             ):
+                # Start workflow run lifecycle tracking before triggering the agent.
+                # This is normally done in _handle_pipeline_trigger (which acquires the lock
+                # first), but when an automated column is triggered directly (bypassing the
+                # pipeline trigger column), the active run must still be registered so the
+                # executor's run_registry.get_active_run() succeeds.
+                if work_item_id not in self._active_runs:
+                    await self._start_workflow_run(work_item_id, project_id, board_id, column_config, config)
                 await self._trigger_agent(work_item_id, column_config, board_id)
 
     async def _handle_pipeline_trigger(
@@ -259,7 +266,9 @@ class BoardColumnEventHandler(EventHandler):
         """
         # Get item position for queue ordering with error handling
         try:
-            position = await self.board_service.get_item_position(work_item_id)
+            position = await self._find_item_position(board_id, work_item_id, workflow_config)
+            if position is None:
+                raise ResourceNotFoundError("work_item", work_item_id)
         except ResourceNotFoundError:
             logger.error(
                 f"Cannot acquire lock for {work_item_id}: work item not found on board",
@@ -449,8 +458,12 @@ class BoardColumnEventHandler(EventHandler):
         # Trigger agent for next queued item if one exists
         if release_result.next_work_item_id:
             try:
-                next_position = await self.board_service.get_item_position(release_result.next_work_item_id)
-                next_column_config = workflow_config.get_column_config(next_position.column_name)
+                next_position = await self._find_item_position(
+                    board_id, release_result.next_work_item_id, workflow_config
+                )
+                next_column_config = (
+                    workflow_config.get_column_config(next_position.column_name) if next_position else None
+                )
 
                 if next_column_config and next_column_config.agent_id:
                     logger.info(f"Triggering agent for next queued item: {release_result.next_work_item_id}")
@@ -849,8 +862,8 @@ class BoardColumnEventHandler(EventHandler):
             try:
                 config = await self.workflow_config.get_board_workflow_template(board_id)
                 if config:
-                    current_position = await self.board_service.get_item_position(work_item_id)
-                    column_config = config.get_column_config(current_position.column_name)
+                    current_position = await self._find_item_position(board_id, work_item_id, config)
+                    column_config = config.get_column_config(current_position.column_name) if current_position else None
                     if column_config and column_config.on_failure_column:
                         await self.board_service.move_item_to_column(
                             work_item_id, column_config.on_failure_column, MovedByType.ORCHESTRATOR
@@ -871,7 +884,12 @@ class BoardColumnEventHandler(EventHandler):
                 logger.warning(f"No workflow config for board {board_id}, skipping auto-progression")
                 return
 
-            current_position = await self.board_service.get_item_position(work_item_id)
+            current_position = await self._find_item_position(board_id, work_item_id, config)
+            if not current_position:
+                logger.warning(
+                    f"Work item {work_item_id} not found in any column on board {board_id}, skipping auto-progression"
+                )
+                return
             current_column_config = config.get_column_config(current_position.column_name)
 
             if not current_column_config:
@@ -903,3 +921,36 @@ class BoardColumnEventHandler(EventHandler):
                 },
             )
             raise
+
+    async def _find_item_position(
+        self,
+        board_id: str,
+        work_item_id: str,
+        config: BoardWorkflowTemplate,
+    ) -> WorkItemPosition | None:
+        """Find a work item's current board position.
+
+        Tries get_item_position() first (O(1) for most adapters). Falls back to
+        scanning all columns via get_items_in_column() for adapters that require
+        explicit board context (e.g. GitHubBoardAdapter with GitHub Projects v2).
+        """
+        try:
+            return await self.board_service.get_item_position(work_item_id)
+        except ResourceNotFoundError:
+            return None
+        except ValueError as e:
+            if "board context" not in str(e):
+                raise
+            # Adapter requires board context — scan columns instead
+        except NotImplementedError:
+            pass
+
+        for column in config.columns:
+            try:
+                items = await self.board_service.get_items_in_column(board_id, column.name)
+                for item in items:
+                    if item.work_item_id == work_item_id:
+                        return item
+            except Exception as e:
+                logger.debug(f"Error scanning column '{column.name}' for {work_item_id}: {e}")
+        return None

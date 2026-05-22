@@ -183,6 +183,30 @@ except ImportError:
     )
     ProductionEnvironmentRepairAdapter = None  # type: ignore
 
+try:
+    from codetoreum.adapters.secondary.basic_review_cycle_adapter import (
+        BasicReviewCycleAdapter,
+    )
+except ImportError:
+    logger.warning(
+        "Optional adapter BasicReviewCycleAdapter not available, skipping registration",
+        exc_info=True,
+        extra={"adapter": "BasicReviewCycleAdapter"},
+    )
+    BasicReviewCycleAdapter = None  # type: ignore
+
+try:
+    from codetoreum.adapters.secondary.basic_pr_review_cycle_adapter import (
+        BasicPRReviewCycleAdapter,
+    )
+except ImportError:
+    logger.warning(
+        "Optional adapter BasicPRReviewCycleAdapter not available, skipping registration",
+        exc_info=True,
+        extra={"adapter": "BasicPRReviewCycleAdapter"},
+    )
+    BasicPRReviewCycleAdapter = None  # type: ignore
+
 from codetoreum.infrastructure.adapters.registries import (
     ActiveWorkflowRunRegistryRegistry,
     AgentExecutorRegistry,
@@ -730,6 +754,17 @@ class AdapterFactory:
             ),
             set_as_default=True,
         )
+        if BasicReviewCycleAdapter:
+            self._review_cycle_registry.register(
+                name="basic",
+                adapter_type=BasicReviewCycleAdapter,
+                description="Production review cycle adapter (in-memory state)",
+                version="1.0.0",
+                tags=["production"],
+                config_schema=AdapterCredentialRequirement(
+                    description="No credentials required",
+                ),
+            )
 
         # PR Review Cycle Service Adapters
         if MockPRReviewCycleAdapter:
@@ -744,6 +779,17 @@ class AdapterFactory:
                     description="Simulation-only adapter, no credentials required",
                 ),
                 set_as_default=True,
+            )
+        if BasicPRReviewCycleAdapter:
+            self._pr_review_cycle_registry.register(
+                name="basic",
+                adapter_type=BasicPRReviewCycleAdapter,
+                description="Production PR review cycle adapter (in-memory state)",
+                version="1.0.0",
+                tags=["production"],
+                config_schema=AdapterCredentialRequirement(
+                    description="No credentials required",
+                ),
             )
 
         # Container Recovery Adapters

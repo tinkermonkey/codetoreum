@@ -318,6 +318,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
         board_service: IBoardService | None = None,
         workflow_config: IWorkflowConfigService | None = None,
         conversational_loop_orchestrator: IConversationalLoopService | None = None,
+        dispatch_via_task_queue: bool = True,
     ):
         """
         Initialize workflow orchestrator.
@@ -346,6 +347,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
         self.board_service = board_service
         self._workflow_config = workflow_config
         self._conversational_loop_orchestrator = conversational_loop_orchestrator
+        self._dispatch_via_task_queue = dispatch_via_task_queue
 
         # Subscribe to adapter events if event bus is available
         if self.event_bus:
@@ -1041,8 +1043,10 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
                         await self._enqueue_agent_task(
                             work_item_id, project_id, board_id, to_column, moved_by, target_column_config
                         )
-                else:
-                    # Standard task_queue: enqueue agent task
+                # Standard task_queue: enqueue agent task only if this orchestrator
+                # is configured as the authoritative dispatcher. When dispatch_via_task_queue
+                # is False, BoardColumnEventHandler handles dispatch (with run_registry wiring).
+                elif self._dispatch_via_task_queue:
                     await self._enqueue_agent_task(
                         work_item_id, project_id, board_id, to_column, moved_by, target_column_config
                     )

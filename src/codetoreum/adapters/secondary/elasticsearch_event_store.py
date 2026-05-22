@@ -183,7 +183,7 @@ class ElasticsearchEventStore(IEventStore):
                 bulk_body.append(doc)
 
             # Execute bulk insert
-            response = await self.client.bulk(operations=bulk_body, refresh=False)
+            response = await self.client.bulk(operations=bulk_body, refresh="wait_for")
 
             # Check for errors
             if response.get("errors"):

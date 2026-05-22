@@ -346,11 +346,30 @@ class ClaudeCodeAdapter(ILLMProvider):
                 shell=False,  # Explicit: prevent shell injection
             )
 
+            logger.info(
+                "ClaudeCodeAdapter: subprocess started (PID: %s), cwd=%s, timeout=%ss",
+                process.pid,
+                cwd,
+                ctx.timeout_seconds,
+            )
+
             # Process streaming output
             output_parts: list[str] = []
             conversation_id = ctx.conversation_id
             usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
             chunk_index = 0
+
+            async def _heartbeat(pid: int, interval: int = 120) -> None:
+                elapsed = 0
+                while True:
+                    await asyncio.sleep(interval)
+                    elapsed += interval
+                    if process.returncode is None:
+                        logger.info(
+                            "ClaudeCodeAdapter: subprocess PID=%s still running (%ds elapsed)",
+                            pid,
+                            elapsed,
+                        )
 
             async def read_stream():
                 nonlocal conversation_id, usage, chunk_index
@@ -397,8 +416,9 @@ class ClaudeCodeAdapter(ILLMProvider):
                             exc_info=True,
                         )
 
-            # Read with timeout
+            # Read with timeout; heartbeat logs progress every 2 minutes
             timeout = ctx.timeout_seconds
+            _heartbeat_task = asyncio.create_task(_heartbeat(process.pid))
             try:
                 await asyncio.wait_for(read_stream(), timeout=timeout)
             except TimeoutError as e:
@@ -421,6 +441,13 @@ class ClaudeCodeAdapter(ILLMProvider):
                     )
                 msg = "Claude"
                 raise ExternalServiceError(msg, "Execution timeout") from e
+
+            finally:
+                _heartbeat_task.cancel()
+                try:
+                    await _heartbeat_task
+                except asyncio.CancelledError:
+                    pass
 
             # Wait for process completion with timeout to prevent hanging
             try:

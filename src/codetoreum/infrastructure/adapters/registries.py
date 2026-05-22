@@ -247,11 +247,15 @@ def _validate_adapter_implements_interface(adapter_type: type, interface_class: 
                             f"{iface_ret_name} expected, got {adapt_ret_name}"
                         )
 
-            # Check async compatibility
+            # Check async compatibility (coroutines and async generators both count as async)
             # Note: Async compatibility is checked but mismatches are logged as warnings
             # rather than errors to allow adapters in transition to async
-            is_interface_async = inspect.iscoroutinefunction(getattr(interface_class, method_name))
-            is_adapter_async = inspect.iscoroutinefunction(adapter_methods[method_name])
+            _iface_method = getattr(interface_class, method_name)
+            is_interface_async = inspect.iscoroutinefunction(_iface_method) or inspect.isasyncgenfunction(_iface_method)
+            _adapter_method = adapter_methods[method_name]
+            is_adapter_async = inspect.iscoroutinefunction(_adapter_method) or inspect.isasyncgenfunction(
+                _adapter_method
+            )
             if is_interface_async != is_adapter_async:
                 logger.warning(
                     f"{adapter_type.__name__}.{method_name}: async/sync mismatch - "
