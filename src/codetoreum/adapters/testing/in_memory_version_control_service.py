@@ -111,7 +111,12 @@ class InMemoryVersionControlService(IVersionControlService):
         # Create the target directory so prepare_workspace() can write context files.
         # The in-memory adapter records git state without touching the filesystem, but
         # downstream workspace preparation relies on the directory existing on disk.
-        await asyncio.to_thread(os.makedirs, target_path, exist_ok=True)
+        # Best-effort: unit tests often pass non-writable paths (e.g. /workspace) that
+        # don't need to exist on disk; only simulation/integration paths under /tmp do.
+        try:
+            await asyncio.to_thread(os.makedirs, target_path, exist_ok=True)
+        except (PermissionError, OSError):
+            pass
 
         with self._lock:
             # Extract repository name from URL

@@ -59,7 +59,7 @@ class ContainerStatus:
     """
 
     id: ContainerId
-    status: str  # running, stopped, exited, paused, restarting, dead
+    status: str  # created, running, paused, restarting, removing, exited, dead
     created_at: datetime
     started_at: datetime | None
     finished_at: datetime | None
@@ -72,14 +72,15 @@ class ContainerStatus:
             raise ValueError(msg)
 
         if not isinstance(self.status, str) or self.status not in (
+            "created",
             "running",
-            "stopped",
-            "exited",
             "paused",
             "restarting",
+            "removing",
+            "exited",
             "dead",
         ):
-            msg = "status must be one of: running, stopped, exited, paused, restarting, dead"
+            msg = "status must be one of: created, running, paused, restarting, removing, exited, dead"
             raise ValueError(msg)
 
         if not isinstance(self.created_at, datetime):
