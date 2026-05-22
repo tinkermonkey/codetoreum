@@ -290,104 +290,17 @@ def auto_register_event_types() -> None:
     This should be called at application startup to populate the
     event type registry for deserialization.
     """
+    import inspect
 
-    from codetoreum.domain.events import (
-        AgentAssignedEvent,
-        AgentCapabilityAddedEvent,
-        AgentCapabilityRemovedEvent,
-        AgentCapabilityUpdatedEvent,
-        AgentConstraintsUpdatedEvent,
-        AgentCreatedEvent,
-        AgentMaxRetriesUpdatedEvent,
-        AgentMcpServerAddedEvent,
-        AgentMcpServerRemovedEvent,
-        AgentModelUpdatedEvent,
-        AgentTimeoutUpdatedEvent,
-        ExecutionCancelledEvent,
-        ExecutionCompletedEvent,
-        ExecutionFailedEvent,
-        ExecutionInitializedEvent,
-        ExecutionPausedEvent,
-        ExecutionResumedEvent,
-        ExecutionRetryScheduledEvent,
-        ExecutionStartedEvent,
-        ExecutionTimedOutEvent,
-        ProjectContextCreatedEvent,
-        ProjectDockerConfigUpdatedEvent,
-        ProjectTestConfigUpdatedEvent,
-        ProjectWorkflowMappingAddedEvent,
-        ReviewCycleApprovedEvent,
-        ReviewCycleEscalatedToHumanEvent,
-        ReviewCycleStartedEvent,
-        WorkflowCancelledEvent,
-        WorkflowCompletedEvent,
-        WorkflowCreatedEvent,
-        WorkflowFailedEvent,
-        WorkflowPausedEvent,
-        WorkflowResumedEvent,
-        WorkflowStageAdvancedEvent,
-        WorkflowStageStatusUpdatedEvent,
-        WorkflowStartedEvent,
-        WorkItemBlockedEvent,
-        WorkItemCompletedEvent,
-        WorkItemCreatedEvent,
-        WorkItemFailedEvent,
-        WorkItemLabelsUpdatedEvent,
-        WorkItemPriorityUpdatedEvent,
-        WorkItemStageUpdatedEvent,
-        WorkItemStartedEvent,
-        WorkItemUnblockedEvent,
-        WorkItemUnderReviewEvent,
-    )
+    import codetoreum.domain.events as _events_pkg
+    from codetoreum.domain.events import CodetoreumEvent
 
-    event_classes = [
-        AgentAssignedEvent,
-        AgentCapabilityAddedEvent,
-        AgentCapabilityRemovedEvent,
-        AgentCapabilityUpdatedEvent,
-        AgentConstraintsUpdatedEvent,
-        AgentCreatedEvent,
-        AgentMaxRetriesUpdatedEvent,
-        AgentMcpServerAddedEvent,
-        AgentMcpServerRemovedEvent,
-        AgentModelUpdatedEvent,
-        AgentTimeoutUpdatedEvent,
-        ExecutionCancelledEvent,
-        ExecutionCompletedEvent,
-        ExecutionFailedEvent,
-        ExecutionInitializedEvent,
-        ExecutionPausedEvent,
-        ExecutionResumedEvent,
-        ExecutionRetryScheduledEvent,
-        ExecutionStartedEvent,
-        ExecutionTimedOutEvent,
-        ProjectContextCreatedEvent,
-        ProjectDockerConfigUpdatedEvent,
-        ProjectTestConfigUpdatedEvent,
-        ProjectWorkflowMappingAddedEvent,
-        ReviewCycleApprovedEvent,
-        ReviewCycleStartedEvent,
-        ReviewCycleEscalatedToHumanEvent,
-        WorkflowCancelledEvent,
-        WorkflowCompletedEvent,
-        WorkflowCreatedEvent,
-        WorkflowFailedEvent,
-        WorkflowPausedEvent,
-        WorkflowResumedEvent,
-        WorkflowStageAdvancedEvent,
-        WorkflowStageStatusUpdatedEvent,
-        WorkflowStartedEvent,
-        WorkItemBlockedEvent,
-        WorkItemCompletedEvent,
-        WorkItemCreatedEvent,
-        WorkItemFailedEvent,
-        WorkItemLabelsUpdatedEvent,
-        WorkItemPriorityUpdatedEvent,
-        WorkItemStageUpdatedEvent,
-        WorkItemStartedEvent,
-        WorkItemUnblockedEvent,
-        WorkItemUnderReviewEvent,
-    ]
-
-    for event_class in event_classes:
-        EventSerializer.register_event_type(event_class)
+    for name in dir(_events_pkg):
+        obj = getattr(_events_pkg, name)
+        if (
+            inspect.isclass(obj)
+            and issubclass(obj, CodetoreumEvent)
+            and obj is not CodetoreumEvent
+            and obj.__name__.endswith("Event")
+        ):
+            EventSerializer.register_event_type(obj)
