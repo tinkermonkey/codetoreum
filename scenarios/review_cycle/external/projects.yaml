@@ -7,6 +7,7 @@
 projects:
   - name: "review-cycle-project"
     description: "Project demonstrating review and feedback workflows"
+    repository_url: "https://github.com/demo-org/review-cycle-project.git"
     default_branch: "main"
     metadata:
       review_policy: "mandatory"

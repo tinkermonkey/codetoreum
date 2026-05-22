@@ -22,6 +22,7 @@ from codetoreum.domain.types import (
     CONTAINER_LABEL_TYPE,
     CONTAINER_LABEL_WORK_ITEM_ID,
     CONTAINER_LABEL_WORKFLOW_RUN_ID,
+    ExecutionId,
 )
 from codetoreum.domain.value_objects import (
     ContainerConfig,
@@ -311,7 +312,7 @@ class ExecutionService:
         while retry_count <= self.max_retries:
             try:
                 # Build LLM execution context
-                llm_context = self._build_llm_context(context)
+                llm_context = self._build_llm_context(context, execution_id=ExecutionId(execution.id))
 
                 # Execute with LLM
                 result = await self.llm_provider.execute(
@@ -904,12 +905,15 @@ class ExecutionService:
 
     # Helper methods
 
-    def _build_llm_context(self, context: ExecutionContext) -> LLMExecutionContext:
+    def _build_llm_context(
+        self, context: ExecutionContext, execution_id: ExecutionId | None = None
+    ) -> LLMExecutionContext:
         """
         Build LLM execution context from domain context.
 
         Args:
             context: Domain execution context
+            execution_id: AgentExecution.id to include in the LLM context
 
         Returns:
             LLM provider execution context
@@ -921,7 +925,7 @@ class ExecutionService:
             timeout_seconds=context.timeout_seconds,
             environment_variables=MappingProxyType(context.environment_variables or {}),
             session_id=context.previous_session_id,
-            execution_id=None,  # Will be set by provider
+            execution_id=execution_id,
             metadata=cast("MappingProxyType", context.metadata),
             working_directory=Path(context.repository_path) if context.repository_path else None,
         )

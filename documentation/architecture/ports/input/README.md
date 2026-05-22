@@ -30,7 +30,7 @@ Input ports are grouped by functional domain:
    - Query configuration values
    - Query system metrics
 
-6. **system-services.md** — IAuthenticationPort, IConversationalLoopService, IWorkspaceQueryPort, IAuditQueryPort
+6. **system-services.md** — IAuthenticationPort, IConversationalLoopService, IWorkspaceQueryPort, IAuditQueryPort, IIssueIntakePort
    - Verify user authentication
    - Multi-turn agent conversations
    - Workspace file operations
@@ -62,7 +62,7 @@ Input ports are primarily inbound (clients call them), so "production" adapters 
 
 ## Phase Delivery
 
-- **Phase 4**: Complete input port documentation (all 6 groups, 19 interfaces)
+- **Phase 4**: Complete input port documentation (all 6 groups, 20 interfaces)
 
 ## See Also
 

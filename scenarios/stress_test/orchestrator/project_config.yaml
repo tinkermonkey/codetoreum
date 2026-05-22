@@ -1,0 +1,16 @@
+# Stress Test Scenario — Orchestrator: Project Configuration
+#
+# Port/Interface: IConfigStore
+# Adapter (sim): InMemoryConfigStore
+
+project_configs:
+  - id: "stress-test-project"
+    name: "stress-test-project"
+    github_org: "demo-org"
+    github_repo: "stress-test-project"
+    tech_stacks:
+      python: "3.11"
+    testing:
+      command: "pytest"
+      framework: "pytest"
+    environment_variables: {}

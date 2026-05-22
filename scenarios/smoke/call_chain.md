@@ -204,13 +204,22 @@ sequenceDiagram
 
 ## Known Gaps
 
-**GAP 1: `AgentScheduler` queue consumer not implemented**
-The `AgentScheduler` is intended as a resource gate / concurrency limiter. When
-multiple items move to `In Progress` simultaneously, the second would be queued
-(`LockStatus.QUEUED`) but the queue consumer that dequeues it after the first
-item completes does not yet exist. In this scenario only one item is in the
-pipeline trigger column at a time, so this gap does not affect smoke test
-outcomes.
+**GAP 1: `AgentScheduler` queue consumer for QUEUED items**
+The `AgentScheduler` is wired and consumes `WorkItemColumnChangedEvent` via
+`WorkflowOrchestrator`, but the queue-dequeue path when a lock comes back as
+`LockStatus.QUEUED` is not yet covered by simulation tests. When multiple items
+move to the pipeline trigger column concurrently, the second item is queued; the
+consumer that grants the lock and retriggers execution after the first item exits
+has not been exercised end-to-end. In this scenario only one item is in the
+trigger column at a time, so this gap does not affect smoke test outcomes.
+
+> **Note on double-dispatch in tests:** Both `BoardColumnEventHandler` (BCEH) and
+> `WorkflowOrchestrator` subscribe to `WorkItemColumnChangedEvent`. BCEH calls
+> `execute()` directly; WO enqueues to `AgentScheduler` → `execute()`. In
+> simulation fixtures the `AgentScheduler` is stopped after seeding so that only
+> BCEH's direct execution path runs. In production the AgentScheduler's deferred
+> call arrives after BCEH has already cleared the run registry, logs "No active
+> run found", and silently no-ops — correct behaviour but noisy.
 
 **GAP 2: GitHub board column → `board_id` mapping in webhook adapter**
 `GitHubWebhookAdapter._map_column_to_stage()` contains a documented `TODO #370`:
@@ -219,30 +228,3 @@ simulation, the trigger is issued directly via `MockBoardAdapter.move_item_to_co
 and emits `WorkItemColumnChangedEvent` with the correct `board_id`. In
 production, this mapping must be resolved before the board automation cascade
 fires.
-
-**GAP 3: `project_id` not present in `ProjectConfig` for `default-project`**
-The smoke scenario's `external/projects.yaml` defines the project as
-`name: "default-project"` with no explicit `github_org` / `github_repo` fields.
-The `ExecutionServiceAgentExecutor._run_execution()` constructs
-`repo_url = f"https://github.com/{project_config.github_org}/{project_config.github_repo}.git"`.
-If the seeded `ProjectConfig` for the smoke project does not populate these
-fields, the VCS clone step will form a malformed URL. The SDLC scenario's
-`projects.yaml` avoids this by providing `repository_url` directly; the smoke
-scenario relies on defaults being populated by the bootstrap seeder.
-
-**GAP 4: `execute_with_llm` is not a method on `ExecutionService`**
-`ExecutionServiceAgentExecutor._run_execution()` calls
-`self._execution_service.execute_with_llm(execution, context)` at step 10, but
-the graph index shows no `execute_with_llm` method on `ExecutionService` (the
-service has `__init__`, `_build_container_labels`, `_commit_workspace`, and log
-helpers). This call will raise `AttributeError` at runtime. The method either
-lives on a different class, is not yet implemented, or was removed and the
-call site not updated. This is a critical execution gap.
-
-**GAP 5: Simulation test for smoke scenario does not exercise the full board pipeline**
-The closest simulation test (`scenario_01_simple_workflow.py`) manually fires
-`WorkflowStarted` / `AgentExecutionStarted` events via `runner.capture_event()`
-without invoking `MockBoardAdapter.move_item_to_column()`. It does not exercise
-`BoardColumnEventHandler`, `IPipelineLockService`, or `ExecutionServiceAgentExecutor`.
-There is no simulation test that validates the complete call chain described
-above for the smoke scenario YAML definition.

@@ -35,6 +35,7 @@ from codetoreum.infrastructure.simulation.bootstrap import (
     SimulationApplicationBootstrap,
 )
 from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
+from codetoreum.ports.output.board_service import MovedByType
 from tests.simulation.helpers import wait_for_column
 
 SCENARIO_DIR = Path(__file__).resolve().parent.parent.parent / "scenarios" / "planning_design_review_cycle"
@@ -62,6 +63,12 @@ async def pr_review_env(
 
     # Seed scenario from YAML
     await simulation_seeder.seed_from_yaml(SCENARIO_DIR)
+
+    # Stop AgentScheduler so WorkflowOrchestrator's enqueued tasks are never
+    # consumed — prevents double-dispatch (BCEH + WO both subscribe to
+    # WorkItemColumnChangedEvent; only BCEH's direct execute() path should run).
+    if simulation_bootstrap.services and simulation_bootstrap.services.agent_scheduler:
+        await simulation_bootstrap.services.agent_scheduler.stop()
 
     return simulation_bootstrap, simulation_seeder
 
@@ -160,8 +167,9 @@ async def test_issues_found_path(pr_review_env):
 
     pr_cycle.set_outcome(work_item_id, PRReviewOutcome.ISSUES_FOUND, findings)
 
-    # Item is already in In Review (pre-placed per FR-12.2), so the PR review cycle
-    # should execute automatically since "In Review" has is_pipeline_trigger=true
+    # Move item to "In Review" (pipeline trigger column) — triggers the PR review cycle.
+    # The mock is configured above before this move so the correct outcome fires.
+    await board.move_item_to_column(work_item_id, "In Review", MovedByType.HUMAN)
 
     # ========================================================================
     # ACCEPTANCE CRITERIA: PR review cycle executes and emits events
@@ -195,18 +203,19 @@ async def test_issues_found_path(pr_review_env):
     assert len(sub_issue_events) > 0, "PRReviewCycleSubIssuesCreatedEvent not fired"
     assert sub_issue_events[0].count == 6, f"Expected 6 sub-issues created, got {sub_issue_events[0].count}"
 
-    # AC-6: 6 child work items created with parent_issue_id and pr-review label
+    # AC-6: 6 child work items created with parent linkage and pr-review-finding label.
+    # Parent-child relationships are tracked in InMemoryTicketAdapter._children keyed by
+    # parent work_item_id (not external_id), since MockPRReviewCycleAdapter passes work_item_id.
+    child_item_ids = seeder._ticket_adapter._children.get(str(work_item_id), [])
     child_items = [
-        item for item in seeder._ticket_adapter._work_items.values() if item.parent_issue_id == int(parent_external_id)
+        seeder._ticket_adapter._work_items[cid] for cid in child_item_ids if cid in seeder._ticket_adapter._work_items
     ]
-    assert (
-        len(child_items) == 6
-    ), f"Expected 6 child work items with parent_issue_id={parent_external_id}, got {len(child_items)}"
+    assert len(child_items) == 6, f"Expected 6 child work items for parent {work_item_id}, got {len(child_items)}"
 
     for child_item in child_items:
         assert (
-            "pr-review" in child_item.labels
-        ), f"Child item {child_item.title} missing 'pr-review' label. Labels: {child_item.labels}"
+            "pr-review-finding" in child_item.labels
+        ), f"Child item {child_item.title} missing 'pr-review-finding' label. Labels: {child_item.labels}"
 
     # AC-7: PRReviewCycleIssuesFoundEvent emitted with critical_count >= 1
     issues_found_events = [e for e in cycle_events if isinstance(e, PRReviewCycleIssuesFoundEvent)]
@@ -246,8 +255,9 @@ async def test_approved_path(pr_review_env):
     # ========================================================================
     pr_cycle.set_approved_immediately(work_item_id)
 
-    # Item is already in In Review (pre-placed per FR-12.2), so the PR review cycle
-    # should execute automatically since "In Review" has is_pipeline_trigger=true
+    # Move item to "In Review" (pipeline trigger column) — triggers the PR review cycle.
+    # The mock is configured above before this move so the correct outcome fires.
+    await board.move_item_to_column(work_item_id, "In Review", MovedByType.HUMAN)
 
     # ========================================================================
     # ACCEPTANCE CRITERIA: PR review cycle approves without creating sub-issues

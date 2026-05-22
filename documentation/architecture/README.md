@@ -14,7 +14,7 @@ Pure domain logic layer. Contains definitions for entity models, value objects, 
 Port interfaces (contracts) that define system boundaries. Input ports represent inbound commands and queries. Output ports represent outbound dependencies.
 
 #### [ports/input/](./ports/input/)
-Inbound ports (APIs for commands, queries, services). Grouped by functional domain. 19 input port interfaces across 6 documentation files.
+Inbound ports (APIs for commands, queries, services). Grouped by functional domain. 20 input port interfaces across 6 documentation files.
 
 #### [ports/output/](./ports/output/)
 Outbound ports (contracts for external system dependencies). Grouped by functional domain. 40 output port interfaces across 7 documentation files.

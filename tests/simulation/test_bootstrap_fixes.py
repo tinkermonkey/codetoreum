@@ -11,8 +11,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from codetoreum.adapters.secondary.failed_event_store_adapter import (
-    DeadLetterQueueFailedEventStoreAdapter,
+from codetoreum.adapters.testing.in_memory_failed_event_store import (
+    InMemoryFailedEventStore,
 )
 from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
@@ -40,8 +40,8 @@ class TestBootstrapFailedEventStoreTyping:
         failed_event_store = bootstrap.infrastructure.failed_event_store
         assert isinstance(failed_event_store, IFailedEventStore)
 
-        # Verify it's also an instance of the concrete adapter
-        assert isinstance(failed_event_store, DeadLetterQueueFailedEventStoreAdapter)
+        # Simulation uses InMemoryFailedEventStore, not the production DLQ adapter
+        assert isinstance(failed_event_store, InMemoryFailedEventStore)
 
         # Verify port interface methods are available
         assert hasattr(failed_event_store, "add_failed_event")
@@ -62,11 +62,11 @@ class TestBootstrapFailedEventStoreTyping:
 
         # Verify infrastructure-specific lifecycle methods are accessible
         failed_event_store = bootstrap.infrastructure.failed_event_store
-        assert isinstance(failed_event_store, DeadLetterQueueFailedEventStoreAdapter)
+        assert isinstance(failed_event_store, InMemoryFailedEventStore)
 
-        # These methods should be available on the adapter
-        assert hasattr(failed_event_store, "start_retry_processor")
-        assert hasattr(failed_event_store, "stop_retry_processor")
+        # These test-utility methods are available on InMemoryFailedEventStore
+        assert hasattr(failed_event_store, "mark_retry_succeeded")
+        assert hasattr(failed_event_store, "mark_retry_failed")
 
         await bootstrap.teardown()
 
@@ -92,19 +92,25 @@ class TestBootstrapTeardownExceptionHandling:
             assert bootstrap._is_setup is True
 
     async def test_teardown_reraises_dlq_stop_failure(self) -> None:
-        """Verify teardown re-raises exceptions from DLQ stop_retry_processor()."""
+        """Verify teardown re-raises exceptions during teardown steps.
+
+        Simulation uses InMemoryFailedEventStore which has no stop_retry_processor.
+        We verify the general teardown re-raise behaviour by patching engine.stop,
+        which is a teardown step that does exist in the simulation bootstrap.
+        """
         config = SimulationConfig.create_fast_config("test")
         bootstrap = SimulationApplicationBootstrap(config)
 
         await bootstrap.setup()
 
-        # Get the DLQ adapter and mock stop_retry_processor to fail
-        dlq_adapter = bootstrap.infrastructure.failed_event_store
-        assert isinstance(dlq_adapter, DeadLetterQueueFailedEventStoreAdapter)
+        # Verify simulation uses InMemoryFailedEventStore (not the production DLQ adapter)
+        failed_event_store = bootstrap.infrastructure.failed_event_store
+        assert isinstance(failed_event_store, InMemoryFailedEventStore)
 
-        with patch.object(dlq_adapter, "stop_retry_processor", side_effect=RuntimeError("Mock DLQ stop failure")):
+        # Patch engine.stop to simulate a teardown failure
+        with patch.object(bootstrap._engine, "stop", side_effect=RuntimeError("Mock teardown stop failure")):
             # Teardown should re-raise the exception
-            with pytest.raises(RuntimeError, match="Mock DLQ stop failure"):
+            with pytest.raises(RuntimeError, match="Mock teardown stop failure"):
                 await bootstrap.teardown()
 
             # _is_setup should NOT be cleared because teardown didn't complete
@@ -200,7 +206,7 @@ class TestBootstrapDLQRetryHandlerUnknownEventType:
                 },
             )
             assert len(publish_calls) == 1
-            assert publish_calls[0].event_type == "WorkItemColumnChanged"
+            assert publish_calls[0].event_type == "WorkItemColumnChangedEvent"
 
             # Test BoardReconciled - should succeed
             await retry_handler(
@@ -213,7 +219,7 @@ class TestBootstrapDLQRetryHandlerUnknownEventType:
                 },
             )
             assert len(publish_calls) == 2
-            assert publish_calls[1].event_type == "BoardReconciled"
+            assert publish_calls[1].event_type == "BoardReconciledEvent"
         finally:
             event_bus.publish = original_publish
             await bootstrap.teardown()

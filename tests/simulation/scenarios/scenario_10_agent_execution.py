@@ -146,9 +146,9 @@ async def scenario_single_agent_execution_happy_path(runner: SimulationRunner):
     init_event = execution.get_pending_events()[0]
     runner.assert_equal(
         init_event.event_type,
-        "ExecutionInitialized",
+        "ExecutionInitializedEvent",
         "single_execution_init_event",
-        "Should emit ExecutionInitialized event",
+        "Should emit ExecutionInitializedEvent",
     )
 
     # Start execution

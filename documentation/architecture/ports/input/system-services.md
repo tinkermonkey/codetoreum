@@ -10,6 +10,7 @@ The system services input ports provide:
 - **IAuditQueryPort**: Access to audit trail and event history
 - **IWorkspaceQueryPort**: Query workspace status, usage, and logs
 - **IConversationalLoopService**: Multi-turn agent dialogue management
+- **IIssueIntakePort**: Inbound webhook handler for issue creation events
 
 These ports abstract critical cross-cutting system services.
 
@@ -325,4 +326,132 @@ classDiagram
         +cleanup_loop(work_item_id, reason) None
         +load_session_state(work_item_id) ConversationalSessionState
     }
+```
+
+### IIssueIntakePort
+
+**File**: `ports/input/issue_intake.py`
+
+**Purpose**: Entry point for newly opened GitHub issues arriving via webhook. Accepts an `IssueOpenedCommand` and places the issue on the project's board initial column, which triggers downstream orchestration via `WorkItemColumnChangedEvent`.
+
+**Design assessment**: Needs documentation only. The interface is fully realized — one abstract method with a concrete application service implementation (`IssueIntakeService`) wired in production bootstrap.
+
+#### Command and Result Types
+
+```python
+@dataclass(frozen=True)
+class IssueOpenedCommand:
+    """Command to handle a newly opened GitHub issue."""
+    project_id: str          # Non-empty project identifier
+    issue_number: str        # Non-empty GitHub issue number (used as work_item_id)
+    issue_title: str | None = None
+    issue_url: str | None = None
+
+@dataclass(frozen=True)
+class IssueIntakeResult:
+    """Result of an issue intake operation."""
+    success: bool
+    work_item_id: str        # Non-empty; equals issue_number on both success and failure
+    message: str             # Human-readable outcome description
+    errors: tuple[str, ...] = ()   # Empty on success; contains error messages on failure
+```
+
+#### Interface Definition
+
+```python
+class IIssueIntakePort(ABC):
+    """
+    Input port for issue intake operations.
+
+    Accepts issues from external sources (e.g., GitHub webhooks) and places
+    them on the project board's initial column. Placement triggers a
+    WorkItemColumnChangedEvent (from_column=None) which drives all downstream
+    workflow orchestration.
+    """
+
+    @abstractmethod
+    async def on_issue_opened(self, command: IssueOpenedCommand) -> IssueIntakeResult:
+        """
+        Handle a newly opened GitHub issue.
+
+        Places the issue in the initial column (position=0) on the project's
+        board, which triggers a WorkItemColumnChangedEvent for orchestration.
+
+        Args:
+            command: IssueOpenedCommand with project_id and issue_number
+
+        Returns:
+            IssueIntakeResult with success=True and work_item_id on success,
+            or success=False with errors tuple on failure.
+
+        Raises:
+            Does not raise — failures are returned as IssueIntakeResult(success=False).
+        """
+```
+
+#### Methods
+
+| Method | Parameters | Return Type | Description |
+|---|---|---|---|
+| `on_issue_opened()` | `command: IssueOpenedCommand` | `IssueIntakeResult` | Place newly opened issue on board initial column |
+
+#### Port Dependencies (Output Ports Used by Implementation)
+
+| Output Port | Usage |
+|---|---|
+| `IBoardService` | `get_all_boards()` to find project board; `add_item_to_column()` to place issue in initial column with `MovedByType.GITHUB_WEBHOOK` |
+| `IWorkflowConfigService` | `get_board_workflow_template(board_id)` to resolve the column at position 0 |
+
+#### Events Emitted
+
+`IIssueIntakePort` does not directly emit events. Events are emitted indirectly:
+
+- `WorkItemColumnChangedEvent` — emitted by `IBoardService.add_item_to_column()` when the issue is placed on the board (from_column=None indicates first placement). This event drives all downstream workflow orchestration.
+
+#### Error Contracts
+
+This port never raises exceptions. All failure modes are returned as `IssueIntakeResult(success=False, errors=(...))`:
+
+| Failure Condition | Message Pattern |
+|---|---|
+| No board configured for project | `"No boards configured for project {project_id}"` |
+| No workflow template for board | `"No workflow template configured for board {board_id}"` |
+| No initial column (position 0) in template | `"No initial column (position 0) found in template for board {board_id}"` |
+| `PortError` from downstream adapter | Logged at ERROR with `exc_info=True`; error message returned in `errors` tuple |
+
+#### Caller / Subscriber
+
+| Caller | Location | Notes |
+|---|---|---|
+| `GitHubWebhookAdapter` | `adapters/primary/github_webhook_adapter.py` | Calls `on_issue_opened()` when GitHub sends an `issues.opened` webhook event |
+
+#### Adapter Implementations
+
+| Adapter Class | Type | Notes |
+|---|---|---|
+| `IssueIntakeService` | Production | `application/issue_intake_service.py` — full implementation; wired by `ProductionBootstrap` |
+
+No mock adapter exists for this port. The webhook adapter guards with `if not self.issue_intake_port` and skips issue intake gracefully when not wired (e.g., simulation mode).
+
+#### Diagram
+
+```mermaid
+sequenceDiagram
+    participant GH as GitHub Webhook
+    participant WH as GitHubWebhookAdapter
+    participant IIP as IIssueIntakePort<br/>(IssueIntakeService)
+    participant BS as IBoardService
+    participant WCS as IWorkflowConfigService
+    participant BUS as Event Bus
+
+    GH->>WH: POST /webhook (issues.opened)
+    WH->>IIP: on_issue_opened(IssueOpenedCommand)
+    IIP->>BS: get_all_boards()
+    BS-->>IIP: [Board, ...]
+    IIP->>WCS: get_board_workflow_template(board_id)
+    WCS-->>IIP: BoardWorkflowTemplate
+    IIP->>BS: add_item_to_column(issue_number, column_name, GITHUB_WEBHOOK)
+    BS->>BUS: emit WorkItemColumnChangedEvent(from_column=None)
+    BS-->>IIP: OK
+    IIP-->>WH: IssueIntakeResult(success=True, work_item_id=issue_number)
 ```

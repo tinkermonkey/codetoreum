@@ -61,6 +61,12 @@ async def exec_chain_env(
     )
     await seeder.seed_default_scenario()
 
+    # Stop AgentScheduler so WorkflowOrchestrator's enqueued tasks are never
+    # consumed — prevents double-dispatch (BCEH + WO both subscribe to
+    # WorkItemColumnChangedEvent; only BCEH's direct execute() path should run).
+    if simulation_bootstrap.services and simulation_bootstrap.services.agent_scheduler:
+        await simulation_bootstrap.services.agent_scheduler.stop()
+
     return simulation_bootstrap, seeder, adapters
 
 

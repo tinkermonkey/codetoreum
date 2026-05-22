@@ -98,6 +98,10 @@ async def _complete_workflow_run(
 
 **Orchestration Role**: Primary entry point for board-driven automation. Bridges external board state (via webhook or polling) to internal workflow execution.
 
+**Double-Dispatch Pattern**: Both `BoardColumnEventHandler` and `WorkflowOrchestrator` subscribe to `WorkItemColumnChangedEvent`. This intentional dual-subscription means a column change triggers both handlers. In simulation tests, `AgentScheduler` is stopped after seeding to suppress the second dispatch and prevent duplicate agent triggers during test setup. The `_trigger_agent` method contains additional idempotency guards at the application layer.
+
+**AgentScheduler Wiring**: `AgentScheduler` is wired in `SimulationApplicationBootstrap` and its consumer loop is started after all event subscriptions are established. It is stopped before adapter teardown to prevent task queue processing during cleanup.
+
 ### 2. ExecutionEventHandler
 
 **File**: `src/codetoreum/application/event_handlers/execution_event_handler.py`

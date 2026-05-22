@@ -94,6 +94,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         recovery_service: AgentExecutionRecoveryService | None = None,
         execution_delay: float = 0.0,
         workflow_config_service: IWorkflowConfigService | None = None,
+        workspace_base_dir: str = "/workspace",
     ) -> None:
         """Initialize ExecutionServiceAgentExecutor.
 
@@ -110,6 +111,9 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             recovery_service: Service for handling completion callback failures
             execution_delay: Optional delay (seconds) before execution for testing
             workflow_config_service: Optional service for fetching workflow templates
+            workspace_base_dir: Base directory for cloned repositories. Defaults to
+                /workspace (the Docker container mount point). Override in simulation
+                with a tempfile path so tests don't require root access.
         """
         self._execution_service = execution_service
         self._workspace_router = workspace_router
@@ -123,6 +127,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         self._recovery_service = recovery_service
         self._execution_delay = execution_delay
         self._workflow_config_service = workflow_config_service
+        self._workspace_base_dir = workspace_base_dir
 
         self._completion_callback: Callable[[str, str, bool], Coroutine[Any, Any, None]] | None = None
         self._default_board_id = "board-1"
@@ -350,7 +355,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             )
 
             # Step 3: Clone repository
-            repo_path = f"/workspace/{work_item_id}"
+            repo_path = f"{self._workspace_base_dir}/{work_item_id}"
             try:
                 await self._vcs.clone_repository(repo_url, repo_path)
             except Exception as e:

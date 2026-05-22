@@ -1,0 +1,16 @@
+# Dev Environment Repair Scenario — Orchestrator: Project Configuration
+#
+# Port/Interface: IConfigStore
+# Adapter (sim): InMemoryConfigStore
+
+project_configs:
+  - id: "dev_environment_repair_project"
+    name: "dev_environment_repair_project"
+    github_org: "demo-org"
+    github_repo: "dev-env-repair-demo"
+    tech_stacks:
+      python: "3.11"
+    testing:
+      command: "pytest"
+      framework: "pytest"
+    environment_variables: {}

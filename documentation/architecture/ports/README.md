@@ -13,7 +13,7 @@ Both sets use Python Abstract Base Classes (ABCs) with type-annotated methods. A
 
 ## Port Organization
 
-With 59 total port interfaces (19 input + 40 output), individual files per port would create navigational overhead. Instead, ports are grouped by **functional domain** — related interfaces that address the same problem area.
+With 60 total port interfaces (20 input + 40 output), individual files per port would create navigational overhead. Instead, ports are grouped by **functional domain** — related interfaces that address the same problem area.
 
 This strategy:
 - Keeps related interfaces together for context
@@ -31,7 +31,7 @@ This strategy:
 ## Contents
 
 ### [input/](./input/)
-**19 input port interfaces** across 6 documentation files:
+**20 input port interfaces** across 6 documentation files:
 
 1. **agent-management.md** — Agent command/query operations
 2. **work-item-management.md** — Work item and task operations

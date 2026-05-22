@@ -60,6 +60,12 @@ async def test_yaml_scenario_seeding_and_cascade(
     # Load scenario from YAML — this exercises the full seeding pipeline
     await seeder.seed_from_yaml(_DEFAULT_YAML)
 
+    # Stop AgentScheduler so WorkflowOrchestrator's enqueued tasks are never
+    # consumed — prevents double-dispatch (BCEH + WO both subscribe to
+    # WorkItemColumnChangedEvent; only BCEH's direct execute() path should run).
+    if simulation_bootstrap.services and simulation_bootstrap.services.agent_scheduler:
+        await simulation_bootstrap.services.agent_scheduler.stop()
+
     if seeder.created_items.work_items:
         # At least one work item was seeded: trigger cascade and assert completion
         work_item_id = seeder.created_items.work_items[0]

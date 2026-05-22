@@ -14,7 +14,7 @@ applies_to: "documentation/architecture/domain/models.md"
 
 ## Overview
 
-The domain layer contains **90 pure business logic classes** across **19 source files**. These models form the core of Codetoreum, representing the system's fundamental concepts: work items, agents, workflows, executions, reviews, repairs, exceptions, and project configuration. All domain models are technology-agnostic—they contain no external dependencies, no I/O operations, and no framework coupling. They are organized into nine primary bounded contexts:
+The domain layer contains **86 pure business logic classes** across **23 source files**. These models form the core of Codetoreum, representing the system's fundamental concepts: work items, agents, workflows, executions, reviews, repairs, exceptions, and project configuration. All domain models are technology-agnostic—they contain no external dependencies, no I/O operations, and no framework coupling. They are organized into nine primary bounded contexts:
 
 1. **Work Item Context** — Lifecycle and state management of work items
 2. **Agent Context** — AI agents and their capabilities

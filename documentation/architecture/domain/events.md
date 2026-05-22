@@ -36,9 +36,11 @@ Events enable:
 
 ### Work Item Context
 
-**File**: `work_item_events.py` (2 events)
+**File**: `work_item_events.py` (12 events)
 
-The Work Item context manages the lifecycle of issues, tasks, and features flowing through the system.
+The Work Item context manages the lifecycle of issues, tasks, and features flowing through the system. All 12 events: `WorkItemCreatedEvent`, `WorkItemUpdatedEvent`, `AgentAssignedEvent`, `WorkItemStartedEvent`, `WorkItemUnderReviewEvent`, `WorkItemCompletedEvent`, `WorkItemFailedEvent`, `WorkItemBlockedEvent`, `WorkItemUnblockedEvent`, `WorkItemStageUpdatedEvent`, `WorkItemLabelsUpdatedEvent`, `WorkItemPriorityUpdatedEvent`.
+
+The following are representative examples:
 
 ```python
 @dataclass(frozen=True)
@@ -82,6 +84,211 @@ class WorkItemUpdatedEvent(CodetoreumEvent):
     work_item_id: str = ""
     project_id: str = ""
     changes: Mapping[str, Any] = field(default_factory=dict)
+
+@dataclass(frozen=True)
+class AgentAssignedEvent(CodetoreumEvent):
+    """Emitted when an agent is assigned to a work item.
+
+    Fired by: AgentScheduler.assign_agent() → application service
+    Subscribers:
+      - WorkflowHandler: Record agent assignment
+      - MetricsHandler: Track assignment
+
+    Type: ``workitem.agent_assigned``
+
+    Attributes:
+        work_item_id: Work item receiving the assignment
+        agent_id: ID of the agent being assigned
+        reason: Reason for the assignment (e.g., capability match)
+        assigned_at: ISO 8601 timestamp when assignment occurred
+    """
+    work_item_id: str = ""
+    agent_id: str = ""
+    reason: str = ""
+    assigned_at: str = ""
+
+@dataclass(frozen=True)
+class WorkItemStartedEvent(CodetoreumEvent):
+    """Emitted when a work item enters active execution.
+
+    Fired by: ExecutionService.start_execution() → application service
+    Subscribers:
+      - ExecutionHandler: Initialize execution state
+      - MetricsHandler: Record start time
+
+    Type: ``workitem.started``
+
+    Attributes:
+        work_item_id: Work item that started
+        agent_id: Agent working on the item
+        started_at: ISO 8601 timestamp when work started
+    """
+    work_item_id: str = ""
+    agent_id: str = ""
+    started_at: str = ""
+
+@dataclass(frozen=True)
+class WorkItemUnderReviewEvent(CodetoreumEvent):
+    """Emitted when a work item enters review.
+
+    Fired by: WorkflowOrchestrator when execution completes and review stage begins
+    Subscribers:
+      - ReviewHandler: Initialize review tracking
+      - MetricsHandler: Record review entry time
+
+    Type: ``workitem.under_review``
+
+    Attributes:
+        work_item_id: Work item entering review
+    """
+    work_item_id: str = ""
+
+@dataclass(frozen=True)
+class WorkItemCompletedEvent(CodetoreumEvent):
+    """Emitted when a work item is successfully completed.
+
+    Fired by: WorkflowOrchestrator.complete_work_item() → application service
+    Subscribers:
+      - BoardHandler: Move item to done column
+      - MetricsHandler: Record completion time
+      - NotificationHandler: Notify stakeholders
+
+    Type: ``workitem.completed``
+
+    Attributes:
+        work_item_id: Work item that completed
+        agent_id: Agent that completed the work
+        completed_at: ISO 8601 timestamp when completion occurred
+    """
+    work_item_id: str = ""
+    agent_id: str = ""
+    completed_at: str = ""
+
+@dataclass(frozen=True)
+class WorkItemFailedEvent(CodetoreumEvent):
+    """Emitted when a work item fails and cannot be automatically retried.
+
+    Fired by: WorkflowOrchestrator.fail_work_item() → application service
+    Subscribers:
+      - BoardHandler: Move item to failed/blocked column
+      - NotificationHandler: Alert team of failure
+      - MetricsHandler: Record failure
+
+    Type: ``workitem.failed``
+
+    Attributes:
+        work_item_id: Work item that failed
+        agent_id: Agent that was working on the item
+        reason: Human-readable description of the failure
+        failed_at: ISO 8601 timestamp when failure occurred
+        new_status: Status applied after failure
+    """
+    work_item_id: str = ""
+    agent_id: str = ""
+    reason: str = ""
+    failed_at: str = ""
+    new_status: str = ""
+
+@dataclass(frozen=True)
+class WorkItemBlockedEvent(CodetoreumEvent):
+    """Emitted when a work item becomes blocked and cannot progress.
+
+    Fired by: WorkflowOrchestrator.block_work_item() → application service
+    Subscribers:
+      - BoardHandler: Move item to blocked column
+      - NotificationHandler: Alert team
+      - MetricsHandler: Track blocked duration
+
+    Type: ``workitem.blocked``
+
+    Attributes:
+        work_item_id: Work item that is blocked
+        reason: Reason for the blockage
+        blocking_issue_id: ID of the issue causing the blockage (if applicable)
+    """
+    work_item_id: str = ""
+    reason: str = ""
+    blocking_issue_id: str = ""
+
+@dataclass(frozen=True)
+class WorkItemUnblockedEvent(CodetoreumEvent):
+    """Emitted when a previously blocked work item is unblocked.
+
+    Fired by: WorkflowOrchestrator.unblock_work_item() → application service
+    Subscribers:
+      - BoardHandler: Move item out of blocked column
+      - AgentScheduler: Re-queue for execution
+      - MetricsHandler: Record unblock
+
+    Type: ``workitem.unblocked``
+
+    Attributes:
+        work_item_id: Work item that was unblocked
+        new_status: Status applied after unblocking
+    """
+    work_item_id: str = ""
+    new_status: str = ""
+
+@dataclass(frozen=True)
+class WorkItemStageUpdatedEvent(CodetoreumEvent):
+    """Emitted when a work item transitions to a new workflow stage.
+
+    Fired by: WorkflowOrchestrator.advance_stage() → application service
+    Subscribers:
+      - WorkflowHandler: Apply stage entry actions
+      - MetricsHandler: Record stage duration
+
+    Type: ``workitem.stage_updated``
+
+    Attributes:
+        work_item_id: Work item changing stages
+        old_stage: Previous workflow stage name
+        new_stage: New workflow stage name
+    """
+    work_item_id: str = ""
+    old_stage: str = ""
+    new_stage: str = ""
+
+@dataclass(frozen=True)
+class WorkItemLabelsUpdatedEvent(CodetoreumEvent):
+    """Emitted when a work item's labels are changed.
+
+    Fired by: IWorkItemService.update_labels() → application service
+    Subscribers:
+      - BoardHandler: Update board label display
+      - MetricsHandler: Track label changes
+
+    Type: ``workitem.labels_updated``
+
+    Attributes:
+        work_item_id: Work item whose labels changed
+        old_labels: Labels before the update
+        new_labels: Labels after the update
+    """
+    work_item_id: str = ""
+    old_labels: tuple = ()
+    new_labels: tuple = ()
+
+@dataclass(frozen=True)
+class WorkItemPriorityUpdatedEvent(CodetoreumEvent):
+    """Emitted when a work item's priority changes.
+
+    Fired by: IWorkItemService.update_priority() → application service
+    Subscribers:
+      - AgentScheduler: Reorder queue by priority
+      - BoardHandler: Update priority display
+      - MetricsHandler: Track priority changes
+
+    Type: ``workitem.priority_updated``
+
+    Attributes:
+        work_item_id: Work item whose priority changed
+        old_priority: Previous priority value (int, 1=highest)
+        new_priority: New priority value (int, 1=highest)
+    """
+    work_item_id: str = ""
+    old_priority: int = 0
+    new_priority: int = 0
 ```
 
 **Invariants Enforced**:
@@ -279,32 +486,224 @@ graph TB
 
 ### Execution Context
 
-**File**: `execution_events.py` (1 event)
+**File**: `execution_events.py` (9 events)
 
-The Execution context tracks agent execution lifecycle events.
+The Execution context tracks the complete agent execution lifecycle. All 9 events: `ExecutionInitializedEvent`, `ExecutionStartedEvent`, `ExecutionCompletedEvent`, `ExecutionFailedEvent`, `ExecutionTimedOutEvent`, `ExecutionCancelledEvent`, `ExecutionPausedEvent`, `ExecutionResumedEvent`, `ExecutionRetryScheduledEvent`.
 
 ```python
 @dataclass(frozen=True)
-class ExecutionTimedOutEvent(CodetoreumEvent):
-    """Emitted when an agent execution exceeds its timeout.
+class ExecutionInitializedEvent(CodetoreumEvent):
+    """Emitted when an agent execution is registered but not yet running.
 
-    Fired by: ExecutionService timeout monitor (infrastructure)
+    Fired by: AgentExecutionService.initialize_execution() → application service
+    Subscribers:
+      - ExecutionHandler: Register execution in tracking state
+      - MetricsHandler: Record initialization
+
+    Type: ``execution.initialized``
+
+    Attributes:
+        execution_id: Unique identifier for this execution
+        work_item_id: Work item being processed
+        agent_id: Agent assigned to the execution
+        stage_name: Workflow stage name for this execution
+    """
+    execution_id: str = ""
+    work_item_id: str = ""
+    agent_id: str = ""
+    stage_name: str = ""
+
+@dataclass(frozen=True)
+class ExecutionStartedEvent(CodetoreumEvent):
+    """Emitted when an agent execution begins running inside its container.
+
+    Fired by: AgentExecutionService.start_execution() → application service
+    Subscribers:
+      - ExecutionHandler: Mark execution as RUNNING
+      - MetricsHandler: Record start time
+
+    Type: ``execution.started``
+
+    Attributes:
+        execution_id: Unique identifier for this execution
+        work_item_id: Work item being processed
+        agent_id: Agent assigned to the execution
+        container_name: Name of the container where the agent runs (None if not yet allocated)
+    """
+    execution_id: str = ""
+    work_item_id: str = ""
+    agent_id: str = ""
+    container_name: str | None = None
+
+@dataclass(frozen=True)
+class ExecutionCompletedEvent(CodetoreumEvent):
+    """Emitted when an agent execution completes successfully.
+
+    Fired by: AgentExecutionService.complete_execution() → application service
+    Subscribers:
+      - ExecutionHandler: Mark execution as COMPLETED, release container
+      - WorkflowHandler: Advance work item to next stage
+      - MetricsHandler: Record completion time and token usage
+
+    Type: ``execution.completed``
+
+    Attributes:
+        execution_id: Unique identifier for this execution
+        work_item_id: Work item that was processed
+        agent_id: Agent that completed the execution
+        output: Execution result text
+        input_tokens: Number of input tokens consumed
+        output_tokens: Number of output tokens produced
+    """
+    execution_id: str = ""
+    work_item_id: str = ""
+    agent_id: str = ""
+    output: str = ""
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+@dataclass(frozen=True)
+class ExecutionFailedEvent(CodetoreumEvent):
+    """Emitted when an agent execution fails with an error.
+
+    Fired by: AgentExecutionService.fail_execution() → application service
+    Subscribers:
+      - ExecutionHandler: Mark execution as FAILED, release container
+      - RepairCycleHandler: Possibly trigger repair cycle
+      - NotificationHandler: Notify team of failure
+      - MetricsHandler: Record failure
+
+    Type: ``execution.failed``
+
+    Attributes:
+        execution_id: Unique identifier for this execution
+        work_item_id: Work item that was being processed
+        agent_id: Agent that failed
+        error: Short error identifier or category
+        error_message: Detailed error description
+        exit_code: Process exit code if available (None if not applicable)
+    """
+    execution_id: str = ""
+    work_item_id: str = ""
+    agent_id: str = ""
+    error: str = ""
+    error_message: str = ""
+    exit_code: int | None = None
+
+@dataclass(frozen=True)
+class ExecutionTimedOutEvent(CodetoreumEvent):
+    """Emitted when an agent execution exceeds its timeout threshold.
+
+    Fired by: ExecutionTimeoutWatchdog (infrastructure)
     Subscribers:
       - ExecutionHandler: Mark execution as TIMEOUT, release resources
       - NotificationHandler: Notify team of timeout
       - MetricsHandler: Record timeout metric
       - RepairCycleHandler: Possibly trigger repair cycle
 
+    Type: ``execution.timed_out``
+
     Attributes:
         execution_id: Execution that timed out
-        agent_id: Agent that timed out
         work_item_id: Work item being executed
-        timeout_seconds: Timeout threshold
+        timeout_seconds: Timeout threshold that was exceeded
+        started_at: ISO 8601 timestamp when execution started
     """
     execution_id: str = ""
-    agent_id: str = ""
     work_item_id: str = ""
     timeout_seconds: int = 0
+    started_at: str = ""
+
+@dataclass(frozen=True)
+class ExecutionCancelledEvent(CodetoreumEvent):
+    """Emitted when an agent execution is cancelled before completion.
+
+    Fired by: AgentExecutionService.cancel_execution() → application service
+    Subscribers:
+      - ExecutionHandler: Mark execution as CANCELLED, release container
+      - MetricsHandler: Record cancellation
+
+    Type: ``execution.cancelled``
+
+    Attributes:
+        execution_id: Unique identifier for this execution
+        work_item_id: Work item that was being processed
+        agent_id: Agent that was executing
+        cancelled_at: ISO 8601 timestamp when cancellation occurred
+    """
+    execution_id: str = ""
+    work_item_id: str = ""
+    agent_id: str = ""
+    cancelled_at: str = ""
+
+@dataclass(frozen=True)
+class ExecutionPausedEvent(CodetoreumEvent):
+    """Emitted when an agent execution is paused.
+
+    Fired by: AgentExecutionService.pause_execution() → application service
+    Subscribers:
+      - ExecutionHandler: Mark execution as PAUSED
+      - MetricsHandler: Record pause time
+
+    Type: ``execution.paused``
+
+    Attributes:
+        execution_id: Unique identifier for this execution
+        work_item_id: Work item being processed
+        agent_id: Agent that was executing
+        paused_at: ISO 8601 timestamp when execution was paused
+    """
+    execution_id: str = ""
+    work_item_id: str = ""
+    agent_id: str = ""
+    paused_at: str = ""
+
+@dataclass(frozen=True)
+class ExecutionResumedEvent(CodetoreumEvent):
+    """Emitted when a paused agent execution is resumed.
+
+    Fired by: AgentExecutionService.resume_execution() → application service
+    Subscribers:
+      - ExecutionHandler: Mark execution as RUNNING again
+      - MetricsHandler: Record resume time
+
+    Type: ``execution.resumed``
+
+    Attributes:
+        execution_id: Unique identifier for this execution
+        work_item_id: Work item being processed
+        agent_id: Agent that is resuming
+        resumed_at: ISO 8601 timestamp when execution was resumed
+    """
+    execution_id: str = ""
+    work_item_id: str = ""
+    agent_id: str = ""
+    resumed_at: str = ""
+
+@dataclass(frozen=True)
+class ExecutionRetryScheduledEvent(CodetoreumEvent):
+    """Emitted when a failed execution is scheduled for retry.
+
+    Fired by: AgentExecutionService.schedule_retry() → application service
+    Subscribers:
+      - ExecutionHandler: Prepare retry execution record
+      - AgentScheduler: Re-queue the execution
+      - MetricsHandler: Record retry count
+
+    Type: ``execution.retry_scheduled``
+
+    Attributes:
+        execution_id: Unique identifier for the original execution
+        work_item_id: Work item being retried
+        agent_id: Agent that will retry
+        retry_count: Current retry attempt number
+        retry_at: ISO 8601 timestamp when retry is scheduled
+    """
+    execution_id: str = ""
+    work_item_id: str = ""
+    agent_id: str = ""
+    retry_count: int = 0
+    retry_at: str = ""
 ```
 
 **Event-Flow Diagram**:
@@ -446,9 +845,11 @@ graph TB
 
 ### Review Cycle Context
 
-**File**: `review_cycle_events.py` (7 events)
+**File**: `review_cycle_events.py` (11 events)
 
-The Review Cycle context (domain layer) models maker-checker code review cycles with iteration and feedback.
+The Review Cycle context (domain layer) models maker-checker code review cycles with iteration and feedback. All 11 events: `ReviewCycleCreatedEvent`, `ReviewCycleStartedEvent`, `ReviewCycleIterationStartedEvent`, `ReviewCycleIterationCompletedEvent`, `ReviewCycleFeedbackSubmittedEvent`, `ReviewCycleMakerRevisionEvent`, `ReviewCycleEscalatedToHumanEvent`, `ReviewCycleHumanFeedbackReceivedEvent`, `ReviewCycleMaxIterationsReachedEvent`, `ReviewCycleApprovedEvent`, `ReviewCycleRejectedEvent`.
+
+The following are representative examples:
 
 ```python
 @dataclass(frozen=True)
@@ -592,6 +993,98 @@ class ReviewCycleMaxIterationsReachedEvent(CodetoreumEvent):
     review_cycle_id: str = ""
     work_item_id: str = ""
     max_iterations: int = 0
+
+@dataclass(frozen=True)
+class ReviewCycleCreatedEvent(CodetoreumEvent):
+    """Emitted when a new review cycle object is created (before it starts).
+
+    Fired by: ReviewService.create_review_cycle() → application service
+    Subscribers:
+      - ReviewHandler: Register review cycle in tracking state
+      - MetricsHandler: Record creation
+
+    Type: ``review_cycle.created``
+
+    Attributes:
+        review_cycle_id: Unique identifier for the review cycle
+        workflow_id: ID of the workflow this cycle belongs to
+        stage_name: Name of the workflow stage triggering the review
+        maker_agent_id: ID of the maker (development) agent
+        reviewer_agent_id: ID of the reviewer (code review) agent
+        max_iterations: Maximum iterations before escalation
+    """
+    review_cycle_id: str = ""
+    workflow_id: str = ""
+    stage_name: str = ""
+    maker_agent_id: str = ""
+    reviewer_agent_id: str = ""
+    max_iterations: int = 0
+
+@dataclass(frozen=True)
+class ReviewCycleIterationStartedEvent(CodetoreumEvent):
+    """Emitted when a new maker-checker iteration begins within a review cycle.
+
+    Fired by: ReviewService.start_iteration() → application service
+    Subscribers:
+      - ReviewHandler: Initialize iteration tracking
+      - MetricsHandler: Record iteration start time
+
+    Type: ``review_cycle.iteration_started``
+
+    Attributes:
+        review_cycle_id: ID of the review cycle
+        iteration_number: The iteration number (1-indexed)
+        maker_execution_id: Execution ID of the maker agent's run for this iteration
+    """
+    review_cycle_id: str = ""
+    iteration_number: int = 0
+    maker_execution_id: str = ""
+
+@dataclass(frozen=True)
+class ReviewCycleFeedbackSubmittedEvent(CodetoreumEvent):
+    """Emitted when the reviewer agent submits feedback on an iteration.
+
+    Fired by: ReviewService.submit_feedback() → application service
+    Subscribers:
+      - ReviewHandler: Apply feedback decision (approve, request changes, escalate)
+      - NotificationHandler: Notify maker of feedback
+      - MetricsHandler: Record review duration
+
+    Type: ``review_cycle.feedback_submitted``
+
+    Attributes:
+        review_cycle_id: ID of the review cycle
+        iteration_number: The iteration number receiving feedback (1-indexed)
+        decision: Reviewer decision (``approve``, ``request_changes``, ``escalate``)
+        reviewer_execution_id: Execution ID of the reviewer agent's run
+        issues_count: Number of issues found by the reviewer
+    """
+    review_cycle_id: str = ""
+    iteration_number: int = 0
+    decision: str = ""
+    reviewer_execution_id: str = ""
+    issues_count: int = 0
+
+@dataclass(frozen=True)
+class ReviewCycleRejectedEvent(CodetoreumEvent):
+    """Emitted when a review cycle ends with rejection after reaching the maximum iterations.
+
+    Fired by: ReviewService.reject_cycle() → application service
+    Subscribers:
+      - WorkflowHandler: Move work item to a failure or escalation state
+      - NotificationHandler: Notify team of rejection
+      - MetricsHandler: Record rejection
+
+    Type: ``review_cycle.rejected``
+
+    Attributes:
+        review_cycle_id: ID of the review cycle that was rejected
+        final_iteration: The final iteration number reached
+        rejection_reason: Human-readable reason for rejection
+    """
+    review_cycle_id: str = ""
+    final_iteration: int = 0
+    rejection_reason: str = ""
 ```
 
 **Event-Flow Diagram**:
@@ -2055,9 +2548,9 @@ graph TB
 
 ### Queue Context
 
-**File**: `queue_events.py` (4 events)
+**File**: `queue_events.py` (5 events)
 
-Queue context tracks work item queue management.
+Queue context tracks work item queue management. All 5 events: `QueueItemAddedEvent`, `QueueItemRemovedEvent`, `QueuePositionChangedEvent`, `WorkItemDeadLetterQueuedEvent`, `TaskDispatchFailedEvent`.
 
 ```python
 @dataclass(frozen=True)
@@ -2133,6 +2626,33 @@ class WorkItemDeadLetterQueuedEvent(CodetoreumEvent):
     to_column: str = ""
     reason: str = ""
     failure_details: str = ""
+
+@dataclass(frozen=True)
+class TaskDispatchFailedEvent(CodetoreumEvent):
+    """Emitted when a scheduled task fails to dispatch to the execution service.
+
+    Fired by: AgentScheduler consumer loop when dispatch raises an exception
+    Subscribers:
+      - SchedulerHandler: Log dispatch failure, possibly re-queue or DLQ the task
+      - NotificationHandler: Alert operations team
+      - MetricsHandler: Record dispatch failure rate
+
+    Type: ``scheduling.task_dispatch_failed``
+
+    Note: Unlike ExecutionFailedEvent (agent execution failure), this event
+    indicates the task never reached the execution service—the failure occurred
+    in the dispatcher before any agent ran.
+
+    Attributes:
+        task_id: ID of the scheduled task that failed to dispatch
+        work_item_id: Work item associated with the task
+        agent_id: ID of the agent that should have executed
+        error: Error description from the dispatch failure
+    """
+    task_id: str = ""
+    work_item_id: str = ""
+    agent_id: str = ""
+    error: str = ""
 ```
 
 **Event-Flow Diagram**:
@@ -2402,6 +2922,748 @@ graph TB
 ```
 
 ---
+
+---
+
+### Agent Context
+
+**File**: `agent_events.py` (10 events)
+
+The Agent context tracks agent configuration lifecycle changes. All events carry `agent_id` as the primary key. Type strings use `agent.*` prefix.
+
+```python
+@dataclass(frozen=True)
+class AgentCreatedEvent(CodetoreumEvent):
+    """Emitted when a new agent is created.
+
+    Type string: "agent.created"
+    Fired by: agent management command handler on agent registration.
+
+    Attributes:
+        agent_id: Unique agent identifier (required, non-empty)
+        name: Agent programmatic name (required, non-empty)
+        display_name: Human-readable label
+        agent_type: Agent role category (e.g., "implementer", "reviewer")
+        model: LLM model identifier (e.g., "claude-opus-4-5")
+    """
+    agent_id: str = ""
+    name: str = ""
+    display_name: str = ""
+    agent_type: str = ""
+    model: str = ""
+
+@dataclass(frozen=True)
+class AgentCapabilityAddedEvent(CodetoreumEvent):
+    """Emitted when a capability (skill) is added to an agent.
+
+    Type string: "agent.capability_added"
+    Fired by: agent capability management on skill assignment.
+
+    Attributes:
+        agent_id: Agent receiving the capability (required, non-empty)
+        skill: Skill name (e.g., "python", "testing", "code_review")
+        proficiency: Proficiency score from 0.0 to 1.0
+    """
+    agent_id: str = ""
+    skill: str = ""
+    proficiency: float = 0.0
+
+@dataclass(frozen=True)
+class AgentCapabilityRemovedEvent(CodetoreumEvent):
+    """Emitted when a capability is removed from an agent.
+
+    Type string: "agent.capability_removed"
+    Fired by: agent capability management on skill removal.
+
+    Attributes:
+        agent_id: Agent losing the capability (required, non-empty)
+        skill: Skill name being removed
+    """
+    agent_id: str = ""
+    skill: str = ""
+
+@dataclass(frozen=True)
+class AgentCapabilityUpdatedEvent(CodetoreumEvent):
+    """Emitted when a capability's proficiency is updated on an agent.
+
+    Type string: "agent.capability_updated"
+    Fired by: agent capability management on proficiency change.
+
+    Attributes:
+        agent_id: Agent whose capability changed (required, non-empty)
+        skill: Skill name being updated
+        old_proficiency: Previous proficiency score (0.0–1.0)
+        new_proficiency: New proficiency score (0.0–1.0)
+    """
+    agent_id: str = ""
+    skill: str = ""
+    old_proficiency: float = 0.0
+    new_proficiency: float = 0.0
+
+@dataclass(frozen=True)
+class AgentModelUpdatedEvent(CodetoreumEvent):
+    """Emitted when an agent's LLM model is changed.
+
+    Type string: "agent.model_updated"
+    Fired by: agent configuration management on model update.
+
+    Attributes:
+        agent_id: Agent being reconfigured (required, non-empty)
+        old_model: Previous model identifier
+        new_model: New model identifier
+    """
+    agent_id: str = ""
+    old_model: str = ""
+    new_model: str = ""
+
+@dataclass(frozen=True)
+class AgentTimeoutUpdatedEvent(CodetoreumEvent):
+    """Emitted when an agent's execution timeout is changed.
+
+    Type string: "agent.timeout_updated"
+    Fired by: agent configuration management on timeout update.
+
+    Attributes:
+        agent_id: Agent being reconfigured (required, non-empty)
+        old_timeout: Previous timeout in seconds
+        new_timeout: New timeout in seconds
+    """
+    agent_id: str = ""
+    old_timeout: int = 0
+    new_timeout: int = 0
+
+@dataclass(frozen=True)
+class AgentMaxRetriesUpdatedEvent(CodetoreumEvent):
+    """Emitted when an agent's maximum retry count is changed.
+
+    Type string: "agent.max_retries_updated"
+    Fired by: agent configuration management on retry policy update.
+
+    Attributes:
+        agent_id: Agent being reconfigured (required, non-empty)
+        old_max_retries: Previous maximum retry count
+        new_max_retries: New maximum retry count
+    """
+    agent_id: str = ""
+    old_max_retries: int = 0
+    new_max_retries: int = 0
+
+@dataclass(frozen=True)
+class AgentConstraintsUpdatedEvent(CodetoreumEvent):
+    """Emitted when an agent's operational constraints are changed.
+
+    Type string: "agent.constraints_updated"
+    Fired by: agent configuration management on constraint update.
+
+    Attributes:
+        agent_id: Agent being reconfigured (required, non-empty)
+        old_constraints: Tuple of previous constraint strings
+        new_constraints: Tuple of new constraint strings
+    """
+    agent_id: str = ""
+    old_constraints: tuple = ()
+    new_constraints: tuple = ()
+
+@dataclass(frozen=True)
+class AgentMcpServerAddedEvent(CodetoreumEvent):
+    """Emitted when an MCP server is added to an agent's configuration.
+
+    Type string: "agent.mcp_server_added"
+    Fired by: agent MCP configuration management.
+
+    Attributes:
+        agent_id: Agent receiving the MCP server (required, non-empty)
+        server_name: MCP server name/identifier
+    """
+    agent_id: str = ""
+    server_name: str = ""
+
+@dataclass(frozen=True)
+class AgentMcpServerRemovedEvent(CodetoreumEvent):
+    """Emitted when an MCP server is removed from an agent's configuration.
+
+    Type string: "agent.mcp_server_removed"
+    Fired by: agent MCP configuration management.
+
+    Attributes:
+        agent_id: Agent losing the MCP server (required, non-empty)
+        server_name: MCP server name/identifier being removed
+    """
+    agent_id: str = ""
+    server_name: str = ""
+```
+
+---
+
+### Configuration Context
+
+**File**: `configuration_events.py` (8 events)
+
+The Configuration context tracks changes to project, agent, and pipeline configuration, as well as command and sub-agent mounting lifecycle. Type strings use class name as-is (PascalCase) in `from_dict` defaults.
+
+```python
+@dataclass(frozen=True)
+class ProjectConfigUpdatedEvent(CodetoreumEvent):
+    """Emitted when a project-level configuration key is changed.
+
+    Type string: "ProjectConfigUpdatedEvent"
+    Fired by: project configuration command handler on key update.
+
+    Attributes:
+        project_id: Project whose config changed (required, non-empty)
+        config_key: Configuration key that changed
+        old_value: Previous value (empty string if previously unset)
+        new_value: New value (empty string if key was deleted)
+    """
+    project_id: str = ""
+    config_key: str = ""
+    old_value: str = ""
+    new_value: str = ""
+
+@dataclass(frozen=True)
+class AgentConfigUpdatedEvent(CodetoreumEvent):
+    """Emitted when an agent-level configuration key is changed.
+
+    Type string: "AgentConfigUpdatedEvent"
+    Fired by: agent configuration command handler on key update.
+
+    Attributes:
+        agent_id: Agent whose config changed (required, non-empty)
+        config_key: Configuration key that changed
+        old_value: Previous value (empty string if previously unset)
+        new_value: New value (empty string if key was deleted)
+    """
+    agent_id: str = ""
+    config_key: str = ""
+    old_value: str = ""
+    new_value: str = ""
+
+@dataclass(frozen=True)
+class PipelineConfigUpdatedEvent(CodetoreumEvent):
+    """Emitted when a pipeline-level configuration key is changed.
+
+    Type string: "PipelineConfigUpdatedEvent"
+    Fired by: pipeline configuration command handler on key update.
+
+    Attributes:
+        pipeline_id: Pipeline whose config changed
+        config_key: Configuration key that changed
+        old_value: Previous value (empty string if previously unset)
+        new_value: New value (empty string if key was deleted)
+    """
+    pipeline_id: str = ""
+    config_key: str = ""
+    old_value: str = ""
+    new_value: str = ""
+
+@dataclass(frozen=True)
+class EnvironmentVariableChangedEvent(CodetoreumEvent):
+    """Emitted when a project environment variable is set, changed, or removed.
+
+    Type string: "EnvironmentVariableChangedEvent"
+    Fired by: project environment variable management on variable mutation.
+
+    Attributes:
+        project_id: Project whose environment changed
+        variable_name: Environment variable name (e.g., "GITHUB_TOKEN")
+        old_value: Previous value (empty string if newly set)
+        new_value: New value (empty string if variable was deleted)
+    """
+    project_id: str = ""
+    variable_name: str = ""
+    old_value: str = ""
+    new_value: str = ""
+
+@dataclass(frozen=True)
+class CommandMountedEvent(CodetoreumEvent):
+    """Emitted when a Claude command (slash command) is mounted for a project.
+
+    Type string: "CommandMountedEvent"
+    Fired by: project command configuration when a command is enabled.
+
+    Attributes:
+        project_id: Project receiving the mounted command
+        command_name: Slash command name (e.g., "arch-doc", "review")
+    """
+    project_id: str = ""
+    command_name: str = ""
+
+@dataclass(frozen=True)
+class CommandUnmountedEvent(CodetoreumEvent):
+    """Emitted when a Claude command is unmounted from a project.
+
+    Type string: "CommandUnmountedEvent"
+    Fired by: project command configuration when a command is disabled.
+
+    Attributes:
+        project_id: Project losing the unmounted command
+        command_name: Slash command name being removed
+    """
+    project_id: str = ""
+    command_name: str = ""
+
+@dataclass(frozen=True)
+class SubAgentMountedEvent(CodetoreumEvent):
+    """Emitted when a sub-agent is mounted (enabled) for a project.
+
+    Type string: "SubAgentMountedEvent"
+    Fired by: project sub-agent configuration when a sub-agent is activated.
+
+    Attributes:
+        project_id: Project receiving the sub-agent
+        agent_id: Sub-agent being mounted
+    """
+    project_id: str = ""
+    agent_id: str = ""
+
+@dataclass(frozen=True)
+class SubAgentUnmountedEvent(CodetoreumEvent):
+    """Emitted when a sub-agent is unmounted (disabled) from a project.
+
+    Type string: "SubAgentUnmountedEvent"
+    Fired by: project sub-agent configuration when a sub-agent is deactivated.
+
+    Attributes:
+        project_id: Project losing the sub-agent
+        agent_id: Sub-agent being unmounted
+    """
+    project_id: str = ""
+    agent_id: str = ""
+```
+
+---
+
+### Project Context (Extended)
+
+**File**: `project_context_events.py` (4 events)
+
+The Project Context (Extended) tracks project-level configuration object lifecycle — specifically the structured `ProjectContext` aggregate (test config, docker config, workflow column mappings). This is distinct from `project_events.py` which tracks project enablement and board reconciliation. Type strings use class name as-is.
+
+```python
+@dataclass(frozen=True)
+class ProjectContextCreatedEvent(CodetoreumEvent):
+    """Emitted when a ProjectContext aggregate is created for a project.
+
+    Type string: "ProjectContextCreatedEvent"
+    Fired by: project context initialization when a new project context is bootstrapped.
+
+    Attributes:
+        project_id: Project for which context was created (required, non-empty)
+        name: Human-readable project name
+    """
+    project_id: str = ""
+    name: str = ""
+
+@dataclass(frozen=True)
+class ProjectTestConfigUpdatedEvent(CodetoreumEvent):
+    """Emitted when a project's test execution configuration is updated.
+
+    Type string: "ProjectTestConfigUpdatedEvent"
+    Fired by: project context management when test command or timeout changes.
+
+    Attributes:
+        project_id: Project whose test config changed (required, non-empty)
+        test_command: Shell command used to run tests (e.g., "poetry run pytest")
+        test_timeout: Maximum test run duration in seconds
+    """
+    project_id: str = ""
+    test_command: str = ""
+    test_timeout: int = 0
+
+@dataclass(frozen=True)
+class ProjectDockerConfigUpdatedEvent(CodetoreumEvent):
+    """Emitted when a project's Docker container image is updated.
+
+    Type string: "ProjectDockerConfigUpdatedEvent"
+    Fired by: project context management when the agent container image changes.
+
+    Attributes:
+        project_id: Project whose docker config changed (required, non-empty)
+        image: Docker image identifier (e.g., "ghcr.io/org/dev-env:latest")
+    """
+    project_id: str = ""
+    image: str = ""
+
+@dataclass(frozen=True)
+class ProjectWorkflowMappingAddedEvent(CodetoreumEvent):
+    """Emitted when a board column is mapped to a workflow stage in a project context.
+
+    Type string: "ProjectWorkflowMappingAddedEvent"
+    Fired by: project context management when a column-to-stage mapping is configured.
+    Used by: WorkflowOrchestrator to determine which pipeline stage to trigger
+    when a work item enters a given board column.
+
+    Attributes:
+        project_id: Project receiving the mapping (required, non-empty)
+        column_name: Board column name (e.g., "In Progress", "Review")
+        workflow_stage: Pipeline stage mapped to this column (e.g., "implementation")
+    """
+    project_id: str = ""
+    column_name: str = ""
+    workflow_stage: str = ""
+```
+
+---
+
+### Workflow Context
+
+**File**: `workflow_events.py` (16 events)
+
+The Workflow context tracks the complete workflow and pipeline execution lifecycle. Workflow-level events use `workflow.*` type strings; pipeline-level events use `pipeline.*` and `pipeline.stage.*` type strings. Both `workflow_id` and `work_item_id` are required fields on most events. All timestamps are ISO 8601 strings.
+
+```python
+@dataclass(frozen=True)
+class WorkflowCreatedEvent(CodetoreumEvent):
+    """Emitted when a workflow run is created for a work item.
+
+    Type string: "workflow.created"
+    Fired by: WorkflowOrchestrator when assigning a pipeline to a work item.
+
+    Attributes:
+        workflow_id: Unique workflow run identifier (required, non-empty)
+        work_item_id: Work item this workflow processes (required, non-empty)
+        pipeline_id: Pipeline template/config identifier
+        stage_name: Initial stage name
+        project_id: Project containing the work item
+    """
+    workflow_id: str = ""
+    work_item_id: str = ""
+    pipeline_id: str = ""
+    stage_name: str = ""
+    project_id: str = ""
+
+@dataclass(frozen=True)
+class WorkflowStartedEvent(CodetoreumEvent):
+    """Emitted when a workflow run begins execution.
+
+    Type string: "workflow.started"
+    Fired by: WorkflowOrchestrator when execution of the first stage commences.
+
+    Attributes:
+        workflow_id: Unique workflow run identifier (required, non-empty)
+        work_item_id: Work item being processed (required, non-empty)
+        stage_name: Current (first) stage name
+    """
+    workflow_id: str = ""
+    work_item_id: str = ""
+    stage_name: str = ""
+
+@dataclass(frozen=True)
+class WorkflowStageAdvancedEvent(CodetoreumEvent):
+    """Emitted when a workflow transitions from one stage to the next.
+
+    Type string: "workflow.stage_advanced"
+    Fired by: WorkflowOrchestrator on successful stage completion and advancement.
+
+    Attributes:
+        workflow_id: Unique workflow run identifier (required, non-empty)
+        work_item_id: Work item being processed (required, non-empty)
+        from_stage: Stage transitioned from
+        to_stage: Stage transitioned to
+    """
+    workflow_id: str = ""
+    work_item_id: str = ""
+    from_stage: str = ""
+    to_stage: str = ""
+
+@dataclass(frozen=True)
+class WorkflowStageStatusUpdatedEvent(CodetoreumEvent):
+    """Emitted when a workflow stage's status changes (without advancing to next stage).
+
+    Type string: "workflow.stage_status_updated"
+    Fired by: WorkflowOrchestrator when a stage's status is updated in-place
+    (e.g., from "pending" to "running", or "running" to "blocked").
+
+    Attributes:
+        workflow_id: Workflow run identifier (required, non-empty)
+        work_item_id: Work item being processed (required, non-empty)
+        stage_name: Name of the stage whose status changed
+        old_status: Previous status value
+        new_status: New status value
+    """
+    workflow_id: str = ""
+    work_item_id: str = ""
+    stage_name: str = ""
+    old_status: str = ""
+    new_status: str = ""
+
+@dataclass(frozen=True)
+class WorkflowCompletedEvent(CodetoreumEvent):
+    """Emitted when a workflow run completes successfully (all stages passed).
+
+    Type string: "workflow.completed"
+    Fired by: WorkflowOrchestrator after the final stage completes.
+    Subscribers:
+      - WorkflowHandler: Move work item to completed column
+
+    Attributes:
+        workflow_id: Unique workflow run identifier (required, non-empty)
+        work_item_id: Work item that was processed (required, non-empty)
+        final_stage: Name of the last stage executed
+        completed_at: ISO 8601 timestamp of completion
+    """
+    workflow_id: str = ""
+    work_item_id: str = ""
+    final_stage: str = ""
+    completed_at: str = ""
+
+@dataclass(frozen=True)
+class WorkflowFailedEvent(CodetoreumEvent):
+    """Emitted when a workflow run fails and cannot continue.
+
+    Type string: "workflow.failed"
+    Fired by: WorkflowOrchestrator when a stage fails and retry/repair is exhausted.
+    Subscribers:
+      - WorkflowHandler: Move work item to failed column or trigger repair
+
+    Attributes:
+        workflow_id: Unique workflow run identifier (required, non-empty)
+        work_item_id: Work item that was being processed (required, non-empty)
+        failed_stage: Stage at which failure occurred
+        reason: Human-readable failure reason
+        failed_at: ISO 8601 timestamp of failure
+    """
+    workflow_id: str = ""
+    work_item_id: str = ""
+    failed_stage: str = ""
+    reason: str = ""
+    failed_at: str = ""
+
+@dataclass(frozen=True)
+class WorkflowCancelledEvent(CodetoreumEvent):
+    """Emitted when a workflow run is cancelled by external request.
+
+    Type string: "workflow.cancelled"
+    Fired by: WorkflowOrchestrator on explicit cancellation (user request or policy).
+
+    Attributes:
+        workflow_id: Unique workflow run identifier (required, non-empty)
+        work_item_id: Work item that was being processed (required, non-empty)
+        cancelled_stage: Stage at which cancellation occurred
+        cancelled_at: ISO 8601 timestamp of cancellation
+    """
+    workflow_id: str = ""
+    work_item_id: str = ""
+    cancelled_stage: str = ""
+    cancelled_at: str = ""
+
+@dataclass(frozen=True)
+class WorkflowPausedEvent(CodetoreumEvent):
+    """Emitted when a workflow run is paused (awaiting external input or approval).
+
+    Type string: "workflow.paused"
+    Fired by: WorkflowOrchestrator when a stage requires human review or approval.
+
+    Attributes:
+        workflow_id: Unique workflow run identifier (required, non-empty)
+        work_item_id: Work item that was being processed (required, non-empty)
+        paused_stage: Stage at which pause occurred
+        paused_at: ISO 8601 timestamp of pause
+    """
+    workflow_id: str = ""
+    work_item_id: str = ""
+    paused_stage: str = ""
+    paused_at: str = ""
+
+@dataclass(frozen=True)
+class WorkflowResumedEvent(CodetoreumEvent):
+    """Emitted when a paused workflow run is resumed.
+
+    Type string: "workflow.resumed"
+    Fired by: WorkflowOrchestrator when a paused workflow is explicitly unblocked.
+
+    Attributes:
+        workflow_id: Unique workflow run identifier (required, non-empty)
+        work_item_id: Work item being processed (required, non-empty)
+        resumed_stage: Stage at which resumption occurred (same stage as when paused)
+        resumed_at: ISO 8601 timestamp of resumption
+    """
+    workflow_id: str = ""
+    work_item_id: str = ""
+    resumed_stage: str = ""
+    resumed_at: str = ""
+
+@dataclass(frozen=True)
+class WorkflowAttachedEvent(CodetoreumEvent):
+    """Emitted when a pipeline template is attached to a work item, creating a workflow run.
+
+    Type string: "workflow.attached"
+    Fired by: WorkflowOrchestrator before WorkflowCreatedEvent; signals the
+    association between work item and pipeline before execution begins.
+
+    Attributes:
+        work_item_id: Work item receiving the workflow (required, non-empty)
+        pipeline_id: Pipeline template being attached
+        workflow_id: Generated workflow run identifier
+    """
+    work_item_id: str = ""
+    pipeline_id: str = ""
+    workflow_id: str = ""
+
+@dataclass(frozen=True)
+class WorkflowBranchSelectedEvent(CodetoreumEvent):
+    """Emitted when a git branch is selected or created for a workflow run.
+
+    Type string: "workflow.branch_selected"
+    Fired by: WorkflowOrchestrator during workspace setup, after branch resolution.
+
+    Attributes:
+        workflow_id: Workflow run identifier (required, non-empty)
+        work_item_id: Work item being processed (required, non-empty)
+        branch_name: Name of the selected or created branch
+        is_new_branch: True if this branch was freshly created; False if pre-existing
+    """
+    workflow_id: str = ""
+    work_item_id: str = ""
+    branch_name: str = ""
+    is_new_branch: bool = False
+
+@dataclass(frozen=True)
+class PipelineStageStartedEvent(CodetoreumEvent):
+    """Emitted when a pipeline stage begins execution.
+
+    Type string: "pipeline.stage.started"
+    Fired by: pipeline execution engine at stage start.
+
+    Attributes:
+        pipeline_id: Pipeline run identifier (required, non-empty)
+        stage_id: Unique stage run identifier
+        stage_name: Human-readable stage name
+        started_at: ISO 8601 timestamp of stage start
+    """
+    pipeline_id: str = ""
+    stage_id: str = ""
+    stage_name: str = ""
+    started_at: str = ""
+
+@dataclass(frozen=True)
+class PipelineStageCompletedEvent(CodetoreumEvent):
+    """Emitted when a pipeline stage completes successfully.
+
+    Type string: "pipeline.stage.completed"
+    Fired by: pipeline execution engine at successful stage completion.
+
+    Attributes:
+        pipeline_id: Pipeline run identifier (required, non-empty)
+        stage_id: Unique stage run identifier
+        stage_name: Human-readable stage name
+        completed_at: ISO 8601 timestamp of stage completion
+    """
+    pipeline_id: str = ""
+    stage_id: str = ""
+    stage_name: str = ""
+    completed_at: str = ""
+
+@dataclass(frozen=True)
+class PipelineStageFailedEvent(CodetoreumEvent):
+    """Emitted when a pipeline stage fails.
+
+    Type string: "pipeline.stage.failed"
+    Fired by: pipeline execution engine when a stage errors out.
+
+    Attributes:
+        pipeline_id: Pipeline run identifier (required, non-empty)
+        stage_id: Unique stage run identifier
+        stage_name: Human-readable stage name
+        error: Error message or exception description
+    """
+    pipeline_id: str = ""
+    stage_id: str = ""
+    stage_name: str = ""
+    error: str = ""
+
+@dataclass(frozen=True)
+class PipelineCompletedEvent(CodetoreumEvent):
+    """Emitted when all pipeline stages complete successfully.
+
+    Type string: "pipeline.completed"
+    Fired by: pipeline execution engine after the final stage succeeds.
+    Subscribers:
+      - WorkflowHandler: Advance workflow to completed state
+
+    Attributes:
+        pipeline_id: Pipeline run identifier (required, non-empty)
+        work_item_id: Work item processed by the pipeline
+        completed_stages: Ordered tuple of stage names that completed
+        completed_at: ISO 8601 timestamp of pipeline completion
+    """
+    pipeline_id: str = ""
+    work_item_id: str = ""
+    completed_stages: tuple = ()
+    completed_at: str = ""
+
+@dataclass(frozen=True)
+class PipelineFailedEvent(CodetoreumEvent):
+    """Emitted when a pipeline fails at a specific stage.
+
+    Type string: "pipeline.failed"
+    Fired by: pipeline execution engine when a stage fails and pipeline halts.
+    Subscribers:
+      - WorkflowHandler: Trigger repair cycle or mark workflow failed
+
+    Attributes:
+        pipeline_id: Pipeline run identifier (required, non-empty)
+        work_item_id: Work item being processed
+        failed_stage: Name of the stage that caused the failure
+        error: Error message or exception description
+        completed_stages: Ordered tuple of stage names that completed before failure
+    """
+    pipeline_id: str = ""
+    work_item_id: str = ""
+    failed_stage: str = ""
+    error: str = ""
+    completed_stages: tuple = ()
+```
+
+**Event-Flow Diagram**:
+
+```mermaid
+graph TB
+    subgraph "Workflow Lifecycle"
+        ATTACH["WorkflowAttachedEvent<br/>(pipeline → work item)"]
+        CREATED["WorkflowCreatedEvent<br/>(run initialized)"]
+        STARTED["WorkflowStartedEvent<br/>(execution begins)"]
+        BRANCH["WorkflowBranchSelectedEvent<br/>(git branch resolved)"]
+        ADVANCED["WorkflowStageAdvancedEvent<br/>(stage N → stage N+1)"]
+        STATUS["WorkflowStageStatusUpdatedEvent<br/>(in-stage status change)"]
+        COMPLETED["WorkflowCompletedEvent"]
+        FAILED["WorkflowFailedEvent"]
+        CANCELLED["WorkflowCancelledEvent"]
+        PAUSED["WorkflowPausedEvent"]
+        RESUMED["WorkflowResumedEvent"]
+    end
+
+    subgraph "Pipeline Stage Lifecycle"
+        PS_STARTED["PipelineStageStartedEvent"]
+        PS_COMPLETED["PipelineStageCompletedEvent"]
+        PS_FAILED["PipelineStageFailedEvent"]
+        P_COMPLETED["PipelineCompletedEvent"]
+        P_FAILED["PipelineFailedEvent"]
+    end
+
+    subgraph "Event Handlers"
+        WFH["WorkflowHandler"]
+        MH["MetricsHandler"]
+    end
+
+    ATTACH --> CREATED --> BRANCH --> STARTED
+    STARTED --> PS_STARTED
+    PS_STARTED --> PS_COMPLETED
+    PS_COMPLETED --> ADVANCED
+    ADVANCED --> PS_STARTED
+    PS_COMPLETED --> P_COMPLETED
+    P_COMPLETED --> COMPLETED
+    PS_FAILED --> P_FAILED
+    P_FAILED --> FAILED
+
+    COMPLETED --> WFH
+    FAILED --> WFH
+    CANCELLED --> WFH
+    PAUSED --> WFH
+    RESUMED --> WFH
+    WFH --> MH
+```
+
 
 ## Event-Flow Diagrams
 

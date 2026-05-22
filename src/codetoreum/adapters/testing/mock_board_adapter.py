@@ -950,6 +950,43 @@ class MockBoardAdapter(IBoardService):
         # Direct access for test cleanup (no concurrent modification expected)
         self._movement_log.clear()
 
+    def set_item_column_silent(
+        self,
+        work_item_id: str,
+        from_column: str,
+        to_column: str,
+        board_id: str,
+        project_id: str,
+    ) -> None:
+        """Update item column without emitting events. For test fixture setup only.
+
+        Used when a test needs to pre-position an item in a column before triggering
+        an HTTP event (which represents an external system notification that the move
+        already happened), without triggering the event handlers a second time.
+        """
+        key = f"{project_id}:{board_id}"
+        board = self._boards.get(key)
+        if board is None:
+            return
+
+        for col in board.columns:
+            if col.name == from_column and work_item_id in col.work_item_ids:
+                new_items = list(col.work_item_ids)
+                new_items.remove(work_item_id)
+                object.__setattr__(col, "work_item_ids", tuple(new_items))
+                break
+
+        new_position = 0
+        for col in board.columns:
+            if col.name == to_column:
+                new_items = list(col.work_item_ids)
+                new_items.append(work_item_id)
+                object.__setattr__(col, "work_item_ids", tuple(new_items))
+                new_position = len(new_items) - 1
+                break
+
+        self._item_positions[work_item_id] = (board_id, to_column, new_position)
+
     async def get_all_boards(self) -> list[ProjectBoard]:
         """Get all boards across all projects.
 

@@ -29,6 +29,7 @@ dependency injection.
 
 import asyncio
 import logging
+import tempfile
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import Enum
@@ -964,6 +965,21 @@ class SimulationApplicationBootstrap:
             if self.infrastructure and self.infrastructure.failed_event_store:
                 logger.debug("Failed event store is ready (no-op for in-memory implementation)")
 
+            # Phase 5c: Start AgentScheduler consumer loop.
+            # Must come after _create_services() so set_executor() has already been called.
+            # Matches the production bootstrap (production_bootstrap.py:367).
+            if self.services and self.services.agent_scheduler:
+                try:
+                    await self.services.agent_scheduler.start()
+                    logger.info("Phase 5c: AgentScheduler consumer loop started")
+                except Exception as e:
+                    logger.error(
+                        f"Failed to start AgentScheduler: {e}",
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                    )
+                    self._degraded_mode.mark_failed(BootstrapPhase.AUTO_ADVANCE, str(e))
+
             # Phase 6: Start auto-advance if configured
             # This must come after all event handlers are registered so tick-driven events have handlers
             if self.config.time.auto_advance and self._engine:
@@ -1176,6 +1192,14 @@ class SimulationApplicationBootstrap:
         try:
             logger.info("Tearing down simulation bootstrap...")
 
+            # Stop AgentScheduler consumer loop before cleaning up adapters.
+            if self.services and self.services.agent_scheduler:
+                try:
+                    await self.services.agent_scheduler.stop()
+                    logger.debug("AgentScheduler consumer loop stopped")
+                except Exception:
+                    logger.warning("Error stopping AgentScheduler during teardown", exc_info=True)
+
             # Stop all watchdogs before cleaning up adapters/infrastructure
             # This prevents scheduled callbacks from firing during teardown and
             # attempting to access None references (adapters, lock_service, etc.)
@@ -1234,6 +1258,46 @@ class SimulationApplicationBootstrap:
             )
             # Re-raise to ensure caller (typically test fixture) knows teardown failed
             raise
+
+    # =========================================================================
+    # DLQ Retry Handler
+    # =========================================================================
+
+    def _create_dlq_retry_handler(self):
+        """Create a DLQ retry handler closure for republishing failed events.
+
+        The handler captures the event bus at creation time and, when called
+        with (event_type, payload), reconstructs the domain event and publishes
+        it via the event bus. Raises ValueError for unknown event types.
+
+        Returns:
+            Async callable (event_type: str, payload: dict) -> None
+        """
+        event_bus = self.infrastructure.event_bus
+
+        # Map of supported event type names to their from_dict constructors
+        _known_event_types = {
+            "WorkItemColumnChanged": WorkItemColumnChangedEvent.from_dict,
+            "BoardReconciled": BoardReconciledEvent.from_dict,
+        }
+
+        async def retry_handler(event_type: str, payload: dict) -> None:
+            """Reconstruct and republish a failed event by its type name and payload."""
+            if event_type not in _known_event_types:
+                raise ValueError(f"Unknown event type: {event_type}")
+            # Ensure required base fields have defaults if not provided
+            enriched = dict(payload)
+            if "timestamp" not in enriched or not enriched.get("timestamp"):
+                from datetime import UTC as _UTC
+                from datetime import datetime
+
+                enriched["timestamp"] = datetime.now(_UTC).isoformat()
+            if "source" not in enriched or not enriched.get("source"):
+                enriched["source"] = "dlq_retry"
+            event = _known_event_types[event_type](enriched)
+            await event_bus.publish(event)
+
+        return retry_handler
 
     # =========================================================================
     # Phase 2: Create Adapters
@@ -1694,6 +1758,9 @@ class SimulationApplicationBootstrap:
             vcs=self.adapters.version_control,
             clock=self._engine.get_clock_for_testing(),
             recovery_service=recovery_service,
+            workflow_config_service=self.adapters.workflow_config,
+            # Use a temp directory: /workspace requires a Docker container with root.
+            workspace_base_dir=str(tempfile.gettempdir()) + "/codetoreum-sim-workspace",
         )
         # Assign to agent_executor (the primary executor for the board handler)
         self.adapters.agent_executor = execution_service_executor
@@ -1727,6 +1794,9 @@ class SimulationApplicationBootstrap:
             scheduling_events=scheduling_events,
             event_store=self.adapters.event_store,
         )
+        # Wire the executor into the scheduler so the consumer loop can dispatch tasks.
+        # start()/stop() are called in setup()/teardown() after services are created.
+        agent_scheduler.set_executor(execution_service_executor)
 
         # Workflow Orchestrator - create with simulation dependencies
         # Create mock implementations for workflow orchestrator dependencies

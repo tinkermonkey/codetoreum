@@ -1,0 +1,16 @@
+# PR Feedback Child Issue Scenario — Orchestrator: Project Configuration
+#
+# Port/Interface: IConfigStore
+# Adapter (sim): InMemoryConfigStore
+
+project_configs:
+  - id: "context-library"
+    name: "context-library"
+    github_org: "demo-org"
+    github_repo: "context-library"
+    tech_stacks:
+      python: "3.11"
+    testing:
+      command: "pytest"
+      framework: "pytest"
+    environment_variables: {}

@@ -177,7 +177,9 @@ class SimulationDataSeeder:
         Returns:
             Self for chaining
         """
-        project_id = str(uuid4())
+        # Use name as the project ID so CLI trigger payloads (project_id="my-project")
+        # match the config store key without UUID lookup friction.
+        project_id = name
 
         if repository_url is None:
             repository_url = f"https://github.com/test-org/{name}.git"

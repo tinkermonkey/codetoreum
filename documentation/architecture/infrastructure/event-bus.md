@@ -543,6 +543,8 @@ bus = EventBus(
 )
 ```
 
+**DLQ Retry Handler in Simulation Bootstrap**: `SimulationApplicationBootstrap` creates a dead-letter queue retry handler via `_create_dlq_retry_handler()`. This method wires the `IFailedEventStore` into a callback that re-publishes DLQ events back through the event bus with an enriched source field (`source="dlq_retry"`). In simulation mode the handler uses the in-memory `InMemoryFailedEventStore` rather than the Redis-backed production implementation.
+
 ---
 
 ## Performance Characteristics

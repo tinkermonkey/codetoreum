@@ -365,12 +365,13 @@ class TestObservabilityIntegration:
         await event_store.append("WI-ROOT", [root_event])
         root_event_id = root_event.event_id
 
-        # Create dependent event: correlated with root event
+        # Create dependent event: caused by and correlated with root event
         dependent_event = WorkItemColumnChangedEvent(
             type="workitem.column_changed",
             timestamp=(base_time + timedelta(seconds=10)).isoformat(),
             source="test",
             correlation_id=root_event.correlation_id,  # Link to root via correlation
+            causation_id=root_event_id,  # Direct causal link for chain traversal
             work_item_id="WI-DEP",
             project_id="test-project",
             board_id="test-board",

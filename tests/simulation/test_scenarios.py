@@ -162,7 +162,7 @@ async def test_scenario_04_execution_failure():
     # Verify failure and retry events
     failed_events = runner.get_events_by_type("AgentExecutionFailed")
     retry_events = runner.get_events_by_type("ExecutionRetryScheduled")
-    completed_events = runner.get_events_by_type("ExecutionCompletedEvent")
+    completed_events = runner.get_events_by_type("AgentExecutionCompleted")
 
     assert len(failed_events) == 1, "Expected exactly 1 failure"
     assert len(retry_events) == 1, "Expected exactly 1 retry scheduled"
@@ -196,7 +196,7 @@ async def test_scenario_05_complex_workflow():
     assert len(branch_events) == 1, "Expected exactly 1 branch selection"
 
     # Verify multiple stages completed
-    completed_events = runner.get_events_by_type("ExecutionCompletedEvent")
+    completed_events = runner.get_events_by_type("AgentExecutionCompleted")
     assert len(completed_events) >= 4, "Expected at least 4 stage completions"
 
     # Verify workflow completed

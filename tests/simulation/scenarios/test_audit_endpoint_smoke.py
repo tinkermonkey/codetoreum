@@ -79,6 +79,12 @@ async def simulation_env():
     )
     await seeder.seed_default_scenario()
 
+    # Stop AgentScheduler so WorkflowOrchestrator's enqueued tasks are never
+    # consumed — prevents double-dispatch (BCEH + WO both subscribe to
+    # WorkItemColumnChangedEvent; only BCEH's direct execute() path should run).
+    if bootstrap.services and bootstrap.services.agent_scheduler:
+        await bootstrap.services.agent_scheduler.stop()
+
     # The bootstrap already creates the FastAPI app
     # with all routers and dependencies wired up
     app = bootstrap.app

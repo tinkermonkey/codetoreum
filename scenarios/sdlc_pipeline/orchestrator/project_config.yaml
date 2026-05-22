@@ -1,0 +1,17 @@
+# SDLC Pipeline Scenario — Orchestrator: Project Configuration
+#
+# Port/Interface: IConfigStore
+# Adapter (sim): InMemoryConfigStore
+
+project_configs:
+  - id: "web-app-project"
+    name: "web-app-project"
+    github_org: "demo-org"
+    github_repo: "web-app"
+    tech_stacks:
+      python: "3.11"
+      typescript: "5.0"
+    testing:
+      command: "pytest && npm test"
+      framework: "pytest"
+    environment_variables: {}

@@ -13,6 +13,7 @@ from typing import cast
 
 import pytest
 
+from codetoreum.infrastructure.event_serialization import infer_aggregate_id_and_type
 from codetoreum.infrastructure.simulation.bootstrap import (
     SimulationAdapters,
     SimulationApplicationBootstrap,
@@ -46,6 +47,12 @@ async def multi_project_env():
         work_item_service=adapters.work_item_service,
     )
     alpha_id, beta_id = await seeder.seed_two_project_scenario()
+
+    # Stop AgentScheduler so WorkflowOrchestrator's enqueued tasks are never
+    # consumed — prevents double-dispatch (BCEH + WO both subscribe to
+    # WorkItemColumnChangedEvent; only BCEH's direct execute() path should run).
+    if bootstrap.services and bootstrap.services.agent_scheduler:
+        await bootstrap.services.agent_scheduler.stop()
 
     yield bootstrap, seeder, alpha_id, beta_id
 
@@ -208,10 +215,14 @@ async def test_event_store_work_item_ids(multi_project_env):
     async def workflow_events_recorded_for_both():
         all_events = event_store.get_all_events_list()
         alpha_workflow_events = [
-            e for e in all_events if e.aggregate_type == "Workflow" and e.payload.get("work_item_id") == alpha_id
+            e
+            for e in all_events
+            if infer_aggregate_id_and_type(e)[1] == "Workflow" and getattr(e, "work_item_id", None) == alpha_id
         ]
         beta_workflow_events = [
-            e for e in all_events if e.aggregate_type == "Workflow" and e.payload.get("work_item_id") == beta_id
+            e
+            for e in all_events
+            if infer_aggregate_id_and_type(e)[1] == "Workflow" and getattr(e, "work_item_id", None) == beta_id
         ]
         return len(alpha_workflow_events) > 0 and len(beta_workflow_events) > 0
 
@@ -226,10 +237,14 @@ async def test_event_store_work_item_ids(multi_project_env):
 
     # Find workflow lifecycle events for each work item
     alpha_workflow_events = [
-        e for e in all_events if e.aggregate_type == "Workflow" and e.payload.get("work_item_id") == alpha_id
+        e
+        for e in all_events
+        if infer_aggregate_id_and_type(e)[1] == "Workflow" and getattr(e, "work_item_id", None) == alpha_id
     ]
     beta_workflow_events = [
-        e for e in all_events if e.aggregate_type == "Workflow" and e.payload.get("work_item_id") == beta_id
+        e
+        for e in all_events
+        if infer_aggregate_id_and_type(e)[1] == "Workflow" and getattr(e, "work_item_id", None) == beta_id
     ]
 
     assert len(alpha_workflow_events) > 0, f"No workflow lifecycle events found for alpha item {alpha_id}"
@@ -238,21 +253,21 @@ async def test_event_store_work_item_ids(multi_project_env):
     # Verify alpha events have the correct work_item_id (not beta)
     for event in alpha_workflow_events:
         assert (
-            event.payload.get("work_item_id") == alpha_id
-        ), f"Alpha workflow event has wrong work_item_id: {event.payload.get('work_item_id')}"
+            getattr(event, "work_item_id", None) == alpha_id
+        ), f"Alpha workflow event has wrong work_item_id: {getattr(event, 'work_item_id', None)}"
 
     # Verify beta events have the correct work_item_id (not alpha)
     for event in beta_workflow_events:
         assert (
-            event.payload.get("work_item_id") == beta_id
-        ), f"Beta workflow event has wrong work_item_id: {event.payload.get('work_item_id')}"
+            getattr(event, "work_item_id", None) == beta_id
+        ), f"Beta workflow event has wrong work_item_id: {getattr(event, 'work_item_id', None)}"
 
     # Verify both runs have WorkflowCompleted events
-    alpha_run_id = alpha_workflow_events[0].aggregate_id
-    beta_run_id = beta_workflow_events[0].aggregate_id
+    alpha_run_id = infer_aggregate_id_and_type(alpha_workflow_events[0])[0]
+    beta_run_id = infer_aggregate_id_and_type(beta_workflow_events[0])[0]
 
-    alpha_run_events = [e for e in all_events if e.aggregate_id == alpha_run_id]
-    beta_run_events = [e for e in all_events if e.aggregate_id == beta_run_id]
+    alpha_run_events = [e for e in all_events if infer_aggregate_id_and_type(e)[0] == alpha_run_id]
+    beta_run_events = [e for e in all_events if infer_aggregate_id_and_type(e)[0] == beta_run_id]
 
     alpha_event_types = [e.event_type for e in alpha_run_events]
     beta_event_types = [e.event_type for e in beta_run_events]

@@ -13,7 +13,7 @@ applies_to: "documentation/architecture/application-services/services.md"
 
 ## Overview
 
-The application services layer contains **22 services** that orchestrate domain logic and coordinate interactions with external systems through ports. Each service implements one or more high-level business capabilities by receiving commands from input ports, invoking domain logic, calling output ports, and emitting domain events.
+The application services layer contains **23 services** that orchestrate domain logic and coordinate interactions with external systems through ports. Each service implements one or more high-level business capabilities by receiving commands from input ports, invoking domain logic, calling output ports, and emitting domain events.
 
 Services are organized into six functional groups:
 
@@ -1210,6 +1210,35 @@ async def convert_ci_run_result_to_repair_test_result(
 
 ---
 
+#### 23. IssueIntakeService
+
+**File**: `src/codetoreum/application/issue_intake_service.py`
+
+**Responsibility**: Processes inbound issue intake events from external ticketing systems.
+
+**Purpose**: Implements the `IIssueIntakePort` input port. Receives webhook-triggered issue-opened commands, creates work items in the system, and initiates workflow assignment.
+
+**Port Dependencies**:
+- `ITicketSystem` — Fetch full issue details
+- `IWorkItemService` — Create and track work items
+- `IEventEmitter` — Publish events
+
+**Key Methods**:
+
+```python
+async def handle_issue_opened(
+    self,
+    command: IssueOpenedCommand,
+) -> IssueIntakeResult:
+    """Process an inbound issue-opened event and create a work item."""
+```
+
+**Events Emitted**:
+- `WorkItemCreatedEvent` — Work item created from inbound issue
+
+---
+
+
 ## Responsibility Matrix
 
 | Service | Workflow | Config | State | Query | Exec | Review | Recovery |
@@ -1236,6 +1265,7 @@ async def convert_ci_run_result_to_repair_test_result(
 | EventSequenceValidator | | | | ✓ | | | |
 | ExpectedSequenceRegistry | | | | ✓ | | | |
 | RepairCycleCIIntegration | | | | | | | ✓ |
+| IssueIntakeService | | | ✓ | | | | |
 
 ## Port Dependencies
 
@@ -1243,7 +1273,7 @@ async def convert_ci_run_result_to_repair_test_result(
 
 - **IBoardService** — 4 services (WorkflowOrchestrator, ConversationalLoopOrchestrator, WorkItemService, BoardPollingService)
 - **IEventStore** — 5 services (ExecutionService, WorkItemService, WorkflowRunQueryService, EventSequenceValidator, RepairCycleCIIntegration)
-- **IEventEmitter** — All 22 services (publish domain events)
+- **IEventEmitter** — All 23 services (publish domain events)
 - **ITicketSystem** — 5 services (WorkflowOrchestrator, ContextBuilder, WorkItemService, ReviewService, FeedbackProcessor)
 - **ILLMProvider** — 2 services (ExecutionService, ConversationalLoopOrchestrator)
 - **IContainer** — 3 services (ExecutionService, WorkspaceRouter, ContainerRecoveryService)

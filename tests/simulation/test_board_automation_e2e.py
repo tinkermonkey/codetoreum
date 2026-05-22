@@ -37,7 +37,15 @@ async def e2e_env(
     adapters = cast("SimulationAdapters", simulation_bootstrap.adapters)
     if adapters.agent_executor is not None:
         adapters.agent_executor._execution_delay = 0.1
+
     await simulation_seeder.seed_default_scenario()
+
+    # Stop AgentScheduler so WorkflowOrchestrator's enqueued tasks are never
+    # consumed — prevents double-dispatch (BCEH + WO both subscribe to
+    # WorkItemColumnChangedEvent; only BCEH's direct execute() path should run).
+    if simulation_bootstrap.services and simulation_bootstrap.services.agent_scheduler:
+        await simulation_bootstrap.services.agent_scheduler.stop()
+
     return simulation_bootstrap, simulation_seeder
 
 
