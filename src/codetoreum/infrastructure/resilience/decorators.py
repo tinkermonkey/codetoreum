@@ -360,10 +360,16 @@ class ResilientLLMProviderDecorator(ILLMProvider):
         # Estimate token cost for rate limiting
         estimated_tokens = self._estimate_tokens(prompt)
 
+        # Outer timeout must exceed the subprocess timeout inside ClaudeCodeAdapter.
+        # Claude manages its own 3600s timeout; we add a 300s buffer so the resilience
+        # layer only fires if Claude itself is hung rather than just running slowly.
+        timeout_s = (context.timeout_seconds + 300) if context and context.timeout_seconds else None
+
         return await self._execute_resilient(
             operation=lambda: self._wrapped.execute(prompt, context, stream_callback),
             operation_name="llm_execute",
             rate_limit_cost=estimated_tokens,
+            timeout_seconds=timeout_s,
         )
 
     async def execute_with_tools(
@@ -467,7 +473,13 @@ class ResilientLLMProviderDecorator(ILLMProvider):
             rate_limit_cost=1,
         )
 
-    async def _execute_resilient(self, operation: Callable[[], T], operation_name: str, rate_limit_cost: int) -> T:
+    async def _execute_resilient(
+        self,
+        operation: Callable[[], T],
+        operation_name: str,
+        rate_limit_cost: int,
+        timeout_seconds: float | None = None,
+    ) -> T:
         """Execute with resilience patterns."""
         # Rate limiting with token cost
         if self._rate_limiter:
@@ -476,16 +488,19 @@ class ResilientLLMProviderDecorator(ILLMProvider):
         # Circuit breaker
         if self._circuit_breaker:
             return await self._circuit_breaker.call(
-                self._execute_with_timeout_and_retry, operation_name, operation, operation_name
+                self._execute_with_timeout_and_retry, operation_name, operation, operation_name, timeout_seconds
             )
-        return await self._execute_with_timeout_and_retry(operation, operation_name)
+        return await self._execute_with_timeout_and_retry(operation, operation_name, timeout_seconds)
 
-    async def _execute_with_timeout_and_retry(self, operation: Callable[[], T], operation_name: str) -> T:
+    async def _execute_with_timeout_and_retry(
+        self, operation: Callable[[], T], operation_name: str, timeout_seconds: float | None = None
+    ) -> T:
         """Apply timeout and retry."""
+        effective_timeout = timeout_seconds or self._default_timeout
 
         async def timed_operation():
             if self._timeout:
-                return await self._timeout.execute(operation, self._default_timeout, operation_name)
+                return await self._timeout.execute(operation, effective_timeout, operation_name)
             return await operation()
 
         if self._retry_policy:

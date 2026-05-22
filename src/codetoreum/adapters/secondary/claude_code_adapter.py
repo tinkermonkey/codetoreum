@@ -421,6 +421,12 @@ class ClaudeCodeAdapter(ILLMProvider):
             _heartbeat_task = asyncio.create_task(_heartbeat(process.pid))
             try:
                 await asyncio.wait_for(read_stream(), timeout=timeout)
+            except asyncio.CancelledError:
+                # Outer resilience timeout cancelled this coroutine — kill the subprocess
+                # immediately to prevent orphaned processes running the same task.
+                if process.returncode is None:
+                    process.kill()
+                raise
             except TimeoutError as e:
                 logger.exception(
                     "Claude Code streaming timed out after %d seconds, terminating process (PID: %s)",

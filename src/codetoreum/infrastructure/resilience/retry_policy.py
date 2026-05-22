@@ -9,6 +9,7 @@ from collections.abc import Callable
 from typing import TypeVar
 
 from .exceptions import MaxRetriesExceededError
+from .exceptions import TimeoutError as ResilienceTimeoutError
 from .interfaces import IRetryPolicy, RetryStats
 
 T = TypeVar("T")
@@ -105,6 +106,7 @@ class ExponentialBackoffRetry(IRetryPolicy):
         non_retryable = (
             KeyboardInterrupt,
             SystemExit,
+            ResilienceTimeoutError,  # Timeouts reflect load/duration, not transient failures
         )
 
         if isinstance(exception, non_retryable):
