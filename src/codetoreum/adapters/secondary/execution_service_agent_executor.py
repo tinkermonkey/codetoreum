@@ -18,7 +18,6 @@ from codetoreum.application.prompt_builder import PromptBuilder
 from codetoreum.domain.project_context import ProjectContext
 from codetoreum.domain.services.execution_context_builder import ExecutionContextBuilder
 from codetoreum.domain.types import WorkItemId
-from codetoreum.domain.value_objects import ContainerConfig
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.output.agent_executor import IAgentExecutor
 
@@ -329,6 +328,19 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 await self._call_completion(work_item_id, resolved_board_id, False)
                 return
 
+            # Advance work item lifecycle to IN_PROGRESS before execution starts.
+            # assign_agent() transitions NEW → ASSIGNED, start() transitions ASSIGNED → IN_PROGRESS.
+            try:
+                await self._work_item_service.transition_to_in_progress(work_item_id, agent.id)
+                # Reload so downstream logic sees the updated status.
+                work_item = await self._work_item_service.get_work_item(WorkItemId(work_item_id))
+            except Exception as e:
+                logger.warning(
+                    f"Could not advance lifecycle for '{work_item_id}' to IN_PROGRESS: {e}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_EXEC_CHAIN_LIFECYCLE_ADVANCE_FAILURE"},
+                )
+
             try:
                 project_config = await self._config_store.get_project_config(run_info.project_id)
             except Exception as e:
@@ -512,13 +524,9 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             exec_result = None
             try:
                 if agent.requires_docker:
-                    container_config = ContainerConfig(
-                        image="codetoreum-agent:latest",
-                        working_dir="/workspace",
-                    )
-                    exec_result = await self._execution_service.execute_with_container(
-                        execution, context, container_config
-                    )
+                    # ContainerConfig assembly is owned by ExecutionService, not this adapter.
+                    # Credentials are injected at bootstrap via ExecutionService.system_credentials.
+                    exec_result = await self._execution_service.execute_agent_with_container(execution, context, agent)
                 else:
                     exec_result = await self._execution_service.execute_with_llm(execution, context)
             except Exception as exec_err:

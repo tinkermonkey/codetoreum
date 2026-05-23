@@ -108,23 +108,20 @@ class GitHubGraphQLClient:
 
             # Check for rate limiting
             if response.status_code == 403:
-                message = (
+                raise ExternalServiceError(
                     "GitHub",
                     f"GitHub rate limit exceeded. Reset at: {self._rate_limit_reset}",
                 )
-                raise ExternalServiceError(message)
 
             if response.status_code >= 400:
-                message = "GitHub", f"GitHub GraphQL API error: {response.status_code}"
-                raise ExternalServiceError(message)
+                raise ExternalServiceError("GitHub", f"GitHub GraphQL API error: {response.status_code}")
 
             data = response.json()
 
             # Check for GraphQL errors in response
             if data.get("errors"):
                 error_messages = [str(e.get("message", "Unknown error")) for e in data["errors"]]
-                message = "GitHub", f"GraphQL errors: {'; '.join(error_messages)}"
-                raise ExternalServiceError(message)
+                raise ExternalServiceError("GitHub", f"GraphQL errors: {'; '.join(error_messages)}")
 
             return data.get("data", {})
 

@@ -96,6 +96,10 @@ class GitHubBoardAdapter(IBoardService):
         self._current_project_id: str | None = None
         self._current_board_id: str | None = None
 
+        # Serialises concurrent get_board → move_item_to_column sequences to prevent
+        # interleaved project/board context corruption on the shared singleton.
+        self._board_lock = asyncio.Lock()
+
     # IEventEmitter implementation
 
     def on(self, event_type: str, handler: Callable) -> None:
@@ -283,6 +287,10 @@ class GitHubBoardAdapter(IBoardService):
                 msg = "Board"
                 raise ResourceNotFoundError(msg, board_id)
 
+            # Set context so move_item_to_column can work without an explicit set_context call
+            self._current_project_id = project_id
+            self._current_board_id = board_id
+
             return self._parse_board_response(project_id, board_id, board_node)
         except ExternalServiceError:
             raise
@@ -375,6 +383,13 @@ class GitHubBoardAdapter(IBoardService):
         Events:
             Emits 'workitem.column_changed' event with moved_by value
         """
+        async with self._board_lock:
+            return await self._move_item_to_column_locked(work_item_id, target_column, moved_by)
+
+    async def _move_item_to_column_locked(
+        self, work_item_id: str, target_column: str, moved_by: MovedByType
+    ) -> ColumnMovementResult:
+        """Move item under board lock — called only from move_item_to_column."""
         if not self._current_project_id or not self._current_board_id:
             msg = "Project and board context required; call within get_board context or set context explicitly"
             raise ValidationError(msg)
@@ -450,20 +465,24 @@ class GitHubBoardAdapter(IBoardService):
         # Create timestamp for result
         timestamp = datetime.now(UTC).isoformat()
 
-        # Emit event
-        self.emit(
-            WorkItemColumnChangedEvent(
-                type="workitem.column_changed",
-                timestamp=timestamp,
-                source="github",
-                work_item_id=work_item_id,
-                project_id=self._current_project_id,
-                board_id=self._current_board_id,
-                from_column=from_column,
-                to_column=target_column,
-                moved_by=moved_by.value,
+        # Suppress the event when the orchestrator is the mover — the orchestrator
+        # already emits WorkItemColumnUpdatedEvent via work_item_service.move_to_column().
+        # Emitting WorkItemColumnChangedEvent here would cause BoardColumnEventHandler to
+        # re-trigger and create a duplicate execution cycle.
+        if moved_by != MovedByType.ORCHESTRATOR:
+            self.emit(
+                WorkItemColumnChangedEvent(
+                    type="workitem.column_changed",
+                    timestamp=timestamp,
+                    source="github",
+                    work_item_id=work_item_id,
+                    project_id=self._current_project_id,
+                    board_id=self._current_board_id,
+                    from_column=from_column,
+                    to_column=target_column,
+                    moved_by=moved_by.value,
+                )
             )
-        )
 
         # Return movement result
         return ColumnMovementResult(

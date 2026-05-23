@@ -24,6 +24,8 @@ Test Design:
 9. #102 acquires lock (new first in queue)
 """
 
+from unittest.mock import AsyncMock
+
 import pytest
 
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
@@ -88,6 +90,7 @@ class TestScenarioB_LockContention:
             workflow_config=config_service,
             agent_executor=agent_executor,
             event_bus=event_bus,
+            work_item_service=AsyncMock(),
         )
 
         # Register event handler with bus

@@ -9,7 +9,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from codetoreum.domain.work_item import WorkItem
+from codetoreum.domain.work_item import WorkItem, WorkItemStatus
 from codetoreum.ports.input.work_item_command import (
     AssignAgentCommand,
     AttachWorkflowCommand,
@@ -406,6 +406,21 @@ class WorkItemService(IWorkItemCommandPort, IWorkItemQueryPort):
             return False
 
         return True
+
+    async def transition_to_in_progress(self, work_item_id: str, agent_id: str) -> None:
+        """Advance work item lifecycle to IN_PROGRESS, assigning the agent if needed."""
+        work_item = await self._load_work_item(work_item_id)
+
+        if work_item.status == WorkItemStatus.IN_PROGRESS:
+            return  # already there, nothing to do
+
+        if work_item.status == WorkItemStatus.NEW:
+            work_item.assign_agent(agent_id, reason="scheduled for execution")
+
+        if work_item.status == WorkItemStatus.ASSIGNED:
+            work_item.start()
+
+        await self._save_work_item(work_item)
 
     def _sort_work_items(self, work_items: list[WorkItem], sort_by: SortField, sort_order: SortOrder) -> list[WorkItem]:
         """Sort work items by the specified field and order."""

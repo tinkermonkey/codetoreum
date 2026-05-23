@@ -2717,13 +2717,19 @@ class SimulationApplicationBootstrap:
             logger.warning(msg)
         self._queued_lock_service = self.adapters.lock_service
 
+        work_item_svc = self.services.work_item_service if self.services else None
+        if work_item_svc is None:
+            logger.warning("Cannot register board column handler: work_item_service not ready")
+            return
+
         handler = BoardColumnEventHandler(
             board_service=self.adapters.board,
             lock_service=self._queued_lock_service,
             workflow_config=self.adapters.workflow_config,
-            event_store=self.adapters.event_store,
             agent_executor=self.adapters.agent_executor,
             event_bus=self.infrastructure.event_bus,
+            work_item_service=work_item_svc,
+            event_store=self.adapters.event_store,
             run_registry=self.adapters.run_registry,
             event_emitter=self.adapters.event_emitter,
             recovery_service=recovery_service,

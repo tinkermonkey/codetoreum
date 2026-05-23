@@ -67,12 +67,22 @@ def mock_agent_executor():
 
 
 @pytest.fixture
+def mock_work_item_service():
+    from unittest.mock import AsyncMock
+
+    service = AsyncMock()
+    service.move_to_column = AsyncMock()
+    return service
+
+
+@pytest.fixture
 def handler(
     event_bus,
     mock_board_service,
     mock_lock_service,
     mock_workflow_config,
     mock_agent_executor,
+    mock_work_item_service,
 ):
     """Create handler with mocked dependencies."""
     return BoardColumnEventHandler(
@@ -81,6 +91,7 @@ def handler(
         workflow_config=mock_workflow_config,
         agent_executor=mock_agent_executor,
         event_bus=event_bus,
+        work_item_service=mock_work_item_service,
     )
 
 

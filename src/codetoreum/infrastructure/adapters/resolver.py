@@ -58,6 +58,7 @@ from codetoreum.ports.output.workflow_config_service import IWorkflowConfigServi
 
 if TYPE_CHECKING:
     from codetoreum.infrastructure.adapters.factory import AdapterFactory
+    from codetoreum.infrastructure.bootstrap.production_bootstrap import ProductionCredentials
     from codetoreum.infrastructure.simulation.bootstrap import SimulationAdapters
     from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
     from codetoreum.infrastructure.simulation.simulation_engine import SimulationEngine
@@ -123,6 +124,7 @@ class AdapterResolver:
         adapter_config: AdapterSelectionConfig,
         factory: "AdapterFactory",
         dependencies: AdapterDependencies,
+        credentials: "ProductionCredentials | None" = None,
     ) -> None:
         """
         Initialize the adapter resolver.
@@ -131,10 +133,14 @@ class AdapterResolver:
             adapter_config: Per-adapter implementation selector
             factory: Adapter factory with registries
             dependencies: Infrastructure dependencies to inject
+            credentials: Production credentials read from os.environ at bootstrap Phase 1b.
+                When provided, resolve_board() and resolve_project_manager() use these
+                instead of reading os.environ inline.
         """
         self._config = adapter_config
         self._factory = factory
         self._deps = dependencies
+        self._credentials = credentials
         self._resolved: dict[str, Any] = {}
 
     def validate_credentials(self) -> None:
@@ -255,6 +261,25 @@ class AdapterResolver:
 
     def resolve_board(self) -> IBoardService:
         """Resolve board service adapter."""
+        if self._config.board == "github":
+            from codetoreum.infrastructure.http.github_graphql_client import GitHubGraphQLClient, GitHubGraphQLConfig
+
+            # Use credentials injected at bootstrap; fall back to os.environ only when
+            # running outside production bootstrap (e.g. integration tests).
+            if self._credentials is not None:
+                github_token = self._credentials.github_token
+            else:
+                import os
+
+                github_token = os.environ.get("GITHUB_TOKEN", "")
+
+            graphql_client = GitHubGraphQLClient(GitHubGraphQLConfig(token=github_token))
+            return self._factory.create_board_service(
+                adapter_name="github",
+                ticket_adapter=self._resolved.get("ticket"),
+                graphql_client=graphql_client,
+                event_emitter=self._resolved["event_emitter"],
+            )
         return self._factory.create_board_service(
             adapter_name=self._config.board,
             event_emitter=self._resolved["event_emitter"],
@@ -345,8 +370,23 @@ class AdapterResolver:
 
     def resolve_project_manager(self) -> IProjectManagerService:
         """Resolve project manager service adapter."""
+        adapter_name = self._config.project_manager
+        if adapter_name == "elasticsearch":
+            if self._credentials is not None:
+                workspace_base = self._credentials.workspace_base
+            else:
+                import os
+
+                workspace_base = os.getenv("AGENT_WORKSPACE_BASE", "/tmp/codetoreum-workspaces")
+
+            return self._factory.create_project_manager_service(
+                adapter_name=adapter_name,
+                config_store=self._resolved.get("config_store"),
+                base_workspace=workspace_base,
+                event_emitter=self._resolved.get("event_emitter"),
+            )
         return self._factory.create_project_manager_service(
-            adapter_name=self._config.project_manager,
+            adapter_name=adapter_name,
             time_source=lambda: self._deps.engine.get_clock_for_testing().now(),
         )
 

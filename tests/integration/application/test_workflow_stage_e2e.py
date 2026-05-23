@@ -187,6 +187,7 @@ class TestWorkflowStageE2E:
             agent_executor=mock_agent_executor,
             event_bus=event_bus,
             event_store=event_store,
+            work_item_service=AsyncMock(),
         )
 
         # 3. Simulate work item moving to "In Progress"

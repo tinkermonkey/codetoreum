@@ -21,6 +21,8 @@ This test validates:
 - System re-triggers appropriate agent when work item re-enters automated column (FR6)
 """
 
+from unittest.mock import AsyncMock
+
 import pytest
 
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
@@ -127,6 +129,7 @@ class TestScenarioD_HumanIntervention:
             workflow_config=config_service,
             agent_executor=agent_executor,
             event_bus=event_bus,
+            work_item_service=AsyncMock(),
         )
 
         # Register event handler with bus

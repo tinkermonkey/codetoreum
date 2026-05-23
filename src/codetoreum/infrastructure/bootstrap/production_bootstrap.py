@@ -195,6 +195,20 @@ class ProductionInfrastructure:
     audit_store: Any
 
 
+@dataclass
+class ProductionCredentials:
+    """Credentials read from os.environ once at bootstrap Phase 1b.
+
+    Centralises all credential reads so adapters and resolvers never call
+    os.environ directly during request processing.
+    """
+
+    github_token: str
+    anthropic_api_key: str
+    claude_code_oauth_token: str
+    workspace_base: str
+
+
 class ProductionApplicationBootstrap:
     """
     Bootstrap the entire application stack in production mode.
@@ -236,6 +250,7 @@ class ProductionApplicationBootstrap:
                 code_review="github",
                 event_store="elasticsearch",  # Shared event bus for cross-process event distribution
                 event_emitter="mock",  # Use mock emitter (in-memory, not capturing for tests)
+                project_manager="elasticsearch",  # Read live project configs from ES
                 # Non-critical slots use mocks (logged as warnings)
                 review_cycle="basic",
                 pr_review_cycle="basic",
@@ -312,6 +327,17 @@ class ProductionApplicationBootstrap:
 
             # Phase 1b: Create adapter factory and resolver
             logger.info("Phase 1b: Initializing adapter factory and resolver...")
+            # Read all credentials once here so no adapter or resolver reads os.environ later.
+            import os as _cred_os
+
+            credentials = ProductionCredentials(
+                github_token=_cred_os.environ.get("GITHUB_TOKEN", ""),
+                anthropic_api_key=_cred_os.environ.get("ANTHROPIC_API_KEY", ""),
+                claude_code_oauth_token=_cred_os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", ""),
+                workspace_base=_cred_os.environ.get("AGENT_WORKSPACE_BASE", "/tmp/codetoreum-workspaces"),
+            )
+            self._credentials = credentials
+            logger.info("Phase 1b: Credentials loaded from environment.")
             # AdapterFactoryConfig defaults to PRODUCTION mode, which is what we need
             self._adapter_factory = AdapterFactory()
 
@@ -336,7 +362,7 @@ class ProductionApplicationBootstrap:
                 config=None,  # type: ignore  # No simulation config in production
             )
 
-            resolver = AdapterResolver(self.config, self._adapter_factory, adapter_deps)
+            resolver = AdapterResolver(self.config, self._adapter_factory, adapter_deps, credentials=credentials)
 
             # Phase 2: Adapter resolution
             logger.info("Phase 2: Creating 33 adapters (credential validation + resolution)...")
@@ -681,12 +707,23 @@ class ProductionApplicationBootstrap:
         )
 
         # Execution Service
+        _system_creds: dict[str, str] = {}
+        if hasattr(self, "_credentials"):
+            creds = self._credentials
+            for _key, _val in [
+                ("ANTHROPIC_API_KEY", creds.anthropic_api_key),
+                ("CLAUDE_CODE_OAUTH_TOKEN", creds.claude_code_oauth_token),
+                ("GITHUB_TOKEN", creds.github_token),
+            ]:
+                if _val:
+                    _system_creds[_key] = _val
         execution_service = ExecutionService(
             llm_provider=self.adapters.llm_provider,
             container=self.adapters.container,
             event_store=self.adapters.event_store,
             storage=self.adapters.storage,
             vcs=self.adapters.version_control,
+            system_credentials=_system_creds if _system_creds else None,
         )
 
         # Workspace Router
@@ -947,7 +984,11 @@ class ProductionApplicationBootstrap:
 
         # Register each project's github_repo with the raw ticket adapter so the
         # adapter resolves per-project repos without a global GITHUB_REPO env var.
+        # The factory already wraps the adapter with resilience, so unwrap to the
+        # concrete adapter that has register_project_repo().
         raw_adapter = getattr(self, "_raw_ticket_adapter", None)
+        while raw_adapter is not None and not hasattr(raw_adapter, "register_project_repo"):
+            raw_adapter = getattr(raw_adapter, "_wrapped", None)
         if raw_adapter is not None and hasattr(raw_adapter, "register_project_repo") and self.adapters.config_store:
             try:
                 project_configs = await self.adapters.config_store.list_projects()

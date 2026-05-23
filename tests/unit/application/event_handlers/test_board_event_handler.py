@@ -77,6 +77,15 @@ def mock_recovery_service():
 
 
 @pytest.fixture
+def mock_work_item_service():
+    from unittest.mock import AsyncMock
+
+    service = AsyncMock()
+    service.move_to_column = AsyncMock()
+    return service
+
+
+@pytest.fixture
 def mock_event_emitter():
     """Create mock event emitter."""
     emitter = AsyncMock()
@@ -92,6 +101,7 @@ def handler(
     mock_event_bus,
     mock_recovery_service,
     mock_event_emitter,
+    mock_work_item_service,
 ):
     """Create handler with mocked dependencies."""
     handler_instance = BoardColumnEventHandler(
@@ -100,6 +110,7 @@ def handler(
         workflow_config=mock_workflow_config,
         agent_executor=mock_agent_executor,
         event_bus=mock_event_bus,
+        work_item_service=mock_work_item_service,
     )
     handler_instance.recovery_service = mock_recovery_service
     handler_instance.event_emitter = mock_event_emitter
@@ -971,6 +982,7 @@ class TestWorkflowLifecycleEventPersistence:
             agent_executor=mock_agent_executor,
             event_bus=EventBus(),
             event_store=event_store,  # Pass event_store to constructor
+            work_item_service=AsyncMock(),
         )
         handler_instance.recovery_service = mock_recovery_service
         handler_instance.event_emitter = mock_event_emitter

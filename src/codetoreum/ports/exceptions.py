@@ -247,3 +247,7 @@ class ComponentNotFoundError(MetricsError):
         """
         super().__init__(f"Component not found: {component_name}")
         self.component_name = component_name
+
+
+class ConfigurationError(PortError):
+    """Raised when adapter or service configuration is invalid or incomplete."""

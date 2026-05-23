@@ -176,7 +176,7 @@ class TestProductionExecutionPath:
         # Verify all steps executed in order
         fx.run_registry.get_active_run.assert_called_once_with(fx.WORK_ITEM_ID)
         fx.agent_repository.get_by_id.assert_called_once_with(fx.AGENT_ID)
-        fx.work_item_service.get_work_item.assert_called_once()
+        assert fx.work_item_service.get_work_item.call_count >= 1  # initial load + re-fetch after lifecycle transition
         fx.config_store.get_project_config.assert_called_once_with("proj-1")
 
         # Step 3: VCS clone
@@ -220,13 +220,13 @@ class TestProductionExecutionPath:
         container_result = MagicMock()
         container_result.success = True
         container_result.execution = MagicMock(output="Container completed")
-        fx.execution_service.execute_with_container.return_value = container_result
+        fx.execution_service.execute_agent_with_container.return_value = container_result
 
         executor = fx.make_executor()
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
 
-        # Verify container path taken
-        fx.execution_service.execute_with_container.assert_called_once()
+        # Verify container path taken via execute_agent_with_container (fix #3: adapter no longer builds ContainerConfig)
+        fx.execution_service.execute_agent_with_container.assert_called_once()
         fx.execution_service.execute_with_llm.assert_not_called()
 
         # Completion should be called with success=True
@@ -475,19 +475,19 @@ class TestProductionPathStep10Execution:
 
     @pytest.mark.asyncio
     async def test_container_execution_called_when_requires_docker_true(self):
-        """Step 10: agent.requires_docker=True → execute_with_container called."""
+        """Step 10: agent.requires_docker=True → execute_agent_with_container called."""
         fx = ProductionPathFixture()
         fx.agent.requires_docker = True
 
         container_result = MagicMock()
         container_result.success = True
         container_result.execution = MagicMock(output="Container output")
-        fx.execution_service.execute_with_container.return_value = container_result
+        fx.execution_service.execute_agent_with_container.return_value = container_result
 
         executor = fx.make_executor()
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
 
-        fx.execution_service.execute_with_container.assert_called_once()
+        fx.execution_service.execute_agent_with_container.assert_called_once()
         fx.execution_service.execute_with_llm.assert_not_called()
 
     @pytest.mark.asyncio

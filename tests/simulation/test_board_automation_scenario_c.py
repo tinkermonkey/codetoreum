@@ -29,6 +29,7 @@ Test Scenarios:
 """
 
 import asyncio
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -92,6 +93,7 @@ class TestScenarioC_ReviewRejectionLoop:
             workflow_config=config_service,
             agent_executor=agent_executor,
             event_bus=event_bus,
+            work_item_service=AsyncMock(),
         )
 
         # Register event handler with bus

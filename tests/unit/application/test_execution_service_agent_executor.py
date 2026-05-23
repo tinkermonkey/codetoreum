@@ -541,16 +541,17 @@ class TestExecutionServiceAgentExecutorMultipleExecutions:
             board_id="board-1",
         )
 
-        # Execute multiple times
+        # Execute multiple times — item-1/coder is deduplicated because item-1 is still in
+        # _executing_work_items when the second execute() call is made
         await executor.execute("item-1", "architect")
-        await executor.execute("item-1", "coder")
+        await executor.execute("item-1", "coder")  # deduplicated: item-1 already executing
         await executor.execute("item-2", "architect")
 
-        # All executions should be recorded
-        assert len(executor.executions) == 3
+        # item-1/architect and item-2/architect recorded; item-1/coder is deduplicated
+        assert len(executor.executions) == 2
         assert executor.executions[0]["agent_id"] == "architect"
-        assert executor.executions[1]["agent_id"] == "coder"
-        assert executor.executions[2]["work_item_id"] == "item-2"
+        assert executor.executions[0]["work_item_id"] == "item-1"
+        assert executor.executions[1]["work_item_id"] == "item-2"
 
         # Clean up
         for task in executor._pending_tasks:
@@ -589,10 +590,17 @@ class TestExecutionServiceAgentExecutorMultipleExecutions:
         exec_list_1 = executor.executions
         exec_count_before = len(exec_list_1)
 
-        # Execute again
-        await executor.execute("item-1", "coder")
+        # Execute a different item (same item would be deduplicated)
+        executor._run_registry.get_active_run.return_value = ActiveRunInfo(
+            run_id="run-2",
+            work_item_id="item-2",
+            project_id="project-1",
+            stage_name="Ready",
+            board_id="board-1",
+        )
+        await executor.execute("item-2", "architect")
 
-        # Previous list should not be modified
+        # Previous list should not be modified (copy semantics)
         assert len(exec_list_1) == exec_count_before
 
         # New list should have new execution

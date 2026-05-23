@@ -113,6 +113,7 @@ class ExecutionService:
         max_retries: int = 1,
         retry_delay_seconds: float = 5,
         vcs: IVersionControlService | None = None,
+        system_credentials: dict[str, str] | None = None,
     ):
         """
         Initialize ExecutionService.
@@ -126,6 +127,10 @@ class ExecutionService:
             retry_delay_seconds: Delay between retry attempts
             vcs: Version control service for post-execution commit+push.
                  When None the commit step is skipped (e.g. simulation without VCS).
+            system_credentials: Credentials injected at bootstrap time
+                (ANTHROPIC_API_KEY, CLAUDE_CODE_OAUTH_TOKEN, GITHUB_TOKEN).
+                Passed to container executions via environment variables so adapters
+                never need to read os.environ directly.
         """
         self.llm_provider = llm_provider
         self.container = container
@@ -134,6 +139,7 @@ class ExecutionService:
         self.max_retries = max_retries
         self.retry_delay_seconds = retry_delay_seconds
         self.vcs = vcs
+        self._system_credentials: dict[str, str] = system_credentials or {}
 
         # Track active executions for streaming
         self._active_executions: dict[str, AgentExecution] = {}
@@ -489,30 +495,52 @@ class ExecutionService:
         if not branch:
             raise RuntimeError(f"branch_name not set on ExecutionContext for execution {execution.id}")
 
+        commit_sha: str | None = None
         try:
             vcs_status = await self.vcs.status(context.repository_path)
-            has_changes = vcs_status.is_dirty or bool(vcs_status.staged_files) or bool(vcs_status.unstaged_files)
-            if not has_changes:
+            has_staged = bool(vcs_status.staged_files)
+            has_unstaged = vcs_status.is_dirty or bool(vcs_status.unstaged_files)
+
+            if has_staged:
+                # Commit whatever is staged (agent may have staged files before container exit)
+                commit_message = (
+                    f"[{context.work_item_id}] {context.stage_name}: agent {context.agent_id}\n\n"
+                    f"Co-Authored-By: Codetoreum <noreply@codetoreum.ai>"
+                )
+                commit_sha = await self.vcs.commit(
+                    context.repository_path,
+                    message=commit_message,
+                    author_name="Codetoreum",
+                    author_email="noreply@codetoreum.ai",
+                )
                 logger.info(
-                    f"No workspace changes to commit for execution {execution.id}",
+                    f"Committed workspace for execution {execution.id}: {commit_sha} → {branch}",
+                    extra={"work_item_id": context.work_item_id, "commit_sha": commit_sha, "branch": branch},
+                )
+            elif has_unstaged:
+                # Agent committed inside the container; unstaged remnants are exploration.
+                # Push the agent's commits without adding more.
+                logger.info(
+                    f"No staged changes for execution {execution.id} "
+                    f"({len(vcs_status.unstaged_files)} unstaged file(s) left as-is). "
+                    "Pushing branch to capture agent commits.",
                     extra={"work_item_id": context.work_item_id, "agent_id": context.agent_id},
                 )
-                return None, None
+            else:
+                # No staged or unstaged files. The agent may have committed and cleaned
+                # up inside the container. Always push so those commits are captured.
+                # If there is truly nothing to push, git is a no-op.
+                logger.warning(
+                    f"No staged or unstaged changes for execution {execution.id} — "
+                    "pushing branch to capture any commits made inside the container",
+                    extra={"work_item_id": context.work_item_id, "agent_id": context.agent_id},
+                )
 
-            commit_message = (
-                f"[{context.work_item_id}] {context.stage_name}: agent {context.agent_id}\n\n"
-                f"Co-Authored-By: Codetoreum <noreply@codetoreum.ai>"
-            )
-            commit_sha = await self.vcs.commit(
-                context.repository_path,
-                message=commit_message,
-                author_name="Codetoreum",
-                author_email="noreply@codetoreum.ai",
-            )
+            # Always push: picks up commits the agent made inside the Docker container.
             await self.vcs.push(context.repository_path, branch)
             logger.info(
-                f"Committed workspace for execution {execution.id}: {commit_sha} → {branch}",
-                extra={"work_item_id": context.work_item_id, "commit_sha": commit_sha, "branch": branch},
+                f"Pushed branch {branch} for execution {execution.id}",
+                extra={"work_item_id": context.work_item_id, "branch": branch},
             )
             return commit_sha, branch
         except Exception:
@@ -527,6 +555,93 @@ class ExecutionService:
         name="execution.execute_with_container",
         attributes={"service": "execution_service", "operation": "execute_container"},
     )
+    def _build_agent_container_config(
+        self,
+        execution: AgentExecution,
+        context: "ExecutionContext",
+        agent: Agent,
+    ) -> ContainerConfig:
+        """Build ContainerConfig for an agent container execution.
+
+        Encapsulates all knowledge about the codetoreum-agent image contract:
+        command format, workspace mount point, required environment variables,
+        and git identity defaults. Credentials come from the system_credentials
+        dict injected at bootstrap — no direct os.environ reads here.
+
+        Args:
+            execution: The execution whose prompt drives the agent
+            context: Execution context (repository path, env overrides, model)
+            agent: Agent domain object supplying the model name
+
+        Returns:
+            Fully configured ContainerConfig ready for execute_with_container
+        """
+        model = context.model or getattr(agent, "model", None)
+        if not model:
+            raise ValueError(
+                f"Agent '{getattr(agent, 'id', agent)}' has no model configured " "— cannot build container config"
+            )
+
+        claude_cmd = (
+            "claude",
+            "--print",
+            "--output-format",
+            "stream-json",
+            "--permission-mode",
+            "bypassPermissions",
+            "--model",
+            model,
+            "--verbose",
+            execution.prompt,
+        )
+
+        volumes: dict[str, dict[str, str]] = {}
+        if context.repository_path:
+            volumes[context.repository_path] = {"bind": "/workspace", "mode": "rw"}
+
+        # Credentials injected at bootstrap take precedence; context env vars can
+        # override on a per-execution basis (e.g. project-specific tokens).
+        env: dict[str, str] = {**self._system_credentials}
+        env.setdefault("GIT_AUTHOR_NAME", "Codetoreum Agent")
+        env.setdefault("GIT_AUTHOR_EMAIL", "agent@codetoreum.ai")
+        env.setdefault("GIT_COMMITTER_NAME", "Codetoreum Agent")
+        env.setdefault("GIT_COMMITTER_EMAIL", "agent@codetoreum.ai")
+        if context.environment_variables:
+            env.update(context.environment_variables)
+
+        return ContainerConfig(
+            image="codetoreum-agent:latest",
+            command=claude_cmd,
+            working_dir="/workspace",
+            volumes=volumes if volumes else None,
+            environment=env if env else None,
+        )
+
+    async def execute_agent_with_container(
+        self,
+        execution: AgentExecution,
+        context: "ExecutionContext",
+        agent: Agent,
+        stream_callback: Callable[[str], None] | None = None,
+    ) -> "ExecutionServiceResult":
+        """Build ContainerConfig and execute agent in Docker container.
+
+        Convenience wrapper over execute_with_container that builds the
+        ContainerConfig from the agent + context so adapters do not need to
+        know about image names, command formats, or credential layout.
+
+        Args:
+            execution: AgentExecution to run
+            context: Execution context
+            agent: Agent domain object (supplies model name)
+            stream_callback: Optional callback for streaming logs
+
+        Returns:
+            ExecutionServiceResult with outcome
+        """
+        container_config = self._build_agent_container_config(execution, context, agent)
+        return await self.execute_with_container(execution, context, container_config, stream_callback)
+
     async def execute_with_container(
         self,
         execution: AgentExecution,

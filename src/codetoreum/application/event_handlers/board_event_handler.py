@@ -87,7 +87,8 @@ class BoardColumnEventHandler(EventHandler):
             lock_service=lock_service,
             workflow_config=config_service,
             agent_executor=executor,
-            event_bus=bus
+            event_bus=bus,
+            work_item_service=work_item_service,
         )
         bus.register_handler(handler)
 
@@ -111,11 +112,11 @@ class BoardColumnEventHandler(EventHandler):
         workflow_config: IWorkflowConfigService,
         agent_executor: IAgentExecutor,
         event_bus: EventBus,
+        work_item_service: IWorkItemCommandPort,
         event_store: IEventStore | None = None,
         run_registry: IActiveWorkflowRunRegistry | None = None,
         event_emitter: IEventEmitter | None = None,
         recovery_service: AgentExecutionRecoveryService | None = None,
-        work_item_service: IWorkItemCommandPort | None = None,
     ):
         """
         Initialize board column event handler.
@@ -126,11 +127,11 @@ class BoardColumnEventHandler(EventHandler):
             workflow_config: Configuration service for workflow templates
             agent_executor: Service for triggering agent executions
             event_bus: Event bus for publishing domain events
+            work_item_service: Command port for persisting work item column state
             event_store: Optional event store for persisting workflow lifecycle events
             run_registry: Optional registry for tracking active workflow runs
             event_emitter: Optional event emitter for CodetoreumEvent instances (e.g. LockStuckEvent)
             recovery_service: Optional recovery service for handling agent execution failures
-            work_item_service: Optional command port for persisting work item column state
         """
         self.board_service = board_service
         self.lock_service = lock_service
@@ -937,7 +938,30 @@ class BoardColumnEventHandler(EventHandler):
 
             await self._advance_workflow_stage(work_item_id, current_position.column_name, next_column_name)
 
-            await self.board_service.move_item_to_column(work_item_id, next_column_name, MovedByType.ORCHESTRATOR)
+            try:
+                await self.work_item_service.move_to_column(
+                    MoveToColumnCommand(work_item_id=work_item_id, column=next_column_name)
+                )
+            except Exception as wi_err:
+                logger.error(
+                    f"Failed to persist column change for {work_item_id} to '{next_column_name}': {wi_err}",
+                    exc_info=True,
+                    extra={
+                        "error_id": "ERR_BOARD_EVENT_WORK_ITEM_COLUMN_PERSIST_FAILURE",
+                        "work_item_id": work_item_id,
+                    },
+                )
+
+            try:
+                await self.board_service.move_item_to_column(work_item_id, next_column_name, MovedByType.ORCHESTRATOR)
+            except Exception as board_err:
+                # External board sync failures (missing context, wrong node ID, token scope) must
+                # not block internal auto-progression — the workflow stage was already advanced.
+                logger.warning(
+                    f"Board sync failed during auto-progression for {work_item_id} "
+                    f"(internal state already updated to '{next_column_name}'): {board_err}",
+                    extra={"error_id": "ERR_BOARD_EVENT_SYNC_FAILURE", "work_item_id": work_item_id},
+                )
 
         except Exception as e:
             logger.error(

@@ -147,3 +147,16 @@ class IWorkItemService(IEventEmitter, IMonitoredService, ABC):
 
         Raises: WorkItemNotFoundError: Parent work item doesn't exist
         """
+
+    @abstractmethod
+    async def transition_to_in_progress(self, work_item_id: str, agent_id: str) -> None:
+        """Advance work item lifecycle to IN_PROGRESS, assigning the agent if needed.
+
+        Idempotent: if the work item is already IN_PROGRESS, does nothing.
+        If NEW, assigns the agent first (emitting AgentAssigned), then starts
+        (emitting WorkItemStarted). If ASSIGNED, starts directly.
+
+        Args:
+            work_item_id: Work item to transition
+            agent_id: Agent being assigned / starting work
+        """

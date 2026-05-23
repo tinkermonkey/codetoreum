@@ -18,6 +18,7 @@ from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStat
 from codetoreum.infrastructure.http.github_graphql_client import GitHubGraphQLClient, GitHubGraphQLConfig
 from codetoreum.ports.exceptions import (
     AuthenticationError,
+    ConfigurationError,
     ExternalServiceError,
     ResourceNotFoundError,
     ValidationError,
@@ -154,10 +155,10 @@ class GitHubTicketAdapter(ITicketSystem):
         if len(self._project_repos) == 0:
             if self.config.repository:
                 return self.config.repository
-            raise RuntimeError(
-                "No GitHub project repos registered. Call register_project_repo() " "for each project during bootstrap."
+            raise ConfigurationError(
+                "No GitHub project repos registered. Call register_project_repo() for each project during bootstrap."
             )
-        raise RuntimeError(
+        raise ConfigurationError(
             f"Multiple projects registered ({list(self._project_repos.keys())}) but no "
             "project_id provided for this call. Update ITicketSystem to pass project_id."
         )
@@ -221,7 +222,7 @@ class GitHubTicketAdapter(ITicketSystem):
             while True:
                 variables = {
                     "owner": self.config.organization,
-                    "repo": self.config.repository,
+                    "repo": self._get_repo(),
                     "first": 100,  # Fetch 100 per page (GitHub limit)
                 }
                 if cursor:
@@ -272,7 +273,7 @@ class GitHubTicketAdapter(ITicketSystem):
             # to indicate pagination is working
             if cursor is None and len(nodes) == 100:
                 logger.info(
-                    f"Fetched discussions for {self.config.organization}/{self.config.repository}, "
+                    f"Fetched discussions for {self.config.organization}/{self._get_repo()}, "
                     f"found {issues_seen} issue references"
                 )
 
@@ -288,7 +289,7 @@ class GitHubTicketAdapter(ITicketSystem):
             self._discussions_fetch_error_id = error_id
             self._discussions_retry_count += 1
             logger.warning(
-                f"Failed to fetch discussions for repository {self.config.organization}/{self.config.repository}: {e}",
+                f"Failed to fetch discussions for repository {self.config.organization}/{self._get_repo()}: {e}",
                 exc_info=True,
                 extra={"error_id": error_id},
             )
@@ -305,7 +306,7 @@ class GitHubTicketAdapter(ITicketSystem):
                 exc_info=True,
                 extra={
                     "organization": self.config.organization,
-                    "repository": self.config.repository,
+                    "repository": self._get_repo(),
                     "error_id": error_id,
                 },
             )
@@ -565,7 +566,7 @@ class GitHubTicketAdapter(ITicketSystem):
         if cached:
             return cached
 
-        path = f"/repos/{self.config.organization}/{self.config.repository}/issues/{item_id}"
+        path = f"/repos/{self.config.organization}/{self._get_repo()}/issues/{item_id}"
         response = await self._make_request("GET", path)
 
         if response.status_code == 404:
@@ -578,7 +579,7 @@ class GitHubTicketAdapter(ITicketSystem):
 
         issue = response.json()
         # Extract project_id from repository
-        project_id = ProjectId(f"{self.config.organization}/{self.config.repository}")
+        project_id = ProjectId(f"{self.config.organization}/{self._get_repo()}")
         work_item = await self._map_github_issue_to_work_item(issue, project_id)
 
         self._set_cache(cache_key, work_item)
@@ -645,7 +646,7 @@ class GitHubTicketAdapter(ITicketSystem):
         if assignee:
             payload["assignees"] = [assignee]
 
-        path = f"/repos/{self.config.organization}/{self.config.repository}/issues"
+        path = f"/repos/{self.config.organization}/{self._get_repo()}/issues"
         response = await self._make_request("POST", path, json=payload)
 
         if response.status_code != 201:
@@ -686,7 +687,7 @@ class GitHubTicketAdapter(ITicketSystem):
         if "labels" in updates:
             payload["labels"] = updates["labels"]
 
-        path = f"/repos/{self.config.organization}/{self.config.repository}/issues/{item_id}"
+        path = f"/repos/{self.config.organization}/{self._get_repo()}/issues/{item_id}"
         response = await self._make_request("PATCH", path, json=payload)
 
         if response.status_code == 404:
@@ -700,7 +701,7 @@ class GitHubTicketAdapter(ITicketSystem):
         self._invalidate_cache(f"issue:{item_id}")
 
         issue = response.json()
-        project_id = ProjectId(f"{self.config.organization}/{self.config.repository}")
+        project_id = ProjectId(f"{self.config.organization}/{self._get_repo()}")
         return await self._map_github_issue_to_work_item(issue, project_id)
 
     async def delete_work_item(self, item_id: WorkItemId) -> None:
@@ -778,7 +779,7 @@ class GitHubTicketAdapter(ITicketSystem):
         if created_after:
             params["since"] = created_after.isoformat()
 
-        path = f"/repos/{self.config.organization}/{self.config.repository}/issues"
+        path = f"/repos/{self.config.organization}/{self._get_repo()}/issues"
         response = await self._make_request("GET", path, params=params)
 
         if response.status_code != 200:
@@ -786,7 +787,7 @@ class GitHubTicketAdapter(ITicketSystem):
             raise ExternalServiceError(msg, f"Failed to list issues: {response.text}")
 
         issues = response.json()
-        proj_id = ProjectId(f"{self.config.organization}/{self.config.repository}")
+        proj_id = ProjectId(f"{self.config.organization}/{self._get_repo()}")
 
         work_items = []
         for issue in issues:
@@ -812,7 +813,7 @@ class GitHubTicketAdapter(ITicketSystem):
     ) -> list[WorkItem]:
         """Full-text search for work items."""
         # Build search query
-        search_query = f"{query} repo:{self.config.organization}/{self.config.repository} is:issue"
+        search_query = f"{query} repo:{self.config.organization}/{self._get_repo()} is:issue"
 
         params = {
             "q": search_query,
@@ -828,7 +829,7 @@ class GitHubTicketAdapter(ITicketSystem):
         result = response.json()
         issues = result.get("items", [])
 
-        proj_id = ProjectId(f"{self.config.organization}/{self.config.repository}")
+        proj_id = ProjectId(f"{self.config.organization}/{self._get_repo()}")
         work_items = []
         for issue in issues:
             work_item = await self._map_github_issue_to_work_item(issue, proj_id)
@@ -878,7 +879,7 @@ class GitHubTicketAdapter(ITicketSystem):
 
         payload = {"body": body}
 
-        path = f"/repos/{self.config.organization}/{self.config.repository}/issues/{item_id}/comments"
+        path = f"/repos/{self.config.organization}/{self._get_repo()}/issues/{item_id}/comments"
         response = await self._make_request("POST", path, json=payload)
 
         if response.status_code == 404:
@@ -917,7 +918,7 @@ class GitHubTicketAdapter(ITicketSystem):
         if since:
             params["since"] = since.isoformat()
 
-        path = f"/repos/{self.config.organization}/{self.config.repository}/issues/{item_id}/comments"
+        path = f"/repos/{self.config.organization}/{self._get_repo()}/issues/{item_id}/comments"
         response = await self._make_request("GET", path, params=params)
 
         if response.status_code == 404:
@@ -1022,7 +1023,7 @@ class GitHubTicketAdapter(ITicketSystem):
             "active": True,
         }
 
-        path = f"/repos/{self.config.organization}/{self.config.repository}/hooks"
+        path = f"/repos/{self.config.organization}/{self._get_repo()}/hooks"
         response = await self._make_request("POST", path, json=payload)
 
         if response.status_code != 201:
@@ -1034,7 +1035,7 @@ class GitHubTicketAdapter(ITicketSystem):
 
     async def unregister_webhook(self, webhook_id: str) -> None:
         """Unregister a webhook."""
-        path = f"/repos/{self.config.organization}/{self.config.repository}/hooks/{webhook_id}"
+        path = f"/repos/{self.config.organization}/{self._get_repo()}/hooks/{webhook_id}"
         response = await self._make_request("DELETE", path)
 
         if response.status_code == 404:

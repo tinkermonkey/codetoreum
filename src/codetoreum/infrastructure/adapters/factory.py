@@ -30,6 +30,9 @@ from codetoreum.adapters.secondary import (
     GitRepositoryAdapter,
     MockEventEmitter,
 )
+from codetoreum.adapters.secondary.elasticsearch_project_manager_adapter import (
+    ElasticsearchProjectManagerAdapter,
+)
 from codetoreum.adapters.secondary.github_version_control_adapter import (
     GitHubVersionControlAdapter,
 )
@@ -857,6 +860,18 @@ class AdapterFactory:
         )
 
         # Project Manager Service Adapters
+        self._project_manager_registry.register(
+            name="elasticsearch",
+            adapter_type=ElasticsearchProjectManagerAdapter,
+            description="Elasticsearch-backed project manager for production",
+            version="1.0.0",
+            tags=["production", "elasticsearch"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=False,
+                description="Reads live project configs from Elasticsearch config store",
+            ),
+            set_as_default=False,
+        )
         self._project_manager_registry.register(
             name="mock",
             adapter_type=MockProjectManagerAdapter,

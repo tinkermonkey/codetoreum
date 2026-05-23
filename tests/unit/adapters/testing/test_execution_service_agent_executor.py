@@ -424,12 +424,12 @@ class TestDockerExecutionPath:
         container_result = MagicMock()
         container_result.success = True
         container_result.execution = MagicMock(output="done")
-        fx.execution_service.execute_with_container.return_value = container_result
+        fx.execution_service.execute_agent_with_container.return_value = container_result
 
         executor = fx.make_executor()
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
 
-        fx.execution_service.execute_with_container.assert_called_once()
+        fx.execution_service.execute_agent_with_container.assert_called_once()
         fx.execution_service.execute_with_llm.assert_not_called()
         fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, True)
 

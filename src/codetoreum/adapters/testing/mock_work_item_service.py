@@ -15,7 +15,7 @@ from codetoreum.domain.events.work_item_events import (
     WorkItemUpdatedEvent,
 )
 from codetoreum.domain.types import ProjectId, WorkItemId
-from codetoreum.domain.work_item import WorkItem, WorkItemPriority
+from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
 from codetoreum.ports.exceptions import (
     ResourceNotFoundError,
     ValidationError,
@@ -370,3 +370,18 @@ class MockWorkItemService(MockEventEmitter, IWorkItemService):
         """
         with self._lock:
             return list(self._work_items.values())
+
+    async def transition_to_in_progress(self, work_item_id: str, agent_id: str) -> None:
+        """Stub: advance work item lifecycle to IN_PROGRESS."""
+        with self._lock:
+            work_item = self._work_items.get(work_item_id)
+        if work_item is None:
+            return
+        if work_item.status == WorkItemStatus.IN_PROGRESS:
+            return
+        if work_item.status == WorkItemStatus.NEW:
+            work_item.assign_agent(agent_id, reason="scheduled for execution")
+        if work_item.status == WorkItemStatus.ASSIGNED:
+            work_item.start()
+        with self._lock:
+            self._work_items[work_item_id] = work_item

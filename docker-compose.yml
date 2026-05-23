@@ -170,6 +170,7 @@ services:
   elasticsearch:
     image: elasticsearch:8.17.0
     container_name: codetoreum-elasticsearch
+    hostname: elasticsearch
     restart: unless-stopped
     environment:
       discovery.type: single-node

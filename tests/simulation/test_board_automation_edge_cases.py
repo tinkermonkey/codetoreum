@@ -16,6 +16,8 @@ These tests validate:
 - Queue position updates work correctly (FR4)
 """
 
+from unittest.mock import AsyncMock
+
 import pytest
 
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
@@ -69,6 +71,7 @@ class TestBoardReconciliation:
             workflow_config=config_service,
             agent_executor=agent_executor,
             event_bus=event_bus,
+            work_item_service=AsyncMock(),
         )
 
         # Register event handler with bus
@@ -607,6 +610,7 @@ class TestManualColumns:
             workflow_config=config_service,
             agent_executor=agent_executor,
             event_bus=event_bus,
+            work_item_service=AsyncMock(),
         )
 
         # Register event handler with bus
@@ -731,6 +735,7 @@ class TestQueuePositionUpdates:
             workflow_config=config_service,
             agent_executor=agent_executor,
             event_bus=event_bus,
+            work_item_service=AsyncMock(),
         )
 
         # Register event handler with bus

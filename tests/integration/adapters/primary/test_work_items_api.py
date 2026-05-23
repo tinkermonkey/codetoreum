@@ -59,6 +59,9 @@ class MockWorkItemCommandPort(IWorkItemCommandPort):
     async def update_stage(self, command):
         return await self._update_stage(command)
 
+    async def move_to_column(self, command):
+        return AsyncMock()()
+
 
 class MockWorkItemQueryPort(IWorkItemQueryPort):
     """Mock implementation of work item query port for testing."""
