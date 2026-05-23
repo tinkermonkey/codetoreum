@@ -135,6 +135,8 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         self._pending_tasks: set[asyncio.Task] = set()
         # Track active executions: task -> ActiveExecutionInfo mapping
         self._active_executions: dict[asyncio.Task, ActiveExecutionInfo] = {}
+        # Guard against double-dispatch: set of work_item_ids currently being executed
+        self._executing_work_items: set[str] = set()
 
     def set_completion_handler(
         self,
@@ -166,7 +168,9 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             task: The completed asyncio.Task
         """
         self._pending_tasks.discard(task)
-        self._active_executions.pop(task, None)  # Clean up execution tracking
+        info = self._active_executions.pop(task, None)  # Clean up execution tracking
+        if info:
+            self._executing_work_items.discard(info.work_item_id)
         try:
             task.result()
         except asyncio.CancelledError:
@@ -213,6 +217,15 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             board_id: ID of the board containing the work item
         """
         resolved_board_id = board_id or self._default_board_id
+
+        if work_item_id in self._executing_work_items:
+            logger.warning(
+                f"ExecutionServiceAgentExecutor: work item '{work_item_id}' already executing, "
+                "ignoring duplicate execute() call",
+                extra={"error_id": "ERR_EXEC_DUPLICATE_EXECUTION", "work_item_id": work_item_id},
+            )
+            return
+
         # Use clock.now() for consistent time tracking with watchdog timeout checks
         now = self._clock.now()
 
@@ -250,6 +263,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
 
         logger.info(f"ExecutionServiceAgentExecutor: scheduling agent '{agent_id}' for '{work_item_id}'")
 
+        self._executing_work_items.add(work_item_id)
         task = asyncio.create_task(self._run_execution(work_item_id, agent_id, resolved_board_id))
         self._pending_tasks.add(task)
 

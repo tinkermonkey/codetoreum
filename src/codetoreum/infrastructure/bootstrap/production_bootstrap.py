@@ -282,6 +282,7 @@ class ProductionApplicationBootstrap:
         - Phase 3: Critical path enforcement (validate no mocks on critical slots)
         - Phase 4: Resilience decoration (wrap adapters with resilience patterns)
         - Phase 5: Application service instantiation (create 11 services)
+        - Phase 5e: Start MultiProjectOrchestrator poll loop (sole orchestration entry point)
         - Phase 6: Input port creation (create 17 port implementations)
         - Phase 7: FastAPI app creation (wire all ports to API endpoints)
 
@@ -398,6 +399,17 @@ class ProductionApplicationBootstrap:
             # REST API (persisted to the event store) are visible to the executor.
             logger.info("Phase 5d: Wiring WorkItemService to executor...")
             self.adapters.agent_executor._work_item_service = self.services.work_item_service
+
+            # Phase 5e: Start multi-project orchestrator poll loop
+            # MPO is the sole orchestration entry point. It polls all enabled projects
+            # every 30s, reconciles boards, and delegates per-project work to
+            # WorkflowOrchestrator. Starting it here (after Phase 5d) ensures WorkItemService
+            # is fully wired before the first poll cycle runs.
+            logger.info("Phase 5e: Starting multi-project orchestrator poll loop...")
+            import asyncio as _asyncio
+
+            _asyncio.ensure_future(self.services.multi_project_orchestrator.start())
+            logger.info("Phase 5e: Multi-project orchestrator poll loop started (background task)")
 
             # Phase 6: Create ports
             logger.info("Phase 6: Creating 17 input port implementations...")
@@ -616,6 +628,9 @@ class ProductionApplicationBootstrap:
         # Apply resilience to critical adapters that support it
         # Ticket system (board and ticket both interact with external system)
         if self.adapters.ticket_system:
+            # Store raw adapter before wrapping so bootstrap can call lifecycle methods
+            # (e.g. register_project_repo) that are not part of the ITicketSystem port.
+            self._raw_ticket_adapter = self.adapters.ticket_system
             self.adapters.ticket_system = resilience_factory.create_resilient_ticket_system(self.adapters.ticket_system)
             logger.debug("Applied resilience to ticket system adapter")
 
@@ -929,6 +944,25 @@ class ProductionApplicationBootstrap:
                 exc_info=True,
                 extra={"error_id": "ERR_BOOTSTRAP_PROJECT_LOAD_FAILURE"},
             )
+
+        # Register each project's github_repo with the raw ticket adapter so the
+        # adapter resolves per-project repos without a global GITHUB_REPO env var.
+        raw_adapter = getattr(self, "_raw_ticket_adapter", None)
+        if raw_adapter is not None and hasattr(raw_adapter, "register_project_repo") and self.adapters.config_store:
+            try:
+                project_configs = await self.adapters.config_store.list_projects()
+                for cfg in project_configs:
+                    if cfg.github_repo:
+                        raw_adapter.register_project_repo(cfg.id, cfg.github_repo)
+                        logger.info(
+                            f"Registered project repo '{cfg.github_repo}' for project '{cfg.id}' " "with ticket adapter"
+                        )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to register project repos with ticket adapter: {e}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_BOOTSTRAP_PROJECT_REPO_REGISTRATION_FAILURE"},
+                )
 
     # =========================================================================
     # Phase 5b: Initialize Codetoreum Board Configuration

@@ -69,6 +69,14 @@ done
 echo "Server ready"
 ```
 
+After the server starts, extract the authentication token from the startup output:
+```bash
+# Extract the authentication token printed by the server on startup
+AUTH_TOKEN=$(grep "Authentication token:" /tmp/codetoreum.log | sed 's/.*Authentication token: //' | tr -d '[:space:]')
+echo "Auth token: $AUTH_TOKEN"
+```
+If `AUTH_TOKEN` is empty, wait a moment for startup to complete and retry.
+
 If the server crashes or fails to start, read the logs at `/tmp/codetoreum.log`, diagnose the problem, and fix it. Common issues:
 - Missing bootstrap Phase 5c (check `production_bootstrap.py`)
 - Missing `project_bootstrap_loader.py`
@@ -124,6 +132,7 @@ ISSUE_BODY="<issue body — this becomes Claude's prompt, so include all detail>
 
 WORK_ITEM_RESPONSE=$(curl -s -X POST http://localhost:8000/api/v2/work-items \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $AUTH_TOKEN" \
   -d "{
     \"project_id\": \"rounds\",
     \"title\": \"$ISSUE_TITLE\",
@@ -147,6 +156,7 @@ If the API returns an error, read the server logs and fix the underlying problem
 ```bash
 TRIGGER_RESPONSE=$(curl -s -X POST http://localhost:8000/api/v2/trigger/column-change \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $AUTH_TOKEN" \
   -d "{
     \"work_item_id\": \"$WORK_ITEM_ID\",
     \"to_column\": \"In Progress\",
@@ -173,7 +183,7 @@ TAIL_PID=$!
 # Poll work item status (up to 20 minutes)
 for i in $(seq 1 120); do
   sleep 10
-  STATUS=$(curl -s "http://localhost:8000/api/v2/work-items/$WORK_ITEM_ID" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('current_column','?'), d.get('status','?'))" 2>/dev/null)
+  STATUS=$(curl -s -H "Authorization: Bearer $AUTH_TOKEN" "http://localhost:8000/api/v2/work-items/$WORK_ITEM_ID" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('current_column','?'), d.get('status','?'))" 2>/dev/null)
   echo "[$i] Status: $STATUS"
 
   # Check for terminal states
@@ -207,7 +217,7 @@ cat /tmp/codetoreum.log
 grep -E "ERROR|CRITICAL|Traceback|Exception|ERR_" /tmp/codetoreum.log | head -50
 
 # Check the work item state
-curl -s "http://localhost:8000/api/v2/work-items/$WORK_ITEM_ID" | python3 -m json.tool
+curl -s -H "Authorization: Bearer $AUTH_TOKEN" "http://localhost:8000/api/v2/work-items/$WORK_ITEM_ID" | python3 -m json.tool
 ```
 
 **Fix the root cause**, following the architecture:

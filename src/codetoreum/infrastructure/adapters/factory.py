@@ -1751,7 +1751,6 @@ class AdapterFactory:
 
         token = os.environ.get("GITHUB_TOKEN")
         org = os.environ.get("GITHUB_ORG")
-        repo = os.environ.get("GITHUB_REPO", "")
 
         errors = []
         if not token:
@@ -1765,7 +1764,6 @@ class AdapterFactory:
         return GitHubConfig(
             token=token,
             organization=org,
-            repository=repo,
         )
 
     def _build_claude_code_config(self) -> ClaudeCodeConfig:

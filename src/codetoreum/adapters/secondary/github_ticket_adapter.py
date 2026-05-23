@@ -37,7 +37,7 @@ class GitHubConfig:
 
     # Repository
     organization: str
-    repository: str
+    repository: str = ""  # Per-project repo; populated via register_project_repo(), NOT from a global env var
 
     # API configuration
     api_base_url: str = "https://api.github.com"
@@ -69,6 +69,7 @@ class GitHubTicketAdapter(ITicketSystem):
             config: GitHub configuration
         """
         self.config = config
+        self._project_repos: dict[str, str] = {}  # project_id -> github_repo
         self._http_client: httpx.AsyncClient | None = None
         self._graphql_client: GitHubGraphQLClient | None = None
 
@@ -133,10 +134,41 @@ class GitHubTicketAdapter(ITicketSystem):
         Raises:
             ValueError: If owner or repo is not configured
         """
-        if not self.config.organization or not self.config.repository:
-            msg = "GitHub owner (organization) and repository must be configured"
-            raise ValueError(msg)
-        return (self.config.organization, self.config.repository)
+        if not self.config.organization:
+            raise ValueError("GitHub organization must be configured")
+        repo = self._get_repo()
+        return (self.config.organization, repo)
+
+    def _get_repo(self) -> str:
+        """Return the GitHub repo for the current call context.
+
+        Checks the project registry first. Falls back to config.repository for
+        backward compatibility (used in tests; production bootstrap must call
+        register_project_repo() instead of setting a global GITHUB_REPO env var).
+
+        Raises if no repo is determinable and multiple projects are registered
+        (requires ITicketSystem to be updated to pass project_id per call).
+        """
+        if len(self._project_repos) == 1:
+            return next(iter(self._project_repos.values()))
+        if len(self._project_repos) == 0:
+            if self.config.repository:
+                return self.config.repository
+            raise RuntimeError(
+                "No GitHub project repos registered. Call register_project_repo() " "for each project during bootstrap."
+            )
+        raise RuntimeError(
+            f"Multiple projects registered ({list(self._project_repos.keys())}) but no "
+            "project_id provided for this call. Update ITicketSystem to pass project_id."
+        )
+
+    def register_project_repo(self, project_id: str, github_repo: str) -> None:
+        """Register a project's GitHub repository.
+
+        Must be called once per project during bootstrap before any ticket
+        adapter methods that need the repository are invoked.
+        """
+        self._project_repos[project_id] = github_repo
 
     async def _fetch_discussions_for_repository(self) -> dict[str, str | None]:
         """Fetch all discussions in the repository and build issue->discussion mapping.

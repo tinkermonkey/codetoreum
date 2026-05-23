@@ -96,7 +96,7 @@ async def _complete_workflow_run(
 
 **Error Handling**: If agent trigger fails, logs error but completes handler (relies on retry mechanism). If lock acquisition fails, continues without exclusive execution.
 
-**Orchestration Role**: Primary entry point for board-driven automation. Bridges external board state (via webhook or polling) to internal workflow execution.
+**Orchestration Role**: Event-driven complement to `MultiProjectOrchestrator`. BEH reacts immediately to column changes (via webhook or explicit REST trigger); MPO independently polls all projects every 30s and drives work via `WorkflowOrchestrator`. The two mechanisms are cooperative: MPO provides polling-based pickup and reconciliation; BEH provides sub-second reaction to real-time board moves. BEH is not the top-level orchestration entry point — MPO is.
 
 **Double-Dispatch Pattern**: Both `BoardColumnEventHandler` and `WorkflowOrchestrator` subscribe to `WorkItemColumnChangedEvent`. This intentional dual-subscription means a column change triggers both handlers. In simulation tests, `AgentScheduler` is stopped after seeding to suppress the second dispatch and prevent duplicate agent triggers during test setup. The `_trigger_agent` method contains additional idempotency guards at the application layer.
 

@@ -68,6 +68,7 @@ class _WorkflowRunMetadata:
     template_id: str
     started_at: datetime
     stage_index: int
+    current_column: str = ""
 
 
 @event_handler("WorkItemColumnChangedEvent")
@@ -558,6 +559,7 @@ class BoardColumnEventHandler(EventHandler):
             template_id=workflow_config.id,
             started_at=now,
             stage_index=0,
+            current_column=column_config.name,
         )
 
         created = WorkflowCreatedEvent(
@@ -901,6 +903,16 @@ class BoardColumnEventHandler(EventHandler):
                 return
 
             current_position = await self._find_item_position(board_id, work_item_id, config)
+            if not current_position and work_item_id in self._active_runs:
+                # Board service couldn't locate the item (e.g. externally-triggered work item
+                # not yet visible to the board adapter). Fall back to our own tracking.
+                tracked_column = self._active_runs[work_item_id].current_column
+                if tracked_column:
+                    current_position = WorkItemPosition(
+                        work_item_id=work_item_id,
+                        column_name=tracked_column,
+                        position=0,
+                    )
             if not current_position:
                 logger.warning(
                     f"Work item {work_item_id} not found in any column on board {board_id}, skipping auto-progression"

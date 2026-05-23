@@ -13,9 +13,14 @@
       "description": "Implements features and fixes bugs with full codebase access",
       "model": "claude-sonnet-4-6",
       "timeout": 3600,
-      "requires_docker": false,
+      "requires_docker": true,
       "makes_code_changes": true,
-      "capabilities": ["code_generation", "debugging", "refactoring", "testing"],
+      "capabilities": [
+        "code_generation",
+        "debugging",
+        "refactoring",
+        "testing"
+      ],
       "commit_policy": "on_success"
     }
   ],

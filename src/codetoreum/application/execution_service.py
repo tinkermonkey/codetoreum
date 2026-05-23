@@ -323,12 +323,26 @@ class ExecutionService:
                     ),
                 )
 
+                # Commit workspace before completing so ExecutionCompleted carries the
+                # commit SHA and downstream handlers see committed code.
+                commit_sha, commit_branch = None, None
+                try:
+                    commit_sha, commit_branch = await self._commit_workspace(context, execution)
+                except Exception:
+                    logger.error(
+                        f"Commit failed for execution {execution.id}, completing without commit SHA",
+                        exc_info=True,
+                        extra={"error_id": "ERR_EXECUTION_COMMIT_FAILURE", "work_item_id": context.work_item_id},
+                    )
+
                 # Complete execution successfully
                 execution.complete(
                     output=result.content,
                     input_tokens=result.prompt_tokens,
                     output_tokens=result.completion_tokens,
                     session_id=result.metadata.get("session_id"),
+                    commit_sha=commit_sha,
+                    branch=commit_branch,
                 )
 
                 # Persist events
@@ -449,28 +463,31 @@ class ExecutionService:
         context: ExecutionContext,
         execution: AgentExecution,
     ) -> tuple[str | None, str | None]:
-        """Commit and push workspace changes after a successful container execution.
+        """Commit and push workspace changes after execution completes.
 
-        Called synchronously inside execute_with_container() before
-        execution.complete() so that the ExecutionCompleted event carries the
-        commit SHA and downstream handlers (workflow progression, PR creation)
-        see committed code.
+        Called before execution.complete() so that the ExecutionCompleted event
+        carries the commit SHA and downstream handlers (workflow progression,
+        PR creation) see committed code.
 
         Returns:
-            (commit_sha, branch) — both None when no commit is needed or possible.
+            (commit_sha, branch) — both None when no commit is needed.
+
+        Raises:
+            RuntimeError: If vcs adapter is missing, repository_path is unset,
+                or branch_name is unset when a commit is expected.
         """
-        if self.vcs is None:
-            return None, None
         if context.commit_policy == CommitPolicy.NONE:
             return None, None
         if not context.can_make_commits:
             return None, None
+        if self.vcs is None:
+            raise RuntimeError(f"VCS adapter not configured — cannot commit workspace for execution {execution.id}")
         if not context.repository_path:
-            return None, None
+            raise RuntimeError(f"repository_path not set on ExecutionContext for execution {execution.id}")
 
         branch = context.branch_name
         if not branch:
-            return None, None
+            raise RuntimeError(f"branch_name not set on ExecutionContext for execution {execution.id}")
 
         try:
             vcs_status = await self.vcs.status(context.repository_path)

@@ -6,7 +6,17 @@ This document covers production bootstrap configuration including:
 - **Workspace Router Setup**: Factory functions to wire `BranchResolutionAdapter` into the workspace preparation flow
 - **Agent Workspace Base**: Directory setup and ownership requirements for agent container execution
 
-**Important Note**: A production bootstrap entry point for `WorkspaceRouter` does not yet exist in `fastapi_app.py`. Currently, only the simulation bootstrap (`infrastructure/simulation/bootstrap.py`) instantiates `WorkspaceRouter`. The factories in this document are designed to be called from production startup code once such an entry point is created.
+**WorkspaceRouter and BranchResolutionAdapter are wired in production bootstrap** (Phase 4b and Phase 5 respectively). `BranchResolutionAdapter` is created in Phase 4b with the resilience-wrapped `ticket_system` and `version_control` adapters; `WorkspaceRouter` is instantiated in Phase 5 with all dependencies injected. The factories documented here reflect the production wiring.
+
+## Phase 5e — MultiProjectOrchestrator Startup
+
+`ProductionApplicationBootstrap.setup()` starts the `MultiProjectOrchestrator` poll loop in Phase 5e using `asyncio.ensure_future` rather than `await` — this keeps `setup()` non-blocking while the poll loop runs as a background task. The loop continues until `teardown()` stops it via `await multi_project_orchestrator.stop()`.
+
+Phase 5e is placed after Phase 5d (WorkItemService wiring) to guarantee that all services are fully constructed before the first 30-second poll cycle fires.
+
+See `bootstrap/ARCHITECTURE.md` §3 and §6 (INV-13) for the full orchestration model.
+
+---
 
 ## Agent Workspace Base Setup
 
@@ -101,11 +111,10 @@ This invariant ensures:
 - Unit tests verify factory behavior in `tests/unit/adapters/primary/factories/test_production.py`
 - Factories are exported from `adapters/primary/factories/__init__.py` for use in production bootstrap
 
-### Production Integration 🔄 (Blocked - No Entry Point)
-- **Blocker**: No production bootstrap entry point exists for instantiating `WorkspaceRouter`
-- The `fastapi_app.py:create_app()` function does not currently instantiate `WorkspaceRouter`
-- Only the simulation bootstrap instantiates `WorkspaceRouter` (simulation/bootstrap.py:1602)
-- **Next step**: Create production bootstrap entry point (e.g., in CLI startup or app initialization), then wire factories
+### Production Integration ✅ (Complete)
+- `BranchResolutionAdapter` is created in Phase 4b of `ProductionApplicationBootstrap` with resilience-wrapped `ticket_system` and `version_control` adapters
+- `WorkspaceRouter` is instantiated in Phase 5 with `BranchResolutionAdapter` injected as `branch_resolution_service`
+- `WorkspaceRouter` is passed to `ExecutionServiceAgentExecutor` for agent workspace preparation
 
 ## Implementation Checklist for Production Bootstrap
 
@@ -237,13 +246,7 @@ execution_service = ExecutionService(
 
 1. ✅ **Factories & Tests** - Production bootstrap factories are available with unit tests in `adapters/primary/factories/production.py` and `tests/unit/adapters/primary/factories/test_production.py`
 
-2. **Production Entry Point** (Future Work) - Create production bootstrap entry point:
-   - Determine where `WorkspaceRouter` should be instantiated in production (CLI startup, app initialization, etc.)
-   - Call `create_branch_resolution_adapter()` and `create_workspace_router_with_branch_resolution()` factories during bootstrap
-   - Inject `WorkspaceRouter` into `ExecutionServiceAgentExecutor` (per simulation pattern)
-   - This completes the acceptance criterion: "Integration into workflow startup before agent execution begins"
-
-3. **Integration Validation** - After production bootstrap is created:
-   - Verify branch resolution events are emitted correctly
+2. **Integration Validation** - Verify the wired production path:
+   - Confirm branch resolution events are emitted in server logs (`Instantiated BranchResolutionAdapter`, `Wired BranchResolutionAdapter`)
    - Verify intelligent branch reuse works for agent executions
    - Verify fallback logic activates correctly when branch resolution is unavailable

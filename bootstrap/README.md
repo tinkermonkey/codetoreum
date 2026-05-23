@@ -45,7 +45,7 @@ Edit `bootstrap/project.json` for your target repository:
       "description": "Implements features and fixes bugs",
       "model": "claude-sonnet-4-6",
       "timeout": 3600,
-      "requires_docker": false,
+      "requires_docker": true,
       "makes_code_changes": true,
       "capabilities": ["code_generation", "debugging", "refactoring", "testing"],
       "commit_policy": "on_success"
@@ -107,6 +107,23 @@ Loaded 1 project bootstrap configuration(s)
 
 > **Important**: Re-run `register_project.py` + restart the server any time you change `project.json`.
 
+### Extract the authentication token
+
+All REST API endpoints require a bearer token. The server generates one on startup and prints it to the log:
+
+```
+Authentication token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+Extract it into a shell variable for use in the steps below:
+
+```bash
+export CODETOREUM_TOKEN=$(docker compose logs codetoreum 2>&1 | grep "Authentication token:" | tail -1 | awk '{print $NF}')
+echo "Token: $CODETOREUM_TOKEN"
+```
+
+If `CODETOREUM_TOKEN` is empty, wait a moment for startup to complete and re-run the export. The token is valid for 365 days and remains stable across restarts as long as `CODETOREUM_SECRET_KEY` is set in your `.env`.
+
 ---
 
 ## Step 3 — Create a work item
@@ -118,6 +135,7 @@ A work item is the task Claude will execute. You can create one manually via the
 ```bash
 curl -s -X POST http://localhost:8000/api/v2/work-items \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $CODETOREUM_TOKEN" \
   -d '{
     "project_id": "my-project",
     "title": "Add input validation to the login endpoint",
@@ -133,6 +151,7 @@ If the task already exists as a GitHub issue, link it using `external_id` (the i
 ```bash
 curl -s -X POST http://localhost:8000/api/v2/work-items \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $CODETOREUM_TOKEN" \
   -d '{
     "project_id": "my-project",
     "title": "Add input validation to login endpoint",
@@ -165,6 +184,7 @@ Move the work item to `"In Progress"` to start the agent pipeline:
 ```bash
 curl -s -X POST http://localhost:8000/api/v2/trigger/column-change \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $CODETOREUM_TOKEN" \
   -d '{
     "work_item_id": "wi-abc123",
     "to_column": "In Progress",
@@ -184,7 +204,7 @@ Once triggered, Codetoreum runs the following chain automatically:
 1. **Acquire pipeline lock** — prevents another work item from running concurrently on the same board
 2. **Clone the repository** — clones `github.com/<org>/<repo>` into a workspace directory
 3. **Build a prompt** — combines the work item title + description + agent role + stage instructions
-4. **Run Claude Code** — executes `claude --print` with the cloned repo as the working directory; Claude reads files, edits code, runs tests, and commits changes
+4. **Run Claude Code** — starts a Docker container (`codetoreum-agent:latest`) with the cloned repo mounted; Claude Code runs inside the container, reads files, edits code, runs tests, and writes changes to the mounted workspace
 5. **Finalize workspace** — commits and pushes the branch if execution succeeded
 6. **Auto-advance** — moves the work item to `"In Review"` (because `auto_progress_on_completion: true`)
 7. **Release lock** — unblocks the next queued work item
@@ -205,13 +225,15 @@ ExecutionServiceAgentExecutor: 'senior_software_engineer' completed for 'wi-abc1
 **Check work item status:**
 
 ```bash
-curl -s http://localhost:8000/api/v2/work-items/wi-abc123 | python3 -m json.tool
+curl -s -H "Authorization: Bearer $CODETOREUM_TOKEN" \
+  http://localhost:8000/api/v2/work-items/wi-abc123 | python3 -m json.tool
 ```
 
 **List all work items for a project:**
 
 ```bash
-curl -s "http://localhost:8000/api/v2/work-items?project_id=my-project" | python3 -m json.tool
+curl -s -H "Authorization: Bearer $CODETOREUM_TOKEN" \
+  "http://localhost:8000/api/v2/work-items?project_id=my-project" | python3 -m json.tool
 ```
 
 **API docs** (when server is running):
@@ -227,7 +249,7 @@ http://localhost:8000/docs
 | Limitation | Detail |
 |---|---|
 | No GitHub webhook | Work items must be created manually via the API. Webhook-driven automation requires the server to be publicly reachable (ngrok or similar). |
-| No Docker isolation | `requires_docker: false` in the default config — Claude runs directly on the host. Set to `true` to run in a container (requires a working Docker socket). |
+| Docker required | Agents run in `codetoreum-agent:latest` containers. The Docker socket must be available and the image must be built before the first run. |
 | Single-agent pipeline | The default board has one automated stage. Multi-stage pipelines (design → implement → test) require additional columns and agent definitions. |
 | In-memory agent/board state | Board templates and agent domain objects are held in memory. A server restart re-loads them from `bootstrap/*.json`. |
 

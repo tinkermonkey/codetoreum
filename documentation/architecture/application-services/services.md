@@ -261,6 +261,23 @@ async def list_enabled_projects(self) -> list[str]:
 **Events Emitted**:
 - `OrchestrationCycleCompletedEvent` — One cycle completed
 
+**Bootstrap Lifecycle**:
+- Started in **Phase 5e** of `ProductionApplicationBootstrap.setup()` via `asyncio.ensure_future(multi_project_orchestrator.start())` — non-blocking so `setup()` does not stall on the poll loop
+- Placed after Phase 5d so `WorkItemService` is fully wired before the first cycle runs
+- Stopped in `teardown()` via `await multi_project_orchestrator.stop()`
+
+**Orchestration Hierarchy**:
+
+MPO is the sole top-level polling entry point. It delegates per-project work to `WorkflowOrchestrator`, which coordinates with `BoardColumnEventHandler` for event-driven dispatch:
+
+```
+MultiProjectOrchestrator  — polls all enabled projects every 30s
+  └── WorkflowOrchestrator  — per-project board scan and stage coordination
+        └── BoardColumnEventHandler  — reacts to column changes in real time
+```
+
+`ConversationalLoopOrchestrator` is a separate concern — it manages multi-turn agent dialogue via comment threads and does not participate in the execution scheduling hierarchy.
+
 ---
 
 ### Execution Management Services (4 services)
