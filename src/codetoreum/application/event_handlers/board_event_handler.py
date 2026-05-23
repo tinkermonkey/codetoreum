@@ -18,7 +18,6 @@ from codetoreum.application.pipeline_lock_service import (
     IQueuedPipelineLockService,
     LockStatus,
 )
-from codetoreum.application.work_item_service import WorkItemService
 from codetoreum.domain.board_workflow_template import (
     BoardWorkflowTemplate,
     ColumnTemplate,
@@ -38,6 +37,7 @@ from codetoreum.domain.events.workflow_events import (
 )
 from codetoreum.infrastructure.event_bus import EventBus, EventHandler, event_handler
 from codetoreum.ports.exceptions import ExternalServiceError, ResourceNotFoundError
+from codetoreum.ports.input.work_item_command import IWorkItemCommandPort, MoveToColumnCommand
 from codetoreum.ports.output.active_workflow_run_registry import (
     IActiveWorkflowRunRegistry,
 )
@@ -114,7 +114,7 @@ class BoardColumnEventHandler(EventHandler):
         run_registry: IActiveWorkflowRunRegistry | None = None,
         event_emitter: IEventEmitter | None = None,
         recovery_service: AgentExecutionRecoveryService | None = None,
-        work_item_service: WorkItemService | None = None,
+        work_item_service: IWorkItemCommandPort | None = None,
     ):
         """
         Initialize board column event handler.
@@ -129,7 +129,7 @@ class BoardColumnEventHandler(EventHandler):
             run_registry: Optional registry for tracking active workflow runs
             event_emitter: Optional event emitter for CodetoreumEvent instances (e.g. LockStuckEvent)
             recovery_service: Optional recovery service for handling agent execution failures
-            work_item_service: Optional service for persisting work item column state
+            work_item_service: Optional command port for persisting work item column state
         """
         self.board_service = board_service
         self.lock_service = lock_service
@@ -206,7 +206,7 @@ class BoardColumnEventHandler(EventHandler):
         # Persist the new column on the work item so API queries reflect current state
         if self.work_item_service is not None:
             try:
-                await self.work_item_service.move_to_column(work_item_id, to_column)
+                await self.work_item_service.move_to_column(MoveToColumnCommand(work_item_id, to_column))
             except Exception:
                 logger.warning(
                     "Failed to persist column update for work item %s to '%s'",

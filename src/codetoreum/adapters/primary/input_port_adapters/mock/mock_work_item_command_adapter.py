@@ -15,6 +15,7 @@ from codetoreum.ports.input.work_item_command import (
     AttachWorkflowCommand,
     CreateWorkItemCommand,
     IWorkItemCommandPort,
+    MoveToColumnCommand,
     UpdateLabelsCommand,
     UpdatePriorityCommand,
     UpdateStageCommand,
@@ -160,8 +161,18 @@ class MockWorkItemCommandAdapter(IWorkItemCommandPort):
                 raise WorkItemNotFoundError(command.work_item_id)
 
             work_item = self._work_items[command.work_item_id]
-            # Use domain method for stage updates
             work_item.update_stage(command.stage)
+
+            return work_item
+
+    async def move_to_column(self, command: MoveToColumnCommand) -> WorkItem:
+        """Updates the board column a work item occupies."""
+        with self._lock:
+            if command.work_item_id not in self._work_items:
+                raise WorkItemNotFoundError(command.work_item_id)
+
+            work_item = self._work_items[command.work_item_id]
+            work_item.move_to_column(command.column)
 
             return work_item
 

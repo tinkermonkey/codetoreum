@@ -341,19 +341,10 @@ class ProductionApplicationBootstrap:
             logger.info("Phase 2: Creating 33 adapters (credential validation + resolution)...")
             self.adapters = resolver.resolve_all()
 
-            # Phase 2b: Create branch_resolution_service (34th adapter, not via resolver)
-            from codetoreum.adapters.secondary.branch_resolution_adapter import BranchResolutionAdapter
-
-            self.adapters.branch_resolution_service = BranchResolutionAdapter(
-                ticket_system=self.adapters.ticket_system,
-                version_control=self.adapters.version_control,
-                event_emitter=self.adapters.event_emitter,
-            )  # type: ignore
-
             self._capture_adapter_slot_info(resolver)
 
-            # Phase 2c: Initialize event store (critical for cross-process event distribution)
-            logger.info("Phase 2c: Initializing event store for cross-process event distribution...")
+            # Phase 2b: Initialize event store (critical for cross-process event distribution)
+            logger.info("Phase 2b: Initializing event store for cross-process event distribution...")
             await self._initialize_event_store()
 
             # Phase 3: Critical path enforcement
@@ -367,6 +358,18 @@ class ProductionApplicationBootstrap:
             # Phase 4: Resilience decoration
             logger.info("Phase 4: Applying resilience decorators...")
             self._apply_resilience_decorators()
+
+            # Phase 4b: Create branch_resolution_service with resilience-wrapped adapters
+            # Must be constructed after Phase 4 so it holds the decorated ticket_system and
+            # version_control references, ensuring rate limiting and circuit breaking apply.
+            logger.info("Phase 4b: Creating BranchResolutionAdapter with resilience-wrapped adapters...")
+            from codetoreum.adapters.secondary.branch_resolution_adapter import BranchResolutionAdapter
+
+            self.adapters.branch_resolution_service = BranchResolutionAdapter(
+                ticket_system=self.adapters.ticket_system,
+                version_control=self.adapters.version_control,
+                event_emitter=self.adapters.event_emitter,
+            )  # type: ignore
 
             # Log non-critical slots with mock implementations
             self._log_non_critical_slots()
@@ -446,7 +449,7 @@ class ProductionApplicationBootstrap:
         )
 
     # =========================================================================
-    # Phase 2c: Event Store Initialization
+    # Phase 2b: Event Store Initialization
     # =========================================================================
 
     async def _initialize_event_store(self) -> None:

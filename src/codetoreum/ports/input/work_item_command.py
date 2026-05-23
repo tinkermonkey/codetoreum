@@ -76,6 +76,14 @@ class UpdateStageCommand:
 
 
 @dataclass
+class MoveToColumnCommand:
+    """Command to update the board column a work item occupies"""
+
+    work_item_id: str
+    column: str
+
+
+@dataclass
 class WorkItemCommandResult:
     """Result of executing a work item command"""
 
@@ -191,6 +199,18 @@ class IWorkItemCommandPort(ABC):
         Updates work item stage.
 
         Args: command: Command with stage update
+
+        Returns: Updated work item
+
+        Raises: WorkItemNotFoundError: If work item doesn't exist
+        """
+
+    @abstractmethod
+    async def move_to_column(self, command: MoveToColumnCommand) -> WorkItem:
+        """
+        Updates the board column a work item occupies.
+
+        Args: command: Command with column update
 
         Returns: Updated work item
 
