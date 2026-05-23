@@ -18,6 +18,7 @@ from codetoreum.application.pipeline_lock_service import (
     IQueuedPipelineLockService,
     LockStatus,
 )
+from codetoreum.application.work_item_service import WorkItemService
 from codetoreum.domain.board_workflow_template import (
     BoardWorkflowTemplate,
     ColumnTemplate,
@@ -113,6 +114,7 @@ class BoardColumnEventHandler(EventHandler):
         run_registry: IActiveWorkflowRunRegistry | None = None,
         event_emitter: IEventEmitter | None = None,
         recovery_service: AgentExecutionRecoveryService | None = None,
+        work_item_service: WorkItemService | None = None,
     ):
         """
         Initialize board column event handler.
@@ -127,6 +129,7 @@ class BoardColumnEventHandler(EventHandler):
             run_registry: Optional registry for tracking active workflow runs
             event_emitter: Optional event emitter for CodetoreumEvent instances (e.g. LockStuckEvent)
             recovery_service: Optional recovery service for handling agent execution failures
+            work_item_service: Optional service for persisting work item column state
         """
         self.board_service = board_service
         self.lock_service = lock_service
@@ -137,6 +140,7 @@ class BoardColumnEventHandler(EventHandler):
         self.run_registry = run_registry
         self.event_emitter = event_emitter
         self.recovery_service = recovery_service
+        self.work_item_service = work_item_service
         # Tracks active workflow runs: work_item_id -> _WorkflowRunMetadata
         # Provides compile-time key validation and type safety over untyped dict[str, Any]
         self._active_runs: dict[str, _WorkflowRunMetadata] = {}
@@ -198,6 +202,18 @@ class BoardColumnEventHandler(EventHandler):
         to_column: str = event.to_column
 
         logger.info(f"Processing column change for {work_item_id}: {from_column} -> {to_column}")
+
+        # Persist the new column on the work item so API queries reflect current state
+        if self.work_item_service is not None:
+            try:
+                await self.work_item_service.move_to_column(work_item_id, to_column)
+            except Exception:
+                logger.warning(
+                    "Failed to persist column update for work item %s to '%s'",
+                    work_item_id,
+                    to_column,
+                    exc_info=True,
+                )
 
         # Get workflow configuration for this board
         config = await self.workflow_config.get_board_workflow_template(board_id)

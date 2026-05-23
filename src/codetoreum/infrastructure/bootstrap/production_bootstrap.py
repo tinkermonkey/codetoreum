@@ -342,10 +342,13 @@ class ProductionApplicationBootstrap:
             self.adapters = resolver.resolve_all()
 
             # Phase 2b: Create branch_resolution_service (34th adapter, not via resolver)
-            # Use mock adapter since it's not on critical path
-            from codetoreum.adapters.testing import MockBranchResolutionAdapter
+            from codetoreum.adapters.secondary.branch_resolution_adapter import BranchResolutionAdapter
 
-            self.adapters.branch_resolution_service = MockBranchResolutionAdapter(clock=None)  # type: ignore
+            self.adapters.branch_resolution_service = BranchResolutionAdapter(
+                ticket_system=self.adapters.ticket_system,
+                version_control=self.adapters.version_control,
+                event_emitter=self.adapters.event_emitter,
+            )  # type: ignore
 
             self._capture_adapter_slot_info(resolver)
 
@@ -1022,7 +1025,7 @@ class ProductionApplicationBootstrap:
         event_store_poller = EventStorePoller(
             event_store=self.adapters.event_store,
             event_bus=self.infrastructure.event_bus,
-            poll_interval_seconds=1.0,  # Poll every second
+            poll_interval_seconds=5.0,
         )
         logger.debug("Created event store poller for cross-process event distribution")
 
@@ -1093,6 +1096,7 @@ class ProductionApplicationBootstrap:
             run_registry=self.adapters.run_registry,
             event_emitter=self.adapters.event_emitter,
             recovery_service=self.services.agent_execution_recovery_service,
+            work_item_service=self.services.work_item_service,
         )
 
         self.infrastructure.event_bus.register_handler(handler)

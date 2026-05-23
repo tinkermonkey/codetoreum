@@ -238,6 +238,13 @@ class WorkItemService(IWorkItemCommandPort, IWorkItemQueryPort):
 
         return work_item
 
+    async def move_to_column(self, work_item_id: str, column: str) -> WorkItem:
+        """Persists a board column change to the work item event stream."""
+        work_item = await self._load_work_item(work_item_id)
+        work_item.move_to_column(column)
+        await self._save_work_item(work_item)
+        return work_item
+
     # ========================================================================
     # Query Port Implementation
     # ========================================================================

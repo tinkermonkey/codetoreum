@@ -225,6 +225,7 @@ from .storage_events import (
 from .work_item_events import (
     AgentAssignedEvent,
     WorkItemBlockedEvent,
+    WorkItemColumnUpdatedEvent,
     WorkItemCompletedEvent,
     WorkItemCreatedEvent,
     WorkItemFailedEvent,
@@ -430,6 +431,7 @@ __all__ = [
     "WorkItemFailedEvent",
     "WorkItemBlockedEvent",
     "WorkItemUnblockedEvent",
+    "WorkItemColumnUpdatedEvent",
     "WorkItemStageUpdatedEvent",
     "WorkItemLabelsUpdatedEvent",
     "WorkItemPriorityUpdatedEvent",

@@ -465,3 +465,35 @@ class WorkItemPriorityUpdatedEvent(CodetoreumEvent):
             old_priority=data.get("old_priority", 0),
             new_priority=data.get("new_priority", 0),
         )
+
+
+@dataclass(frozen=True)
+class WorkItemColumnUpdatedEvent(CodetoreumEvent):
+    """Emitted when a work item's board column is updated."""
+
+    work_item_id: str = ""
+    old_column: str = ""
+    new_column: str = ""
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if not self.work_item_id:
+            raise ValueError("work_item_id is required")
+
+    def to_dict(self) -> dict[str, Any]:
+        d = super().to_dict()
+        d.update({"work_item_id": self.work_item_id, "old_column": self.old_column, "new_column": self.new_column})
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "WorkItemColumnUpdatedEvent":
+        return cls(
+            type=data.get("type", "workitem.column_updated"),
+            timestamp=data.get("timestamp", now_iso()),
+            source=data.get("source", "domain"),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            work_item_id=data.get("work_item_id", ""),
+            old_column=data.get("old_column", ""),
+            new_column=data.get("new_column", ""),
+        )
