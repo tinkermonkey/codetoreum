@@ -370,6 +370,7 @@ class ProductionApplicationBootstrap:
                 version_control=self.adapters.version_control,
                 event_emitter=self.adapters.event_emitter,
             )  # type: ignore
+            self._slot_info["branch_resolution_service"] = type(self.adapters.branch_resolution_service).__name__
 
             # Log non-critical slots with mock implementations
             self._log_non_critical_slots()
@@ -632,6 +633,13 @@ class ProductionApplicationBootstrap:
         if self.adapters.container:
             self.adapters.container = resilience_factory.create_resilient_container(self.adapters.container)
             logger.debug("Applied resilience to container adapter")
+
+        # Version control (used by BranchResolutionAdapter constructed in Phase 4b)
+        if self.adapters.version_control:
+            self.adapters.version_control = resilience_factory.create_resilient_version_control(
+                self.adapters.version_control
+            )
+            logger.debug("Applied resilience to version control adapter")
 
         logger.info("Resilience decorators applied to critical adapters")
 

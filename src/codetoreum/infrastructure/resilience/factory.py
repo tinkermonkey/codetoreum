@@ -9,6 +9,7 @@ from codetoreum.ports.output.container import IContainer
 from codetoreum.ports.output.llm_provider import ILLMProvider
 from codetoreum.ports.output.repository import IRepository
 from codetoreum.ports.output.ticket_system import ITicketSystem
+from codetoreum.ports.output.version_control_service import IVersionControlService
 
 from .circuit_breaker import CircuitBreaker
 from .config import (
@@ -210,5 +211,25 @@ class ResilienceFactory:
             IContainer: Adapter (unwrapped placeholder)
         """
         # TODO: Implement ResilientContainerDecorator
+        # Similar pattern to ResilientTicketSystemDecorator
+        return adapter
+
+    def create_resilient_version_control(
+        self, adapter: IVersionControlService, service_config: dict[str, Any] | None = None
+    ) -> IVersionControlService:
+        """
+        Create resilient version control adapter.
+
+        Note: This would need a ResilientVersionControlDecorator implementation.
+        For now, returning the adapter as-is as a placeholder.
+
+        Args:
+            adapter: Underlying version control adapter
+            service_config: Service-specific configuration
+
+        Returns:
+            IVersionControlService: Adapter (unwrapped placeholder)
+        """
+        # TODO: Implement ResilientVersionControlDecorator
         # Similar pattern to ResilientTicketSystemDecorator
         return adapter
