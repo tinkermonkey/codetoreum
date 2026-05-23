@@ -109,20 +109,25 @@ Loaded 1 project bootstrap configuration(s)
 
 ### Extract the authentication token
 
-All REST API endpoints require a bearer token. The server generates one on startup and prints it to the log:
+All REST API endpoints require a bearer token. The server generates one on startup and prints it to stdout:
 
 ```
 Authentication token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
-Extract it into a shell variable for use in the steps below:
+If you redirected server output to a log file (recommended), extract it:
 
 ```bash
+# If running server with output redirected to a file:
+export CODETOREUM_TOKEN=$(grep "Authentication token:" /tmp/codetoreum.log | tail -1 | sed 's/.*Authentication token: //' | tr -d '[:space:]')
+
+# If running via docker compose:
 export CODETOREUM_TOKEN=$(docker compose logs codetoreum 2>&1 | grep "Authentication token:" | tail -1 | awk '{print $NF}')
+
 echo "Token: $CODETOREUM_TOKEN"
 ```
 
-If `CODETOREUM_TOKEN` is empty, wait a moment for startup to complete and re-run the export. The token is valid for 365 days and remains stable across restarts as long as `CODETOREUM_SECRET_KEY` is set in your `.env`.
+If `CODETOREUM_TOKEN` is empty, wait a moment — the token is printed near the end of Phase 7 (FastAPI app creation). The token is valid for 365 days and stable across restarts as long as `CODETOREUM_SECRET_KEY` is set in your `.env`.
 
 ---
 

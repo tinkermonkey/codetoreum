@@ -1,23 +1,21 @@
 ---
-description: End-to-end bootstrap test-fix cycle. Starts Codetoreum, finds or creates a GitHub issue on tinkermonkey/rounds, works it via the agent pipeline, then reports on the run.
+description: End-to-end bootstrap test-fix cycle. Proves the Codetoreum production code path against real services by executing a GitHub issue through the full agent pipeline, then reports deficiencies found.
 argument-hint: "[--project rounds] [--issue <number>]"
 ---
 
-You are driving an end-to-end test-fix cycle for Codetoreum against the `tinkermonkey/rounds` repository.
+You are running the Codetoreum bootstrap harness — a deliberately minimal production run that uses real services (GitHub, Elasticsearch, Redis, Docker) to find deficiencies that simulation cannot expose.
 
-## Your Goal
+## Mission
 
-Execute a real work item through the full Codetoreum pipeline:
-1. Ensure infrastructure is running
-2. Register the rounds project
-3. Start the Codetoreum server
-4. Find or create a GitHub issue on `tinkermonkey/rounds`
-5. Create a work item and trigger execution
-6. Monitor until completion or failure
-7. If Codetoreum fails, diagnose and fix it (following the architecture), then retry
-8. If execution succeeds, analyze the logs and report deficiencies
+Drive one work item through the complete production pipeline:
+- Real GitHub issue on `tinkermonkey/rounds`
+- Real Claude Code agent executing inside a Docker container (`codetoreum-agent:latest`)
+- Real Elasticsearch event store, Redis, and GitHub board operations
+- MultiProjectOrchestrator as the polling orchestration entry point
 
-Work through this systematically. Fix real problems as you encounter them — do not skip or paper over failures.
+**Success** means the agent ran in a container, produced a commit, and the work item auto-advanced to "In Review". **Failure** is a signal — diagnose it, fix the Codetoreum deficiency (not the symptom), and retry. Do not skip or paper over failures.
+
+Retry budget: 3 fix-retry cycles before reporting blocked.
 
 ---
 
@@ -55,11 +53,10 @@ ELASTICSEARCH_URL=http://localhost:9200 .venv/bin/codetoreum-server > /tmp/codet
 CODETOREUM_PID=$!
 echo "Server PID: $CODETOREUM_PID"
 
-# Wait for it to be ready
+# Wait for health endpoint
 sleep 5
-until curl -s http://localhost:8000/health | grep -q '"status"'; do
+until curl -s http://localhost:8000/api/v2/health | grep -q '"status"'; do
   sleep 2
-  # Check it hasn't crashed
   if ! kill -0 $CODETOREUM_PID 2>/dev/null; then
     echo "Server crashed. Last logs:"
     tail -50 /tmp/codetoreum.log
@@ -69,23 +66,24 @@ done
 echo "Server ready"
 ```
 
-After the server starts, extract the authentication token from the startup output:
+Extract the authentication token — all REST API calls require it:
 ```bash
-# Extract the authentication token printed by the server on startup
 AUTH_TOKEN=$(grep "Authentication token:" /tmp/codetoreum.log | sed 's/.*Authentication token: //' | tr -d '[:space:]')
 echo "Auth token: $AUTH_TOKEN"
 ```
-If `AUTH_TOKEN` is empty, wait a moment for startup to complete and retry.
+If `AUTH_TOKEN` is empty, wait a moment and retry — the token is printed near the end of Phase 7.
 
-If the server crashes or fails to start, read the logs at `/tmp/codetoreum.log`, diagnose the problem, and fix it. Common issues:
-- Missing bootstrap Phase 5c (check `production_bootstrap.py`)
-- Missing `project_bootstrap_loader.py`
+If the server crashes or fails to start, read `/tmp/codetoreum.log`, diagnose, and fix. Common causes:
+- Missing credentials (`GITHUB_TOKEN`, `ANTHROPIC_API_KEY`, `ELASTICSEARCH_URL`)
+- Bootstrap phase failure (check phase-specific log lines)
 - Import errors
 
-Verify Phase 5c loaded correctly:
+Verify the critical bootstrap phases completed:
 ```bash
-grep -E "Phase 5c|Loaded.*bootstrap|Loaded agent|Loaded board" /tmp/codetoreum.log
+grep -E "Phase 5c|Phase 5e|Loaded agent|Loaded board|multi.project.orchestrator.*started|Production bootstrap completed" /tmp/codetoreum.log
 ```
+
+Phase 5c must show `Loaded agent 'senior_software_engineer'` and Phase 5e must show the MPO poll loop started. Both are required before triggering work.
 
 ---
 
@@ -197,11 +195,14 @@ kill $TAIL_PID 2>/dev/null || true
 ```
 
 Key log patterns to watch for:
-- `scheduling agent 'senior_software_engineer'` — agent started
-- `ClaudeCodeAdapter.*execute` — Claude subprocess running
-- `completed.*success=True` — agent succeeded
+- `scheduling agent 'senior_software_engineer'` — agent queued
+- `DockerContainerAdapter.*starting\|container.*created` — container launching
+- `codetoreum-agent:latest` — container image pulled/started
+- `ClaudeCodeAdapter.*execute\|claude.*--print` — agent running inside container
+- `completed.*success=True` — agent succeeded, commit pushed
 - `completed.*success=False` — agent failed
 - `WorkItemColumnChangedEvent` — column transitions
+- `Auto-progressing.*In Review` — successful auto-advance
 
 ---
 
@@ -229,8 +230,6 @@ curl -s -H "Authorization: Bearer $AUTH_TOKEN" "http://localhost:8000/api/v2/wor
 
 After fixing, stop and restart the server, re-register the project, and retry from Step 3.
 
-**Retry budget**: Up to 3 fix-retry cycles before reporting blocked.
-
 ---
 
 ## Step 9 — Report results
@@ -246,7 +245,8 @@ After execution completes (or you exhaust retries):
 
 2. Check what Claude did in the rounds repo workspace:
    ```bash
-   ls $AGENT_WORKSPACE_BASE/rounds/  # or check default workspace path
+   AGENT_WORKSPACE_BASE=${AGENT_WORKSPACE_BASE:-/tmp/codetoreum/workspaces}
+   ls $AGENT_WORKSPACE_BASE/
    ```
 
 3. Analyze the logs for:

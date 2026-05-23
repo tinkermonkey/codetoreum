@@ -74,7 +74,7 @@ async def _register(config: dict, es_url: str) -> None:
                 agent_name=agent_def["name"],
                 model=agent_def.get("model", "claude-sonnet-4-6"),
                 timeout=agent_def.get("timeout", 3600),
-                requires_docker=agent_def.get("requires_docker", False),
+                requires_docker=agent_def.get("requires_docker", True),
                 makes_code_changes=agent_def.get("makes_code_changes", True),
                 capabilities=agent_def.get("capabilities", ["code_generation"]),
                 version=1,
@@ -99,9 +99,15 @@ def _print_next_steps(config: dict) -> None:
     print()
     print("Restart the server to activate agents and board workflow, then:")
     print()
+    print("  Extract the auth token printed on startup:")
+    print(
+        "     AUTH_TOKEN=$(grep 'Authentication token:' /tmp/codetoreum.log | sed 's/.*Authentication token: //' | tr -d '[:space:]')"
+    )
+    print()
     print("  1. Create a work item (or link a GitHub issue):")
     print("     curl -s -X POST http://localhost:8000/api/v2/work-items \\")
     print("       -H 'Content-Type: application/json' \\")
+    print("       -H 'Authorization: Bearer $AUTH_TOKEN' \\")
     print("       -d '{")
     print(f'         "project_id": "{project_id}",')
     print('         "title": "My task title",')
@@ -117,6 +123,7 @@ def _print_next_steps(config: dict) -> None:
     print("  2. Trigger execution (move to 'In Progress'):")
     print("     curl -s -X POST http://localhost:8000/api/v2/trigger/column-change \\")
     print("       -H 'Content-Type: application/json' \\")
+    print("       -H 'Authorization: Bearer $AUTH_TOKEN' \\")
     print("       -d '{")
     print('         "work_item_id": "<id-from-step-1>",')
     print('         "to_column": "In Progress",')
