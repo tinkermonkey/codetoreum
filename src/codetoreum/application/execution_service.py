@@ -519,13 +519,24 @@ class ExecutionService:
                     extra={"work_item_id": context.work_item_id, "commit_sha": commit_sha, "branch": branch},
                 )
             elif has_unstaged:
-                # Agent committed inside the container; unstaged remnants are exploration.
-                # Push the agent's commits without adding more.
+                # Agent edited files but did not commit them (Claude Code edits files
+                # but does not run `git commit`). Stage and commit all unstaged files
+                # so the pushed branch captures the agent's actual output.
+                commit_message = (
+                    f"[{context.work_item_id}] {context.stage_name}: agent {context.agent_id}\n\n"
+                    f"Co-Authored-By: Codetoreum <noreply@codetoreum.ai>"
+                )
+                commit_sha = await self.vcs.commit(
+                    context.repository_path,
+                    message=commit_message,
+                    author_name="Codetoreum",
+                    author_email="noreply@codetoreum.ai",
+                    files=list(vcs_status.unstaged_files),
+                )
                 logger.info(
-                    f"No staged changes for execution {execution.id} "
-                    f"({len(vcs_status.unstaged_files)} unstaged file(s) left as-is). "
-                    "Pushing branch to capture agent commits.",
-                    extra={"work_item_id": context.work_item_id, "agent_id": context.agent_id},
+                    f"Committed {len(vcs_status.unstaged_files)} unstaged file(s) for execution {execution.id}: "
+                    f"{commit_sha} → {branch}",
+                    extra={"work_item_id": context.work_item_id, "commit_sha": commit_sha, "branch": branch},
                 )
             else:
                 # No staged or unstaged files. The agent may have committed and cleaned
