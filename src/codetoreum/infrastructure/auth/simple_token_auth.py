@@ -226,7 +226,7 @@ class SimpleTokenAuthManager:
         print("   - Use HTTPS in production to protect the token")
         print("\n📚 API Documentation:")
         print(f"   {base_url}/api/docs")
-        print("=" * 70 + "\n")
+        print("=" * 70 + "\n", flush=True)
 
     def get_token_info(self) -> dict:
         """

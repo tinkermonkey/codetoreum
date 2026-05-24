@@ -31,6 +31,7 @@ from codetoreum.domain.value_objects import (
 from codetoreum.domain.work_item import WorkItem
 from codetoreum.infrastructure.observability.instrumentation import (
     instrument_async_function,
+    instrument_function,
 )
 from codetoreum.ports.exceptions import (
     ContainerExecutionError,
@@ -551,9 +552,9 @@ class ExecutionService:
             )
             raise
 
-    @instrument_async_function(
-        name="execution.execute_with_container",
-        attributes={"service": "execution_service", "operation": "execute_container"},
+    @instrument_function(
+        name="execution.build_agent_container_config",
+        attributes={"service": "execution_service", "operation": "build_container_config"},
     )
     def _build_agent_container_config(
         self,
