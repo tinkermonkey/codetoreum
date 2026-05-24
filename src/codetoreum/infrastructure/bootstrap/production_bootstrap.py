@@ -899,6 +899,8 @@ class ProductionApplicationBootstrap:
         work_item_query = self.services.work_item_service
         agent_command = MockAgentCommandAdapter()
         agent_query = MockAgentQueryAdapter()
+        for _agent in self.adapters.agent_repository.get_all_sync():
+            agent_query.add_agent(_agent)
         execution_command = MockExecutionCommandAdapter()
         execution_query = MockExecutionQueryAdapter(
             agent_executor=self.adapters.agent_executor,

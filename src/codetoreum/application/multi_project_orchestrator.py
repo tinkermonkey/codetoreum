@@ -555,11 +555,33 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
             )
             return
 
+        # Only reconcile if a real GitHub Projects v2 node ID is configured.
+        # Passing the project name as a GraphQL projectId always fails.
+        # ProjectConfig (domain value object) doesn't have a metadata field, so we
+        # use getattr to safely probe — if a richer config type is ever used here,
+        # or if metadata is added to ProjectConfig, this will pick it up automatically.
+        github_project_id: str | None = None
+        try:
+            project_config = await self._project_manager.get_project_config(project_name)
+            metadata = getattr(project_config, "metadata", {})
+            github_project_id = metadata.get("github_project_id") if hasattr(metadata, "get") else None
+        except Exception:
+            pass
+
+        if not github_project_id:
+            logger.debug(
+                f"Skipping board reconciliation for {project_name}: no github_project_id in project metadata",
+                extra={"project_name": project_name},
+            )
+            return
+
         logger.debug(
-            f"Reconciling boards for project {project_name}",
+            f"Reconciling boards for project {project_name} (node_id={github_project_id})",
             extra={"project_name": project_name},
         )
-        await self._board_service.reconcile_board(project_name, BoardConfig(board_id=project_name, expected_columns=()))
+        await self._board_service.reconcile_board(
+            github_project_id, BoardConfig(board_id=project_name, expected_columns=())
+        )
 
     @staticmethod
     def _get_iso_timestamp() -> str:

@@ -953,6 +953,11 @@ class BoardColumnEventHandler(EventHandler):
                 )
 
             try:
+                # Set board context so GitHubBoardAdapter._move_item_to_column_locked
+                # doesn't raise "Project and board context required".
+                if work_item_id in self._active_runs:
+                    run_meta = self._active_runs[work_item_id]
+                    await self.board_service.get_board(run_meta.project_id, board_id)
                 await self.board_service.move_item_to_column(work_item_id, next_column_name, MovedByType.ORCHESTRATOR)
             except Exception as board_err:
                 # External board sync failures (missing context, wrong node ID, token scope) must

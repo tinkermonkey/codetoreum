@@ -121,7 +121,7 @@ async def load_bootstrap_dir(
             try:
                 agent = _build_agent(agent_def, project_id)
                 await agent_repository.save(agent, project_id)
-                logger.debug(f"Loaded agent '{agent.id}' for project '{project_id}'")
+                logger.info(f"Loaded agent '{agent.id}' for project '{project_id}'")
             except Exception as e:
                 logger.error(
                     f"Failed to load agent '{agent_def.get('name')}' from {json_path.name}: {e}",

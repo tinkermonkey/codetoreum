@@ -98,7 +98,9 @@ class TestOrchestrationCycle:
         # Verify calls
         project_manager.reload_config.assert_called_once()
         assert project_manager.get_enabled_projects.call_count == 1
-        assert project_manager.get_project_config.call_count == 2
+        assert (
+            project_manager.get_project_config.call_count == 4
+        )  # once in orchestrate_project + once in _reconcile_project_boards per project
         assert project_manager.ensure_project_cloned.call_count == 2
         assert workflow_orchestrator.orchestrate_project.call_count == 2
 
@@ -171,7 +173,9 @@ class TestOrchestrationCycle:
         assert result.total_errors == 1
 
         # Verify both projects were attempted
-        assert project_manager.get_project_config.call_count == 2
+        assert (
+            project_manager.get_project_config.call_count == 4
+        )  # once in orchestrate_project + once in _reconcile_project_boards per project
         assert project_manager.ensure_project_cloned.call_count == 2
 
     @pytest.mark.asyncio
