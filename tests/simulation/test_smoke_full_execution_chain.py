@@ -8,8 +8,8 @@ Validates the path exercised by ``codetoreum-trigger`` CLI:
     → ExecutionServiceAgentExecutor._run_execution()
     → InMemoryVersionControlService.clone_repository()  ← creates workspace dir on disk
     → WorkspaceRouter.prepare_workspace()
-    → ExecutionService.execute_with_llm()
-    → MockLLMAdapter.execute()  ← captures LLMExecutionContext
+    → ExecutionService.execute()  ← Phase D4 unified path
+    → MockClaudeCodeAdapter.execute()  ← records (work_item, agent, mode, model)
     → completion callback → auto-progress: In Progress → Review → Done
 
 This test is distinct from ``test_execution_chain_e2e.py``, which triggers
@@ -149,12 +149,14 @@ async def test_http_trigger_drives_full_execution_chain(smoke_env):
 
     Five key assertions are checked in order:
 
-    1. working_directory is set on LLMExecutionContext — ExecutionServiceAgentExecutor
-       passes the cloned repo path as working_directory.
+    1. Coding agent invocation was recorded — MockClaudeCodeAdapter captured
+       at least one (work_item_id, agent_id, invocation_mode, model) tuple,
+       which means ExecutionService.execute() dispatched through the new
+       unified D4 path.
     2. Workspace directory exists on disk — InMemoryVersionControlService.clone_repository()
        creates the directory so that prepare_workspace() can write context files.
-    3. LLM was called at least once — MockLLMAdapter.execute() was invoked by
-       ExecutionService.execute_with_llm().
+    3. Invocation references the right work item — at least one invocation
+       carries the work_item_id that was triggered.
     4. Execution domain events are present — ExecutionCreatedEvent, ExecutionStartedEvent,
        and ExecutionCompletedEvent must all appear in the InMemoryEventStore.
     5. Work item reaches Done column — the cascade auto-progresses through all
@@ -163,9 +165,16 @@ async def test_http_trigger_drives_full_execution_chain(smoke_env):
     Note: The domain event emitted by AgentExecution.create() is
     ``ExecutionInitializedEvent`` (not "ExecutionCreatedEvent").
     """
+    from codetoreum.adapters.testing.mock_claude_code_adapter import (
+        MockClaudeCodeAdapter,
+    )
+
     bootstrap, seeder, adapters, client = smoke_env
     board_mock = adapters.board_as_mock()
-    llm_mock = adapters.llm_as_mock()
+    coding_agent_mock = adapters.coding_agent
+    assert isinstance(coding_agent_mock, MockClaudeCodeAdapter), (
+        "Simulation bootstrap must wire MockClaudeCodeAdapter as the " "coding_agent slot (Phase D3/D4)."
+    )
     work_item_id = seeder.created_items.work_items[0]
 
     # Fire the trigger — simulates `codetoreum-trigger --work-item-id X --column Ready`
@@ -188,37 +197,45 @@ async def test_http_trigger_drives_full_execution_chain(smoke_env):
         f"Current column: {(await board_mock.get_item_position(work_item_id)).column_name}"
     )
 
-    # Wait for MockLLMAdapter to capture at least one call before inspecting context
-    async def llm_was_called():
-        return llm_mock.get_request_count() >= 1 and llm_mock.last_context is not None
+    # Wait for the coding agent to capture at least one invocation
+    async def coding_agent_was_called():
+        return len(coding_agent_mock.invocations) >= 1
 
     await assert_condition(
-        llm_was_called,
+        coding_agent_was_called,
         timeout=5.0,
         poll_interval=0.05,
-        message="MockLLMAdapter.execute() should have been called at least once via ExecutionService",
+        message=(
+            "MockClaudeCodeAdapter.execute() should have been invoked at "
+            "least once via ExecutionService.execute() (Phase D4 path)."
+        ),
     )
 
-    # --- Assertion 1: working_directory set on LLMExecutionContext ---
-    last_ctx = llm_mock.last_context
-    assert last_ctx is not None, "MockLLMAdapter.last_context is None — execute() was never called"
-    assert last_ctx.working_directory is not None, (
-        "LLMExecutionContext.working_directory was not set. "
-        "ExecutionServiceAgentExecutor must pass the cloned repo path to the execution context."
+    # --- Assertion 1: at least one coding agent invocation recorded ---
+    invocations = coding_agent_mock.invocations
+    assert len(invocations) >= 1, (
+        "MockClaudeCodeAdapter recorded no invocations — ExecutionService.execute() "
+        "did not reach the coding-agent adapter."
     )
 
     # --- Assertion 2: workspace directory exists on disk ---
-    workspace_path = last_ctx.working_directory
+    # The executor clones into {workspace_base_dir}/{work_item_id}; the base
+    # dir is configured in the simulation bootstrap (tempdir-rooted).
+    from pathlib import Path
+
+    executor = bootstrap.adapters.agent_executor
+    workspace_path = Path(executor._workspace_base_dir) / work_item_id
     assert workspace_path.exists(), (
         f"Workspace directory does not exist on disk: {workspace_path}\n"
         "InMemoryVersionControlService.clone_repository() must call os.makedirs(target_path) "
         "so that WorkspaceRouter.prepare_workspace() can write /context/issue.txt and siblings."
     )
 
-    # --- Assertion 3: LLM was called ---
-    llm_call_count = llm_mock.get_request_count()
-    assert llm_call_count >= 1, (
-        f"Expected at least 1 LLM call via ExecutionService.execute_with_llm(), " f"got {llm_call_count}"
+    # --- Assertion 3: invocation references the triggered work item ---
+    triggered_invocations = [inv for inv in invocations if inv.work_item_id == work_item_id]
+    assert triggered_invocations, (
+        f"None of the coding-agent invocations reference work item {work_item_id!r}. "
+        f"Recorded work_item_ids: {[inv.work_item_id for inv in invocations]}"
     )
 
     # --- Assertion 4: execution domain events ---
@@ -250,15 +267,21 @@ async def test_http_trigger_drives_full_execution_chain(smoke_env):
 
 @pytest.mark.asyncio
 async def test_http_trigger_context_carries_execution_id(smoke_env):
-    """The LLMExecutionContext passed to MockLLMAdapter has an execution_id.
+    """The invocation passed to MockClaudeCodeAdapter carries an execution_id.
 
     This confirms that ExecutionService.create_execution() produced a persisted
-    AgentExecution before execute_with_llm() was called — i.e., the full
-    create → start → execute lifecycle ran correctly.
+    AgentExecution before ExecutionService.execute() was called — i.e., the
+    full create → start → execute lifecycle ran correctly through the D4
+    unified path.
     """
+    from codetoreum.adapters.testing.mock_claude_code_adapter import (
+        MockClaudeCodeAdapter,
+    )
+
     _, seeder, adapters, client = smoke_env
     board_mock = adapters.board_as_mock()
-    llm_mock = adapters.llm_as_mock()
+    coding_agent_mock = adapters.coding_agent
+    assert isinstance(coding_agent_mock, MockClaudeCodeAdapter)
     work_item_id = seeder.created_items.work_items[0]
 
     response = await client.post(
@@ -276,19 +299,26 @@ async def test_http_trigger_context_carries_execution_id(smoke_env):
     reached_done = await wait_for_column(board_mock, work_item_id, "Done", timeout=30.0)
     assert reached_done
 
-    async def context_has_execution_id():
-        return llm_mock.last_context is not None and llm_mock.last_context.execution_id is not None
+    async def invocation_has_execution_id():
+        return any(
+            inv.execution_id is not None and inv.work_item_id == work_item_id for inv in coding_agent_mock.invocations
+        )
 
     await assert_condition(
-        context_has_execution_id,
+        invocation_has_execution_id,
         timeout=5.0,
         poll_interval=0.05,
-        message="LLMExecutionContext.execution_id should be set by ExecutionService",
+        message=(
+            "MockClaudeCodeAdapter invocations should carry execution_id "
+            "after ExecutionService.create_execution() persists the AgentExecution."
+        ),
     )
 
-    assert llm_mock.last_context.execution_id is not None, (
-        "LLMExecutionContext.execution_id is None — ExecutionService did not wire the "
-        "AgentExecution id into the context before calling execute_with_llm()"
+    matching = [inv for inv in coding_agent_mock.invocations if inv.work_item_id == work_item_id]
+    assert matching, "No invocations recorded for the triggered work item"
+    assert matching[0].execution_id is not None, (
+        "MockClaudeCodeAdapter invocation has execution_id=None — ExecutionService "
+        "did not wire the AgentExecution id through to the coding-agent dispatch."
     )
 
 
@@ -342,8 +372,14 @@ async def test_http_trigger_sequential_items_both_reach_done(smoke_env):
         f"Item B did not reach Done. " f"Current: {(await board_mock.get_item_position(item_b)).column_name}"
     )
 
-    # Both items completed — LLM was called at least once per item
-    llm_mock = adapters.llm_as_mock()
-    assert llm_mock.get_request_count() >= 2, (
-        f"Expected at least 2 LLM calls (one cascade per item), " f"got {llm_mock.get_request_count()}"
+    # Both items completed — the coding agent was invoked at least once per item
+    from codetoreum.adapters.testing.mock_claude_code_adapter import (
+        MockClaudeCodeAdapter,
+    )
+
+    coding_agent_mock = adapters.coding_agent
+    assert isinstance(coding_agent_mock, MockClaudeCodeAdapter)
+    assert len(coding_agent_mock.invocations) >= 2, (
+        f"Expected at least 2 coding-agent invocations (one cascade per item), "
+        f"got {len(coding_agent_mock.invocations)}"
     )

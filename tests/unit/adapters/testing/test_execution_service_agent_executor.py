@@ -135,7 +135,9 @@ class ExecutorFixture:
         exec_result = MagicMock()
         exec_result.success = True
         exec_result.execution = MagicMock(output="done")
-        self.execution_service.execute_with_llm.return_value = exec_result
+        # D4: executor dispatches via ExecutionService.execute() — the new
+        # unified entry point that internally delegates to ICodingAgent.
+        self.execution_service.execute.return_value = exec_result
 
     def make_executor(self, recovery_service=None) -> ExecutionServiceAgentExecutor:
         return ExecutionServiceAgentExecutor(
@@ -373,7 +375,7 @@ class TestExecutionServiceAgentExecutorFailurePaths:
         await fx.drain_pending(executor)
 
         fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, False)
-        fx.execution_service.execute_with_llm.assert_not_called()
+        fx.execution_service.execute.assert_not_called()
         # finalize_workspace must also be called with success=False (mirrors create_execution failure path)
         fx.workspace_router.finalize_workspace.assert_called_once()
         call_args = fx.workspace_router.finalize_workspace.call_args
@@ -383,7 +385,7 @@ class TestExecutionServiceAgentExecutorFailurePaths:
     async def test_unexpected_exception_calls_completion_with_failure(self):
         """Outer try/except: unexpected exception → completion called with False."""
         fx = ExecutorFixture()
-        fx.execution_service.execute_with_llm.side_effect = RuntimeError("unexpected crash")
+        fx.execution_service.execute.side_effect = RuntimeError("unexpected crash")
         executor = fx.make_executor()
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
@@ -395,13 +397,13 @@ class TestExecutionServiceAgentExecutorFailurePaths:
         fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, False)
 
     @pytest.mark.asyncio
-    async def test_execute_with_llm_soft_failure_calls_completion_with_false(self):
-        """Step 10: execute_with_llm returns success=False → callback called with False."""
+    async def test_execute_soft_failure_calls_completion_with_false(self):
+        """Step 10: ExecutionService.execute() returns success=False → callback called with False."""
         fx = ExecutorFixture()
         exec_result = MagicMock()
         exec_result.success = False
         exec_result.execution = MagicMock(output="")
-        fx.execution_service.execute_with_llm.return_value = exec_result
+        fx.execution_service.execute.return_value = exec_result
         executor = fx.make_executor()
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
@@ -413,13 +415,13 @@ class TestExecutionServiceAgentExecutorFailurePaths:
         fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, False)
 
     @pytest.mark.asyncio
-    async def test_execute_with_llm_soft_failure_finalizes_workspace_with_false(self):
-        """Step 10: execute_with_llm returns success=False → finalize_workspace called with success=False."""
+    async def test_execute_soft_failure_finalizes_workspace_with_false(self):
+        """Step 10: ExecutionService.execute() returns success=False → finalize_workspace called with success=False."""
         fx = ExecutorFixture()
         exec_result = MagicMock()
         exec_result.success = False
         exec_result.execution = MagicMock(output="")
-        fx.execution_service.execute_with_llm.return_value = exec_result
+        fx.execution_service.execute.return_value = exec_result
         executor = fx.make_executor()
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
@@ -433,13 +435,13 @@ class TestExecutionServiceAgentExecutorFailurePaths:
         assert call_args.args[2]["success"] is False
 
     @pytest.mark.asyncio
-    async def test_execute_with_llm_soft_failure_no_double_clear(self):
+    async def test_execute_soft_failure_no_double_clear(self):
         """Step 10: soft failure cleans up registry/branch-tracker exactly once (via finally)."""
         fx = ExecutorFixture()
         exec_result = MagicMock()
         exec_result.success = False
         exec_result.execution = MagicMock(output="")
-        fx.execution_service.execute_with_llm.return_value = exec_result
+        fx.execution_service.execute.return_value = exec_result
         executor = fx.make_executor()
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
@@ -517,8 +519,21 @@ class TestExecutePublicMethod:
 
 class TestDockerExecutionPath:
     @pytest.mark.asyncio
-    async def test_docker_path_uses_execute_with_container(self):
-        """Agent with requires_docker=True routes to execute_with_container."""
+    async def test_docker_agent_dispatches_with_containerized_invocation_mode(self):
+        """Agent with requires_docker=True dispatches via ExecutionService.execute()
+        with InvocationMode.CONTAINERIZED options.
+
+        Per Phase D4, the executor no longer branches on `requires_docker` to
+        choose between container and LLM call sites. It always calls
+        ExecutionService.execute() and uses `_build_invocation_options` to
+        derive the InvocationMode from the agent — the coding-agent adapter
+        then owns the dispatch decision inside execute().
+        """
+        from codetoreum.ports.output.coding_agent import (
+            CodingAgentInvocationOptions,
+            InvocationMode,
+        )
+
         fx = ExecutorFixture()
         agent = ExecutorFixture.make_agent_mock(requires_docker=True)
         fx.agent_repository.get_by_id.return_value = agent
@@ -526,15 +541,20 @@ class TestDockerExecutionPath:
         container_result = MagicMock()
         container_result.success = True
         container_result.execution = MagicMock(output="done")
-        fx.execution_service.execute_agent_with_container.return_value = container_result
+        fx.execution_service.execute.return_value = container_result
 
         executor = fx.make_executor()
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
         await fx.drain_pending(executor)
         await fx.drain_pending(executor)
 
-        fx.execution_service.execute_agent_with_container.assert_called_once()
-        fx.execution_service.execute_with_llm.assert_not_called()
+        fx.execution_service.execute.assert_called_once()
+        call_args = fx.execution_service.execute.call_args
+        # ExecutionService.execute(execution, context, workspace, options)
+        options = call_args.args[3]
+        assert isinstance(options, CodingAgentInvocationOptions)
+        assert options.invocation_mode == InvocationMode.CONTAINERIZED
+        assert options.mode_config.get("image") == "codetoreum-agent:latest"
         fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, True)
 
 
@@ -615,7 +635,7 @@ class TestCancelledErrorHandling:
         fx = ExecutorFixture()
         # Simulate a point where CancelledError is raised
         # For example, during asyncio.sleep in execution delay or during execution
-        fx.execution_service.execute_with_llm.side_effect = asyncio.CancelledError()
+        fx.execution_service.execute.side_effect = asyncio.CancelledError()
         executor = fx.make_executor()
 
         # Act & Assert: CancelledError should be re-raised after cleanup

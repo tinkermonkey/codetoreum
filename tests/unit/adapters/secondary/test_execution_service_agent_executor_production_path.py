@@ -146,11 +146,13 @@ class ProductionPathFixture:
         self.start_result.success = True
         self.execution_service.start_execution.return_value = self.start_result
 
-        # Step 10: Execute with LLM (default path)
+        # Step 10: D4 unified dispatch via ExecutionService.execute()
+        # (replaces execute_with_llm / execute_with_container; the coding-agent
+        # adapter owns the invocation-mode decision internally).
         self.exec_result = MagicMock()
         self.exec_result.success = True
         self.exec_result.execution = MagicMock(output="Completed successfully")
-        self.execution_service.execute_with_llm.return_value = self.exec_result
+        self.execution_service.execute.return_value = self.exec_result
 
         # Step 11: Finalize workspace
         self.finalize_result = MagicMock()
@@ -235,9 +237,8 @@ class TestProductionExecutionPath:
         # Step 9: Start execution
         fx.execution_service.start_execution.assert_called_once_with(fx.execution, ANY)
 
-        # Step 10: Execute (LLM path)
-        fx.execution_service.execute_with_llm.assert_called_once()
-        fx.execution_service.execute_with_container.assert_not_called()
+        # Step 10: Execute via the unified D4 path
+        fx.execution_service.execute.assert_called_once()
 
         # Step 11: Finalize workspace
         fx.workspace_router.finalize_workspace.assert_called_once()
@@ -251,22 +252,30 @@ class TestProductionExecutionPath:
 
     @pytest.mark.asyncio
     async def test_full_container_execution_path_success(self):
-        """Full chain with requires_docker=True routes to execute_with_container."""
+        """Full chain with requires_docker=True dispatches via the unified D4
+        path with InvocationMode.CONTAINERIZED options."""
+        from codetoreum.ports.output.coding_agent import InvocationMode
+
         fx = ProductionPathFixture()
         fx.agent.requires_docker = True
 
         container_result = MagicMock()
         container_result.success = True
         container_result.execution = MagicMock(output="Container completed")
-        fx.execution_service.execute_agent_with_container.return_value = container_result
+        fx.execution_service.execute.return_value = container_result
 
         executor = fx.make_executor()
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
         await fx.drain_pending(executor)
 
-        # Verify container path taken via execute_agent_with_container (fix #3: adapter no longer builds ContainerConfig)
-        fx.execution_service.execute_agent_with_container.assert_called_once()
-        fx.execution_service.execute_with_llm.assert_not_called()
+        # Verify the unified path was used. The executor's
+        # `_build_invocation_options` derives CONTAINERIZED from
+        # agent.requires_docker; the coding-agent adapter would then own
+        # the IContainer dispatch decision inside execute().
+        fx.execution_service.execute.assert_called_once()
+        options = fx.execution_service.execute.call_args.args[3]
+        assert options.invocation_mode == InvocationMode.CONTAINERIZED
+        assert options.mode_config.get("image") == "codetoreum-agent:latest"
 
         # Completion should be called with success=True
         fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, True)
@@ -516,15 +525,23 @@ class TestProductionPathStep9StartExecution:
         fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, False)
 
         # Execution should not proceed
-        fx.execution_service.execute_with_llm.assert_not_called()
+        fx.execution_service.execute.assert_not_called()
 
 
 class TestProductionPathStep10Execution:
-    """Test Step 10: Execute via LLM or Container path."""
+    """Test Step 10: Unified D4 dispatch via ExecutionService.execute().
+
+    Post-D4 the executor no longer branches on `agent.requires_docker`;
+    it always calls ExecutionService.execute() with an InvocationMode
+    derived in `_build_invocation_options`. The coding-agent adapter owns
+    the container vs. host vs. API dispatch internally.
+    """
 
     @pytest.mark.asyncio
-    async def test_llm_execution_called_when_requires_docker_false(self):
-        """Step 10: agent.requires_docker=False → execute_with_llm called."""
+    async def test_host_invocation_options_when_requires_docker_false(self):
+        """Step 10: agent.requires_docker=False → execute() called with HOST mode."""
+        from codetoreum.ports.output.coding_agent import InvocationMode
+
         fx = ProductionPathFixture()
         fx.agent.requires_docker = False
         executor = fx.make_executor()
@@ -533,30 +550,36 @@ class TestProductionPathStep10Execution:
 
         await fx.drain_pending(executor)
 
-        fx.execution_service.execute_with_llm.assert_called_once()
-        fx.execution_service.execute_with_container.assert_not_called()
+        fx.execution_service.execute.assert_called_once()
+        options = fx.execution_service.execute.call_args.args[3]
+        assert options.invocation_mode == InvocationMode.HOST
+        assert options.mode_config == {}
 
     @pytest.mark.asyncio
-    async def test_container_execution_called_when_requires_docker_true(self):
-        """Step 10: agent.requires_docker=True → execute_agent_with_container called."""
+    async def test_containerized_invocation_options_when_requires_docker_true(self):
+        """Step 10: agent.requires_docker=True → execute() called with CONTAINERIZED mode."""
+        from codetoreum.ports.output.coding_agent import InvocationMode
+
         fx = ProductionPathFixture()
         fx.agent.requires_docker = True
 
         container_result = MagicMock()
         container_result.success = True
         container_result.execution = MagicMock(output="Container output")
-        fx.execution_service.execute_agent_with_container.return_value = container_result
+        fx.execution_service.execute.return_value = container_result
 
         executor = fx.make_executor()
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
         await fx.drain_pending(executor)
 
-        fx.execution_service.execute_agent_with_container.assert_called_once()
-        fx.execution_service.execute_with_llm.assert_not_called()
+        fx.execution_service.execute.assert_called_once()
+        options = fx.execution_service.execute.call_args.args[3]
+        assert options.invocation_mode == InvocationMode.CONTAINERIZED
+        assert options.mode_config.get("image") == "codetoreum-agent:latest"
 
     @pytest.mark.asyncio
     async def test_execution_failure_is_soft_failure(self):
-        """Step 10: execute_with_llm.success=False → finalize and completion=False."""
+        """Step 10: ExecutionService.execute() returns success=False → finalize and completion=False."""
         fx = ProductionPathFixture()
         fx.exec_result.success = False
         fx.exec_result.execution = MagicMock(output="LLM error output")
@@ -576,9 +599,9 @@ class TestProductionPathStep10Execution:
 
     @pytest.mark.asyncio
     async def test_execution_exception_is_caught_and_finalized(self):
-        """Step 10: execute_with_llm raises exception → finalize and completion=False."""
+        """Step 10: ExecutionService.execute() raises exception → finalize and completion=False."""
         fx = ProductionPathFixture()
-        fx.execution_service.execute_with_llm.side_effect = RuntimeError("LLM call failed")
+        fx.execution_service.execute.side_effect = RuntimeError("execute call failed")
         executor = fx.make_executor()
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
@@ -636,7 +659,7 @@ class TestProductionPathStep11Finalization:
     async def test_workspace_finalization_on_execution_exception(self):
         """Step 11: finalize_workspace called even if execute raises exception."""
         fx = ProductionPathFixture()
-        fx.execution_service.execute_with_llm.side_effect = RuntimeError("Execution crashed")
+        fx.execution_service.execute.side_effect = RuntimeError("Execution crashed")
         executor = fx.make_executor()
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
@@ -700,7 +723,7 @@ class TestProductionPathCleanupAndCompletion:
     async def test_registry_and_branch_tracker_cleared_on_failure(self):
         """Registry and branch-tracker cleared even on execution failure."""
         fx = ProductionPathFixture()
-        fx.execution_service.execute_with_llm.side_effect = RuntimeError("Execution failed")
+        fx.execution_service.execute.side_effect = RuntimeError("Execution failed")
         executor = fx.make_executor()
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
