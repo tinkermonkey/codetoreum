@@ -281,6 +281,18 @@ class TestExecutionServiceAgentExecutorChainSteps:
 
         await executor._run_execution("item-1", "architect", "board-1")
 
+        # Wait for the AgentExecutionCompletedEvent publish task to finish
+
+        for t in list(executor._pending_tasks):
+
+            try:
+
+                await asyncio.wait_for(asyncio.shield(t), timeout=1.0)
+
+            except (TimeoutError, Exception):
+
+                pass
+
         # Verify completion callback was called with False (failure)
         callback.assert_called_once_with("item-1", "board-1", False)
         executor._run_registry.get_active_run.assert_called_once_with("item-1")
@@ -308,6 +320,18 @@ class TestExecutionServiceAgentExecutorChainSteps:
         executor._agent_repository.get_by_id.side_effect = Exception("Agent not found")
 
         await executor._run_execution("item-1", "architect", "board-1")
+
+        # Wait for the AgentExecutionCompletedEvent publish task to finish
+
+        for t in list(executor._pending_tasks):
+
+            try:
+
+                await asyncio.wait_for(asyncio.shield(t), timeout=1.0)
+
+            except (TimeoutError, Exception):
+
+                pass
 
         # Verify completion callback called with False
         callback.assert_called_once_with("item-1", "board-1", False)
@@ -339,6 +363,18 @@ class TestExecutionServiceAgentExecutorChainSteps:
         executor._work_item_service.get_work_item.side_effect = Exception("Work item not found")
 
         await executor._run_execution("item-1", "architect", "board-1")
+
+        # Wait for the AgentExecutionCompletedEvent publish task to finish
+
+        for t in list(executor._pending_tasks):
+
+            try:
+
+                await asyncio.wait_for(asyncio.shield(t), timeout=1.0)
+
+            except (TimeoutError, Exception):
+
+                pass
 
         # Verify completion callback called with False
         callback.assert_called_once_with("item-1", "board-1", False)
@@ -374,6 +410,18 @@ class TestExecutionServiceAgentExecutorChainSteps:
 
         await executor._run_execution("item-1", "architect", "board-1")
 
+        # Wait for the AgentExecutionCompletedEvent publish task to finish
+
+        for t in list(executor._pending_tasks):
+
+            try:
+
+                await asyncio.wait_for(asyncio.shield(t), timeout=1.0)
+
+            except (TimeoutError, Exception):
+
+                pass
+
         # Verify completion callback called with False
         callback.assert_called_once_with("item-1", "board-1", False)
 
@@ -396,6 +444,12 @@ class TestExecutionServiceAgentExecutorCompletion:
 
         # Should not raise
         await executor._run_execution("item-1", "architect", "board-1")
+        # Wait for the AgentExecutionCompletedEvent publish task to finish
+        for t in list(executor._pending_tasks):
+            try:
+                await asyncio.wait_for(asyncio.shield(t), timeout=1.0)
+            except (TimeoutError, Exception):
+                pass
 
     @pytest.mark.asyncio
     async def test_pending_tasks_cleanup_on_completion(self):

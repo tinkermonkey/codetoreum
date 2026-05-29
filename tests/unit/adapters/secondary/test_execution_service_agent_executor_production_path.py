@@ -15,6 +15,7 @@ Also covers recovery logic:
 - Recovery service failure handling (don't let it crash fire-and-forget task)
 """
 
+import asyncio
 from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
@@ -173,6 +174,29 @@ class ProductionPathFixture:
             default_board_id=self.BOARD_ID,
         )
 
+    async def drain_pending(self, executor: ExecutionServiceAgentExecutor, deadline_s: float = 1.0) -> None:
+        """Await every task the executor scheduled in `_pending_tasks`.
+
+        `_call_completion` now schedules the AgentExecutionCompletedEvent publish as
+        a fire-and-forget task so the executor's outer task can complete (and clear
+        its `_executing_work_items` membership) before the BEH handler runs. Tests
+        that assert against the completion bridge need to wait until that task has
+        finished. We snapshot the set, await each task with a deadline, and repeat
+        until no new tasks appear (recovery cascades).
+        """
+        loop_count = 0
+        while executor._pending_tasks and loop_count < 20:
+            snapshot = list(executor._pending_tasks)
+            for t in snapshot:
+                try:
+                    await asyncio.wait_for(asyncio.shield(t), timeout=deadline_s)
+                except (TimeoutError, asyncio.CancelledError):
+                    pass
+                except Exception:
+                    # Exceptions are surfaced via done-callbacks; tests assert on side effects.
+                    pass
+            loop_count += 1
+
 
 class TestProductionExecutionPath:
     """Test the full production execution path (Steps 5-11)."""
@@ -184,6 +208,8 @@ class TestProductionExecutionPath:
         executor = fx.make_executor()
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+        await fx.drain_pending(executor)
 
         # Verify all steps executed in order
         fx.run_registry.get_active_run.assert_called_once_with(fx.WORK_ITEM_ID)
@@ -236,6 +262,7 @@ class TestProductionExecutionPath:
 
         executor = fx.make_executor()
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+        await fx.drain_pending(executor)
 
         # Verify container path taken via execute_agent_with_container (fix #3: adapter no longer builds ContainerConfig)
         fx.execution_service.execute_agent_with_container.assert_called_once()
@@ -257,6 +284,8 @@ class TestProductionPathStep5BranchTracking:
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
 
+        await fx.drain_pending(executor)
+
         fx.branch_tracker.set_branch.assert_called_once_with(fx.WORK_ITEM_ID, "feature/issue-123-tracking")
         fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, True)
 
@@ -268,6 +297,8 @@ class TestProductionPathStep5BranchTracking:
         executor = fx.make_executor()
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+        await fx.drain_pending(executor)
 
         # set_branch should not be called for falsy branch names
         fx.branch_tracker.set_branch.assert_not_called()
@@ -282,6 +313,8 @@ class TestProductionPathStep5BranchTracking:
         executor = fx.make_executor()
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+        await fx.drain_pending(executor)
 
         fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, False)
         # Downstream steps should not execute
@@ -299,6 +332,8 @@ class TestProductionPathStep6WorkspacePreparation:
         executor = fx.make_executor()
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+        await fx.drain_pending(executor)
 
         # Verify prepare_workspace was called
         assert fx.workspace_router.prepare_workspace.call_count == 1
@@ -323,6 +358,8 @@ class TestProductionPathStep6WorkspacePreparation:
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
 
+        await fx.drain_pending(executor)
+
         fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, False)
         fx.execution_service.create_execution.assert_not_called()
 
@@ -334,6 +371,8 @@ class TestProductionPathStep6WorkspacePreparation:
         executor = fx.make_executor()
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+        await fx.drain_pending(executor)
 
         fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, False)
         fx.execution_service.create_execution.assert_not_called()
@@ -356,6 +395,7 @@ class TestProductionPathStep7ExecutionContextBuilding:
 
             executor = fx.make_executor()
             await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+            await fx.drain_pending(executor)
 
             # Verify build_context was called with the right arguments
             assert mock_builder.build_context.called
@@ -377,6 +417,8 @@ class TestProductionPathStep8CreateExecution:
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
 
+        await fx.drain_pending(executor)
+
         assert fx.execution_service.create_execution.call_count == 1
         call_kwargs = fx.execution_service.create_execution.call_args.kwargs
         assert call_kwargs["agent"] == fx.agent
@@ -392,6 +434,8 @@ class TestProductionPathStep8CreateExecution:
         executor = fx.make_executor()
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+        await fx.drain_pending(executor)
 
         # Finalize should be called even on create_execution failure
         fx.workspace_router.finalize_workspace.assert_called_once()
@@ -413,6 +457,8 @@ class TestProductionPathStep8CreateExecution:
             mock_prompt_builder.build_prompt.side_effect = AttributeError("None agent field")
 
             await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+            await fx.drain_pending(executor)
 
             # Finalize should be called on prompt build failure
             fx.workspace_router.finalize_workspace.assert_called_once()
@@ -442,6 +488,7 @@ class TestProductionPathStep9StartExecution:
 
             executor = fx.make_executor()
             await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+            await fx.drain_pending(executor)
 
             assert fx.execution_service.start_execution.call_count == 1
             call_args = fx.execution_service.start_execution.call_args
@@ -457,6 +504,8 @@ class TestProductionPathStep9StartExecution:
         executor = fx.make_executor()
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+        await fx.drain_pending(executor)
 
         # Finalize should be called on startup failure
         fx.workspace_router.finalize_workspace.assert_called_once()
@@ -482,6 +531,8 @@ class TestProductionPathStep10Execution:
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
 
+        await fx.drain_pending(executor)
+
         fx.execution_service.execute_with_llm.assert_called_once()
         fx.execution_service.execute_with_container.assert_not_called()
 
@@ -498,6 +549,7 @@ class TestProductionPathStep10Execution:
 
         executor = fx.make_executor()
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+        await fx.drain_pending(executor)
 
         fx.execution_service.execute_agent_with_container.assert_called_once()
         fx.execution_service.execute_with_llm.assert_not_called()
@@ -511,6 +563,8 @@ class TestProductionPathStep10Execution:
         executor = fx.make_executor()
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+        await fx.drain_pending(executor)
 
         # Finalize should still be called
         fx.workspace_router.finalize_workspace.assert_called_once()
@@ -528,6 +582,8 @@ class TestProductionPathStep10Execution:
         executor = fx.make_executor()
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+        await fx.drain_pending(executor)
 
         # Finalize should still be called (in try/finally pattern)
         fx.workspace_router.finalize_workspace.assert_called_once()
@@ -551,6 +607,8 @@ class TestProductionPathStep11Finalization:
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
 
+        await fx.drain_pending(executor)
+
         fx.workspace_router.finalize_workspace.assert_called_once()
         finalize_call = fx.workspace_router.finalize_workspace.call_args
         finalize_data = finalize_call.args[2]
@@ -567,6 +625,8 @@ class TestProductionPathStep11Finalization:
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
 
+        await fx.drain_pending(executor)
+
         fx.workspace_router.finalize_workspace.assert_called_once()
         finalize_call = fx.workspace_router.finalize_workspace.call_args
         finalize_data = finalize_call.args[2]
@@ -580,6 +640,8 @@ class TestProductionPathStep11Finalization:
         executor = fx.make_executor()
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+        await fx.drain_pending(executor)
 
         # Finalize should still be called (finally block)
         fx.workspace_router.finalize_workspace.assert_called_once()
@@ -596,6 +658,7 @@ class TestProductionPathStep11Finalization:
 
         # Should not raise
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+        await fx.drain_pending(executor)
 
         # Completion still called (success=True because exec succeeded before finalize crashed)
         fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, True)
@@ -609,6 +672,8 @@ class TestProductionPathStep11Finalization:
         executor = fx.make_executor()
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+        await fx.drain_pending(executor)
 
         finalize_call = fx.workspace_router.finalize_workspace.call_args
         finalize_data = finalize_call.args[2]
@@ -626,6 +691,8 @@ class TestProductionPathCleanupAndCompletion:
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
 
+        await fx.drain_pending(executor)
+
         fx.run_registry.clear_run.assert_called_once_with(fx.WORK_ITEM_ID)
         fx.branch_tracker.clear.assert_called_once_with(fx.WORK_ITEM_ID)
 
@@ -637,6 +704,8 @@ class TestProductionPathCleanupAndCompletion:
         executor = fx.make_executor()
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+        await fx.drain_pending(executor)
 
         # Cleanup still happens (finally block)
         fx.run_registry.clear_run.assert_called_once_with(fx.WORK_ITEM_ID)
@@ -651,6 +720,8 @@ class TestProductionPathCleanupAndCompletion:
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
 
+        await fx.drain_pending(executor)
+
         # Cleanup still happens
         fx.run_registry.clear_run.assert_called_once_with(fx.WORK_ITEM_ID)
         fx.branch_tracker.clear.assert_called_once_with(fx.WORK_ITEM_ID)
@@ -664,6 +735,8 @@ class TestProductionPathCleanupAndCompletion:
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
 
+        await fx.drain_pending(executor)
+
         # Completion still called despite cleanup failure
         fx.completion_callback.assert_called_once()
 
@@ -674,6 +747,8 @@ class TestProductionPathCleanupAndCompletion:
         executor = fx.make_executor()
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+        await fx.drain_pending(executor)
 
         # Exactly one call
         assert fx.completion_callback.call_count == 1
@@ -700,6 +775,8 @@ class TestCompletionCallbackFailureRecovery:
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
 
+        await fx.drain_pending(executor)
+
         # Recovery service should be invoked
         assert fx.recovery_service.handle_completion_callback_failure.called
         call_kwargs = fx.recovery_service.handle_completion_callback_failure.call_args.kwargs
@@ -717,6 +794,8 @@ class TestCompletionCallbackFailureRecovery:
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
 
+        await fx.drain_pending(executor)
+
         # Recovery service should receive the exception
         call_kwargs = fx.recovery_service.handle_completion_callback_failure.call_args.kwargs
         assert call_kwargs["error"] is publish_error
@@ -730,6 +809,7 @@ class TestCompletionCallbackFailureRecovery:
 
         # Should not raise
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+        await fx.drain_pending(executor)
 
         # Cleanup still happens
         fx.run_registry.clear_run.assert_called_once_with(fx.WORK_ITEM_ID)
@@ -745,6 +825,7 @@ class TestCompletionCallbackFailureRecovery:
 
         # Should not raise even though recovery service failed
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+        await fx.drain_pending(executor)
 
     @pytest.mark.asyncio
     async def test_completion_callback_success_does_not_invoke_recovery(self):
@@ -753,6 +834,8 @@ class TestCompletionCallbackFailureRecovery:
         executor = fx.make_executor(recovery_service=fx.recovery_service)
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+        await fx.drain_pending(executor)
 
         # Recovery service should not be called
         fx.recovery_service.handle_completion_callback_failure.assert_not_called()
@@ -779,6 +862,7 @@ class TestCompletionCallbackFailureRecovery:
 
         # Execution should complete without crashing
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+        await fx.drain_pending(executor)
 
         # Subscriber failures are logged by EventBus; the executor does NOT
         # treat them as publish failures and does NOT invoke the recovery service.
@@ -798,6 +882,7 @@ class TestProductionPathProjectContextBuilding:
         ) as mock_context_class:
             executor = fx.make_executor()
             await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+            await fx.drain_pending(executor)
 
             # ProjectContext should be instantiated
             assert mock_context_class.called
@@ -815,6 +900,7 @@ class TestProductionPathProjectContextBuilding:
         ) as mock_context_class:
             executor = fx.make_executor()
             await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+            await fx.drain_pending(executor)
 
             # Check the call
             call_kwargs = mock_context_class.call_args.kwargs
@@ -836,6 +922,8 @@ class TestPromptBuilderIntegration:
         executor = fx.make_executor(workflow_config_service=workflow_config_service)
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+        await fx.drain_pending(executor)
 
         # Verify workflow template was fetched
         workflow_config_service.get_board_workflow_template.assert_called_once_with(fx.BOARD_ID)
@@ -859,6 +947,8 @@ class TestPromptBuilderIntegration:
 
             await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
 
+            await fx.drain_pending(executor)
+
             # Verify PromptBuilder.build_prompt was called with workflow_template
             assert mock_prompt_builder.build_prompt.called
             call_kwargs = mock_prompt_builder.build_prompt.call_args.kwargs
@@ -878,6 +968,8 @@ class TestPromptBuilderIntegration:
             executor = fx.make_executor()
 
             await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+            await fx.drain_pending(executor)
 
             # Verify PromptBuilder.build_prompt was called with workflow_template=None
             assert mock_prompt_builder.build_prompt.called
@@ -901,6 +993,8 @@ class TestPromptBuilderIntegration:
                 executor = fx.make_executor(workflow_config_service=workflow_config_service)
 
                 await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+                await fx.drain_pending(executor)
 
                 # Verify warning was logged
                 assert mock_logger.warning.called
@@ -930,6 +1024,8 @@ class TestPromptBuilderIntegration:
                 executor = fx.make_executor()
 
                 await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+                await fx.drain_pending(executor)
 
                 # Verify PromptBuilder still called with previous_output=None
                 assert mock_prompt_builder.build_prompt.called

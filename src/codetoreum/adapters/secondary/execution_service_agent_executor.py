@@ -598,14 +598,22 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         event bus replaces that callback: `BoardColumnEventHandler` subscribes to
         `AgentExecutionCompletedEvent` and runs the same auto-progression logic.
 
-        If publishing fails, the work item is stuck in its current column. This
-        method handles recovery via:
-        1. Logging the failure with full context
-        2. Using AgentExecutionRecoveryService to queue for manual recovery
-        3. Failing the workflow run to signal pipeline blockage
+        **Scheduling**: The publish is dispatched via `asyncio.create_task` and
+        NOT awaited here. Awaiting would keep `_run_execution` (and therefore the
+        outer `_executing_work_items` membership) alive across the BEH handler
+        chain — which calls `board.move_item_to_column`, schedules a deferred
+        bridge task, and yields control. Any deferred bridge task from an earlier
+        move can then run before the executor's task completes, hit
+        `LockStatus.ALREADY_HELD`, and re-trigger the agent — turning a single
+        auto-progression into a loop. Detaching the publish lets the executor's
+        task complete (and clear its `_executing_work_items` entry) before the
+        BEH handler runs, matching the timing of the original
+        `set_completion_handler` callback path.
 
-        If the recovery service itself fails, the exception is caught and logged
-        to prevent it from propagating unhandled through the fire-and-forget task.
+        **Failure handling**: A done-callback inspects the publish task's result.
+        If it failed, the recovery service is invoked from within the callback —
+        this preserves the recovery semantics the old callback path had, even
+        though the publish is no longer awaited inline.
 
         Args:
             work_item_id: Work item that completed
@@ -624,31 +632,51 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             error_summary=error_summary,
         )
 
-        try:
-            await self._event_bus.publish(event)
-        except Exception as e:
+        publish_task = asyncio.create_task(self._event_bus.publish(event))
+        # Track the task so it isn't garbage-collected mid-flight; the done-callback
+        # discards it from the set once it finishes.
+        self._pending_tasks.add(publish_task)
+
+        def _on_publish_done(t: asyncio.Task[None]) -> None:
+            self._pending_tasks.discard(t)
+            try:
+                exc = t.exception()
+            except asyncio.CancelledError:
+                return
+            if exc is None:
+                return
             logger.error(
-                f"Publishing AgentExecutionCompletedEvent failed for '{work_item_id}': {e}",
-                exc_info=True,
+                f"Publishing AgentExecutionCompletedEvent failed for '{work_item_id}': {exc}",
+                exc_info=exc,
                 extra={"error_id": ErrorRegistry.ERR_EXEC_CHAIN_COMPLETION_CALLBACK_FAILURE},
             )
-            # Use recovery service to handle the failure (queue for manual recovery,
-            # fail workflow)
-            if self._recovery_service:
+            if not self._recovery_service:
+                return
+            # Recovery is async; schedule it as its own task. We can't await here
+            # because we're inside a sync done-callback.
+            recovery_coro = self._recovery_service.handle_completion_callback_failure(
+                work_item_id=work_item_id,
+                board_id=board_id,
+                success=success,
+                error=exc,
+                project_id=project_id,
+            )
+            recovery_task = asyncio.create_task(recovery_coro)
+            self._pending_tasks.add(recovery_task)
+
+            def _on_recovery_done(rt: asyncio.Task[None]) -> None:
+                self._pending_tasks.discard(rt)
                 try:
-                    await self._recovery_service.handle_completion_callback_failure(
-                        work_item_id=work_item_id,
-                        board_id=board_id,
-                        success=success,
-                        error=e,
-                        project_id=project_id,
-                    )
-                except Exception as recovery_error:
-                    # Recovery service itself failed (e.g., DLQ add failure,
-                    # fail_workflow failure)
-                    # Log this failure to prevent silent loss in fire-and-forget task
+                    rexc = rt.exception()
+                except asyncio.CancelledError:
+                    return
+                if rexc is not None:
                     logger.error(
-                        f"Recovery service failed for '{work_item_id}' after completion publish failure: {recovery_error}",
-                        exc_info=True,
+                        f"Recovery service failed for '{work_item_id}' after completion publish failure: {rexc}",
+                        exc_info=rexc,
                         extra={"error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
                     )
+
+            recovery_task.add_done_callback(_on_recovery_done)
+
+        publish_task.add_done_callback(_on_publish_done)

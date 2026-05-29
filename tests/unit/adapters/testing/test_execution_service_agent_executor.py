@@ -153,6 +153,29 @@ class ExecutorFixture:
             default_board_id=self.BOARD_ID,
         )
 
+    async def drain_pending(self, executor: ExecutionServiceAgentExecutor, deadline_s: float = 1.0) -> None:
+        """Await every task the executor scheduled in `_pending_tasks`.
+
+        `_call_completion` now schedules the AgentExecutionCompletedEvent publish as
+        a fire-and-forget task so the executor's outer task can complete (and clear
+        its `_executing_work_items` membership) before the BEH handler runs. Tests
+        that assert against the completion bridge need to wait until that task has
+        finished. We snapshot the set, await each task with a deadline, and repeat
+        until no new tasks appear (recovery cascades).
+        """
+        loop_count = 0
+        while executor._pending_tasks and loop_count < 20:
+            snapshot = list(executor._pending_tasks)
+            for t in snapshot:
+                try:
+                    await asyncio.wait_for(asyncio.shield(t), timeout=deadline_s)
+                except (TimeoutError, asyncio.CancelledError):
+                    pass
+                except Exception:
+                    # Exceptions are surfaced via done-callbacks; tests assert on side effects.
+                    pass
+            loop_count += 1
+
 
 # ---------------------------------------------------------------------------
 # Happy path
@@ -167,6 +190,10 @@ class TestExecutionServiceAgentExecutorHappyPath:
         executor = fx.make_executor()
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+        await fx.drain_pending(executor)
+
+        await fx.drain_pending(executor)
 
         fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, True)
         fx.run_registry.clear_run.assert_called_once_with(fx.WORK_ITEM_ID)
@@ -188,6 +215,10 @@ class TestExecutionServiceAgentExecutorFailurePaths:
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
 
+        await fx.drain_pending(executor)
+
+        await fx.drain_pending(executor)
+
         fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, False)
         fx.execution_service.create_execution.assert_not_called()
 
@@ -199,6 +230,10 @@ class TestExecutionServiceAgentExecutorFailurePaths:
         executor = fx.make_executor()
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+        await fx.drain_pending(executor)
+
+        await fx.drain_pending(executor)
 
         fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, False)
         fx.work_item_service.get_work_item.assert_not_called()
@@ -212,6 +247,10 @@ class TestExecutionServiceAgentExecutorFailurePaths:
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
 
+        await fx.drain_pending(executor)
+
+        await fx.drain_pending(executor)
+
         fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, False)
         fx.config_store.get_project_config.assert_not_called()
 
@@ -223,6 +262,10 @@ class TestExecutionServiceAgentExecutorFailurePaths:
         executor = fx.make_executor()
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+        await fx.drain_pending(executor)
+
+        await fx.drain_pending(executor)
 
         fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, False)
         fx.workspace_router.route_workspace.assert_not_called()
@@ -236,6 +279,10 @@ class TestExecutionServiceAgentExecutorFailurePaths:
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
 
+        await fx.drain_pending(executor)
+
+        await fx.drain_pending(executor)
+
         fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, False)
         fx.workspace_router.route_workspace.assert_not_called()
 
@@ -248,6 +295,10 @@ class TestExecutionServiceAgentExecutorFailurePaths:
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
 
+        await fx.drain_pending(executor)
+
+        await fx.drain_pending(executor)
+
         fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, False)
         fx.branch_tracker.set_branch.assert_not_called()
 
@@ -259,6 +310,10 @@ class TestExecutionServiceAgentExecutorFailurePaths:
         executor = fx.make_executor()
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+        await fx.drain_pending(executor)
+
+        await fx.drain_pending(executor)
 
         fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, False)
         fx.workspace_router.prepare_workspace.assert_not_called()
@@ -275,6 +330,10 @@ class TestExecutionServiceAgentExecutorFailurePaths:
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
 
+        await fx.drain_pending(executor)
+
+        await fx.drain_pending(executor)
+
         fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, False)
         fx.execution_service.create_execution.assert_not_called()
 
@@ -286,6 +345,10 @@ class TestExecutionServiceAgentExecutorFailurePaths:
         executor = fx.make_executor()
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+        await fx.drain_pending(executor)
+
+        await fx.drain_pending(executor)
 
         fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, False)
         # finalize_workspace must have been called with success=False
@@ -305,6 +368,10 @@ class TestExecutionServiceAgentExecutorFailurePaths:
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
 
+        await fx.drain_pending(executor)
+
+        await fx.drain_pending(executor)
+
         fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, False)
         fx.execution_service.execute_with_llm.assert_not_called()
         # finalize_workspace must also be called with success=False (mirrors create_execution failure path)
@@ -321,6 +388,10 @@ class TestExecutionServiceAgentExecutorFailurePaths:
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
 
+        await fx.drain_pending(executor)
+
+        await fx.drain_pending(executor)
+
         fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, False)
 
     @pytest.mark.asyncio
@@ -335,6 +406,10 @@ class TestExecutionServiceAgentExecutorFailurePaths:
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
 
+        await fx.drain_pending(executor)
+
+        await fx.drain_pending(executor)
+
         fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, False)
 
     @pytest.mark.asyncio
@@ -348,6 +423,10 @@ class TestExecutionServiceAgentExecutorFailurePaths:
         executor = fx.make_executor()
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+
+        await fx.drain_pending(executor)
+
+        await fx.drain_pending(executor)
 
         fx.workspace_router.finalize_workspace.assert_called_once()
         call_args = fx.workspace_router.finalize_workspace.call_args
@@ -365,6 +444,10 @@ class TestExecutionServiceAgentExecutorFailurePaths:
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
 
+        await fx.drain_pending(executor)
+
+        await fx.drain_pending(executor)
+
         fx.run_registry.clear_run.assert_called_once_with(fx.WORK_ITEM_ID)
         fx.branch_tracker.clear.assert_called_once_with(fx.WORK_ITEM_ID)
 
@@ -380,6 +463,8 @@ class TestCompletionCallbackCalledExactlyOnce:
         fx = ExecutorFixture()
         executor = fx.make_executor()
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+        await fx.drain_pending(executor)
+        await fx.drain_pending(executor)
         assert fx.completion_callback.call_count == 1
 
     @pytest.mark.asyncio
@@ -388,6 +473,8 @@ class TestCompletionCallbackCalledExactlyOnce:
         fx.run_registry.get_active_run.return_value = None
         executor = fx.make_executor()
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+        await fx.drain_pending(executor)
+        await fx.drain_pending(executor)
         assert fx.completion_callback.call_count == 1
 
     @pytest.mark.asyncio
@@ -396,6 +483,8 @@ class TestCompletionCallbackCalledExactlyOnce:
         fx.execution_service.create_execution.side_effect = RuntimeError("fail")
         executor = fx.make_executor()
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+        await fx.drain_pending(executor)
+        await fx.drain_pending(executor)
         assert fx.completion_callback.call_count == 1
 
 
@@ -441,6 +530,8 @@ class TestDockerExecutionPath:
 
         executor = fx.make_executor()
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+        await fx.drain_pending(executor)
+        await fx.drain_pending(executor)
 
         fx.execution_service.execute_agent_with_container.assert_called_once()
         fx.execution_service.execute_with_llm.assert_not_called()
@@ -478,6 +569,8 @@ class TestCompletionCallbackFailureRecovery:
 
         # Act
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+        await fx.drain_pending(executor)
+        await fx.drain_pending(executor)
 
         # Assert: Recovery service invoked to handle the publish failure
         assert recovery_service.handle_completion_callback_failure.called
@@ -496,6 +589,8 @@ class TestCompletionCallbackFailureRecovery:
 
         # Act (should not raise)
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+        await fx.drain_pending(executor)
+        await fx.drain_pending(executor)
 
         # Assert: Just logged, cleanup still happens
         assert fx.run_registry.clear_run.called
@@ -526,6 +621,10 @@ class TestCancelledErrorHandling:
         # Act & Assert: CancelledError should be re-raised after cleanup
         with pytest.raises(asyncio.CancelledError):
             await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
+            await fx.drain_pending(executor)
+
+        # Drain after the raise so the publish task fires before assertions
+        await fx.drain_pending(executor)
 
         # Assert: Completion callback was called with success=False
         fx.completion_callback.assert_called_once_with(fx.WORK_ITEM_ID, fx.BOARD_ID, False)
