@@ -22,6 +22,12 @@ from codetoreum.ports.output.code_review_service import (
     ICodeReviewService,
     ReviewComment,
 )
+from codetoreum.ports.output.coding_agent import (
+    CodingAgentInvocationOptions,
+    CodingAgentResult,
+    ICodingAgent,
+    InvocationMode,
+)
 from codetoreum.ports.output.container import (
     ContainerHealthStatus,
     ContainerResult,
@@ -128,6 +134,11 @@ from codetoreum.ports.output.pr_review_cycle_service import (
     PRReviewCycleStateData,
 )
 from codetoreum.ports.output.project_manager_service import IProjectManagerService
+from codetoreum.ports.output.prompt_builder import (
+    ExecutionOutput,
+    IPromptBuilder,
+    StructuredPrompt,
+)
 from codetoreum.ports.output.repair_cycle_checkpoint_store import (
     IRepairCycleCheckpointStore,
 )
@@ -172,6 +183,11 @@ __all__ = [
     "ProjectBoard",
     "ReconciliationResult",
     "WorkItemPosition",
+    # Coding Agent (D1 — replaces ILLMProvider / IAgentLauncher in Phase D5)
+    "ICodingAgent",
+    "InvocationMode",
+    "CodingAgentInvocationOptions",
+    "CodingAgentResult",
     # Code Review Service
     "ICodeReviewService",
     "Approval",
@@ -244,6 +260,10 @@ __all__ = [
     # Project Manager Service
     "IProjectManagerService",
     "ProjectConfig",
+    # Prompt Builder (D1 — assembles vendor-agnostic StructuredPrompt)
+    "IPromptBuilder",
+    "StructuredPrompt",
+    "ExecutionOutput",
     # Pipeline Queue Service
     "IPipelineQueueService",
     "PipelineQueueEntry",
