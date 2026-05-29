@@ -341,12 +341,12 @@ Every port exercised in a bootstrap run, with its production adapter and role.
 | `ICodeReviewService` | `GitHubCodeReviewAdapter` | Not invoked in basic bootstrap | Yes (validated, not called) |
 | `IEventStore` | `ElasticsearchEventStore` | Persists all domain events; `WorkItemService` reads from it | No (infra) |
 | `IConfigStore` | `CachedConfigStore` → `ElasticsearchConfigStorage` | Project config, agent config lookup | No (infra) |
-| `IAgentRepository` | `InMemoryAgentRepository` | Agent domain object lookup by ID | No (infra) |
-| `IWorkflowConfigService` | in-memory impl | Board workflow template lookup | No (infra) |
+| `IAgentRepository` | `ElasticsearchAgentRepository` (production) / `InMemoryAgentRepository` (simulation) | Agent domain object lookup; survives restart in production | No (infra) |
+| `IWorkflowConfigService` | `ElasticsearchWorkflowConfigService` (production) / `InMemoryWorkflowConfigService` (simulation) | Board workflow template lookup; survives restart in production | No (infra) |
 | `IActiveWorkflowRunRegistry` | `RedisActiveWorkflowRunRegistry` (production) / `InMemoryActiveWorkflowRunRegistry` (simulation) | Active run tracking between handler and executor; survives restart in production | No (infra) |
 | `IWorkItemBranchTracker` | in-memory impl | Branch name tracking per work item | No (infra) |
 | `IPipelineLockService` (`IQueuedPipelineLockService`) | `RedisPipelineLockService` (production) / `InMemoryLockService` (simulation) | Pipeline serialization (1 active execution per board); persistent in production | No (infra) |
-| `IStorage` | `InMemoryStorageAdapter` | Artifact storage (not meaningfully used in bootstrap) | No (infra) |
+| `IStorage` | `MinioStorageAdapter` (production) / `InMemoryStorageAdapter` (simulation) | Execution-log and artifact persistence (`executions/{id}/logs.txt`); real presigned URLs in production | No (infra) |
 | `IBranchResolutionService` | `BranchResolutionAdapter` | Branch name computation from ticket + VCS | No |
 | `IAgentExecutor` | `ExecutionServiceAgentExecutor` | Drives the full execution chain | No (wired internally) |
 | `IWorkItemService` | `WorkItemService` (event-sourced from ES) | Work item read by executor | No (infra) |
@@ -471,6 +471,33 @@ Bootstrap does not require any of these handlers for the happy path. The survey 
 ## 9. Deficiency Log
 
 Running record of architectural gaps found and fixed during bootstrap cycles. Most recent first.
+
+---
+
+### DEF-009 — IStorage has no production-grade artifact persistence
+
+**Deficiency**: `InMemoryStorageAdapter` was the only `IStorage` implementation available on the production critical path. Agent execution logs and outputs lived in process memory only — they vanished on restart and were never reachable by downstream tooling. `generate_presigned_url` returned synthetic `memory://localhost/...` strings rather than real URLs, so any flow that relied on out-of-band artifact access (future repair-cycle artifact replay, external review tooling) was silently broken.
+
+**Fix**: Added `MinioStorageAdapter` (`src/codetoreum/adapters/secondary/minio_storage_adapter.py`). Wraps the synchronous `minio.Minio` client with `asyncio.to_thread` so the adapter surface stays async without blocking the event loop. Implements the full `IStorage` port including real `presigned_get_object` / `presigned_put_object` URLs. Bucket bootstrap is automatic on first call (`make_bucket` when absent). Registered as `minio` in `AdapterFactory`; `production_bootstrap.py` selects it via `storage="minio"`. `docker-compose.yml` adds the Minio service and `minio_data` volume; `.env.example` documents the `MINIO_ENDPOINT` / `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` / `MINIO_BUCKET` / `MINIO_SECURE` variables.
+
+`ExecutionService.execute_with_container` now persists container logs to `executions/{execution_id}/logs.txt` after the container exits (best-effort; upload failure is logged but does not block execution completion).
+
+**Files changed**: `src/codetoreum/adapters/secondary/minio_storage_adapter.py`, `src/codetoreum/application/execution_service.py`, `src/codetoreum/infrastructure/adapters/factory.py`, `src/codetoreum/infrastructure/adapters/resolver.py`, `src/codetoreum/infrastructure/bootstrap/production_bootstrap.py`, `docker-compose.yml`, `.env.example`, `tests/unit/adapters/secondary/test_minio_storage_adapter.py`
+
+---
+
+### DEF-008 — IAgentRepository and IWorkflowConfigService lose state on restart
+
+**Deficiency**: Both `IAgentRepository` (`InMemoryAgentRepository`) and `IWorkflowConfigService` (`InMemoryWorkflowConfigService`) held state purely in-process. After a server restart the agent catalog was empty until `bootstrap/register_project.py` re-ran the full loader, and `BoardColumnEventHandler.handle_column_change` could not resolve the next-stage template — auto-progression silently halted. Multi-instance deployments saw divergent state across nodes for the same reason.
+
+**Fix**:
+- Extended `ElasticsearchConfigStorage` with `save_board_workflow_template` / `get_board_workflow_template` / `list_board_workflow_templates` / `delete_board_workflow_template` on a new `codetoreum_workflow_templates` index (template payload stored as a JSON sub-document so the rich `ColumnTemplate` structure round-trips without forcing every nested field into the mapping).
+- Added `ElasticsearchAgentRepository` (`src/codetoreum/adapters/secondary/elasticsearch_agent_repository.py`) — read-through cache on `ElasticsearchConfigStorage.save_agent_config` / `list_agents`. Cache TTL 300s. Preserves the `get_all_sync` / `get_by_name_sync` surface relied on by `AdapterResolver._create_agent_llm_factory` and `_create_ports`.
+- Added `ElasticsearchWorkflowConfigService` (`src/codetoreum/adapters/secondary/elasticsearch_workflow_config_service.py`) — read-through cache on the new ES board-template methods. Cache TTL 300s.
+- Registered both as `elasticsearch` in `AdapterFactory` and wired them in `AdapterResolver`. `production_bootstrap.py` now selects `config_store="elasticsearch"`, `agent_repository="elasticsearch"`, and `workflow_config="elasticsearch"` (defaults remain `in_memory` for simulation).
+- The existing `project_bootstrap_loader.py` flow is unchanged: it parses `bootstrap/*.json` and calls `agent_repository.save(...)` / `workflow_config.save_board_workflow_template(...)`. With the new adapters wired, those calls write through to ES; subsequent reads either hit the in-process cache or refresh from ES once the TTL expires.
+
+**Files changed**: `src/codetoreum/adapters/secondary/elasticsearch_config_storage.py`, `src/codetoreum/adapters/secondary/elasticsearch_agent_repository.py`, `src/codetoreum/adapters/secondary/elasticsearch_workflow_config_service.py`, `src/codetoreum/infrastructure/adapters/factory.py`, `src/codetoreum/infrastructure/adapters/resolver.py`, `src/codetoreum/infrastructure/bootstrap/production_bootstrap.py`, `tests/unit/adapters/secondary/test_elasticsearch_agent_repository.py`, `tests/unit/adapters/secondary/test_elasticsearch_workflow_config_service.py`
 
 ---
 
