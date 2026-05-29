@@ -76,6 +76,7 @@ from codetoreum.application.feedback_processor import FeedbackProcessor
 from codetoreum.application.issue_intake_service import IssueIntakeService
 from codetoreum.application.multi_project_orchestrator import MultiProjectOrchestrator
 from codetoreum.application.pipeline_manager import PipelineManager
+from codetoreum.application.prompt_building import DefaultPromptBuilder
 from codetoreum.application.review_service import ReviewService
 from codetoreum.application.work_item_service import WorkItemService
 from codetoreum.application.workflow_orchestrator import WorkflowOrchestrator
@@ -121,6 +122,7 @@ from codetoreum.ports.input.workflow_definition_command import (
 from codetoreum.ports.input.workflow_query import IWorkflowQueryPort
 from codetoreum.ports.input.workflow_run_query import IWorkflowRunQueryPort
 from codetoreum.ports.input.workspace_query import IWorkspaceQueryPort
+from codetoreum.ports.output.prompt_builder import IPromptBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -161,6 +163,9 @@ class ProductionServices:
     agent_execution_recovery_service: AgentExecutionRecoveryService
     multi_project_orchestrator: MultiProjectOrchestrator
     container_recovery_service: ContainerRecoveryService
+    # Default IPromptBuilder implementation (Phase D2). Currently unused;
+    # D3 wires it into the rewritten ClaudeCodeAdapter.
+    prompt_builder: IPromptBuilder
 
 
 @dataclass
@@ -904,6 +909,7 @@ class ProductionApplicationBootstrap:
             agent_execution_recovery_service=recovery_service,
             multi_project_orchestrator=multi_project_orchestrator,
             container_recovery_service=container_recovery_service,
+            prompt_builder=DefaultPromptBuilder(),
         )
 
     # =========================================================================

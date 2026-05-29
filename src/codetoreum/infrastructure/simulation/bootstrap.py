@@ -147,6 +147,7 @@ from codetoreum.application.execution_service import ExecutionService
 from codetoreum.application.feedback_processor import FeedbackProcessor
 from codetoreum.application.multi_project_orchestrator import MultiProjectOrchestrator
 from codetoreum.application.pipeline_manager import PipelineManager
+from codetoreum.application.prompt_building import DefaultPromptBuilder
 from codetoreum.application.review_service import ReviewService
 from codetoreum.application.work_item_service import WorkItemService
 from codetoreum.application.workflow_orchestrator import WorkflowOrchestrator, WorkflowState
@@ -237,6 +238,7 @@ from codetoreum.ports.output.pipeline_lock_service import IPipelineLockService
 from codetoreum.ports.output.pipeline_queue_service import IPipelineQueueService
 from codetoreum.ports.output.pr_review_cycle_service import IPRReviewCycle
 from codetoreum.ports.output.project_manager_service import IProjectManagerService
+from codetoreum.ports.output.prompt_builder import IPromptBuilder
 from codetoreum.ports.output.repair_cycle_checkpoint_store import (
     IRepairCycleCheckpointStore,
 )
@@ -766,6 +768,9 @@ class SimulationServices:
     workspace_router: WorkspaceRouter
     configuration_service: ConfigurationService
     work_item_service: WorkItemService
+    # Default IPromptBuilder implementation (Phase D2). Currently unused;
+    # D3 wires it into the rewritten ClaudeCodeAdapter.
+    prompt_builder: IPromptBuilder
     agent_execution_recovery_service: AgentExecutionRecoveryService | None = None
     multi_project_orchestrator: Any | None = None  # MultiProjectOrchestrator
     container_recovery_service: Any | None = None
@@ -1914,6 +1919,7 @@ class SimulationApplicationBootstrap:
             workspace_router=workspace_router,
             configuration_service=configuration_service,
             work_item_service=work_item_service,
+            prompt_builder=DefaultPromptBuilder(),
             agent_execution_recovery_service=recovery_service,
             multi_project_orchestrator=multi_project_orchestrator,
             container_recovery_service=container_recovery_service,

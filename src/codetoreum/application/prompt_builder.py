@@ -5,6 +5,16 @@ previous output) into a well-structured prompt that provides agents with all
 necessary information to execute their task.
 """
 
+# Retired by DefaultPromptBuilder (Phase D2); D5 deletes this module.
+#
+# The legacy ``PromptBuilder`` returns a pre-rendered ``str`` and is consumed
+# only by ``ExecutionServiceAgentExecutor`` (the pre-redesign execution path).
+# The new ``DefaultPromptBuilder`` in
+# ``codetoreum.application.prompt_building`` returns a vendor-agnostic
+# ``StructuredPrompt`` per the D-series rewrite. The two cannot coexist in
+# the long run — D3 rewires the executor to the new port, and D5 deletes
+# this module. See ``~/.claude/plans/coding-agent-port-redesign.md`` §6.
+
 import logging
 
 from codetoreum.domain.agent import Agent
