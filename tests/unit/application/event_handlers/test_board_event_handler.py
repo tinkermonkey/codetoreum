@@ -671,7 +671,7 @@ class TestHandleAgentCompletion:
 
         # Assert
         mock_board_service.move_item_to_column.assert_not_called()
-        assert "skipping auto-progression" in caplog.text
+        assert "routing to on_failure_column" in caplog.text
 
     @pytest.mark.asyncio
     async def test_does_not_progress_when_disabled(

@@ -922,17 +922,35 @@ class BoardColumnEventHandler(EventHandler):
             Exception: Re-raised after logging if auto-progression fails
         """
         if not success:
-            logger.warning(f"Agent failed for {work_item_id}, skipping auto-progression")
+            logger.warning(f"Agent failed for {work_item_id}, routing to on_failure_column")
             try:
                 config = await self.workflow_config.get_board_workflow_template(board_id)
                 if config:
                     current_position = await self._find_item_position(board_id, work_item_id, config)
+                    if not current_position and work_item_id in self._active_runs:
+                        # Board service couldn't locate the item (no real Projects v2 board for
+                        # this project, or the item is invisible at this moment). Fall back to
+                        # our own tracking — mirrors the success-path fallback below.
+                        tracked_column = self._active_runs[work_item_id].current_column
+                        if tracked_column:
+                            current_position = WorkItemPosition(
+                                work_item_id=work_item_id,
+                                column_name=tracked_column,
+                                position=0,
+                            )
                     column_config = config.get_column_config(current_position.column_name) if current_position else None
                     if column_config and column_config.on_failure_column:
                         await self.board_service.move_item_to_column(
                             work_item_id, column_config.on_failure_column, MovedByType.ORCHESTRATOR
                         )
                         logger.info(f"Moved {work_item_id} to failure column '{column_config.on_failure_column}'")
+                    else:
+                        logger.warning(
+                            f"Cannot route {work_item_id} to on_failure_column: "
+                            f"current_position={current_position}, "
+                            f"column_config={column_config}, "
+                            f"on_failure_column={column_config.on_failure_column if column_config else None}"
+                        )
             except Exception as e:
                 logger.error(
                     f"Failed to move {work_item_id} to failure column: {e}",
