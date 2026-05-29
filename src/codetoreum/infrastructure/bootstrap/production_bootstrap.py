@@ -253,6 +253,7 @@ class ProductionApplicationBootstrap:
                 project_manager="elasticsearch",  # Read live project configs from ES
                 encryption="local_key",  # Fernet keyed by ENCRYPTION_KEY_BASE64 env var
                 lock_service="redis",  # Persistent pipeline lock; survives restart, coordinates instances
+                run_registry="redis",  # Persistent active-run records; closes DEF-002 across restart
                 # Non-critical slots use mocks (logged as warnings)
                 review_cycle="basic",
                 pr_review_cycle="basic",

@@ -338,7 +338,22 @@ class AdapterResolver:
         return self._factory.create_agent_repository(adapter_name=self._config.agent_repository)
 
     def resolve_run_registry(self) -> IActiveWorkflowRunRegistry:
-        """Resolve active workflow run registry adapter."""
+        """Resolve active workflow run registry adapter.
+
+        For "redis", constructs an aioredis client from REDIS_URL so
+        ActiveRunInfo records survive restart and coordinate across instances.
+        """
+        if self._config.run_registry == "redis":
+            import os
+
+            import redis.asyncio as aioredis
+
+            redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+            redis_client = aioredis.from_url(redis_url)
+            return self._factory.create_active_workflow_run_registry(
+                adapter_name=self._config.run_registry,
+                redis_client=redis_client,
+            )
         return self._factory.create_active_workflow_run_registry(adapter_name=self._config.run_registry)
 
     def resolve_branch_tracker(self) -> IWorkItemBranchTracker:

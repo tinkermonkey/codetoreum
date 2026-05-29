@@ -1060,6 +1060,23 @@ class AdapterFactory:
             ),
             set_as_default=True,
         )
+        # Redis-backed registry: ActiveRunInfo records survive restart,
+        # closing the duplicate-execution gap (DEF-002) that the in-memory
+        # impl loses on crash.
+        from codetoreum.adapters.secondary.redis_active_workflow_run_registry import (
+            RedisActiveWorkflowRunRegistry,
+        )
+
+        self._active_workflow_run_registry_registry.register(
+            name="redis",
+            adapter_type=RedisActiveWorkflowRunRegistry,
+            description="Redis-backed active workflow run registry; 2h TTL on each entry",
+            version="1.0.0",
+            tags=["production", "persistent", "multi_instance"],
+            config_schema=AdapterCredentialRequirement(
+                description=("Requires an aioredis client (injected by AdapterResolver from REDIS_URL)."),
+            ),
+        )
 
         # Systemic Analysis Service Adapters
         self._systemic_analysis_registry.register(
