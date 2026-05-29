@@ -39,6 +39,9 @@ from codetoreum.adapters.secondary.github_version_control_adapter import (
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
     InMemoryLockService,
 )
+from codetoreum.adapters.secondary.local_key_encryption_adapter import (
+    LocalKeyEncryptionAdapter,
+)
 
 # Import testing adapters
 from codetoreum.adapters.testing import (
@@ -829,6 +832,23 @@ class AdapterFactory:
                 description="Simulation-only adapter, no credentials required",
             ),
             set_as_default=True,
+        )
+        # Production encryption: Fernet keyed by ENCRYPTION_KEY_BASE64 env var.
+        # Operators MUST set ENCRYPTION_KEY_BASE64 for stable across-restart
+        # decryption; if absent, the adapter generates an ephemeral key and
+        # logs a WARNING. See LocalKeyEncryptionAdapter docstring.
+        self._encryption_registry.register(
+            name="local_key",
+            adapter_type=LocalKeyEncryptionAdapter,
+            description="Fernet encryption keyed by a persistent local key (single-instance production)",
+            version="1.0.0",
+            tags=["production", "single_instance"],
+            config_schema=AdapterCredentialRequirement(
+                description=(
+                    "Reads ENCRYPTION_KEY_BASE64 from env; generates a key with a "
+                    "warning if missing. Required for stable cross-restart decryption."
+                ),
+            ),
         )
 
         # Pipeline Lock Service Adapters
