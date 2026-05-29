@@ -22,9 +22,47 @@ from codetoreum.adapters.testing.execution_service_agent_executor import (
     ExecutionServiceAgentExecutor,
 )
 from codetoreum.domain.agent import Agent
+from codetoreum.domain.events import AgentExecutionCompletedEvent
 from codetoreum.domain.work_item import WorkItem
+from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.ports.output.active_workflow_run_registry import ActiveRunInfo
+
+
+def _build_dependencies() -> dict:
+    """Return the standard dependencies dict the test suite assembles inline.
+
+    Centralized so that depth-axis A4c can add `event_bus` once instead of
+    sprinkling it through every test. Each test still constructs its own
+    AsyncMocks so they remain isolated.
+    """
+    return {
+        "execution_service": AsyncMock(),
+        "workspace_router": AsyncMock(),
+        "config_store": AsyncMock(),
+        "agent_repository": AsyncMock(),
+        "work_item_service": AsyncMock(),
+        "run_registry": AsyncMock(),
+        "branch_tracker": AsyncMock(),
+        "vcs": AsyncMock(),
+        "clock": SimulationClock(),
+        "event_bus": EventBus(max_retries=0, retry_delay_seconds=0.0),
+    }
+
+
+def _subscribe_completion_callback(event_bus: EventBus, callback: AsyncMock, board_id: str = "board-1") -> None:
+    """Wire `callback` to receive completion events in the legacy
+    (work_item_id, board_id, success) shape so existing assertions still work.
+
+    The default_board_id arg is preserved for tests that previously called
+    `executor.set_completion_handler(callback, board_id)` — the value is now
+    set via the executor constructor's `default_board_id` parameter.
+    """
+
+    async def _bridge(event: AgentExecutionCompletedEvent) -> None:
+        await callback(event.work_item_id, event.board_id, event.success)
+
+    event_bus.subscribe("AgentExecutionCompletedEvent", _bridge)
 
 
 class TestExecutionServiceAgentExecutorInitialization:
@@ -41,6 +79,7 @@ class TestExecutionServiceAgentExecutorInitialization:
         branch_tracker = AsyncMock()
         vcs = AsyncMock()
         clock = SimulationClock()
+        event_bus = EventBus(max_retries=0, retry_delay_seconds=0.0)
 
         executor = ExecutionServiceAgentExecutor(
             execution_service=execution_service,
@@ -52,26 +91,18 @@ class TestExecutionServiceAgentExecutorInitialization:
             branch_tracker=branch_tracker,
             vcs=vcs,
             clock=clock,
+            event_bus=event_bus,
         )
 
         assert executor is not None
         assert executor._execution_service is execution_service
         assert executor._workspace_router is workspace_router
         assert executor._config_store is config_store
+        assert executor._event_bus is event_bus
 
     def test_executor_initializes_with_optional_recovery_service(self):
         """Test that executor accepts optional recovery service."""
-        dependencies = {
-            "execution_service": AsyncMock(),
-            "workspace_router": AsyncMock(),
-            "config_store": AsyncMock(),
-            "agent_repository": AsyncMock(),
-            "work_item_service": AsyncMock(),
-            "run_registry": AsyncMock(),
-            "branch_tracker": AsyncMock(),
-            "vcs": AsyncMock(),
-            "clock": SimulationClock(),
-        }
+        dependencies = _build_dependencies()
 
         recovery_service = AsyncMock()
 
@@ -81,43 +112,29 @@ class TestExecutionServiceAgentExecutorInitialization:
 
     def test_executor_initializes_with_execution_delay(self):
         """Test that executor accepts execution delay for testing."""
-        dependencies = {
-            "execution_service": AsyncMock(),
-            "workspace_router": AsyncMock(),
-            "config_store": AsyncMock(),
-            "agent_repository": AsyncMock(),
-            "work_item_service": AsyncMock(),
-            "run_registry": AsyncMock(),
-            "branch_tracker": AsyncMock(),
-            "vcs": AsyncMock(),
-            "clock": SimulationClock(),
-        }
+        dependencies = _build_dependencies()
 
         executor = ExecutionServiceAgentExecutor(execution_delay=0.5, **dependencies)
 
         assert executor._execution_delay == 0.5
 
-    def test_set_completion_handler_wires_callback(self):
-        """Test that set_completion_handler correctly wires completion callback."""
-        dependencies = {
-            "execution_service": AsyncMock(),
-            "workspace_router": AsyncMock(),
-            "config_store": AsyncMock(),
-            "agent_repository": AsyncMock(),
-            "work_item_service": AsyncMock(),
-            "run_registry": AsyncMock(),
-            "branch_tracker": AsyncMock(),
-            "vcs": AsyncMock(),
-            "clock": SimulationClock(),
-        }
+    def test_executor_wires_event_bus_and_default_board_id(self):
+        """Verify constructor accepts the event bus and default_board_id.
 
-        executor = ExecutionServiceAgentExecutor(**dependencies)
+        Replaces the previous `test_set_completion_handler_wires_callback` test.
+        The set_completion_handler callback mechanism has been removed in
+        favour of event-bus publication (see commit "Add
+        AgentExecutionCompletedEvent for executor → board-handler seam" and
+        siblings).
+        """
+        dependencies = _build_dependencies()
 
-        callback = AsyncMock()
-        executor.set_completion_handler(callback, "board-1")
+        executor = ExecutionServiceAgentExecutor(**dependencies, default_board_id="board-xyz")
 
-        assert executor._completion_callback is callback
-        assert executor._default_board_id == "board-1"
+        assert executor._event_bus is dependencies["event_bus"]
+        assert executor._default_board_id == "board-xyz"
+        assert not hasattr(executor, "_completion_callback")
+        assert not hasattr(executor, "set_completion_handler")
 
 
 class TestExecutionServiceAgentExecutorExecution:
@@ -131,20 +148,9 @@ class TestExecutionServiceAgentExecutorExecution:
         schedules _run_execution as a background task, and returns immediately
         without waiting for completion.
         """
-        dependencies = {
-            "execution_service": AsyncMock(),
-            "workspace_router": AsyncMock(),
-            "config_store": AsyncMock(),
-            "agent_repository": AsyncMock(),
-            "work_item_service": AsyncMock(),
-            "run_registry": AsyncMock(),
-            "branch_tracker": AsyncMock(),
-            "vcs": AsyncMock(),
-            "clock": SimulationClock(),
-        }
+        dependencies = _build_dependencies()
 
         executor = ExecutionServiceAgentExecutor(**dependencies)
-        executor.set_completion_handler(AsyncMock(), "board-1")
 
         # Record active run
         run_info = ActiveRunInfo(
@@ -176,20 +182,9 @@ class TestExecutionServiceAgentExecutorExecution:
     @pytest.mark.asyncio
     async def test_execute_uses_provided_board_id_when_given(self):
         """Test that execute() uses provided board_id instead of default."""
-        dependencies = {
-            "execution_service": AsyncMock(),
-            "workspace_router": AsyncMock(),
-            "config_store": AsyncMock(),
-            "agent_repository": AsyncMock(),
-            "work_item_service": AsyncMock(),
-            "run_registry": AsyncMock(),
-            "branch_tracker": AsyncMock(),
-            "vcs": AsyncMock(),
-            "clock": SimulationClock(),
-        }
+        dependencies = _build_dependencies()
 
-        executor = ExecutionServiceAgentExecutor(**dependencies)
-        executor.set_completion_handler(AsyncMock(), "default-board")
+        executor = ExecutionServiceAgentExecutor(**dependencies, default_board_id="default-board")
 
         executor._run_registry.get_active_run.return_value = ActiveRunInfo(
             run_id="run-1",
@@ -215,20 +210,9 @@ class TestExecutionServiceAgentExecutorExecution:
 
         When active run is not found, it records 'unknown' for workflow/stage.
         """
-        dependencies = {
-            "execution_service": AsyncMock(),
-            "workspace_router": AsyncMock(),
-            "config_store": AsyncMock(),
-            "agent_repository": AsyncMock(),
-            "work_item_service": AsyncMock(),
-            "run_registry": AsyncMock(),
-            "branch_tracker": AsyncMock(),
-            "vcs": AsyncMock(),
-            "clock": SimulationClock(),
-        }
+        dependencies = _build_dependencies()
 
         executor = ExecutionServiceAgentExecutor(**dependencies)
-        executor.set_completion_handler(AsyncMock(), "board-1")
 
         # No active run
         executor._run_registry.get_active_run.return_value = None
@@ -250,20 +234,9 @@ class TestExecutionServiceAgentExecutorExecution:
 
         The delay is useful for simulation testing to allow events to settle.
         """
-        dependencies = {
-            "execution_service": AsyncMock(),
-            "workspace_router": AsyncMock(),
-            "config_store": AsyncMock(),
-            "agent_repository": AsyncMock(),
-            "work_item_service": AsyncMock(),
-            "run_registry": AsyncMock(),
-            "branch_tracker": AsyncMock(),
-            "vcs": AsyncMock(),
-            "clock": SimulationClock(),
-        }
+        dependencies = _build_dependencies()
 
         executor = ExecutionServiceAgentExecutor(execution_delay=0.1, **dependencies)
-        executor.set_completion_handler(AsyncMock(), "board-1")
 
         # Mock to fail early (no active run) to test delay is applied
         executor._run_registry.get_active_run.return_value = None
@@ -297,21 +270,11 @@ class TestExecutionServiceAgentExecutorChainSteps:
     @pytest.mark.asyncio
     async def test_run_execution_step1_active_run_lookup(self):
         """Test Step 1: Look up active run from registry."""
-        dependencies = {
-            "execution_service": AsyncMock(),
-            "workspace_router": AsyncMock(),
-            "config_store": AsyncMock(),
-            "agent_repository": AsyncMock(),
-            "work_item_service": AsyncMock(),
-            "run_registry": AsyncMock(),
-            "branch_tracker": AsyncMock(),
-            "vcs": AsyncMock(),
-            "clock": SimulationClock(),
-        }
+        dependencies = _build_dependencies()
 
         executor = ExecutionServiceAgentExecutor(**dependencies)
         callback = AsyncMock()
-        executor.set_completion_handler(callback, "board-1")
+        _subscribe_completion_callback(dependencies["event_bus"], callback, "board-1")
 
         # No active run - should complete callback with failure
         executor._run_registry.get_active_run.return_value = None
@@ -325,21 +288,11 @@ class TestExecutionServiceAgentExecutorChainSteps:
     @pytest.mark.asyncio
     async def test_run_execution_step2_agent_load_failure(self):
         """Test Step 2: Handle failure when loading agent."""
-        dependencies = {
-            "execution_service": AsyncMock(),
-            "workspace_router": AsyncMock(),
-            "config_store": AsyncMock(),
-            "agent_repository": AsyncMock(),
-            "work_item_service": AsyncMock(),
-            "run_registry": AsyncMock(),
-            "branch_tracker": AsyncMock(),
-            "vcs": AsyncMock(),
-            "clock": SimulationClock(),
-        }
+        dependencies = _build_dependencies()
 
         executor = ExecutionServiceAgentExecutor(**dependencies)
         callback = AsyncMock()
-        executor.set_completion_handler(callback, "board-1")
+        _subscribe_completion_callback(dependencies["event_bus"], callback, "board-1")
 
         # Setup active run
         run_info = ActiveRunInfo(
@@ -362,21 +315,11 @@ class TestExecutionServiceAgentExecutorChainSteps:
     @pytest.mark.asyncio
     async def test_run_execution_step3_work_item_load_failure(self):
         """Test Step 3: Handle failure when loading work item."""
-        dependencies = {
-            "execution_service": AsyncMock(),
-            "workspace_router": AsyncMock(),
-            "config_store": AsyncMock(),
-            "agent_repository": AsyncMock(),
-            "work_item_service": AsyncMock(),
-            "run_registry": AsyncMock(),
-            "branch_tracker": AsyncMock(),
-            "vcs": AsyncMock(),
-            "clock": SimulationClock(),
-        }
+        dependencies = _build_dependencies()
 
         executor = ExecutionServiceAgentExecutor(**dependencies)
         callback = AsyncMock()
-        executor.set_completion_handler(callback, "board-1")
+        _subscribe_completion_callback(dependencies["event_bus"], callback, "board-1")
 
         # Setup active run
         run_info = ActiveRunInfo(
@@ -403,21 +346,11 @@ class TestExecutionServiceAgentExecutorChainSteps:
     @pytest.mark.asyncio
     async def test_run_execution_step4_project_config_load_failure(self):
         """Test Step 4: Handle failure when loading project config."""
-        dependencies = {
-            "execution_service": AsyncMock(),
-            "workspace_router": AsyncMock(),
-            "config_store": AsyncMock(),
-            "agent_repository": AsyncMock(),
-            "work_item_service": AsyncMock(),
-            "run_registry": AsyncMock(),
-            "branch_tracker": AsyncMock(),
-            "vcs": AsyncMock(),
-            "clock": SimulationClock(),
-        }
+        dependencies = _build_dependencies()
 
         executor = ExecutionServiceAgentExecutor(**dependencies)
         callback = AsyncMock()
-        executor.set_completion_handler(callback, "board-1")
+        _subscribe_completion_callback(dependencies["event_bus"], callback, "board-1")
 
         # Setup active run
         run_info = ActiveRunInfo(
@@ -449,22 +382,15 @@ class TestExecutionServiceAgentExecutorCompletion:
     """Test completion callback handling."""
 
     @pytest.mark.asyncio
-    async def test_completion_callback_not_called_if_not_set(self):
-        """Test that missing completion callback doesn't crash executor."""
-        dependencies = {
-            "execution_service": AsyncMock(),
-            "workspace_router": AsyncMock(),
-            "config_store": AsyncMock(),
-            "agent_repository": AsyncMock(),
-            "work_item_service": AsyncMock(),
-            "run_registry": AsyncMock(),
-            "branch_tracker": AsyncMock(),
-            "vcs": AsyncMock(),
-            "clock": SimulationClock(),
-        }
+    async def test_completion_publish_with_no_subscribers_does_not_crash(self):
+        """Publishing AgentExecutionCompletedEvent with no subscribers is a no-op.
+
+        The event bus is required; subscribers are not. The executor must
+        not crash when nothing is listening (e.g., bootstrap order issue).
+        """
+        dependencies = _build_dependencies()
 
         executor = ExecutionServiceAgentExecutor(**dependencies)
-        # Don't call set_completion_handler
 
         executor._run_registry.get_active_run.return_value = None
 
@@ -474,20 +400,9 @@ class TestExecutionServiceAgentExecutorCompletion:
     @pytest.mark.asyncio
     async def test_pending_tasks_cleanup_on_completion(self):
         """Test that completed tasks are properly cleaned up from _pending_tasks."""
-        dependencies = {
-            "execution_service": AsyncMock(),
-            "workspace_router": AsyncMock(),
-            "config_store": AsyncMock(),
-            "agent_repository": AsyncMock(),
-            "work_item_service": AsyncMock(),
-            "run_registry": AsyncMock(),
-            "branch_tracker": AsyncMock(),
-            "vcs": AsyncMock(),
-            "clock": SimulationClock(),
-        }
+        dependencies = _build_dependencies()
 
         executor = ExecutionServiceAgentExecutor(**dependencies)
-        executor.set_completion_handler(AsyncMock(), "board-1")
 
         executor._run_registry.get_active_run.return_value = None
 
@@ -518,20 +433,9 @@ class TestExecutionServiceAgentExecutorMultipleExecutions:
     @pytest.mark.asyncio
     async def test_multiple_executions_recorded_separately(self):
         """Test that multiple executions are recorded as separate entries."""
-        dependencies = {
-            "execution_service": AsyncMock(),
-            "workspace_router": AsyncMock(),
-            "config_store": AsyncMock(),
-            "agent_repository": AsyncMock(),
-            "work_item_service": AsyncMock(),
-            "run_registry": AsyncMock(),
-            "branch_tracker": AsyncMock(),
-            "vcs": AsyncMock(),
-            "clock": SimulationClock(),
-        }
+        dependencies = _build_dependencies()
 
         executor = ExecutionServiceAgentExecutor(**dependencies)
-        executor.set_completion_handler(AsyncMock(), "board-1")
 
         executor._run_registry.get_active_run.return_value = ActiveRunInfo(
             run_id="run-1",
@@ -561,20 +465,9 @@ class TestExecutionServiceAgentExecutorMultipleExecutions:
     @pytest.mark.asyncio
     async def test_executions_property_returns_copy(self):
         """Test that executions property returns a copy, not mutable reference."""
-        dependencies = {
-            "execution_service": AsyncMock(),
-            "workspace_router": AsyncMock(),
-            "config_store": AsyncMock(),
-            "agent_repository": AsyncMock(),
-            "work_item_service": AsyncMock(),
-            "run_registry": AsyncMock(),
-            "branch_tracker": AsyncMock(),
-            "vcs": AsyncMock(),
-            "clock": SimulationClock(),
-        }
+        dependencies = _build_dependencies()
 
         executor = ExecutionServiceAgentExecutor(**dependencies)
-        executor.set_completion_handler(AsyncMock(), "board-1")
 
         executor._run_registry.get_active_run.return_value = ActiveRunInfo(
             run_id="run-1",

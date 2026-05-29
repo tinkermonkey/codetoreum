@@ -23,7 +23,9 @@ from codetoreum.adapters.secondary.execution_service_agent_executor import (
     ExecutionServiceAgentExecutor,
 )
 from codetoreum.domain.agent import AgentType
+from codetoreum.domain.events import AgentExecutionCompletedEvent
 from codetoreum.domain.project_context import ProjectContext
+from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.ports.output.active_workflow_run_registry import ActiveRunInfo
 
@@ -47,7 +49,17 @@ class ProductionPathFixture:
         self.workspace_router = AsyncMock()
         self.branch_tracker = AsyncMock()
         self.execution_service = AsyncMock()
+        # Event-bus bridge: subscribe a small forwarder so existing assertions
+        # like `completion_callback.assert_called_once_with(work_item_id, board_id, success)`
+        # continue to work. The executor now publishes AgentExecutionCompletedEvent
+        # on the event bus instead of invoking a callback directly.
+        self.event_bus = EventBus(max_retries=0, retry_delay_seconds=0.0)
         self.completion_callback = AsyncMock()
+
+        async def _bridge(event: AgentExecutionCompletedEvent) -> None:
+            await self.completion_callback(event.work_item_id, event.board_id, event.success)
+
+        self.event_bus.subscribe("AgentExecutionCompletedEvent", _bridge)
         self.clock = SimulationClock()
         self.recovery_service = AsyncMock()
 
@@ -145,7 +157,7 @@ class ProductionPathFixture:
         self.workspace_router.finalize_workspace.return_value = self.finalize_result
 
     def make_executor(self, recovery_service=_UNSET, workflow_config_service=_UNSET) -> ExecutionServiceAgentExecutor:
-        executor = ExecutionServiceAgentExecutor(
+        return ExecutionServiceAgentExecutor(
             execution_service=self.execution_service,
             workspace_router=self.workspace_router,
             config_store=self.config_store,
@@ -155,11 +167,11 @@ class ProductionPathFixture:
             branch_tracker=self.branch_tracker,
             vcs=self.vcs,
             clock=self.clock,
+            event_bus=self.event_bus,
             recovery_service=self.recovery_service if recovery_service is _UNSET else recovery_service,
             workflow_config_service=None if workflow_config_service is _UNSET else workflow_config_service,
+            default_board_id=self.BOARD_ID,
         )
-        executor.set_completion_handler(self.completion_callback, self.BOARD_ID)
-        return executor
 
 
 class TestProductionExecutionPath:
@@ -670,13 +682,20 @@ class TestProductionPathCleanupAndCompletion:
 
 
 class TestCompletionCallbackFailureRecovery:
-    """Test recovery logic in _call_completion (lines 515-566)."""
+    """Test recovery logic in `_call_completion` for the event-bus path.
+
+    Under the event-bus mechanism, individual subscriber failures are caught
+    by EventBus dispatch and logged; they do not propagate to publish().
+    The executor's recovery_service hook now fires only when the publish call
+    itself fails (e.g., Redis persistence, EventBusError). Handler-level
+    recovery is BoardColumnEventHandler's responsibility.
+    """
 
     @pytest.mark.asyncio
     async def test_completion_callback_failure_invokes_recovery_service(self):
-        """Completion callback raises → recovery service.handle_completion_callback_failure called."""
+        """event_bus.publish raises → recovery_service.handle_completion_callback_failure called."""
         fx = ProductionPathFixture()
-        fx.completion_callback.side_effect = RuntimeError("Auto-progression failed")
+        fx.event_bus.publish = AsyncMock(side_effect=RuntimeError("Publish failed"))
         executor = fx.make_executor(recovery_service=fx.recovery_service)
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
@@ -690,23 +709,23 @@ class TestCompletionCallbackFailureRecovery:
 
     @pytest.mark.asyncio
     async def test_completion_callback_failure_with_recovery_service_receives_error(self):
-        """Recovery service receives the exception that caused callback failure."""
+        """Recovery service receives the exception that caused the publish failure."""
         fx = ProductionPathFixture()
-        callback_error = RuntimeError("Board update failed")
-        fx.completion_callback.side_effect = callback_error
+        publish_error = RuntimeError("Bus persistence failed")
+        fx.event_bus.publish = AsyncMock(side_effect=publish_error)
         executor = fx.make_executor(recovery_service=fx.recovery_service)
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
 
         # Recovery service should receive the exception
         call_kwargs = fx.recovery_service.handle_completion_callback_failure.call_args.kwargs
-        assert call_kwargs["error"] == callback_error
+        assert call_kwargs["error"] is publish_error
 
     @pytest.mark.asyncio
     async def test_completion_callback_failure_without_recovery_service(self):
-        """Completion callback failure without recovery service is just logged."""
+        """Publish failure without recovery service is just logged."""
         fx = ProductionPathFixture()
-        fx.completion_callback.side_effect = RuntimeError("Auto-progression failed")
+        fx.event_bus.publish = AsyncMock(side_effect=RuntimeError("Publish failed"))
         executor = fx.make_executor(recovery_service=None)
 
         # Should not raise
@@ -720,7 +739,7 @@ class TestCompletionCallbackFailureRecovery:
     async def test_recovery_service_failure_does_not_crash_task(self):
         """Recovery service failure logged but doesn't propagate in fire-and-forget task."""
         fx = ProductionPathFixture()
-        fx.completion_callback.side_effect = RuntimeError("Callback failed")
+        fx.event_bus.publish = AsyncMock(side_effect=RuntimeError("Publish failed"))
         fx.recovery_service.handle_completion_callback_failure.side_effect = RuntimeError("Recovery service crashed")
         executor = fx.make_executor(recovery_service=fx.recovery_service)
 
@@ -729,7 +748,7 @@ class TestCompletionCallbackFailureRecovery:
 
     @pytest.mark.asyncio
     async def test_completion_callback_success_does_not_invoke_recovery(self):
-        """When completion callback succeeds, recovery service not invoked."""
+        """When publish succeeds, recovery service not invoked."""
         fx = ProductionPathFixture()
         executor = fx.make_executor(recovery_service=fx.recovery_service)
 
@@ -740,26 +759,30 @@ class TestCompletionCallbackFailureRecovery:
 
     @pytest.mark.asyncio
     async def test_no_completion_callback_handler_error_logged(self):
-        """When no completion callback set, error logged with helpful message."""
+        """Subscriber-level failures are captured by EventBus, not by the executor.
+
+        Previously a missing completion callback was logged with a specific
+        error id. The event-bus mechanism makes the event bus mandatory (it is
+        a required constructor argument), so the "missing callback" failure
+        mode no longer exists. Instead, this test asserts that a subscriber
+        raising does NOT crash the executor's fire-and-forget task and does
+        NOT invoke the recovery service (handler-level recovery is BEH's
+        responsibility).
+        """
         fx = ProductionPathFixture()
-        executor = ExecutionServiceAgentExecutor(
-            execution_service=fx.execution_service,
-            workspace_router=fx.workspace_router,
-            config_store=fx.config_store,
-            agent_repository=fx.agent_repository,
-            work_item_service=fx.work_item_service,
-            run_registry=fx.run_registry,
-            branch_tracker=fx.branch_tracker,
-            vcs=fx.vcs,
-            clock=fx.clock,
-            recovery_service=fx.recovery_service,
-        )
-        # Don't call set_completion_handler
+
+        async def _raising_subscriber(event: AgentExecutionCompletedEvent) -> None:
+            raise RuntimeError("BEH subscriber raised")
+
+        fx.event_bus.subscribe("AgentExecutionCompletedEvent", _raising_subscriber)
+        executor = fx.make_executor(recovery_service=fx.recovery_service)
 
         # Execution should complete without crashing
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
 
-        # No exception should be raised
+        # Subscriber failures are logged by EventBus; the executor does NOT
+        # treat them as publish failures and does NOT invoke the recovery service.
+        fx.recovery_service.handle_completion_callback_failure.assert_not_called()
 
 
 class TestProductionPathProjectContextBuilding:

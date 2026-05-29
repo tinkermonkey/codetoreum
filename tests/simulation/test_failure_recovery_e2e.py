@@ -12,6 +12,7 @@ from typing import Any, cast
 
 import pytest
 
+from codetoreum.domain.events import AgentExecutionCompletedEvent, now_iso
 from codetoreum.domain.repair_cycle_types import RepairTestRunConfig, RepairTestType
 from codetoreum.infrastructure.event_serialization import infer_aggregate_id_and_type
 from codetoreum.infrastructure.simulation.bootstrap import (
@@ -79,11 +80,22 @@ async def test_agent_failure_emits_workflow_failed_event(
         nonlocal call_count
         call_count += 1
         if call_count == 2:
-            # Simulate coder failure by invoking completion callback with success=False.
-            # This mirrors what _run_execution does in its except block, ensuring
-            # the board_event_handler's _fail_workflow_run() is called and persists WorkflowFailed.
-            if executor._completion_callback:
-                await executor._completion_callback(work_item_id_arg, board_id, False)
+            # Simulate coder failure by publishing AgentExecutionCompletedEvent
+            # with success=False. This mirrors what _run_execution does in its
+            # except block, ensuring the board_event_handler's
+            # handle_agent_execution_completed bridge calls _fail_workflow_run()
+            # and persists WorkflowFailed.
+            await executor._event_bus.publish(
+                AgentExecutionCompletedEvent(
+                    type="agent_execution.completed",
+                    timestamp=now_iso(),
+                    source="execution_service_agent_executor",
+                    work_item_id=work_item_id_arg,
+                    board_id=board_id,
+                    success=False,
+                    error_summary="Simulated coder failure",
+                )
+            )
             return
         await original_run(work_item_id_arg, agent_id, board_id)
 

@@ -15,6 +15,8 @@ from codetoreum.adapters.testing.execution_service_agent_executor import (
     ExecutionServiceAgentExecutor,
 )
 from codetoreum.domain.agent import AgentType
+from codetoreum.domain.events import AgentExecutionCompletedEvent
+from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.ports.output.active_workflow_run_registry import ActiveRunInfo
 
@@ -63,7 +65,18 @@ class ExecutorFixture:
         self.workspace_router = AsyncMock()
         self.branch_tracker = AsyncMock()
         self.execution_service = AsyncMock()
+        # The executor publishes AgentExecutionCompletedEvent on the event bus
+        # when it finishes processing a work item. To preserve existing
+        # assertion shape (`completion_callback.assert_called_once_with(...)`),
+        # we subscribe a small bridge that translates the event back into the
+        # legacy (work_item_id, board_id, success) triple.
+        self.event_bus = EventBus(max_retries=0, retry_delay_seconds=0.0)
         self.completion_callback = AsyncMock()
+
+        async def _bridge(event: AgentExecutionCompletedEvent) -> None:
+            await self.completion_callback(event.work_item_id, event.board_id, event.success)
+
+        self.event_bus.subscribe("AgentExecutionCompletedEvent", _bridge)
         self.clock = SimulationClock()
 
         # Happy-path defaults ---
@@ -125,7 +138,7 @@ class ExecutorFixture:
         self.execution_service.execute_with_llm.return_value = exec_result
 
     def make_executor(self, recovery_service=None) -> ExecutionServiceAgentExecutor:
-        executor = ExecutionServiceAgentExecutor(
+        return ExecutionServiceAgentExecutor(
             execution_service=self.execution_service,
             workspace_router=self.workspace_router,
             config_store=self.config_store,
@@ -135,10 +148,10 @@ class ExecutorFixture:
             branch_tracker=self.branch_tracker,
             vcs=self.vcs,
             clock=self.clock,
+            event_bus=self.event_bus,
             recovery_service=recovery_service,
+            default_board_id=self.BOARD_ID,
         )
-        executor.set_completion_handler(self.completion_callback, self.BOARD_ID)
-        return executor
 
 
 # ---------------------------------------------------------------------------
@@ -442,33 +455,31 @@ class TestDockerExecutionPath:
 class TestCompletionCallbackFailureRecovery:
     @pytest.mark.asyncio
     async def test_completion_callback_failure_invokes_recovery_service(self):
-        """When completion callback raises, recovery service is invoked."""
+        """When event_bus.publish itself raises, recovery service is invoked.
+
+        Under the event-bus mechanism, individual subscriber failures are
+        caught by the bus dispatch loop and logged; they do not propagate
+        to publish(). The executor's recovery_service hook now fires only
+        when the publish call itself fails (e.g., Redis persistence error
+        or EventBusError during dispatch setup). Handler-level recovery is
+        BoardColumnEventHandler's responsibility, not the executor's.
+        """
         from codetoreum.application.agent_execution_recovery_service import (
             AgentExecutionRecoveryService,
         )
 
         fx = ExecutorFixture()
         recovery_service = AsyncMock(spec=AgentExecutionRecoveryService)
-        fx.completion_callback.side_effect = RuntimeError("Auto-progression failed")
 
-        executor = ExecutionServiceAgentExecutor(
-            execution_service=fx.execution_service,
-            workspace_router=fx.workspace_router,
-            config_store=fx.config_store,
-            agent_repository=fx.agent_repository,
-            work_item_service=fx.work_item_service,
-            run_registry=fx.run_registry,
-            branch_tracker=fx.branch_tracker,
-            vcs=fx.vcs,
-            clock=fx.clock,
-            recovery_service=recovery_service,
-        )
-        executor.set_completion_handler(fx.completion_callback, fx.BOARD_ID)
+        # Replace event_bus.publish to simulate a transport-level publish failure
+        fx.event_bus.publish = AsyncMock(side_effect=RuntimeError("Publish failed"))
+
+        executor = fx.make_executor(recovery_service=recovery_service)
 
         # Act
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
 
-        # Assert: Recovery service invoked to handle the callback failure
+        # Assert: Recovery service invoked to handle the publish failure
         assert recovery_service.handle_completion_callback_failure.called
         call_args = recovery_service.handle_completion_callback_failure.call_args
         assert call_args.kwargs["work_item_id"] == fx.WORK_ITEM_ID
@@ -477,23 +488,11 @@ class TestCompletionCallbackFailureRecovery:
 
     @pytest.mark.asyncio
     async def test_completion_callback_failure_without_recovery_service(self):
-        """When no recovery service, completion callback failure is just logged."""
+        """When no recovery service, a publish failure is just logged."""
         fx = ExecutorFixture()
-        fx.completion_callback.side_effect = RuntimeError("Auto-progression failed")
+        fx.event_bus.publish = AsyncMock(side_effect=RuntimeError("Publish failed"))
 
-        executor = ExecutionServiceAgentExecutor(
-            execution_service=fx.execution_service,
-            workspace_router=fx.workspace_router,
-            config_store=fx.config_store,
-            agent_repository=fx.agent_repository,
-            work_item_service=fx.work_item_service,
-            run_registry=fx.run_registry,
-            branch_tracker=fx.branch_tracker,
-            vcs=fx.vcs,
-            clock=fx.clock,
-            recovery_service=None,  # No recovery service
-        )
-        executor.set_completion_handler(fx.completion_callback, fx.BOARD_ID)
+        executor = fx.make_executor(recovery_service=None)
 
         # Act (should not raise)
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
