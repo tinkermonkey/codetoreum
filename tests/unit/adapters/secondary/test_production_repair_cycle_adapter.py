@@ -38,7 +38,7 @@ from codetoreum.domain.repair_cycle_types import (
 from codetoreum.infrastructure.resilience.exceptions import CircuitBreakerOpenError
 from codetoreum.infrastructure.resilience.interfaces import CircuitState
 from codetoreum.infrastructure.resilience.mocks import MockCircuitBreaker
-from codetoreum.ports.output.llm_provider import ExecutionResult
+from codetoreum.ports.output.llm_types import ExecutionResult
 
 # ---------------------------------------------------------------------------
 # Shared helpers

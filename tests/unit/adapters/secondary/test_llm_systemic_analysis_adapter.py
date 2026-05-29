@@ -23,7 +23,7 @@ from codetoreum.domain.repair_cycle_types import (
     RepairTestFailure,
     SystemicAnalysisResult,
 )
-from codetoreum.ports.output.llm_provider import ExecutionResult
+from codetoreum.ports.output.llm_types import ExecutionResult
 
 # ---------------------------------------------------------------------------
 # Shared helpers

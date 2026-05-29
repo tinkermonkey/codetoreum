@@ -26,12 +26,24 @@ from codetoreum.application.repair_cycle_ci_integration import (
 )
 
 if TYPE_CHECKING:
+    from typing import Protocol
+
     from codetoreum.ports.output.ci_pipeline_service import ICIPipelineService
     from codetoreum.ports.output.container import IContainer
     from codetoreum.ports.output.environment_repair_service import (
         IEnvironmentRepairService,
     )
-    from codetoreum.ports.output.llm_provider import ILLMProvider
+
+    class ILLMProvider(Protocol):
+        """Duck-typed surrogate for the retired ``ILLMProvider`` port (Phase D5).
+
+        ``MockRepairCycleAdapter`` keeps the optional ``llm_factory`` slot for
+        scenarios that exercise the production-path repair logic. The protocol
+        documents the minimum surface; ``MockRepairCycleAdapter`` does not
+        invoke any method on the factory result itself."""
+
+        async def execute(self, prompt: str, context: object = ...) -> object: ...
+
     from codetoreum.ports.output.systemic_analysis_service import (
         ISystemicAnalysisService,
     )

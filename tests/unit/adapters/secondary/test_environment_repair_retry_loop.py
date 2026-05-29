@@ -36,7 +36,7 @@ from codetoreum.domain.repair_cycle_types import (
     VerificationResult,
 )
 from codetoreum.ports.output.event_emitter import IEventEmitter
-from codetoreum.ports.output.llm_provider import ExecutionResult
+from codetoreum.ports.output.llm_types import ExecutionResult
 
 # ---------------------------------------------------------------------------
 # Shared test fixtures and helpers

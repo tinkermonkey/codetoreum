@@ -34,7 +34,7 @@ from codetoreum.domain.repair_cycle_types import (
     RepairTestRunConfig,
     RepairTestType,
 )
-from codetoreum.ports.output.llm_provider import ExecutionResult
+from codetoreum.ports.output.llm_types import ExecutionResult
 from codetoreum.ports.output.repair_cycle_service import RepairCycleContext
 
 # ============================================================================

@@ -33,9 +33,24 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Coroutine
+    from typing import Any, Protocol
+
     from codetoreum.infrastructure.resilience.interfaces import ICircuitBreaker
     from codetoreum.ports.output.event_emitter import IEventEmitter
-    from codetoreum.ports.output.llm_provider import AgentLLMFactory, ExecutionResult, ILLMProvider
+    from codetoreum.ports.output.llm_types import ExecutionContext, ExecutionResult
+
+    class ILLMProvider(Protocol):
+        """Duck-typed surrogate for the retired ``ILLMProvider`` port.
+
+        Phase D5 deleted ``IAgentLauncher`` / ``ILLMProvider``; this adapter
+        retains a prompt→completion call site until it migrates to
+        ``ICodingAgent``. The protocol below documents the minimum surface
+        the adapter relies on at runtime."""
+
+        async def execute(self, prompt: str, context: ExecutionContext | None = ...) -> ExecutionResult: ...
+
+    AgentLLMFactory = Callable[[str], Coroutine[Any, Any, ILLMProvider]]
 
 from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.domain.events.repair_cycle_events import (

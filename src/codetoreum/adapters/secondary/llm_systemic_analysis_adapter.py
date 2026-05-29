@@ -25,7 +25,23 @@ import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from codetoreum.ports.output.llm_provider import AgentLLMFactory, ExecutionContext, ExecutionResult
+    from collections.abc import Callable, Coroutine
+    from typing import Any, Protocol
+
+    from codetoreum.ports.output.llm_types import ExecutionContext, ExecutionResult
+
+    class _LLMProviderLike(Protocol):
+        """Duck-typed interface for the prompt-execution call sites.
+
+        The historical ``ILLMProvider`` port retired in Phase D5; this
+        adapter still needs a callable that takes a prompt+context and
+        returns an ``ExecutionResult``. Until the systemic-analysis
+        adapter migrates to ``ICodingAgent``, it relies on the duck type
+        below."""
+
+        async def execute(self, prompt: str, context: ExecutionContext | None = ...) -> ExecutionResult: ...
+
+    AgentLLMFactory = Callable[[str], Coroutine[Any, Any, _LLMProviderLike]]
 
 from codetoreum.domain.repair_cycle_types import (
     AnalysisContext,
@@ -105,7 +121,7 @@ class LLMSystemicAnalysisAdapter(ISystemicAnalysisService):
         prompt = self._build_prompt(failures, context)
 
         # Create execution context with timeout and agent specialization metadata
-        from codetoreum.ports.output.llm_provider import ExecutionContext as ExecutionContextImpl
+        from codetoreum.ports.output.llm_types import ExecutionContext as ExecutionContextImpl
 
         execution_context = ExecutionContextImpl(
             timeout_seconds=self._timeout_seconds,
