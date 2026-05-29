@@ -309,8 +309,9 @@ class SimulationAdapters:
     while maintaining type safety.
 
     Note: agent_executor is assigned in Phase 3 (ExecutionService creation) and is
-    always ExecutionServiceAgentExecutor. It implements IAgentExecutor and provides
-    set_completion_handler() for BoardColumnEventHandler wiring.
+    always ExecutionServiceAgentExecutor. It implements IAgentExecutor and publishes
+    AgentExecutionCompletedEvent on the event bus when an execution finishes;
+    BoardColumnEventHandler subscribes to that event to drive auto-progression.
 
     Event Bus Wiring: The code_review adapter is available here for wiring to the
     central event bus via EventBusWiring.wire_review_service(). Currently not wired
@@ -1757,10 +1758,12 @@ class SimulationApplicationBootstrap:
             branch_tracker=self.adapters.branch_tracker,
             vcs=self.adapters.version_control,
             clock=self._engine.get_clock_for_testing(),
+            event_bus=self.infrastructure.event_bus,
             recovery_service=recovery_service,
             workflow_config_service=self.adapters.workflow_config,
             # Use a temp directory: /workspace requires a Docker container with root.
             workspace_base_dir=str(tempfile.gettempdir()) + "/codetoreum-sim-workspace",
+            default_board_id="board-1",
         )
         # Assign to agent_executor (the primary executor for the board handler)
         self.adapters.agent_executor = execution_service_executor
@@ -2684,9 +2687,16 @@ class SimulationApplicationBootstrap:
         """Register BoardColumnEventHandler for automated column processing.
 
         Creates the handler with its 5 dependencies (plus optional recovery_service)
-        and wires the agent executor's completion callback to the handler's
-        handle_agent_completion method. This closes the loop: column change ->
-        agent execution -> completion callback -> auto-progress to next column.
+        and registers it with the event bus. The handler subscribes to both
+        WorkItemColumnChangedEvent (column movement automation) and
+        AgentExecutionCompletedEvent (auto-progression after the executor
+        finishes). This closes the loop: column change → agent execution →
+        executor publishes AgentExecutionCompletedEvent → auto-progress to
+        next column.
+
+        The executor → handler auto-progression path is now event-bus mediated
+        (see INV-05 in `bootstrap/ARCHITECTURE.md` §6); the legacy
+        `set_completion_handler` callback is no longer used.
 
         NOTE: The handler requires IQueuedPipelineLockService (application-level interface
         with 4-parameter try_acquire_lock), not the PORT interface IPipelineLockService
@@ -2735,15 +2745,12 @@ class SimulationApplicationBootstrap:
             recovery_service=recovery_service,
         )
 
-        # Wire completion callback on ExecutionServiceAgentExecutor for auto-progression
-        # This method is not part of the IAgentExecutor port interface (lifecycle concern)
-        # but is provided by concrete implementations for bootstrap initialization.
-        if hasattr(self.adapters.agent_executor, "set_completion_handler"):
-            self.adapters.agent_executor.set_completion_handler(handler.handle_agent_completion, "board-1")
-
         # Store reference to handler for potential future reference
         self._board_event_handler = handler
 
+        # register_handler subscribes BoardColumnEventHandler to both
+        # WorkItemColumnChangedEvent and AgentExecutionCompletedEvent (the
+        # latter replaces the legacy executor.set_completion_handler callback).
         self.infrastructure.event_bus.register_handler(handler)
         logger.info("Registered BoardColumnEventHandler with event bus")
 
