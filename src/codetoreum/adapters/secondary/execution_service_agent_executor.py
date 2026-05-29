@@ -8,13 +8,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from codetoreum.application.prompt_builder import PromptBuilder
+from codetoreum.domain.events import AgentExecutionCompletedEvent, now_iso
 from codetoreum.domain.project_context import ProjectContext
 from codetoreum.domain.services.execution_context_builder import ExecutionContextBuilder
 from codetoreum.domain.types import WorkItemId
@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     )
     from codetoreum.application.execution_service import ExecutionService
     from codetoreum.application.workspace_router import WorkspaceRouter
+    from codetoreum.infrastructure.event_bus import EventBus
     from codetoreum.infrastructure.simulation.simulation_clock import ClockProtocol
     from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
     from codetoreum.ports.output.agent_repository import IAgentRepository
@@ -90,10 +91,12 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         branch_tracker: IWorkItemBranchTracker,
         vcs: IVersionControlService,
         clock: ClockProtocol,
+        event_bus: EventBus,
         recovery_service: AgentExecutionRecoveryService | None = None,
         execution_delay: float = 0.0,
         workflow_config_service: IWorkflowConfigService | None = None,
         workspace_base_dir: str = "/workspace",
+        default_board_id: str = "board-1",
     ) -> None:
         """Initialize ExecutionServiceAgentExecutor.
 
@@ -107,12 +110,19 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             branch_tracker: Tracks VCS branches per work item
             vcs: Version control service for repository operations
             clock: Clock implementation (IClock protocol) for time tracking
-            recovery_service: Service for handling completion callback failures
+            event_bus: Event bus used to publish AgentExecutionCompletedEvent
+                when the executor finishes processing a work item. The previous
+                set_completion_handler callback mechanism has been replaced; the
+                event bus is now the sole channel for executor → BEH
+                auto-progression signalling.
+            recovery_service: Service for handling completion publish failures
             execution_delay: Optional delay (seconds) before execution for testing
             workflow_config_service: Optional service for fetching workflow templates
             workspace_base_dir: Base directory for cloned repositories. Defaults to
                 /workspace (the Docker container mount point). Override in simulation
                 with a tempfile path so tests don't require root access.
+            default_board_id: Board id published with the completion event when
+                the active run registry has no board context (defensive fallback).
         """
         self._execution_service = execution_service
         self._workspace_router = workspace_router
@@ -123,35 +133,19 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         self._branch_tracker = branch_tracker
         self._vcs = vcs
         self._clock = clock
+        self._event_bus = event_bus
         self._recovery_service = recovery_service
         self._execution_delay = execution_delay
         self._workflow_config_service = workflow_config_service
         self._workspace_base_dir = workspace_base_dir
 
-        self._completion_callback: Callable[[str, str, bool], Coroutine[Any, Any, None]] | None = None
-        self._default_board_id = "board-1"
+        self._default_board_id = default_board_id
         self._executions: list[dict[str, Any]] = []
         self._pending_tasks: set[asyncio.Task] = set()
         # Track active executions: task -> ActiveExecutionInfo mapping
         self._active_executions: dict[asyncio.Task, ActiveExecutionInfo] = {}
         # Guard against double-dispatch: set of work_item_ids currently being executed
         self._executing_work_items: set[str] = set()
-
-    def set_completion_handler(
-        self,
-        callback: Callable[[str, str, bool], Coroutine[Any, Any, None]],
-        default_board_id: str,
-    ) -> None:
-        """Wire completion callback after handler creation.
-
-        Avoids circular constructor dependencies.
-
-        Args:
-            callback: Async function(work_item_id, board_id, success)
-            default_board_id: Board ID to pass to callback
-        """
-        self._completion_callback = callback
-        self._default_board_id = default_board_id
 
     def _task_done_callback(self, task: asyncio.Task[None]) -> None:
         """Handle completion of fire-and-forget execution task.
@@ -591,12 +585,21 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         )
 
     async def _call_completion(
-        self, work_item_id: str, board_id: str, success: bool, project_id: str | None = None
+        self,
+        work_item_id: str,
+        board_id: str,
+        success: bool,
+        project_id: str | None = None,
+        error_summary: str | None = None,
     ) -> None:
-        """Invoke completion callback with error handling and recovery.
+        """Publish AgentExecutionCompletedEvent so BoardColumnEventHandler can auto-progress.
 
-        If the completion callback (auto-progression) fails, the work item is stuck
-        in its current column. This method handles recovery via:
+        Previously this method invoked a `set_completion_handler` callback. The
+        event bus replaces that callback: `BoardColumnEventHandler` subscribes to
+        `AgentExecutionCompletedEvent` and runs the same auto-progression logic.
+
+        If publishing fails, the work item is stuck in its current column. This
+        method handles recovery via:
         1. Logging the failure with full context
         2. Using AgentExecutionRecoveryService to queue for manual recovery
         3. Failing the workflow run to signal pipeline blockage
@@ -608,40 +611,44 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             work_item_id: Work item that completed
             board_id: Board identifier
             success: Whether execution succeeded
+            project_id: Optional project id for recovery service context
+            error_summary: Optional short error description (None on success)
         """
-        if self._completion_callback:
-            try:
-                await self._completion_callback(work_item_id, board_id, success)
-            except Exception as e:
-                logger.error(
-                    f"Completion callback failed for '{work_item_id}': {e}",
-                    exc_info=True,
-                    extra={"error_id": ErrorRegistry.ERR_EXEC_CHAIN_COMPLETION_CALLBACK_FAILURE},
-                )
-                # Use recovery service to handle the failure (queue for manual recovery,
-                # fail workflow)
-                if self._recovery_service:
-                    try:
-                        await self._recovery_service.handle_completion_callback_failure(
-                            work_item_id=work_item_id,
-                            board_id=board_id,
-                            success=success,
-                            error=e,
-                            project_id=project_id,
-                        )
-                    except Exception as recovery_error:
-                        # Recovery service itself failed (e.g., DLQ add failure,
-                        # fail_workflow failure)
-                        # Log this failure to prevent silent loss in fire-and-forget task
-                        logger.error(
-                            f"Recovery service failed for '{work_item_id}' after completion callback failure: {recovery_error}",
-                            exc_info=True,
-                            extra={"error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
-                        )
-        else:
+        event = AgentExecutionCompletedEvent(
+            type="agent_execution.completed",
+            timestamp=now_iso(),
+            source="execution_service_agent_executor",
+            work_item_id=work_item_id,
+            board_id=board_id,
+            success=success,
+            error_summary=error_summary,
+        )
+
+        try:
+            await self._event_bus.publish(event)
+        except Exception as e:
             logger.error(
-                f"No completion callback set for ExecutionServiceAgentExecutor. "
-                f"Work item '{work_item_id}' completed with success={success} but auto-progression will not occur. "
-                f"Call set_completion_handler() to wire the callback before executing.",
-                extra={"error_id": ErrorRegistry.ERR_EXEC_CHAIN_NO_COMPLETION_CALLBACK},
+                f"Publishing AgentExecutionCompletedEvent failed for '{work_item_id}': {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_EXEC_CHAIN_COMPLETION_CALLBACK_FAILURE},
             )
+            # Use recovery service to handle the failure (queue for manual recovery,
+            # fail workflow)
+            if self._recovery_service:
+                try:
+                    await self._recovery_service.handle_completion_callback_failure(
+                        work_item_id=work_item_id,
+                        board_id=board_id,
+                        success=success,
+                        error=e,
+                        project_id=project_id,
+                    )
+                except Exception as recovery_error:
+                    # Recovery service itself failed (e.g., DLQ add failure,
+                    # fail_workflow failure)
+                    # Log this failure to prevent silent loss in fire-and-forget task
+                    logger.error(
+                        f"Recovery service failed for '{work_item_id}' after completion publish failure: {recovery_error}",
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR},
+                    )
