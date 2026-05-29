@@ -468,7 +468,7 @@ class IRepository(ABC):
 | `inspect()` | `container_id` | `dict[str, Any]` | Get detailed container info |
 | `wait()` | `container_id, timeout` | `int` | Wait for container to stop |
 | `copy_to_container()` | `container_id, source, destination` | `None` | Copy files to container |
-| `copy_from_container()` | `container_id, source, destination` | `None` | Copy files from container |
+| `copy_from_container()` | `container_id, source, destination` | `None` | Copy a file or directory tree from a container to the host (used by `ExecutionService.execute_with_container` for `/output` artifact extraction) |
 | `get_file_content()` | `container_id, file_path` | `bytes` | Get file content from container |
 
 ### ILLMProvider Methods

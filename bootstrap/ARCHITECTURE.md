@@ -337,7 +337,7 @@ Every port exercised in a bootstrap run, with its production adapter and role.
 | `IBoardService` | `GitHubBoardAdapter` | Column position lookup, item move for auto-progression | Yes |
 | `ILLMProvider` | `ClaudeCodeAdapter` (wrapped by resilience decorator) | Runs `claude --print` inside Docker container | Yes |
 | `IVersionControlService` | `GitHubVersionControlAdapter` (wrapped by resilience decorator) | Clone repo, status, commit, push | Yes |
-| `IContainer` | `DockerContainerAdapter` (wrapped) | Launches `codetoreum-agent:latest` container for agent execution | Yes (active) |
+| `IContainer` | `DockerContainerAdapter` (wrapped) | Launches `codetoreum-agent:latest` container for agent execution; post-exit artifact extraction via `copy_from_container("/output", ...)` | Yes (active) |
 | `ICodeReviewService` | `GitHubCodeReviewAdapter` | Not invoked in basic bootstrap | Yes (validated, not called) |
 | `IEventStore` | `ElasticsearchEventStore` | Persists all domain events; `WorkItemService` reads from it | No (infra) |
 | `IConfigStore` | `CachedConfigStore` → `ElasticsearchConfigStorage` | Project config, agent config lookup | No (infra) |
@@ -346,7 +346,7 @@ Every port exercised in a bootstrap run, with its production adapter and role.
 | `IActiveWorkflowRunRegistry` | `RedisActiveWorkflowRunRegistry` (production) / `InMemoryActiveWorkflowRunRegistry` (simulation) | Active run tracking between handler and executor; survives restart in production | No (infra) |
 | `IWorkItemBranchTracker` | in-memory impl | Branch name tracking per work item | No (infra) |
 | `IPipelineLockService` (`IQueuedPipelineLockService`) | `RedisPipelineLockService` (production) / `InMemoryLockService` (simulation) | Pipeline serialization (1 active execution per board); persistent in production | No (infra) |
-| `IStorage` | `MinioStorageAdapter` (production) / `InMemoryStorageAdapter` (simulation) | Execution-log and artifact persistence (`executions/{id}/logs.txt`); real presigned URLs in production | No (infra) |
+| `IStorage` | `MinioStorageAdapter` (production) / `InMemoryStorageAdapter` (simulation) | Execution-log persistence (`executions/{id}/logs.txt`) and artifact persistence (`executions/{id}/artifacts/{relative}`); real presigned URLs in production | No (infra) |
 | `IBranchResolutionService` | `BranchResolutionAdapter` | Branch name computation from ticket + VCS | No |
 | `IAgentExecutor` | `ExecutionServiceAgentExecutor` | Drives the full execution chain | No (wired internally) |
 | `IWorkItemService` | `WorkItemService` (event-sourced from ES) | Work item read by executor | No (infra) |
@@ -471,6 +471,20 @@ Bootstrap does not require any of these handlers for the happy path. The survey 
 ## 9. Deficiency Log
 
 Running record of architectural gaps found and fixed during bootstrap cycles. Most recent first.
+
+---
+
+### DEF-011 — IContainer.copy_from_container present on the port but never called
+
+**Deficiency**: `IContainer.copy_from_container` and the corresponding `DockerContainerAdapter` implementation had existed since Gen 2 design and `documentation/architecture/ports/output/core-system.md` documented it, but no application service ever invoked it. Agent containers wrote artifacts under `/output` and the orchestrator immediately discarded them on container removal: the only escape path for execution outputs was the git commit produced by `_commit_workspace`. Anything an agent produced that wasn't committed — structured execution-result JSON, intermediate report files, attachments destined for the work-item — was lost. The port surface promised an artifact extraction primitive that the production code path silently failed to use; a second container orchestrator (Kubernetes) would have inherited the same gap. The artifact-extraction breadth-axis item (D2) made this explicit.
+
+**Fix**:
+- Tightened the `IContainer.copy_from_container` docstring to make file-vs-directory tree semantics and the exception contract (`ValidationError` / `ResourceNotFoundError` / `ContainerError`) explicit.
+- Hardened `DockerContainerAdapter.copy_from_container` with layered error handling: missing container, missing source path, Docker API failures, and tar extraction failures are now distinguished and each logged with `exc_info=True` and a unique `error_id` (`ERR_CONTAINER_NOT_FOUND`, `ERR_CONTAINER_COPY_SOURCE_NOT_FOUND`, `ERR_CONTAINER_COPY_API_ERROR`, `ERR_CONTAINER_COPY_EXTRACT_FAILED`). Destination directory is now auto-created; tar extraction uses Python 3.12+'s `filter="data"` safe-extract mode where available. Resilience (retries/backoff) stays in `ResilientContainerDecorator` per INV-11.
+- Extended `FakeContainerAdapter.copy_from_container` to support directory-tree sources by treating any non-exact source as a directory prefix and copying every matching virtual file to the host destination with relative paths preserved.
+- Added `_extract_and_upload_artifacts` to `ExecutionService` and wired it into `execute_with_container` between log persistence and token-usage extraction. The helper stages the extract in a `tempfile.TemporaryDirectory`, walks the result with `rglob`, and uploads each file to `executions/{execution_id}/artifacts/{relative_path}` in `IStorage` (now backed by `MinioStorageAdapter` in production per DEF-009). The container's primary deliverable remains the git commit — artifact extraction is explicitly best-effort and never blocks execution completion. Every failure mode is logged with `exc_info=True`.
+
+**Files changed**: `src/codetoreum/ports/output/container.py`, `src/codetoreum/adapters/secondary/docker_container_adapter.py`, `src/codetoreum/adapters/testing/fake_container_adapter.py`, `src/codetoreum/application/execution_service.py`, `documentation/architecture/ports/output/core-system.md`, `bootstrap/ARCHITECTURE.md`, `tests/unit/adapters/test_fake_container_adapter.py`, `tests/integration/application/test_execution_service.py`
 
 ---
 
