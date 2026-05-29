@@ -317,6 +317,11 @@ class TestAdapterResolver:
             "tracer",
             "systemic_analysis_service",
             "branch_resolution_service",
+            # Phase D3/D4: coding_agent is wired by SimulationApplicationBootstrap
+            # (MockClaudeCodeAdapter) and ProductionApplicationBootstrap Phase 4c
+            # (ResilientCodingAgentDecorator-wrapped ClaudeCodeAdapter); not
+            # produced by AdapterResolver.resolve_all() itself.
+            "coding_agent",
         }
         for field in dataclasses.fields(result):
             adapter = getattr(result, field.name)
@@ -1047,6 +1052,11 @@ class TestAdapterResolverIntegration:
             "tracer",
             "systemic_analysis_service",
             "branch_resolution_service",
+            # Phase D3/D4: coding_agent is wired by SimulationApplicationBootstrap
+            # (MockClaudeCodeAdapter) and ProductionApplicationBootstrap Phase 4c
+            # (ResilientCodingAgentDecorator-wrapped ClaudeCodeAdapter); not
+            # produced by AdapterResolver.resolve_all() itself.
+            "coding_agent",
         }
         for field in dataclasses.fields(result):
             adapter = getattr(result, field.name)
