@@ -249,7 +249,12 @@ class ProductionApplicationBootstrap:
                 container="docker",
                 code_review="github",
                 event_store="elasticsearch",  # Shared event bus for cross-process event distribution
-                event_emitter="mock",  # Use mock emitter (in-memory, not capturing for tests)
+                event_emitter="mock",  # Use mock emitter (in-memory, not capturing for tests).
+                # Multi-instance deployments should set this to "redis_pubsub"
+                # to propagate domain events across processes via Redis.
+                # The single-instance bootstrap does not exercise cross-process
+                # event distribution; the in-memory MockEventEmitter remains
+                # the default until that scenario becomes part of the harness.
                 project_manager="elasticsearch",  # Read live project configs from ES
                 encryption="local_key",  # Fernet keyed by ENCRYPTION_KEY_BASE64 env var
                 lock_service="redis",  # Persistent pipeline lock; survives restart, coordinates instances

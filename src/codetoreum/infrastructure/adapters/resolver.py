@@ -236,7 +236,23 @@ class AdapterResolver:
         return self._factory.create_identity_service(adapter_name=self._config.identity_service)
 
     def resolve_event_emitter(self) -> IEventEmitter:
-        """Resolve event emitter adapter."""
+        """Resolve event emitter adapter.
+
+        For "redis_pubsub", constructs an aioredis client from REDIS_URL so
+        emitted CodetoreumEvents propagate to subscribers in other processes.
+        Local in-process handlers continue to receive events synchronously.
+        """
+        if self._config.event_emitter == "redis_pubsub":
+            import os
+
+            import redis.asyncio as aioredis
+
+            redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+            redis_client = aioredis.from_url(redis_url)
+            return self._factory.create_event_emitter(
+                adapter_name=self._config.event_emitter,
+                redis_client=redis_client,
+            )
         return self._factory.create_event_emitter(adapter_name=self._config.event_emitter)
 
     def resolve_message_broker(self) -> IMessageBroker:

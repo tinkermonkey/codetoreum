@@ -962,6 +962,23 @@ class AdapterFactory:
                 description="Simulation-only adapter, no credentials required",
             ),
         )
+        # Redis pub/sub event emitter for multi-instance deployments. Local
+        # in-process delivery semantics are preserved alongside cross-process
+        # delivery via Redis channels keyed by event.type.
+        from codetoreum.adapters.secondary.redis_pubsub_event_emitter import (
+            RedisPubSubEventEmitter,
+        )
+
+        self._event_emitter_registry.register(
+            name="redis_pubsub",
+            adapter_type=RedisPubSubEventEmitter,
+            description="Redis pub/sub event emitter for multi-instance deployments",
+            version="1.0.0",
+            tags=["production", "multi_instance"],
+            config_schema=AdapterCredentialRequirement(
+                description=("Requires an aioredis client (injected by AdapterResolver from REDIS_URL)."),
+            ),
+        )
 
         # Identity Service Adapters
         self._identity_service_registry.register(
