@@ -284,3 +284,60 @@ Report:
 - Application services implementing output ports MUST explicitly inherit the port ABC
 
 When in doubt about architecture decisions, consult the codetoreum-architect agent.
+
+---
+
+## Drill mode: restart
+
+Goal: prove the system either resumes or surfaces orphan state when the server is killed mid-execution. This is the verification drill for persistence-grade in-memory replacements (lock service, run registry).
+
+1. Complete Steps 1–6 above to trigger a work item.
+2. Tail the server log and wait for the `WorkflowStartedEvent` line (Phase 5 of the run):
+   ```bash
+   until grep -q "WorkflowStartedEvent" /tmp/codetoreum.log; do sleep 1; done
+   echo "Workflow started, killing server"
+   ```
+3. SIGTERM the server: `kill -15 $CODETOREUM_PID` (DO NOT use SIGKILL — we want clean teardown to be testable). Confirm the process exits.
+4. Restart the server with the same command as Step 3.
+5. After Phase 7 reports ready, query the work item:
+   ```bash
+   curl -s -H "Authorization: Bearer $AUTH_TOKEN" http://localhost:8000/api/v2/work-items/$WORK_ITEM_ID | python3 -m json.tool
+   ```
+6. Expected outcomes (any of these is acceptable; "no observable state at all" is not):
+   - The executor detects the orphaned run (no matching `WorkflowCompletedEvent` for the existing `WorkflowStartedEvent`) and resumes or emits a `WorkflowOrphanedEvent`.
+   - The lock state is rebuilt from persistence (Redis); the work item is still queued or running.
+   - Auto-progression continues from the column the work item was in before restart.
+7. Failure modes to report:
+   - Work item silently stuck in the old column with no event trail.
+   - Duplicate `WorkflowStartedEvent` for the same `work_item_id` (suggests the run registry lost state).
+   - Lock service returns `ACQUIRED` for a new work item on the same board immediately (suggests the lock was lost and pipeline serialization is broken).
+
+While `IPipelineLockService`, `IActiveWorkflowRunRegistry`, and `IWorkItemBranchTracker` are in-memory, this drill is expected to fail. The Phase B production adapters make it pass.
+
+---
+
+## Drill mode: concurrent
+
+Goal: prove pipeline serialization holds when two work items are triggered on the same board before the first completes. This is the verification drill for the lock service's queueing behavior.
+
+1. Complete Steps 1–3 to start the server.
+2. Create two work items on the same board (call Step 5 twice with different `external_id`s). Record `WORK_ITEM_ID_A` and `WORK_ITEM_ID_B`.
+3. Trigger both into "In Progress" back-to-back, without waiting:
+   ```bash
+   curl -s -X POST http://localhost:8000/api/v2/trigger/column-change \
+     -H "Content-Type: application/json" -H "Authorization: Bearer $AUTH_TOKEN" \
+     -d "{\"work_item_id\": \"$WORK_ITEM_ID_A\", \"to_column\": \"In Progress\", \"project_id\": \"rounds\", \"board_id\": \"rounds-board-1\"}"
+   curl -s -X POST http://localhost:8000/api/v2/trigger/column-change \
+     -H "Content-Type: application/json" -H "Authorization: Bearer $AUTH_TOKEN" \
+     -d "{\"work_item_id\": \"$WORK_ITEM_ID_B\", \"to_column\": \"In Progress\", \"project_id\": \"rounds\", \"board_id\": \"rounds-board-1\"}"
+   ```
+4. Expected log patterns:
+   - First trigger: `Lock acquired for $WORK_ITEM_ID_A`.
+   - Second trigger: `try_acquire_lock` returns `LockStatus.QUEUED` for `$WORK_ITEM_ID_B` (NOT `ACQUIRED`).
+   - When A finishes: `Lock released for $WORK_ITEM_ID_A, next work item: $WORK_ITEM_ID_B` followed by `Lock acquired for $WORK_ITEM_ID_B`.
+5. Failure modes:
+   - Both work items log `Lock acquired` simultaneously — pipeline serialization is broken (catastrophic).
+   - B is never picked up after A completes — queue release/handoff is broken.
+   - B is picked up but A's lock was force-released — stale-lock detection misfired.
+
+After Phase B Step 2 ships `RedisPipelineLockService`, run this drill with two server instances (`docker compose up --scale codetoreum=2`) to prove multi-instance coordination.
