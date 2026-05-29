@@ -777,14 +777,18 @@ class CodingAgentInvokedEvent(CodetoreumEvent):
 
     Attributes:
         execution_id: Aggregate ID for this execution stream
-        work_item_id: Work item being processed (non-aggregate, for cross-stream queries)
         coding_agent_id: Adapter identifier (e.g. "claude-code", "github-copilot")
         invocation_mode: containerized / host / api
         model: Model name configured for this execution
         model_options: Vendor-specific options (image, cpu, memory, etc.)
+
+    Note:
+        ``work_item_id`` is intentionally not on this event. Per O1
+        (proposal §7), the work-item link is recovered from the event
+        store's ``execution_id`` → ``work_item_id`` index, keeping the
+        execution stream clean.
     """
     execution_id: str = ""
-    work_item_id: str = ""
     coding_agent_id: str = ""
     invocation_mode: str = ""
     model: str = ""
@@ -842,13 +846,26 @@ class CodingAgentToolResultEvent(CodetoreumEvent):
     Attributes:
         execution_id: Aggregate ID
         tool_use_id: Correlates to the originating ToolCallEvent
-        result_content: Tool output. May be truncated; see was_truncated.
+        result_content: Tool output. Truncated at MAX_RESULT_CONTENT_BYTES;
+                        see ``was_truncated`` and ``full_content_size``.
+        was_truncated: True if ``result_content`` was truncated.
+        full_content_size: Byte length of the original (untruncated) content.
         is_error: True if the tool returned an error
         duration_ms: How long the tool execution took
+
+    Class constants:
+        MAX_RESULT_CONTENT_BYTES = 65536 (64 KiB)
+
+    Factory:
+        ``from_full_content(...)`` is the preferred constructor — it applies
+        truncation deterministically and sets the ``was_truncated`` /
+        ``full_content_size`` fields. Per O4 Lean (proposal §7).
     """
     execution_id: str = ""
     tool_use_id: str = ""
     result_content: str = ""
+    was_truncated: bool = False
+    full_content_size: int = 0
     is_error: bool = False
     duration_ms: int = 0
 
@@ -901,16 +918,17 @@ class CodingAgentRateLimitEvent(CodetoreumEvent):
 
     Attributes:
         execution_id: Aggregate ID
-        rate_limit_type: e.g. "tokens_per_minute", "requests_per_minute"
-        status: Vendor status string
-        resets_at: ISO 8601 timestamp when the limit resets
-        overage_status: Vendor's overage classification (e.g. "warning", "hard")
+        rate_limit_type: e.g. "five_hour", "tokens_per_minute"
+        status: Vendor status string (e.g. "allowed", "throttled")
+        resets_at: Epoch-seconds timestamp when the limit resets (int)
+        overage_status: Vendor's overage classification (e.g. "warning",
+                        "hard"), or None when not reported.
     """
     execution_id: str = ""
     rate_limit_type: str = ""
     status: str = ""
-    resets_at: str = ""
-    overage_status: str = ""
+    resets_at: int = 0
+    overage_status: str | None = None
 
 
 @dataclass(frozen=True)
@@ -951,13 +969,29 @@ class CodingAgentOtlpSpanEvent(CodetoreumEvent):
 
     Attributes:
         execution_id: Aggregate ID
-        span: Structured span fields (trace_id, span_id, name, attributes,
-              events). See open question O2 in the design doc — exact
-              shape may carry the raw OTel wire format as a sub-field for
-              re-export.
+        trace_id: W3C trace ID
+        span_id: W3C span ID
+        parent_span_id: Parent span ID, or None for a root span
+        name: Span name
+        start_time: ISO 8601 timestamp when the span started
+        end_time: ISO 8601 timestamp when the span ended
+        attributes: Span attribute map
+        events: Tuple of structured span events (each a dict)
+        status: Span status (e.g. "OK", "ERROR")
+        raw_span: Original OTel JSON payload, attached for re-export
+                  via IObservabilityProvider. Per O2 Lean.
     """
     execution_id: str = ""
-    span: dict = field(default_factory=dict)
+    trace_id: str = ""
+    span_id: str = ""
+    parent_span_id: str | None = None
+    name: str = ""
+    start_time: str = ""
+    end_time: str = ""
+    attributes: dict = field(default_factory=dict)
+    events: tuple = ()
+    status: str = ""
+    raw_span: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -974,17 +1008,18 @@ class CodingAgentTokensUsedEvent(CodetoreumEvent):
         execution_id: Aggregate ID
         input_tokens: Tokens sent to the model
         output_tokens: Tokens produced by the model
-        cache_read: Cached input tokens read (cost-discounted)
-        cache_write: Cache-writing input tokens (premium-priced)
-        cost_usd: Estimated cost for this measurement window
+        cache_read_input_tokens: Cached input tokens read (cost-discounted)
+        cache_creation_input_tokens: Cache-writing input tokens (premium-priced)
+        cost_usd: Estimated cost for this measurement window (Decimal —
+                  serialised as a string by the event store JSON encoder)
         model: Model name (in case multiple models used in one execution)
     """
     execution_id: str = ""
     input_tokens: int = 0
     output_tokens: int = 0
-    cache_read: int = 0
-    cache_write: int = 0
-    cost_usd: float = 0.0
+    cache_read_input_tokens: int = 0
+    cache_creation_input_tokens: int = 0
+    cost_usd: Decimal = Decimal("0")
     model: str = ""
 
 
@@ -1002,8 +1037,9 @@ class CodingAgentCompletedEvent(CodetoreumEvent):
         execution_id: Aggregate ID
         success: Whether execution completed successfully
         summary_text: Final agent summary / response text
-        total_cost_usd: Total cost across the execution
-        total_tokens: Total tokens (input + output) for the execution
+        total_cost_usd: Total cost across the execution (Decimal)
+        total_input_tokens: Total input tokens (incl. cache reads/writes)
+        total_output_tokens: Total output tokens produced
         tool_call_count: Number of tool invocations made
         duration_ms: End-to-end duration
         error_summary: Error description if !success, else None
