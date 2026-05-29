@@ -42,6 +42,9 @@ from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
 from codetoreum.adapters.secondary.local_key_encryption_adapter import (
     LocalKeyEncryptionAdapter,
 )
+from codetoreum.adapters.secondary.redis_pipeline_lock_service import (
+    RedisPipelineLockService,
+)
 
 # Import testing adapters
 from codetoreum.adapters.testing import (
@@ -863,6 +866,22 @@ class AdapterFactory:
                 description="Simulation-only adapter, no credentials required",
             ),
             set_as_default=True,
+        )
+        # Redis-backed pipeline lock service: lock state survives restart and
+        # coordinates across multiple Codetoreum instances. Requires a running
+        # Redis at REDIS_URL.
+        self._pipeline_lock_registry.register(
+            name="redis",
+            adapter_type=RedisPipelineLockService,
+            description="Redis-backed pipeline lock service with sorted-set queue ordering",
+            version="1.0.0",
+            tags=["production", "persistent", "multi_instance"],
+            config_schema=AdapterCredentialRequirement(
+                description=(
+                    "Requires a Redis client (redis.asyncio.Redis). The resolver injects "
+                    "one constructed from REDIS_URL. EventBus is injected for lock event emission."
+                ),
+            ),
         )
 
         # Pipeline Queue Service Adapters

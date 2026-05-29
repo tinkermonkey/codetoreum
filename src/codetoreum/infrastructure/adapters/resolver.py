@@ -296,7 +296,25 @@ class AdapterResolver:
         )
 
     def resolve_lock_service(self) -> IPipelineLockService:
-        """Resolve pipeline lock service adapter."""
+        """Resolve pipeline lock service adapter.
+
+        For "redis", an aioredis client is constructed from REDIS_URL
+        (defaulting to redis://localhost:6379/0) and the EventBus from
+        ``_deps`` is wired so lock events flow into the in-process pub/sub
+        bus alongside the persistent Redis state.
+        """
+        if self._config.lock_service == "redis":
+            import os
+
+            import redis.asyncio as aioredis
+
+            redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+            redis_client = aioredis.from_url(redis_url)
+            return self._factory.create_pipeline_lock_service(
+                adapter_name=self._config.lock_service,
+                redis_client=redis_client,
+                event_bus=self._deps.event_bus,
+            )
         return self._factory.create_pipeline_lock_service(adapter_name=self._config.lock_service)
 
     def resolve_queue_service(self) -> IPipelineQueueService:
