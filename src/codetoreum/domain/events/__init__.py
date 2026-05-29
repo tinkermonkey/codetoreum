@@ -55,6 +55,21 @@ from .ci_pipeline_events import (
     CIRunStartedEvent,
 )
 
+# Coding agent events (granular per-execution telemetry, 11 events)
+from .coding_agent_events import (
+    CodingAgentApiRetryEvent,
+    CodingAgentCompletedEvent,
+    CodingAgentInvokedEvent,
+    CodingAgentOtlpSpanEvent,
+    CodingAgentRateLimitEvent,
+    CodingAgentReadyEvent,
+    CodingAgentTextOutputEvent,
+    CodingAgentThinkingEvent,
+    CodingAgentTokensUsedEvent,
+    CodingAgentToolCallEvent,
+    CodingAgentToolResultEvent,
+)
+
 # Configuration domain events (frozen dataclasses)
 from .configuration_events import (
     AgentConfigUpdatedEvent,
@@ -442,4 +457,16 @@ __all__ = [
     "PipelineStageFailedEvent",
     "PipelineCompletedEvent",
     "PipelineFailedEvent",
+    # Coding agent events (granular per-execution telemetry, 11 events)
+    "CodingAgentInvokedEvent",
+    "CodingAgentReadyEvent",
+    "CodingAgentToolCallEvent",
+    "CodingAgentToolResultEvent",
+    "CodingAgentTextOutputEvent",
+    "CodingAgentThinkingEvent",
+    "CodingAgentRateLimitEvent",
+    "CodingAgentApiRetryEvent",
+    "CodingAgentOtlpSpanEvent",
+    "CodingAgentTokensUsedEvent",
+    "CodingAgentCompletedEvent",
 ]
