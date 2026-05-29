@@ -2,7 +2,9 @@
 
 import asyncio
 import logging
+import mimetypes
 import re
+import tempfile
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -34,6 +36,7 @@ from codetoreum.infrastructure.observability.instrumentation import (
     instrument_function,
 )
 from codetoreum.ports.exceptions import (
+    ContainerError,
     ContainerExecutionError,
     ContainerTimeoutError,
     EventStoreError,
@@ -725,6 +728,12 @@ class ExecutionService:
             # gracefully and continue.
             await self._persist_execution_logs(execution, logs, context)
 
+            # Extract and upload any artifacts the agent wrote under /output.
+            # Best-effort: the container's primary deliverable is the git
+            # commit; artifact extraction failure must not fail the
+            # execution.
+            await self._extract_and_upload_artifacts(execution, container_id, context)
+
             # Extract token usage from logs (if available)
             input_tokens, output_tokens = self._extract_token_usage(logs)
 
@@ -1221,6 +1230,136 @@ class ExecutionService:
                     "storage_key": key,
                 },
             )
+
+    async def _extract_and_upload_artifacts(
+        self,
+        execution: AgentExecution,
+        container_id: str,
+        context: ExecutionContext,
+    ) -> None:
+        """Harvest /output from the container and upload to IStorage.
+
+        Called after the agent container exits (and after logs are
+        persisted) but before container cleanup. Walks the extracted
+        directory and uploads each file to
+        ``executions/{execution_id}/artifacts/{relative_path}``.
+
+        Failure modes are intentionally swallowed: the container's primary
+        deliverable is the git commit, and artifact extraction is a
+        best-effort observability concern. Every failure is logged with
+        ``exc_info=True`` and a unique ``error_id``; nothing is silent.
+
+        - Missing ``/output`` directory (agent produced no artifacts):
+          common case, logged at debug, returns cleanly.
+        - Copy / extract failures: logged at error, returns cleanly.
+        - Per-file upload failures: logged at error per file, continues
+          uploading the remaining files.
+        """
+        if self.storage is None:
+            return
+
+        artifact_source = "/output"
+
+        # Use a temp directory so we don't pollute the workspace (which is
+        # version-controlled and may have its own /output ignored by .gitignore).
+        # tempfile.TemporaryDirectory cleans up on context exit even on errors.
+        with tempfile.TemporaryDirectory(prefix=f"codetoreum-artifacts-{execution.id}-") as tmpdir:
+            artifacts_root = Path(tmpdir)
+            try:
+                await self.container.copy_from_container(
+                    container_id,
+                    artifact_source,
+                    str(artifacts_root),
+                )
+            except ContainerError as e:
+                # ResourceNotFoundError (subclass of ContainerError-family) when
+                # /output does not exist is the common case for agents that
+                # do not produce structured artifacts. Log at debug and exit.
+                logger.debug(
+                    f"No artifacts to extract from execution {execution.id} " f"({artifact_source!r}): {e}",
+                    extra={
+                        "execution_id": execution.id,
+                        "container_id": container_id,
+                        "artifact_source": artifact_source,
+                    },
+                )
+                return
+            except Exception:
+                # Defensive: any unexpected error from the container adapter.
+                logger.error(
+                    f"Unexpected error extracting artifacts for execution {execution.id}",
+                    exc_info=True,
+                    extra={
+                        "error_id": "ERR_EXECUTION_ARTIFACT_EXTRACT_FAILED",
+                        "execution_id": execution.id,
+                        "container_id": container_id,
+                        "artifact_source": artifact_source,
+                    },
+                )
+                return
+
+            # Walk the extracted tree and upload each file.
+            try:
+                files = [p for p in artifacts_root.rglob("*") if p.is_file()]
+            except OSError:
+                logger.error(
+                    f"Failed to walk artifact directory for execution {execution.id}",
+                    exc_info=True,
+                    extra={
+                        "error_id": "ERR_EXECUTION_ARTIFACT_WALK_FAILED",
+                        "execution_id": execution.id,
+                    },
+                )
+                return
+
+            if not files:
+                logger.debug(
+                    f"Artifact directory empty for execution {execution.id}",
+                    extra={"execution_id": execution.id},
+                )
+                return
+
+            metadata = {
+                "execution_id": execution.id,
+                "work_item_id": context.work_item_id,
+            }
+            if context.project_id:
+                metadata["project_id"] = context.project_id
+
+            for file_path in files:
+                try:
+                    relative = file_path.relative_to(artifacts_root).as_posix()
+                except ValueError:
+                    # Should not happen given rglob root, but skip defensively
+                    continue
+                key = f"executions/{execution.id}/artifacts/{relative}"
+                try:
+                    content = file_path.read_bytes()
+                    guessed_type, _ = mimetypes.guess_type(file_path.name)
+                    content_type = guessed_type or "application/octet-stream"
+                    await self.storage.upload(
+                        key=key,
+                        content=content,
+                        content_type=content_type,
+                        metadata=metadata,
+                    )
+                    logger.debug(
+                        f"Uploaded artifact {relative} for execution {execution.id} to {key}",
+                        extra={
+                            "execution_id": execution.id,
+                            "storage_key": key,
+                        },
+                    )
+                except Exception:
+                    logger.error(
+                        f"Failed to upload artifact {relative} for execution {execution.id}",
+                        exc_info=True,
+                        extra={
+                            "error_id": "ERR_EXECUTION_ARTIFACT_UPLOAD_FAILED",
+                            "execution_id": execution.id,
+                            "storage_key": key,
+                        },
+                    )
 
     def _extract_token_usage(self, logs: str) -> tuple[int, int]:
         """

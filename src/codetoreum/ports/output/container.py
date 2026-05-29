@@ -445,17 +445,36 @@ class IContainer(ABC):
         source: str,
         destination: str,
     ) -> None:
-        """
-        Copy files from a container.
+        """Extract a file or directory tree from a container to the host.
+
+        Used by ``ExecutionService.execute_with_container`` after the agent
+        exits to harvest artifacts produced under ``/output`` (or any
+        configured artifact path). Implementations MUST support both
+        single-file and directory-tree sources:
+
+        - When ``source`` is a single file, the file's content is written
+          to ``destination`` (a file path on the host).
+        - When ``source`` is a directory, the entire tree is extracted into
+          ``destination`` (a directory on the host), preserving relative
+          paths.
+
+        Kubernetes-style orchestrators are expected to satisfy this contract
+        by ``kubectl cp``-equivalent semantics; Docker orchestrators use
+        ``get_archive`` and extract the returned tar stream.
 
         Args:
-            container_id: Container identifier
-            source: Source path in container
-            destination: Destination path on host
+            container_id: Container identifier.
+            source: Source path inside the container (file or directory).
+            destination: Destination path on the host. For directory
+                extraction this is the parent directory; for file
+                extraction this is the target file or its parent directory
+                (adapter-defined when ambient — see implementation docs).
 
         Raises:
-            ResourceNotFoundError: Container or file doesn't exist
-            ContainerError: Copy operation failed
+            ValidationError: Empty container_id, source, or destination.
+            ResourceNotFoundError: Container does not exist, or source path
+                does not exist inside the container.
+            ContainerError: Copy operation failed for any other reason.
         """
 
     @abstractmethod

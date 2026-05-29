@@ -1305,16 +1305,75 @@ class DockerContainerAdapter(IContainer):
         source: str,
         destination: str,
     ) -> None:
-        """Copy files from a container."""
+        """Extract a file or directory tree from a container to the host.
+
+        Uses docker-py's ``container.get_archive(source)`` which returns a
+        tar stream regardless of whether ``source`` is a file or directory.
+        The tar is extracted to ``destination``. The destination directory
+        is created on demand so callers do not have to pre-create it.
+
+        Distinguishes three failure modes:
+        - ``ResourceNotFoundError`` for missing container (``NotFound`` from
+          docker-py).
+        - ``ResourceNotFoundError`` for missing source path inside the
+          container (``NotFound`` raised by ``get_archive``).
+        - ``ContainerError`` for anything else; logged with ``exc_info=True``
+          before re-raising so failures are never silent.
+        """
+        if not container_id:
+            msg = "Container ID cannot be empty"
+            raise ValidationError(msg)
+        if not source:
+            msg = "Source path cannot be empty"
+            raise ValidationError(msg)
+        if not destination:
+            msg = "Destination path cannot be empty"
+            raise ValidationError(msg)
+
         client = self._get_client()
         loop = asyncio.get_event_loop()
 
         def _copy():
             try:
                 container = client.containers.get(container_id)
+            except docker.errors.NotFound as e:
+                logger.error(
+                    f"Container {container_id} not found during copy_from_container",
+                    exc_info=True,
+                    extra={"error_id": "ERR_CONTAINER_NOT_FOUND", "container_id": container_id},
+                )
+                raise ResourceNotFoundError("Container", container_id) from e
 
-                # Get tar archive from container
+            try:
+                # Get tar archive from container (works for files and directories)
                 bits, _stat = container.get_archive(source)
+            except docker.errors.NotFound as e:
+                logger.error(
+                    f"Source path {source!r} not found in container {container_id}",
+                    exc_info=True,
+                    extra={
+                        "error_id": "ERR_CONTAINER_COPY_SOURCE_NOT_FOUND",
+                        "container_id": container_id,
+                        "source": source,
+                    },
+                )
+                raise ResourceNotFoundError("Source path", source) from e
+            except docker.errors.APIError as e:
+                logger.error(
+                    f"Docker API error fetching {source!r} from container {container_id}: {e}",
+                    exc_info=True,
+                    extra={
+                        "error_id": "ERR_CONTAINER_COPY_API_ERROR",
+                        "container_id": container_id,
+                        "source": source,
+                    },
+                )
+                msg = f"Failed to copy from container: {e}"
+                raise ContainerError(msg) from e
+
+            try:
+                # Ensure destination directory exists (parent of file dest, or dest itself for dir)
+                Path(destination).mkdir(parents=True, exist_ok=True)
 
                 # Extract tar archive
                 tar_stream = io.BytesIO()
@@ -1323,13 +1382,25 @@ class DockerContainerAdapter(IContainer):
 
                 tar_stream.seek(0)
                 with tarfile.open(fileobj=tar_stream, mode="r") as tar:
-                    tar.extractall(destination)
-
-            except Exception as e:
-                if "not found" in str(e).lower() and "container" in str(e).lower():
-                    msg = "Container"
-                    raise ResourceNotFoundError(msg, container_id) from e
-                msg = f"Failed to copy from container: {e!s}"
+                    # Filter is the recommended safe extraction mode in Python 3.12+.
+                    # 'data' filter blocks special files/links and absolute paths.
+                    try:
+                        tar.extractall(destination, filter="data")
+                    except TypeError:
+                        # Older Python without the filter argument
+                        tar.extractall(destination)
+            except (OSError, tarfile.TarError) as e:
+                logger.error(
+                    f"Failed to extract archive from container {container_id} to {destination}: {e}",
+                    exc_info=True,
+                    extra={
+                        "error_id": "ERR_CONTAINER_COPY_EXTRACT_FAILED",
+                        "container_id": container_id,
+                        "source": source,
+                        "destination": destination,
+                    },
+                )
+                msg = f"Failed to extract archive from container: {e}"
                 raise ContainerError(msg) from e
 
         await loop.run_in_executor(None, _copy)

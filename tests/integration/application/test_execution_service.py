@@ -268,6 +268,72 @@ async def test_execute_with_container_creates_container(
 
 
 @pytest.mark.asyncio
+async def test_extract_and_upload_artifacts_uploads_output_tree(
+    execution_service,
+    sample_agent,
+    sample_work_item,
+    sample_execution_context,
+    mock_container,
+    mock_storage,
+):
+    """Files under /output in the container land at executions/{id}/artifacts/{path} in IStorage."""
+    execution = await execution_service.create_execution(
+        agent=sample_agent,
+        work_item=sample_work_item,
+        workflow_id="workflow-123",
+        stage_name="development",
+        prompt="Implement the feature",
+    )
+
+    # Seed a container with an /output tree
+    container_id = await mock_container.create(image="codetoreum/agent:latest")
+    mock_container.write_output_file(container_id, "/output/result.json", '{"ok": true}')
+    mock_container.write_output_file(container_id, "/output/logs/run.log", "started\n")
+
+    # Call the helper directly so we control the container_id wiring
+    await execution_service._extract_and_upload_artifacts(execution, container_id, sample_execution_context)
+
+    # Verify uploads landed at the expected storage keys
+    expected_json_key = f"executions/{execution.id}/artifacts/result.json"
+    expected_log_key = f"executions/{execution.id}/artifacts/logs/run.log"
+    assert await mock_storage.exists(expected_json_key)
+    assert await mock_storage.exists(expected_log_key)
+    json_content = await mock_storage.download(expected_json_key)
+    assert json_content == b'{"ok": true}'
+    log_content = await mock_storage.download(expected_log_key)
+    assert log_content == b"started\n"
+
+
+@pytest.mark.asyncio
+async def test_extract_and_upload_artifacts_no_output_dir_is_soft_miss(
+    execution_service,
+    sample_agent,
+    sample_work_item,
+    sample_execution_context,
+    mock_container,
+    mock_storage,
+):
+    """When the agent produced no /output, extraction logs and returns cleanly — no upload, no raise."""
+    execution = await execution_service.create_execution(
+        agent=sample_agent,
+        work_item=sample_work_item,
+        workflow_id="workflow-123",
+        stage_name="development",
+        prompt="Implement the feature",
+    )
+
+    # Create a container but DO NOT write any /output files
+    container_id = await mock_container.create(image="codetoreum/agent:latest")
+
+    # Should not raise
+    await execution_service._extract_and_upload_artifacts(execution, container_id, sample_execution_context)
+
+    # And nothing was uploaded under the artifacts prefix
+    artifact_files = await mock_storage.list_files(prefix=f"executions/{execution.id}/artifacts/")
+    assert artifact_files == []
+
+
+@pytest.mark.asyncio
 async def test_cancel_execution(
     execution_service,
     sample_agent,
