@@ -20,6 +20,10 @@ from codetoreum.domain.services.execution_context_builder import ExecutionContex
 from codetoreum.domain.types import WorkItemId
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.output.agent_executor import IAgentExecutor
+from codetoreum.ports.output.coding_agent import (
+    CodingAgentInvocationOptions,
+    InvocationMode,
+)
 
 if TYPE_CHECKING:
     from codetoreum.application.agent_execution_recovery_service import (
@@ -76,7 +80,8 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
     7.  Builds execution context via ExecutionContextBuilder
     8.  Creates execution via ExecutionService
     9.  Starts execution and validates start result
-    10. Executes via LLM path (default) or Container path (requires_docker=True)
+    10. Executes via ExecutionService.execute() (the unified D4 path that
+        delegates to ICodingAgent — adapter owns the invocation-mode decision)
     11. Finalizes workspace, clears registry/branch-tracker, calls completion callback
     """
 
@@ -514,15 +519,21 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 await self._call_completion(work_item_id, resolved_board_id, False)
                 return
 
-            # Step 10: Execute via LLM or Container
+            # Step 10: Dispatch via the unified ExecutionService.execute() path
+            # (Phase D4). The coding-agent adapter owns the invocation-mode
+            # decision; we no longer branch on `agent.requires_docker` here.
+            # The flag is still read to derive InvocationMode for the bridge
+            # state — D6 retires `requires_docker` along with the rest of the
+            # legacy agent-config schema.
+            invocation_options = self._build_invocation_options(agent, context)
             exec_result = None
             try:
-                if agent.requires_docker:
-                    # ContainerConfig assembly is owned by ExecutionService, not this adapter.
-                    # Credentials are injected at bootstrap via ExecutionService.system_credentials.
-                    exec_result = await self._execution_service.execute_agent_with_container(execution, context, agent)
-                else:
-                    exec_result = await self._execution_service.execute_with_llm(execution, context)
+                exec_result = await self._execution_service.execute(
+                    execution,
+                    context,
+                    workspace,
+                    invocation_options,
+                )
             except Exception as exec_err:
                 logger.error(
                     f"ExecutionServiceAgentExecutor: execution call failed for '{work_item_id}': {exec_err}",
@@ -582,6 +593,45 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
 
         await self._call_completion(
             work_item_id, resolved_board_id, success, project_id=run_info.project_id if run_info else None
+        )
+
+    @staticmethod
+    def _build_invocation_options(
+        agent: Any,
+        context: Any,
+    ) -> CodingAgentInvocationOptions:
+        """Translate the agent + context into a :class:`CodingAgentInvocationOptions`.
+
+        Bridge-state logic for Phase D4:
+
+        - ``invocation_mode`` is derived from the legacy ``agent.requires_docker``
+          flag (True -> CONTAINERIZED, False -> HOST). D6 retires the flag
+          and sources the mode directly from the new agent-config schema.
+        - ``mode_config`` carries the canonical container image for
+          CONTAINERIZED mode; empty for HOST. D6 sources this from
+          ``agent.invocation.mode_config``.
+        - ``timeout_seconds`` and ``model`` come from existing fields so the
+          downstream adapter sees the same timeout the watchdog enforces.
+        - ``cost_limit_usd`` defaults to ``None`` until the new agent-config
+          schema (D6) introduces a per-execution cost ceiling.
+        """
+        requires_docker = bool(getattr(agent, "requires_docker", False))
+        mode = InvocationMode.CONTAINERIZED if requires_docker else InvocationMode.HOST
+        mode_config: dict[str, Any] = {"image": "codetoreum-agent:latest"} if requires_docker else {}
+
+        # Prefer the per-execution context model (preserves any
+        # ExecutionContextBuilder overrides), fall back to the agent's model.
+        model = getattr(context, "model", None) or getattr(agent, "model", "")
+        timeout_seconds = int(
+            getattr(context, "timeout_seconds", None) or getattr(agent, "timeout_seconds", 0) or 3600,
+        )
+
+        return CodingAgentInvocationOptions(
+            invocation_mode=mode,
+            model=model,
+            timeout_seconds=timeout_seconds,
+            cost_limit_usd=None,
+            mode_config=mode_config,
         )
 
     async def _call_completion(
