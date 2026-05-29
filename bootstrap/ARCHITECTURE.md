@@ -343,15 +343,16 @@ Every port exercised in a bootstrap run, with its production adapter and role.
 | `IConfigStore` | `CachedConfigStore` → `ElasticsearchConfigStorage` | Project config, agent config lookup | No (infra) |
 | `IAgentRepository` | `InMemoryAgentRepository` | Agent domain object lookup by ID | No (infra) |
 | `IWorkflowConfigService` | in-memory impl | Board workflow template lookup | No (infra) |
-| `IActiveWorkflowRunRegistry` | `InMemoryActiveWorkflowRunRegistry` | Active run tracking between handler and executor | No (infra) |
+| `IActiveWorkflowRunRegistry` | `RedisActiveWorkflowRunRegistry` (production) / `InMemoryActiveWorkflowRunRegistry` (simulation) | Active run tracking between handler and executor; survives restart in production | No (infra) |
 | `IWorkItemBranchTracker` | in-memory impl | Branch name tracking per work item | No (infra) |
-| `IPipelineLockService` (`IQueuedPipelineLockService`) | `InMemoryLockService` | Pipeline serialization (1 active execution per board) | No (infra) |
+| `IPipelineLockService` (`IQueuedPipelineLockService`) | `RedisPipelineLockService` (production) / `InMemoryLockService` (simulation) | Pipeline serialization (1 active execution per board); persistent in production | No (infra) |
 | `IStorage` | `InMemoryStorageAdapter` | Artifact storage (not meaningfully used in bootstrap) | No (infra) |
 | `IBranchResolutionService` | `BranchResolutionAdapter` | Branch name computation from ticket + VCS | No |
 | `IAgentExecutor` | `ExecutionServiceAgentExecutor` | Drives the full execution chain | No (wired internally) |
 | `IWorkItemService` | `WorkItemService` (event-sourced from ES) | Work item read by executor | No (infra) |
 | `IWorkItemCommandPort` | `WorkItemCommandAdapter` | REST API → work item creation | No (input port) |
-| `IEventEmitter` | `MockEventEmitter` (production-safe) | LockStuckEvent emission | No |
+| `IEncryptionService` | `LocalKeyEncryptionAdapter` (production, Fernet keyed by ENCRYPTION_KEY_BASE64) / `SimpleEncryptionAdapter` (simulation) | Sensitive config value encrypt/decrypt; not exercised in basic bootstrap | No |
+| `IEventEmitter` | `MockEventEmitter` (default) / `RedisPubSubEventEmitter` (opt-in for multi-instance) | LockStuckEvent emission; cross-process distribution when redis_pubsub selected | No |
 
 ---
 
@@ -470,6 +471,38 @@ Bootstrap does not require any of these handlers for the happy path. The survey 
 ## 9. Deficiency Log
 
 Running record of architectural gaps found and fixed during bootstrap cycles. Most recent first.
+
+---
+
+### DEF-007 — IEventEmitter has no production multi-instance distribution adapter
+
+**Deficiency**: `MockEventEmitter` was the only IEventEmitter implementation suitable for production. It distributes events in-process only, which silently breaks any deployment that runs more than one Codetoreum instance — cross-process subscribers never receive emitted events.
+
+**Fix**: Added `RedisPubSubEventEmitter` (`src/codetoreum/adapters/secondary/redis_pubsub_event_emitter.py`). Registered as `redis_pubsub` in `AdapterFactory`. Local in-process delivery semantics preserved (handlers on `on()` run synchronously); cross-process delivery happens via Redis channels keyed by `event.type`. `production_bootstrap.py` documents the opt-in path; the default remains `mock` until the bootstrap harness exercises multi-instance distribution (see drill modes in §3).
+
+**Files changed**: `src/codetoreum/adapters/secondary/redis_pubsub_event_emitter.py`, `src/codetoreum/infrastructure/adapters/factory.py`, `src/codetoreum/infrastructure/adapters/resolver.py`, `src/codetoreum/infrastructure/bootstrap/production_bootstrap.py`
+
+---
+
+### DEF-006 — IActiveWorkflowRunRegistry loses every active-run record on restart
+
+**Deficiency**: `InMemoryActiveWorkflowRunRegistry` held all active-run records in-process. A crash mid-execution left the executor with no ability to detect duplicate replay; DEF-002's dedup guard depends on this state being intact, so the guard silently fails after restart.
+
+**Fix**: Added `RedisActiveWorkflowRunRegistry` (`src/codetoreum/adapters/secondary/redis_active_workflow_run_registry.py`). Key format `codetoreum:workflow:run:{work_item_id}` → JSON of ActiveRunInfo. 2-hour TTL on each entry. Registered as `redis` in `AdapterFactory`; `production_bootstrap.py` selects it via `run_registry="redis"`.
+
+**Files changed**: `src/codetoreum/adapters/secondary/redis_active_workflow_run_registry.py`, `src/codetoreum/infrastructure/adapters/factory.py`, `src/codetoreum/infrastructure/adapters/resolver.py`, `src/codetoreum/infrastructure/bootstrap/production_bootstrap.py`
+
+---
+
+### DEF-005 — IPipelineLockService loses lock + queue state on restart and cannot coordinate across instances
+
+**Deficiency**: `InMemoryLockService` held pipeline lock and queue state in-process. A crash mid-execution lost the lock; a second instance running concurrently saw an unowned lock and granted it to a new work item, breaking pipeline serialization. The restart drill (see §3) made this failure mode reproducible.
+
+**Fix**: Added `RedisPipelineLockService` (`src/codetoreum/adapters/secondary/redis_pipeline_lock_service.py`). Uses `SET ... NX EX` for atomic lock acquisition with a 2-hour TTL safety net, and a Sorted Set (`ZADD NX` / `ZPOPMIN`) for board-position-ordered queueing. Implements both `IPipelineLockService` and `IQueuedPipelineLockService`. Emits `LockAcquiredEvent` / `LockReleasedEvent` via the injected `EventBus`. Registered as `redis` in `AdapterFactory`; `production_bootstrap.py` selects it via `lock_service="redis"`.
+
+**Outstanding**: stale-lock watchdog (periodic scan of `get_all_locks()` to emit `StaleLockDetectedEvent`) is not yet implemented; the TTL is the only stale-protection mechanism today. Best owned by a dedicated periodic task in a future cycle.
+
+**Files changed**: `src/codetoreum/adapters/secondary/redis_pipeline_lock_service.py`, `src/codetoreum/infrastructure/adapters/factory.py`, `src/codetoreum/infrastructure/adapters/resolver.py`, `src/codetoreum/infrastructure/bootstrap/production_bootstrap.py`
 
 ---
 
