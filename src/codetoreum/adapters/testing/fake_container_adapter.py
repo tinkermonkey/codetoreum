@@ -1108,20 +1108,33 @@ class FakeContainerAdapter(IContainer):
         source: str,
         destination: str,
     ) -> None:
-        """
-        Copy files from a container.
+        """Copy a file or directory tree from a container to the host.
 
-        Reads content from _virtual_filesystems[container_id][source] and writes
-        to _host_files[destination], making it accessible to the caller.
+        Supports two modes against the virtual filesystem:
+
+        - **Single-file**: ``source`` matches an exact file in
+          ``_virtual_filesystems[container_id]``. The file's content is
+          written to ``_host_files[destination]``.
+        - **Directory tree**: ``source`` does not match a file exactly but
+          IS a prefix of one or more file paths (treated as a directory).
+          Each matching file is written to ``_host_files`` under
+          ``f"{destination.rstrip('/')}/{relative_path}"`` where
+          ``relative_path`` is the part of the virtual path after
+          ``source``. This mirrors the ``tar.extractall`` behaviour of the
+          Docker adapter.
 
         Args:
             container_id: Container ID
-            source: Source path in container's virtual filesystem
-            destination: Destination path (key in _host_files)
+            source: Source path in container's virtual filesystem (file or
+                directory).
+            destination: Destination path on host. For single-file sources
+                this is the file key in ``_host_files``. For directory
+                sources this is the destination directory prefix.
 
         Raises:
-            ResourceNotFoundError: If container does not exist or source file not found
-            ValidationError: If paths are empty
+            ResourceNotFoundError: If container does not exist or source
+                path matches no files.
+            ValidationError: If paths are empty.
         """
         if not container_id:
             msg = "Container ID cannot be empty"
@@ -1144,13 +1157,28 @@ class FakeContainerAdapter(IContainer):
                 raise ResourceNotFoundError(msg, source)
 
             virtual_fs = self._virtual_filesystems[container_id]
-            if source not in virtual_fs:
-                msg = f"File '{source}' not found in container"
-                raise ResourceNotFoundError(msg, source)
 
-            # Copy content from container's virtual filesystem to host_files
-            content = virtual_fs[source]
-            self._host_files[destination] = content
+            if source in virtual_fs:
+                # Single-file copy: preserves existing behaviour for callers
+                # that target a specific file path.
+                self._host_files[destination] = virtual_fs[source]
+            else:
+                # Directory-tree copy: collect all virtual files whose paths
+                # are under ``source`` (treated as a directory prefix). The
+                # canonical prefix ends with "/" so we don't accidentally
+                # match "/output_extra/foo" when source is "/output".
+                prefix = source if source.endswith("/") else source + "/"
+                matches = {path: content for path, content in virtual_fs.items() if path.startswith(prefix)}
+
+                if not matches:
+                    msg = f"File '{source}' not found in container"
+                    raise ResourceNotFoundError(msg, source)
+
+                dest_prefix = destination.rstrip("/")
+                for src_path, content in matches.items():
+                    relative = src_path[len(prefix) :]
+                    host_key = f"{dest_prefix}/{relative}"
+                    self._host_files[host_key] = content
 
         # Simulate copy operation
         if self._execution_delay > 0:
