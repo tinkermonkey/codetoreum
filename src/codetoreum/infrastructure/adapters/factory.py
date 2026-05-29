@@ -523,6 +523,26 @@ class AdapterFactory:
             ),
             set_as_default=True,
         )
+        # Minio-backed storage for production artifact persistence.  Closes
+        # DEF-009: agent execution logs survive restart and presigned URLs
+        # are real HTTP URLs (not memory:// placeholders).
+        from codetoreum.adapters.secondary.minio_storage_adapter import MinioStorageAdapter
+
+        self._storage_registry.register(
+            name="minio",
+            adapter_type=MinioStorageAdapter,
+            description="Minio-backed object storage for production artifacts",
+            version="1.0.0",
+            tags=["production", "persistent"],
+            config_schema=AdapterCredentialRequirement(
+                env_vars=("MINIO_ENDPOINT", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY"),
+                description=(
+                    "Requires MINIO_ENDPOINT (host:port), MINIO_ACCESS_KEY, "
+                    "MINIO_SECRET_KEY env vars; optional MINIO_BUCKET and "
+                    "MINIO_SECURE."
+                ),
+            ),
+        )
 
         # Board Service Adapters
         self._board_service_registry.register(

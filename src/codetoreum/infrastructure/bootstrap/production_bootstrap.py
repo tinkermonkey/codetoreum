@@ -262,6 +262,7 @@ class ProductionApplicationBootstrap:
                 run_registry="redis",  # Persistent active-run records; closes DEF-002 across restart
                 agent_repository="elasticsearch",  # Agent catalog survives restart (DEF-008)
                 workflow_config="elasticsearch",  # BoardWorkflowTemplate survives restart (DEF-008)
+                storage="minio",  # Real S3-compatible artifact persistence (DEF-009)
                 # Non-critical slots use mocks (logged as warnings)
                 review_cycle="basic",
                 pr_review_cycle="basic",

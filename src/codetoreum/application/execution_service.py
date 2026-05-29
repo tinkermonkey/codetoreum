@@ -719,6 +719,12 @@ class ExecutionService:
             # Get output
             logs = await self.container.logs(container_id)
 
+            # Persist logs to IStorage so artifacts survive restart and are
+            # available to the repair-cycle / PR-review-cycle handlers.
+            # Failure here MUST NOT block execution completion — degrade
+            # gracefully and continue.
+            await self._persist_execution_logs(execution, logs, context)
+
             # Extract token usage from logs (if available)
             input_tokens, output_tokens = self._extract_token_usage(logs)
 
@@ -1168,6 +1174,52 @@ class ExecutionService:
                 f"Unhandled exception in container log streaming: {e}",
                 exc_info=True,
                 extra={"error_id": "ERR_EXECUTION_LOG_STREAMING_EXCEPTION"},
+            )
+
+    async def _persist_execution_logs(
+        self,
+        execution: AgentExecution,
+        logs: str,
+        context: ExecutionContext,
+    ) -> None:
+        """Persist container logs to IStorage under executions/{execution_id}/logs.txt.
+
+        Failure to persist logs MUST NOT block execution completion — the
+        storage upload happens after the container has finished and is a
+        recoverable artifact concern, not a correctness concern.  Errors
+        are logged with ``exc_info=True`` and swallowed; the execution
+        result is unaffected.
+        """
+        if self.storage is None:
+            return
+
+        key = f"executions/{execution.id}/logs.txt"
+        metadata = {
+            "execution_id": execution.id,
+            "work_item_id": context.work_item_id,
+        }
+        if context.project_id:
+            metadata["project_id"] = context.project_id
+        try:
+            await self.storage.upload(
+                key=key,
+                content=logs.encode("utf-8"),
+                content_type="text/plain",
+                metadata=metadata,
+            )
+            logger.debug(
+                f"Persisted container logs for execution {execution.id} to {key}",
+                extra={"execution_id": execution.id, "storage_key": key},
+            )
+        except Exception as e:
+            logger.error(
+                f"Failed to persist container logs for execution {execution.id}: {e}",
+                exc_info=True,
+                extra={
+                    "error_id": "ERR_EXECUTION_LOG_PERSISTENCE_FAILED",
+                    "execution_id": execution.id,
+                    "storage_key": key,
+                },
             )
 
     def _extract_token_usage(self, logs: str) -> tuple[int, int]:

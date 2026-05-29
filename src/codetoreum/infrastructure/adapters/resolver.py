@@ -237,7 +237,41 @@ class AdapterResolver:
         return self._factory.create_metrics(adapter_name=self._config.metrics)
 
     def resolve_storage(self) -> IStorage:
-        """Resolve storage adapter."""
+        """Resolve storage adapter.
+
+        For "minio", construct a ``minio.Minio`` client from the
+        MINIO_* env vars (endpoint, access key, secret key, secure
+        flag) and inject the bucket name (default
+        ``codetoreum-artifacts``).
+        """
+        if self._config.storage == "minio":
+            import os
+
+            from minio import Minio
+
+            endpoint = os.environ.get("MINIO_ENDPOINT", "localhost:9000")
+            access_key = os.environ.get("MINIO_ACCESS_KEY", "minioadmin")
+            secret_key = os.environ.get("MINIO_SECRET_KEY", "minioadmin")
+            bucket = os.environ.get("MINIO_BUCKET", "codetoreum-artifacts")
+            secure = os.environ.get("MINIO_SECURE", "false").strip().lower() in {
+                "true",
+                "1",
+                "yes",
+                "on",
+            }
+            client = Minio(
+                endpoint,
+                access_key=access_key,
+                secret_key=secret_key,
+                secure=secure,
+            )
+            return self._factory.create_storage(
+                adapter_name=self._config.storage,
+                client=client,
+                bucket=bucket,
+                event_emitter=self._resolved["event_emitter"],
+                event_bus=self._deps.event_bus,
+            )
         return self._factory.create_storage(
             adapter_name=self._config.storage,
             event_emitter=self._resolved["event_emitter"],
