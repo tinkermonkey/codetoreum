@@ -479,6 +479,38 @@ Running record of architectural gaps found and fixed during bootstrap cycles. Mo
 
 ---
 
+### DEF-014 — Agent containers default to a Docker network with no internet egress
+
+**Deficiency**: `DockerContainerAdapter.config.agent_network` defaulted to `"codetoreum_default"`, the network docker-compose creates for the orchestrator stack. The default exists because the orchestrator wanted agent containers to share a network with the otel-collector. But on hosts where the codetoreum docker-compose stack has not been started — or where another project has co-opted the network name — the codetoreum_default network has no functioning DNS / outbound routes. Agent containers joined a network they could not escape; `claude --print` saw every Anthropic API call time out and reported `error_status:null, error:"unknown"` in `api_retry` events for 10+ minutes per execution. The bootstrap run that surfaced this had Claude inside the container hammering retries with `apiKeySource:"none"` (which is informational, not the auth failure it looks like) and the orchestrator sitting on a stuck container with no error path.
+
+The misleading docstring on `WorkspaceRouter.prepare_container_environment` ("CLAUDE_CODE_OAUTH_TOKEN is NOT passed (Claude Code CLI uses it from server process)") compounded the diagnostic difficulty. The token IS passed — `ExecutionService._build_agent_container_config` merges `system_credentials` into the container env via `execute_with_container`. The comment was an artifact of an earlier design that confused the actual flow.
+
+**Fix**:
+- Changed the default `AGENT_NETWORK` from `codetoreum_default` to `bridge` (the default Docker bridge network) in `src/codetoreum/adapters/secondary/docker_container_adapter.py`. Operators who need agent-to-collector connectivity can opt in via `AGENT_NETWORK` in `.env`; the harness no longer assumes a docker-compose network exists.
+- Updated `.env` to set `AGENT_NETWORK=bridge` explicitly so the bootstrap run uses bridge regardless of the code default.
+- Rewrote the `prepare_container_environment` docstring in `src/codetoreum/application/workspace_router.py` to describe the actual credential flow (`ExecutionService._build_agent_container_config` merges credentials; `WorkspaceRouter` contributes only workspace-shaped variables).
+- Updated `tests/unit/adapters/secondary/test_docker_container_adapter_hardening.py::test_agent_network_default` to assert the new `"bridge"` default.
+
+**Why bridge over a custom network**: the agent container needs outbound internet (Anthropic API, GitHub clones, plugin marketplaces) more than it needs intra-cluster service discovery. OTEL telemetry export from agents (`AGENT_OTEL_ENDPOINT=http://otel-collector:4317`) won't resolve on bridge, but that's a configuration concern with an opt-in path, not a correctness blocker for execution. Future work can introduce a "agent + telemetry" mode that joins a network with both internet egress and the collector reachable.
+
+**Files changed**: `src/codetoreum/adapters/secondary/docker_container_adapter.py`, `src/codetoreum/application/workspace_router.py`, `tests/unit/adapters/secondary/test_docker_container_adapter_hardening.py`, `.env` (host-local, not in git), `bootstrap/ARCHITECTURE.md`
+
+---
+
+### DEF-013 — BoardColumnEventHandler silently drops `on_failure_column` transition when board service can't locate the work item
+
+**Deficiency**: `BoardColumnEventHandler.handle_agent_completion(success=False)` looked up the work item's column position via `board_service.get_item_position()` to decide where the on_failure_column transition should go. When `rounds.json` (or any project config) omits `metadata.github_project_id`, `GitHubBoardAdapter` has no real Projects v2 board to query and returns `None`. The failure-branch code at `board_event_handler.py:925-936` then evaluated `column_config = config.get_column_config(current_position.column_name) if current_position else None` → `column_config = None` → `if column_config and column_config.on_failure_column` → false → silently fell through to `_fail_workflow_run` without moving the column. Net result: a failed agent execution left the work item permanently stuck in its current column with no log line explaining why and no recovery path. The success-branch already had the correct fallback at line 952 (use `self._active_runs[work_item_id].current_column` when `_find_item_position` returns None), but the failure branch was missing it.
+
+**Fix**:
+- Added the same `_active_runs` fallback to the failure branch in `handle_agent_completion`. When `_find_item_position` returns None but the work item is in `_active_runs`, synthesize a `WorkItemPosition` from the tracked column so the on_failure_column lookup can proceed.
+- Added an explicit `logger.warning` for the case where on_failure_column cannot be routed (no current_position, no column_config, or no on_failure_column configured). The previous "skipping auto-progression" message was misleading — it suggested intentional inaction rather than the silent column lookup failure that was actually happening.
+- Renamed the initial warning message from "skipping auto-progression" to "routing to on_failure_column" so log readers can distinguish the failure path from the success path.
+- Updated `tests/unit/application/event_handlers/test_board_event_handler.py::test_does_not_progress_when_failed` to assert the new log message.
+
+**Files changed**: `src/codetoreum/application/event_handlers/board_event_handler.py`, `tests/unit/application/event_handlers/test_board_event_handler.py`, `bootstrap/ARCHITECTURE.md`
+
+---
+
 ### DEF-012 — Executor → BoardColumnEventHandler seam coupled via mutable callback
 
 **Deficiency**: `ExecutionServiceAgentExecutor` exposed a `set_completion_handler(callback, default_board_id)` method that bootstrap had to invoke on the executor instance after constructing `BoardColumnEventHandler`. INV-05 was the load-bearing contract: skip the wiring and the executor would silently log `ERR_EXEC_CHAIN_NO_COMPLETION_CALLBACK` after every execution, leaving work items stuck. The seam violated event-driven principles (INV-10) because it relied on direct interface coupling between an adapter and a handler; the executor knew about the handler's API shape instead of emitting a domain event. The wiring also fought INV-09 in spirit — `set_completion_handler` was not part of the `IAgentExecutor` port, but bootstrap depended on it being present on every executor implementation. `MockAgentExecutor` carried a no-op `set_completion_handler` purely to satisfy the bootstrap's `hasattr` check.
