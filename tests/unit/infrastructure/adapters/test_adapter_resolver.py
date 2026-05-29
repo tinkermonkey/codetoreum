@@ -235,10 +235,10 @@ class TestAdapterResolver:
         # Should implement the IMetrics interface contract
         assert isinstance(metrics, IMetrics)
 
-    def test_resolve_llm(self, factory, dependencies, adapter_config):
+    def test_resolve_agent_launcher(self, factory, dependencies, adapter_config):
         """Test resolving LLM provider adapter."""
         resolver = AdapterResolver(adapter_config, factory, dependencies)
-        llm = resolver.resolve_llm()
+        llm = resolver.resolve_agent_launcher()
 
         assert llm is not None
         # Should be an adapter instance (may be wrapped by resilience decorator)
@@ -299,7 +299,7 @@ class TestAdapterResolver:
         call_order = []
 
         original_resolve_event_store = resolver.resolve_event_store
-        original_resolve_llm = resolver.resolve_llm
+        original_resolve_agent_launcher = resolver.resolve_agent_launcher
         original_resolve_review_cycle = resolver.resolve_review_cycle
 
         def track_event_store():
@@ -308,14 +308,14 @@ class TestAdapterResolver:
 
         def track_llm():
             call_order.append("llm")
-            return original_resolve_llm()
+            return original_resolve_agent_launcher()
 
         def track_review_cycle():
             call_order.append("review_cycle")
             return original_resolve_review_cycle()
 
         resolver.resolve_event_store = track_event_store
-        resolver.resolve_llm = track_llm
+        resolver.resolve_agent_launcher = track_llm
         resolver.resolve_review_cycle = track_review_cycle
 
         result = resolver.resolve_all()
@@ -378,7 +378,7 @@ class TestAdapterResolver:
         resolver._deps.engine.create_review_cycle_adapter.return_value = mock_review_cycle
 
         # Populate _resolved with LLM first
-        resolver._resolved["llm"] = resolver.resolve_llm()
+        resolver._resolved["llm"] = resolver.resolve_agent_launcher()
 
         # Resolve review_cycle
         resolver.resolve_review_cycle()

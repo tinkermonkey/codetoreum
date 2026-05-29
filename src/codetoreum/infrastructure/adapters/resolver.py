@@ -23,6 +23,7 @@ from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.simulation.simulation_config import AdapterSelectionConfig
 from codetoreum.ports.exceptions import ResourceNotFoundError
 from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
+from codetoreum.ports.output.agent_launcher import IAgentLauncher
 from codetoreum.ports.output.agent_repository import IAgentRepository
 from codetoreum.ports.output.board_service import IBoardService
 from codetoreum.ports.output.ci_pipeline_service import ICIPipelineService
@@ -247,8 +248,13 @@ class AdapterResolver:
         """Resolve ticket system adapter."""
         return self._factory.create_ticket_system(adapter_name=self._config.ticket)
 
-    def resolve_llm(self) -> ILLMProvider:
-        """Resolve LLM provider adapter."""
+    def resolve_agent_launcher(self) -> IAgentLauncher:
+        """Resolve the agent-launcher adapter (Claude Code, mock, etc.).
+
+        Returns an :class:`IAgentLauncher` — the autonomous-agent launcher port
+        introduced by the D3 ``ILLMProvider`` semantics split. ``ILLMProvider``
+        is now a deprecated alias of ``IAgentLauncher``.
+        """
         return self._factory.create_llm_provider(adapter_name=self._config.llm)
 
     def resolve_container(self) -> IContainer:
@@ -808,7 +814,7 @@ class AdapterResolver:
 
         # 4. External system adapters
         self._resolved["ticket"] = self.resolve_ticket()
-        self._resolved["llm"] = self.resolve_llm()
+        self._resolved["llm"] = self.resolve_agent_launcher()
 
         # 5. Coordination adapters
         self._resolved["discussion_adapter"] = self.resolve_discussion_adapter()
