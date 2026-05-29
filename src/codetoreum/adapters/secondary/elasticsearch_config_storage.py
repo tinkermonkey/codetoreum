@@ -71,6 +71,7 @@ class ElasticsearchConfigStorage(IConfigStore):
     INDEX_AGENTS = "config-agents"
     INDEX_PIPELINES = "config-pipelines"
     INDEX_WORKFLOWS = "config-workflows"
+    INDEX_BOARD_TEMPLATES = "codetoreum_workflow_templates"
     INDEX_HISTORY = "config-history"
 
     def __init__(
@@ -118,6 +119,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             (self.INDEX_AGENTS, self._get_agents_mapping()),
             (self.INDEX_PIPELINES, self._get_pipelines_mapping()),
             (self.INDEX_WORKFLOWS, self._get_workflows_mapping()),
+            (self.INDEX_BOARD_TEMPLATES, self._get_board_templates_mapping()),
             (self.INDEX_HISTORY, self._get_history_mapping()),
         ]
 
@@ -311,6 +313,173 @@ class ElasticsearchConfigStorage(IConfigStore):
                 "snapshot": {"type": "object", "enabled": True, "dynamic": False},
             }
         }
+
+    def _get_board_templates_mapping(self) -> dict[str, Any]:
+        """Get Elasticsearch mapping for board workflow templates index.
+
+        The full template (with its column tuple) is serialized as a JSON blob
+        in the ``payload`` field so the rich ColumnTemplate structure
+        (repair_cycle_agents, pr_review_cycle_config, etc.) is preserved
+        without forcing every nested field into the mapping.  The flat
+        ``board_id`` / ``project_id`` keywords support point lookups and
+        per-project listing.
+        """
+        return {
+            "properties": {
+                "id": {"type": "keyword"},
+                "board_id": {"type": "keyword"},
+                "project_id": {"type": "keyword"},
+                "name": {
+                    "type": "text",
+                    "analyzer": "config_analyzer",
+                    "fields": {"keyword": {"type": "keyword"}},
+                },
+                "created_at": {"type": "date"},
+                "updated_at": {"type": "date"},
+                "payload": {"type": "object", "enabled": False, "dynamic": False},
+            }
+        }
+
+    # ------------------------------------------------------------------
+    # Board workflow template CRUD
+    # ------------------------------------------------------------------
+
+    async def save_board_workflow_template(self, template: dict[str, Any]) -> None:
+        """Persist a serialized BoardWorkflowTemplate document keyed by board_id.
+
+        The adapter accepts a plain dict (the serialized form produced by
+        ``ElasticsearchWorkflowConfigService``) so the storage layer stays
+        decoupled from the domain model.  Callers must include at least
+        ``board_id``, ``project_id``, ``id``, ``name``, and ``payload``.
+
+        Args:
+            template: Serialized template dict. ``board_id`` is the document id.
+
+        Raises:
+            ValueError: If template lacks board_id or project_id.
+        """
+        if not self._initialized:
+            await self.initialize()
+
+        board_id = template.get("board_id")
+        project_id = template.get("project_id")
+        if not board_id or not isinstance(board_id, str) or not board_id.strip():
+            msg = "template['board_id'] must be a non-empty string"
+            raise ValueError(msg)
+        if not project_id or not isinstance(project_id, str) or not project_id.strip():
+            msg = "template['project_id'] must be a non-empty string"
+            raise ValueError(msg)
+
+        doc = dict(template)
+        now_iso = datetime.now(UTC).isoformat()
+        doc.setdefault("created_at", now_iso)
+        doc["updated_at"] = now_iso
+
+        try:
+            await self.client.index(
+                index=self.INDEX_BOARD_TEMPLATES,
+                id=board_id,
+                document=doc,
+                refresh=True,
+            )
+            logger.info(f"Saved board workflow template board_id={board_id} project_id={project_id}")
+        except Exception as e:
+            logger.error(
+                f"Failed to save board workflow template board_id={board_id}: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR},
+            )
+            raise
+
+    async def get_board_workflow_template(self, board_id: str) -> dict[str, Any] | None:
+        """Get a serialized BoardWorkflowTemplate document by board_id.
+
+        Returns:
+            Dict produced by ``save_board_workflow_template``, or None if no
+            template has been persisted for ``board_id``.
+
+        Raises:
+            Exception: On Elasticsearch communication failure (logged with
+                ``exc_info=True`` before re-raising).
+        """
+        if not self._initialized:
+            await self.initialize()
+
+        try:
+            result = await self.client.get(index=self.INDEX_BOARD_TEMPLATES, id=board_id)
+            return dict(result["_source"])
+        except NotFoundError:
+            return None
+        except Exception as e:
+            logger.error(
+                f"Failed to get board workflow template board_id={board_id}: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR},
+            )
+            raise
+
+    async def list_board_workflow_templates(self, project_id: str) -> list[dict[str, Any]]:
+        """List all board workflow template documents for a project.
+
+        Returns:
+            List of serialized template dicts ordered by ``board_id``.
+
+        Raises:
+            ValueError: If ``project_id`` is empty.
+            Exception: On Elasticsearch communication failure (logged with
+                ``exc_info=True`` before re-raising).
+        """
+        if not project_id or not project_id.strip():
+            msg = "project_id cannot be empty"
+            raise ValueError(msg)
+
+        if not self._initialized:
+            await self.initialize()
+
+        try:
+            result = await self.client.search(
+                index=self.INDEX_BOARD_TEMPLATES,
+                query={"term": {"project_id": project_id}},
+                size=1000,
+            )
+            docs = [dict(hit["_source"]) for hit in result["hits"]["hits"]]
+            docs.sort(key=lambda d: d.get("board_id", ""))
+            return docs
+        except NotFoundError:
+            # Index doesn't exist yet — nothing has been written.
+            return []
+        except Exception as e:
+            logger.error(
+                f"Failed to list board workflow templates project_id={project_id}: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_QUERY_ERROR},
+            )
+            raise
+
+    async def delete_board_workflow_template(self, board_id: str) -> None:
+        """Delete a board workflow template by board_id (idempotent).
+
+        Idempotent: missing documents are not an error.
+
+        Raises:
+            Exception: On Elasticsearch communication failure (logged with
+                ``exc_info=True`` before re-raising).
+        """
+        if not self._initialized:
+            await self.initialize()
+
+        try:
+            await self.client.delete(index=self.INDEX_BOARD_TEMPLATES, id=board_id, refresh=True)
+            logger.info(f"Deleted board workflow template board_id={board_id}")
+        except NotFoundError:
+            return
+        except Exception as e:
+            logger.error(
+                f"Failed to delete board workflow template board_id={board_id}: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_DATABASE_ERROR},
+            )
+            raise
 
     async def get_project_config(self, project_id: str) -> ProjectConfig:
         """
