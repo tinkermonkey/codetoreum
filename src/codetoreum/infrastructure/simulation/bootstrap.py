@@ -111,6 +111,7 @@ from codetoreum.adapters.testing import (
     SimpleEncryptionAdapter,
 )
 from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
+from codetoreum.adapters.testing.mock_claude_code_adapter import MockClaudeCodeAdapter
 from codetoreum.adapters.testing.mock_systemic_analysis_adapter import (
     MockSystemicAnalysisAdapter,
 )
@@ -219,6 +220,7 @@ from codetoreum.ports.output.board_service import IBoardService
 from codetoreum.ports.output.branch_resolution_service import IBranchResolutionService
 from codetoreum.ports.output.ci_pipeline_service import ICIPipelineService
 from codetoreum.ports.output.code_review_service import ICodeReviewService
+from codetoreum.ports.output.coding_agent import ICodingAgent
 from codetoreum.ports.output.config_store import IConfigStore
 from codetoreum.ports.output.container import IContainer
 from codetoreum.ports.output.container_recovery import IAgentContainerRecoveryService
@@ -379,6 +381,11 @@ class SimulationAdapters:
     branch_resolution_service: IBranchResolutionService | None = None
     agent_executor: IAgentExecutor | None = None
     tracer: ITracer | None = None
+    # Phase D3/D4 coding agent slot. Optional during the bridge state:
+    # production wires the resilient ClaudeCodeAdapter, simulation wires
+    # MockClaudeCodeAdapter. ExecutionService.execute() requires this to
+    # be non-None at the point of dispatch.
+    coding_agent: ICodingAgent | None = None
 
     # =========================================================================
     # Accessor helpers for test code needing simulation-specific methods
@@ -1502,6 +1509,11 @@ class SimulationApplicationBootstrap:
         # Create tracer with simulation clock
         resolved.tracer = InMemoryTracer(time_source=lambda: self._engine.get_clock_for_testing().now())
 
+        # Wire the coding-agent adapter (Phase D3/D4). Simulation uses
+        # MockClaudeCodeAdapter for deterministic results; production wires
+        # the real ClaudeCodeAdapter via AdapterResolver.resolve_coding_agent.
+        resolved.coding_agent = MockClaudeCodeAdapter(event_bus=self.infrastructure.event_bus)
+
         return resolved
 
     # =========================================================================
@@ -1723,12 +1735,17 @@ class SimulationApplicationBootstrap:
         # We create stubs here to satisfy the SimulationServices container structure.
 
         # Execution Service
+        # D4 bridge state: keep the legacy llm_provider / container deps
+        # (still consumed by execute_with_llm / execute_with_container until
+        # D5 deletes them), plus the new ICodingAgent slot which the new
+        # ExecutionService.execute() path delegates to.
         execution_service = ExecutionService(
             llm_provider=self.adapters.llm_provider,
             container=self.adapters.container,
             event_store=self.adapters.event_store,
             storage=self.adapters.storage,
             vcs=self.adapters.version_control,
+            coding_agent=self.adapters.coding_agent,
         )
 
         # Workspace Router

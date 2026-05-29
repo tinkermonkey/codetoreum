@@ -416,6 +416,20 @@ class ProductionApplicationBootstrap:
             )  # type: ignore
             self._slot_info["branch_resolution_service"] = type(self.adapters.branch_resolution_service).__name__
 
+            # Phase 4c: Wire the new ICodingAgent slot (Phase D3/D4).
+            # Production uses the new ClaudeCodeAdapter wrapped by
+            # ResilientCodingAgentDecorator (constructed inside
+            # AdapterResolver.resolve_coding_agent). Must run after Phase 4
+            # so the wrapped adapter sees the resilience-decorated container.
+            logger.info("Phase 4c: Resolving coding-agent (ICodingAgent) adapter...")
+            self.adapters.coding_agent = resolver.resolve_coding_agent(
+                prompt_builder=DefaultPromptBuilder(),
+                agent_repository=self.adapters.agent_repository,
+                work_item_service=self.adapters.work_item_service,
+                container=self.adapters.container,
+            )
+            self._slot_info["coding_agent"] = type(self.adapters.coding_agent).__name__
+
             # Log non-critical slots with mock implementations
             self._log_non_critical_slots()
 
@@ -741,6 +755,11 @@ class ProductionApplicationBootstrap:
             storage=self.adapters.storage,
             vcs=self.adapters.version_control,
             system_credentials=_system_creds if _system_creds else None,
+            # D4 bridge state: the new ICodingAgent slot (wired in Phase 4c).
+            # ExecutionService.execute() delegates here; the legacy
+            # llm_provider / container deps remain only for the soon-to-be
+            # deleted execute_with_llm / execute_with_container methods.
+            coding_agent=self.adapters.coding_agent,
         )
 
         # Workspace Router
