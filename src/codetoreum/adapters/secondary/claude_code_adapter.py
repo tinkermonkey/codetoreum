@@ -1,4 +1,11 @@
-"""Claude Code adapter for ILLMProvider interface."""
+"""Claude Code adapter for the :class:`IAgentLauncher` port.
+
+``ClaudeCodeAdapter`` launches the ``claude --print`` subprocess inside a
+workspace and lets it run its own internal agentic loop (reading files,
+editing code, executing shell). It is an autonomous-agent launcher, not a
+prompt-to-text LLM API. See
+``documentation/architecture/ports/output/agent-launcher.md``.
+"""
 
 import asyncio
 import json
@@ -25,10 +32,10 @@ from codetoreum.ports.exceptions import (
     UnsupportedFeatureError,
     ValidationError,
 )
+from codetoreum.ports.output.agent_launcher import IAgentLauncher
 from codetoreum.ports.output.llm_provider import (
     ExecutionContext,
     ExecutionResult,
-    ILLMProvider,
     ModelInfo,
     StreamCallback,
     StreamChunk,
@@ -115,12 +122,18 @@ _PROCESS_TIMEOUT_AFTER_SIGKILL_SECONDS = 5
 _PROCESS_TIMEOUT_NORMAL_COMPLETION_SECONDS = 30
 
 
-class ClaudeCodeAdapter(ILLMProvider):
+class ClaudeCodeAdapter(IAgentLauncher):
     """
-    Claude Code CLI adapter for LLM operations.
+    Claude Code CLI adapter for autonomous-agent execution.
 
-    This adapter executes the Claude Code CLI to run prompts with the
-    Claude AI model. It supports streaming, tool use, and containerized execution.
+    Launches ``claude --print`` (Claude Code's headless mode), which still runs
+    Claude Code's full agentic loop inside ``ExecutionContext.working_directory``
+    — reading files, editing code, executing bash, making multi-step decisions.
+    From Codetoreum's perspective the subprocess is synchronous (we ``await``
+    its completion); within the subprocess Claude Code operates autonomously.
+
+    Implements :class:`IAgentLauncher`. Sibling adapters for other launchers
+    (Aider, Cursor CLI, OpenAI Codex CLI) would implement the same port.
     """
 
     def __init__(self, config: ClaudeCodeConfig):
@@ -597,7 +610,7 @@ class ClaudeCodeAdapter(ILLMProvider):
     ) -> AsyncIterator[StreamChunk]:
         """Stream completion tokens.
 
-        This method implements the ILLMProvider.stream_completion() port contract.
+        This method implements the IAgentLauncher.stream_completion() port contract.
         It provides a pure streaming interface for callers that prefer iterator-based
         streaming over callback-based streaming.
 
@@ -608,7 +621,7 @@ class ClaudeCodeAdapter(ILLMProvider):
         When the ResilientLLMProviderDecorator wraps this method, it applies rate
         limiting and circuit breaker patterns (infrastructure/resilience/decorators.py).
         However, this is not a fallback mechanism — it is the standard resilience
-        wrapper for all ILLMProvider methods, including stream_completion().
+        wrapper for all IAgentLauncher methods, including stream_completion().
         """
         ctx = context or ExecutionContext()
 

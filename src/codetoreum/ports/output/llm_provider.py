@@ -1,7 +1,21 @@
-"""ILLMProvider output port interface."""
+"""LLM provider port data models and shared types.
 
-from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator, Awaitable, Callable, Coroutine, Mapping
+This module owns the data types shared between ``IAgentLauncher`` and
+``ILLMTextProvider`` — the two sibling ports introduced when the original
+``ILLMProvider`` was split. The split is documented in
+``documentation/architecture/ports/output/agent-launcher.md``.
+
+The historical ``ILLMProvider`` ABC has been removed from this module;
+``ILLMProvider`` is now a deprecated alias of ``IAgentLauncher`` and is
+exported from ``codetoreum.ports.output`` for source compatibility with
+existing call sites.
+
+New code should import ``IAgentLauncher`` (for subprocess-based agentic CLIs
+like Claude Code, Aider) or ``ILLMTextProvider`` (for prompt-to-text LLM APIs
+like Anthropic, OpenAI) directly.
+"""
+
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -600,228 +614,30 @@ class UsageStats:
 # Type aliases
 StreamCallback = Callable[[StreamChunk], Awaitable[None]]
 
-# AgentLLMFactory is defined after ILLMProvider for resolved references
-
 
 # ============================================================================
-# Port Interface
+# Backwards-compatible alias: ``ILLMProvider`` is now an alias of
+# ``IAgentLauncher``. The historical ABC class definition has been split into
+# ``agent_launcher.py`` (autonomous-agent launcher case) and
+# ``llm_text_provider.py`` (prompt-to-text API case). Keeping the alias
+# importable from this module preserves the historical deep-import path
+# ``from codetoreum.ports.output.llm_provider import ILLMProvider``.
+#
+# We use module-level ``__getattr__`` to resolve the alias lazily — this
+# avoids a circular import (``agent_launcher`` imports the data types defined
+# above in this module).
 # ============================================================================
 
-
-class ILLMProvider(ABC):
-    """
-    Interface for Large Language Model providers.
-
-    This port abstracts LLM operations, supporting various providers
-    like Claude, GPT-4, and local models. For Codetoreum, providers
-    run in containerized environments with context mounted as files.
-    """
-
-    # Core Execution
-
-    @abstractmethod
-    async def execute(
-        self,
-        prompt: str,
-        context: ExecutionContext | None = None,
-        stream_callback: StreamCallback | None = None,
-    ) -> ExecutionResult:
-        """
-        Execute a prompt with the LLM.
-
-        Args:
-            prompt: The prompt to execute (may reference mounted context files)
-            context: Execution context with parameters and mounted paths
-            stream_callback: Optional callback for streaming responses
-
-        Returns:
-            ExecutionResult: Execution result with response and metadata
-
-        Raises:
-            PromptTooLongError: Prompt exceeds token limit
-            RateLimitError: Provider rate limit exceeded
-            AuthenticationError: Invalid credentials
-            ExternalServiceError: Provider service error
-        """
-
-    @abstractmethod
-    async def execute_with_tools(
-        self,
-        prompt: str,
-        tools: list[ToolDefinition],
-        context: ExecutionContext | None = None,
-        stream_callback: StreamCallback | None = None,
-    ) -> ExecutionResult:
-        """
-        Execute prompt with tool/function calling capabilities.
-
-        Args:
-            prompt: The prompt to execute
-            tools: Available tools for the LLM to use
-            context: Execution context
-            stream_callback: Optional streaming callback
-
-        Returns:
-            ExecutionResult: Result with tool calls and responses
-
-        Raises:
-            ToolExecutionError: Tool execution failed
-            UnsupportedFeatureError: Provider doesn't support tools
-            PromptTooLongError: Prompt exceeds token limit
-            RateLimitError: Provider rate limit exceeded
-            ExternalServiceError: Provider service error
-        """
-
-    # Streaming
-
-    @abstractmethod
-    async def stream_completion(
-        self,
-        prompt: str,
-        context: ExecutionContext | None = None,
-    ) -> AsyncIterator[StreamChunk]:
-        """
-        Stream completion tokens as they're generated.
-
-        Args:
-            prompt: The prompt to execute
-            context: Execution context
-
-        Yields:
-            StreamChunk: Streaming response chunks
-
-        Raises:
-            StreamingError: Streaming failure
-            UnsupportedFeatureError: Provider doesn't support streaming
-            PromptTooLongError: Prompt exceeds token limit
-            RateLimitError: Provider rate limit exceeded
-        """
-
-    # Conversation Management
-
-    @abstractmethod
-    async def create_conversation(
-        self,
-        system_prompt: str | None = None,
-        parameters: ExecutionContext | None = None,
-    ) -> str:
-        """
-        Create a new conversation session.
-
-        Args:
-            system_prompt: System instructions
-            parameters: Model parameters
-
-        Returns:
-            str: Unique conversation identifier
-
-        Raises:
-            ExternalServiceError: Provider service error
-        """
-
-    @abstractmethod
-    async def continue_conversation(
-        self,
-        conversation_id: str,
-        message: str,
-        stream_callback: StreamCallback | None = None,
-    ) -> ExecutionResult:
-        """
-        Continue an existing conversation.
-
-        Args:
-            conversation_id: Conversation to continue
-            message: New message in conversation
-            stream_callback: Optional streaming callback
-
-        Returns:
-            ExecutionResult: Response in conversation context
-
-        Raises:
-            ConversationNotFoundError: Conversation doesn't exist
-            ConversationExpiredError: Conversation has expired
-            RateLimitError: Provider rate limit exceeded
-        """
-
-    # Model Information
-
-    @abstractmethod
-    async def get_model_info(self) -> ModelInfo:
-        """
-        Get information about the current model.
-
-        Returns:
-            ModelInfo: Model information
-
-        Raises:
-            ExternalServiceError: Provider service error
-        """
-
-    @abstractmethod
-    async def list_available_models(self) -> list[ModelInfo]:
-        """
-        List all available models from this provider.
-
-        Returns:
-            List[ModelInfo]: List of available models
-
-        Raises:
-            ExternalServiceError: Provider service error
-        """
-
-    # Token Management
-
-    @abstractmethod
-    async def count_tokens(
-        self,
-        text: str,
-        model: str | None = None,
-    ) -> int:
-        """
-        Count tokens in text.
-
-        Args:
-            text: Text to count tokens for
-            model: Optional model identifier (uses default if not specified)
-
-        Returns:
-            int: Token count
-
-        Raises:
-            ExternalServiceError: Provider service error
-        """
-
-    @abstractmethod
-    async def get_usage_stats(
-        self,
-        since: datetime | None = None,
-    ) -> UsageStats:
-        """
-        Get usage statistics (token usage and costs).
-
-        Args:
-            since: Start time for statistics period
-
-        Returns:
-            UsageStats: Usage statistics
-
-        Raises:
-            ExternalServiceError: Provider service error
-        """
+from collections.abc import Coroutine
 
 
-# ============================================================================
-# Type Aliases (defined after ILLMProvider for resolved references)
-# ============================================================================
+def __getattr__(name: str) -> Any:
+    if name == "ILLMProvider":
+        from codetoreum.ports.output.agent_launcher import IAgentLauncher
 
-AgentLLMFactory = Callable[[str], Coroutine[Any, Any, ILLMProvider]]
-"""Async factory callable that creates a configured ILLMProvider for a given agent.
+        return IAgentLauncher
+    if name == "AgentLLMFactory":
+        from codetoreum.ports.output.agent_launcher import IAgentLauncher
 
-Input:  agent_name (str) - e.g., "senior_software_engineer"
-Output: Coroutine that resolves to a configured ILLMProvider with agent's model,
-        temperature, system prompt, tools
-
-This factory is async-safe and can be called from both sync and async contexts
-(via 'await factory(agent_name)'). Pre-populated cache ensures most calls complete
-synchronously without actually needing async event loops.
-"""
+        return Callable[[str], Coroutine[Any, Any, IAgentLauncher]]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

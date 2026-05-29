@@ -13,10 +13,10 @@ from codetoreum.ports.exceptions import (
     RateLimitError,
     ValidationError,
 )
+from codetoreum.ports.output.agent_launcher import IAgentLauncher
 from codetoreum.ports.output.llm_provider import (
     ExecutionContext,
     ExecutionResult,
-    ILLMProvider,
     ModelInfo,
     StreamCallback,
     StreamChunk,
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 
 
-class MockLLMAdapter(ILLMProvider):
+class MockLLMAdapter(IAgentLauncher):
     """
     Mock LLM provider for testing.
 
