@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
+from enum import Enum
 from typing import Any
 
 from codetoreum.domain.types import ContainerId
@@ -11,6 +12,23 @@ from codetoreum.domain.types import ContainerId
 # ============================================================================
 # Data Models
 # ============================================================================
+
+
+class ContainerHealthStatus(Enum):
+    """Container health status.
+
+    Mirrors the values produced by the Docker daemon's healthcheck subsystem
+    (`State.Health.Status`), with `UNKNOWN` covering the no-healthcheck case
+    and any orchestrators that cannot report health (e.g., the in-process
+    fake adapter). Defined on the port rather than reused from
+    `codetoreum.infrastructure.health` to keep the port boundary clean —
+    ports must not depend on infrastructure.
+    """
+
+    HEALTHY = "healthy"
+    UNHEALTHY = "unhealthy"
+    STARTING = "starting"
+    UNKNOWN = "unknown"
 
 
 @dataclass(frozen=True)
@@ -463,4 +481,44 @@ class IContainer(ABC):
         Raises:
             ResourceNotFoundError: Container or file doesn't exist
             ContainerError: Read operation failed
+        """
+
+    @abstractmethod
+    async def network_create(self, name: str, driver: str = "bridge") -> str:
+        """Create a container network.
+
+        Required by orchestrators that compose multiple containers per work item
+        (database + agent + service-mesh sidecar). The Docker adapter delegates
+        to `docker.networks.create`; Kubernetes adapters would create a
+        NetworkPolicy or namespace.
+
+        Args:
+            name: Network name. Must be unique within the host's network scope.
+            driver: Network driver (default: "bridge"). Adapter-defined values
+                accepted (e.g., "overlay" on Docker Swarm).
+
+        Returns:
+            str: Network identifier assigned by the runtime.
+
+        Raises:
+            ValidationError: Invalid name or driver.
+            ContainerError: Network creation failed.
+        """
+
+    @abstractmethod
+    async def health_check(self, container_id: str) -> ContainerHealthStatus:
+        """Report container health.
+
+        Reads the container's healthcheck status (if a HEALTHCHECK is configured
+        on the image). Returns `UNKNOWN` when the container has no healthcheck.
+
+        Args:
+            container_id: Container identifier.
+
+        Returns:
+            ContainerHealthStatus: One of HEALTHY, UNHEALTHY, STARTING, UNKNOWN.
+
+        Raises:
+            ResourceNotFoundError: Container doesn't exist.
+            ContainerError: Status query failed.
         """

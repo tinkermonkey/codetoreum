@@ -36,6 +36,7 @@ from codetoreum.ports.exceptions import (
     ValidationError,
 )
 from codetoreum.ports.output.container import (
+    ContainerHealthStatus,
     ContainerResult,
     ContainerStatus,
     IContainer,
@@ -1477,6 +1478,83 @@ class DockerContainerAdapter(IContainer):
             # pools release resources asynchronously.
             gc.collect()
             gc.collect()
+
+    @instrument_async_function(
+        name="container.network_create",
+        attributes={
+            "service": "docker_container_adapter",
+            "operation": "network_create",
+        },
+        capture_args=True,
+    )
+    async def network_create(self, name: str, driver: str = "bridge") -> str:
+        """Create a Docker network."""
+        if not isinstance(name, str) or not name:
+            raise ValidationError("name must be a non-empty string")
+        if not isinstance(driver, str) or not driver:
+            raise ValidationError("driver must be a non-empty string")
+
+        client = self._get_client()
+        loop = asyncio.get_event_loop()
+
+        def _create() -> str:
+            try:
+                network = client.networks.create(name=name, driver=driver)
+                return str(network.id)
+            except Exception as e:
+                logger.error(
+                    f"Failed to create network {name}: {e}",
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
+                )
+                raise ContainerError(f"Failed to create network {name}: {e!s}") from e
+
+        return await loop.run_in_executor(None, _create)
+
+    @instrument_async_function(
+        name="container.health_check",
+        attributes={
+            "service": "docker_container_adapter",
+            "operation": "health_check",
+        },
+        capture_args=True,
+    )
+    async def health_check(self, container_id: str) -> ContainerHealthStatus:
+        """Report Docker container health.
+
+        Reads `State.Health.Status` from `container.attrs`. Returns `UNKNOWN`
+        when the image has no HEALTHCHECK configured (no `Health` field).
+        """
+        client = self._get_client()
+        loop = asyncio.get_event_loop()
+
+        def _check() -> ContainerHealthStatus:
+            try:
+                container = client.containers.get(container_id)
+                container.reload()
+                state = container.attrs.get("State", {}) or {}
+                health = state.get("Health")
+                if not health:
+                    return ContainerHealthStatus.UNKNOWN
+                status = health.get("Status", "").lower()
+                if status == "healthy":
+                    return ContainerHealthStatus.HEALTHY
+                if status == "unhealthy":
+                    return ContainerHealthStatus.UNHEALTHY
+                if status == "starting":
+                    return ContainerHealthStatus.STARTING
+                return ContainerHealthStatus.UNKNOWN
+            except docker.errors.NotFound as e:
+                raise ResourceNotFoundError("Container", container_id) from e
+            except Exception as e:
+                logger.error(
+                    f"Failed to read health for {container_id}: {e}",
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
+                )
+                raise ContainerError(f"Failed to read health: {e!s}") from e
+
+        return await loop.run_in_executor(None, _check)
 
     async def __aenter__(self):
         """Async context manager entry."""

@@ -22,6 +22,7 @@ from codetoreum.ports.exceptions import (
     ValidationError,
 )
 from codetoreum.ports.output.container import (
+    ContainerHealthStatus,
     ContainerResult,
     ContainerStatus,
     IContainer,
@@ -1234,6 +1235,29 @@ class FakeContainerAdapter(IContainer):
             # All content from write_output_file is str, so this shouldn't occur
             msg = f"Invalid content type for file '{file_path}': {type(content)}"
             raise ContainerError(msg)
+
+    async def network_create(self, name: str, driver: str = "bridge") -> str:
+        """Record a fake network creation and return a synthetic network id.
+
+        The fake adapter has no real network surface; this method exists to
+        satisfy the IContainer contract so application code that calls
+        `network_create` (or test harnesses that wrap a real one) does not
+        have to special-case the fake.
+        """
+        network_id = f"fake-network-{uuid4().hex[:12]}"
+        logger.debug(f"FakeContainerAdapter.network_create({name!r}, driver={driver!r}) -> {network_id}")
+        return network_id
+
+    async def health_check(self, container_id: str) -> ContainerHealthStatus:
+        """Report HEALTHY for any container the fake knows about, else raise.
+
+        The fake adapter does not simulate healthcheck lifecycle; tests that
+        need to assert STARTING/UNHEALTHY transitions should drive that
+        through a mock instead.
+        """
+        if container_id not in self._containers:
+            raise ResourceNotFoundError("Container", container_id)
+        return ContainerHealthStatus.HEALTHY
 
     # Helper methods for testing
 

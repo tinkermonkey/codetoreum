@@ -22,6 +22,7 @@ from codetoreum.ports.output.code_review_service import (
     ReviewComment,
 )
 from codetoreum.ports.output.container import (
+    ContainerHealthStatus,
     ContainerResult,
     ContainerStatus,
     IContainer,
@@ -153,6 +154,7 @@ __all__ = [
     "ReviewComment",
     # Container
     "IContainer",
+    "ContainerHealthStatus",
     "ContainerResult",
     "ContainerStatus",
     # Discussion Adapter

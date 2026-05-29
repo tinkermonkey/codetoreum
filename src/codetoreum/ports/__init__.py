@@ -37,6 +37,7 @@ from codetoreum.ports.output import (
     Action,
     Attachment,
     Comment,
+    ContainerHealthStatus,
     ContainerResult,
     ContainerStatus,
     DeliveryStatus,
@@ -100,6 +101,7 @@ __all__ = [
     "UnsupportedChannelError",
     # Output Port Interfaces
     "IContainer",
+    "ContainerHealthStatus",
     "ContainerResult",
     "ContainerStatus",
     "IEventStore",
