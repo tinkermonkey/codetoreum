@@ -418,13 +418,13 @@ class ProductionApplicationBootstrap:
             logger.info("Phase 5c: Loading project bootstrap configurations...")
             await self._load_bootstrap_projects()
 
-            # Phase 5d: Wire event-store-backed WorkItemService to executor
-            # The executor was created in Phase 3 with MockWorkItemService because
-            # WorkItemService (backed by Redis event store) didn't exist yet. Now that
-            # services are ready, replace the placeholder so work items created via the
-            # REST API (persisted to the event store) are visible to the executor.
-            logger.info("Phase 5d: Wiring WorkItemService to executor...")
-            self.adapters.agent_executor._work_item_service = self.services.work_item_service
+            # Phase 5d removed: WorkItemService is now constructor-injected into
+            # the executor in _create_services (see "WorkItemService must be
+            # constructed BEFORE the executor" block). No post-hoc swap is
+            # required. The phase ordering log line is retained for parity with
+            # log-grep checkpoints in the deficiency log; the architectural
+            # seam it documented is gone.
+            logger.info("Phase 5d: WorkItemService is constructor-injected into executor (no swap needed)")
 
             # Phase 5e: Start multi-project orchestrator poll loop
             # MPO is the sole orchestration entry point. It polls all enabled projects
@@ -742,6 +742,15 @@ class ProductionApplicationBootstrap:
             failed_event_store=self.infrastructure.failed_event_store,
         )
 
+        # WorkItemService must be constructed BEFORE the executor so it can
+        # be passed in as a constructor argument. Previously this lived later
+        # in _create_services and Phase 5d swapped self.adapters.agent_executor
+        # ._work_item_service after the fact. The post-hoc swap depended on a
+        # private attribute and broke if the executor cached the reference.
+        work_item_service = WorkItemService(
+            event_store=self.adapters.event_store,
+        )
+
         # For production, use the execution service executor with a real time clock
         import os as _os
 
@@ -757,7 +766,7 @@ class ProductionApplicationBootstrap:
             workspace_router=workspace_router,
             config_store=self.adapters.config_store,
             agent_repository=self.adapters.agent_repository,
-            work_item_service=self.adapters.work_item_service,
+            work_item_service=work_item_service,
             run_registry=self.adapters.run_registry,
             branch_tracker=self.adapters.branch_tracker,
             vcs=self.adapters.version_control,
@@ -847,10 +856,8 @@ class ProductionApplicationBootstrap:
             dispatch_via_task_queue=False,  # BoardColumnEventHandler owns dispatch in production
         )
 
-        # Work Item Service
-        work_item_service = WorkItemService(
-            event_store=self.adapters.event_store,
-        )
+        # WorkItemService was instantiated earlier (before the executor) so it
+        # could be passed via constructor. No second creation needed.
 
         # Container Recovery Service
         container_recovery_service = ContainerRecoveryService(

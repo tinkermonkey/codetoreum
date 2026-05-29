@@ -168,7 +168,7 @@ WorkItemService(event_store)
 MultiProjectOrchestrator(project_manager, workflow_orchestrator, board_service, poll_interval_seconds=30)
 ```
 
-Note: `ExecutionServiceAgentExecutor` is initialized with a placeholder `work_item_service` (whatever `self.adapters.work_item_service` holds at this point, which is a mock). The real `WorkItemService` is wired in Phase 5d.
+Note: `ExecutionServiceAgentExecutor` receives `WorkItemService` as a constructor argument. The service is instantiated earlier in `_create_services` (immediately after `WorkspaceRouter`) so it is available when the executor is built. The post-hoc `_work_item_service` swap that previously existed in Phase 5d is gone.
 
 **Phase 5a**: `agent_scheduler.start()` starts the consumer loop.
 
@@ -176,7 +176,7 @@ Note: `ExecutionServiceAgentExecutor` is initialized with a placeholder `work_it
 
 **Phase 5c**: `_load_bootstrap_projects()` loads `bootstrap/rounds.json` into `IAgentRepository`, `IWorkflowConfigService`, and `IConfigStore`. Then calls `register_project_repo()` on the raw ticket adapter for each project.
 
-**Phase 5d**: `self.adapters.agent_executor._work_item_service = self.services.work_item_service` replaces the placeholder with the event-store-backed `WorkItemService`. This is necessary because `WorkItemService` depends on the `IEventStore` adapter, which is only fully initialized after Phase 2b, and the executor is created mid-Phase 5. Without this replacement, the executor cannot load work items created via the REST API.
+**Phase 5d**: `WorkItemService` is constructor-injected into `ExecutionServiceAgentExecutor` during `_create_services`. The phase label is retained for parity with log-grep checkpoints but the architectural seam (private attribute swap on the executor) is gone.
 
 **Phase 5e**: `asyncio.ensure_future(self.services.multi_project_orchestrator.start())` launches the MPO poll loop as a background task. MPO is the sole orchestration entry point — it polls all enabled projects every 30 seconds, reconciles boards, and delegates per-project work to `WorkflowOrchestrator`. Starting after Phase 5d ensures `WorkItemService` is fully wired before the first poll cycle.
 
@@ -367,8 +367,8 @@ The following constraints MUST hold for bootstrap to work correctly. Violating a
 **INV-02**: Phase 5c (`_load_bootstrap_projects`) MUST run after Phase 5 service creation so `IConfigStore` is populated before `register_project_repo()` is called.
 - This is enforced by `setup()` ordering; do not reorder phases.
 
-**INV-03**: Phase 5d MUST run after Phase 5 service creation (`WorkItemService` instantiated) and before Phase 6 (ports created and bound to the executor's `_work_item_service`).
-- Violation: Executor uses placeholder `work_item_service` (mock); work items created via REST API are invisible to the agent executor.
+**INV-03**: `WorkItemService` MUST be instantiated BEFORE `ExecutionServiceAgentExecutor` inside `_create_services`. The executor takes it as a constructor argument; no Phase 5d swap exists.
+- Violation: Executor would be constructed with the placeholder `self.adapters.work_item_service` (a mock); work items created via REST API would be invisible to the agent executor.
 
 ### Wiring constraints
 
