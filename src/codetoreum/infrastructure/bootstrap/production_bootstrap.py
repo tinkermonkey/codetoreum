@@ -783,9 +783,11 @@ class ProductionApplicationBootstrap:
             branch_tracker=self.adapters.branch_tracker,
             vcs=self.adapters.version_control,
             clock=RealTimeClock(),
+            event_bus=self.infrastructure.event_bus,
             recovery_service=recovery_service,
             workflow_config_service=self.adapters.workflow_config,
             workspace_base_dir=_workspace_base,
+            default_board_id=CODETOREUM_BOARD_ID,
         )
         self.adapters.agent_executor = execution_service_executor
 
@@ -1214,16 +1216,17 @@ class ProductionApplicationBootstrap:
         )
 
         self.infrastructure.event_bus.register_handler(handler)
-        logger.info("Registered BoardColumnEventHandler with event bus")
-
-        # Wire completion callback from executor to handler for auto-progression
-        # This ensures that when an agent execution completes, the handler's
-        # handle_agent_completion() method is invoked to auto-progress the work item
-        self.adapters.agent_executor.set_completion_handler(
-            handler.handle_agent_completion,
-            default_board_id=CODETOREUM_BOARD_ID,
+        # `register_handler` subscribes BoardColumnEventHandler to both
+        # WorkItemColumnChangedEvent and AgentExecutionCompletedEvent. The
+        # latter replaces the legacy `set_completion_handler` callback wiring:
+        # ExecutionServiceAgentExecutor publishes AgentExecutionCompletedEvent
+        # on the event bus when it finishes processing a work item, and the
+        # handler runs auto-progression in its handle_agent_execution_completed
+        # bridge. See INV-05 in `bootstrap/ARCHITECTURE.md` §6.
+        logger.info(
+            "Registered BoardColumnEventHandler with event bus "
+            "(WorkItemColumnChangedEvent + AgentExecutionCompletedEvent)"
         )
-        logger.info("Wired completion callback from ExecutionServiceAgentExecutor to BoardColumnEventHandler")
 
     def _register_conversational_loop_orchestrator(self) -> None:
         """Register conversational loop orchestrator to handle column changes."""
