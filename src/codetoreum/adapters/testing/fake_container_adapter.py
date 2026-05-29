@@ -1162,6 +1162,7 @@ class FakeContainerAdapter(IContainer):
                 # Single-file copy: preserves existing behaviour for callers
                 # that target a specific file path.
                 self._host_files[destination] = virtual_fs[source]
+                self._write_to_real_filesystem(destination, virtual_fs[source])
             else:
                 # Directory-tree copy: collect all virtual files whose paths
                 # are under ``source`` (treated as a directory prefix). The
@@ -1179,10 +1180,41 @@ class FakeContainerAdapter(IContainer):
                     relative = src_path[len(prefix) :]
                     host_key = f"{dest_prefix}/{relative}"
                     self._host_files[host_key] = content
+                    self._write_to_real_filesystem(host_key, content)
 
         # Simulate copy operation
         if self._execution_delay > 0:
             await asyncio.sleep(self._execution_delay * 0.1)
+
+    @staticmethod
+    def _write_to_real_filesystem(path: str, content: str) -> None:
+        """Best-effort write of copy_from_container output to the real filesystem.
+
+        The fake adapter has always tracked extracted files in ``_host_files``
+        (a dict keyed by destination path) for unit tests that inspect that
+        dict directly. ``ExecutionService._extract_and_upload_artifacts``
+        instead points the adapter at a real ``tempfile.TemporaryDirectory``
+        and then ``rglob``s the result, so tests of the extraction pipeline
+        require the files to materialise on disk too.
+
+        We write best-effort: failures (read-only destination, parent
+        directory unwritable, etc.) are swallowed because the canonical
+        record of the extraction lives in ``_host_files``. Tests that want
+        on-disk artifacts must pass a real, writable host path.
+        """
+        from pathlib import Path as _Path
+
+        try:
+            target = _Path(path)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if isinstance(content, bytes):
+                target.write_bytes(content)
+            else:
+                target.write_text(content)
+        except OSError:
+            # Synthetic destinations like "/host/result.txt" used by legacy
+            # tests will fail here on most platforms; that's expected.
+            pass
 
     # Helper methods for event emission and virtual filesystem tracking
 

@@ -911,6 +911,65 @@ class TestFakeContainerAdapterCopyOperations:
                 destination="/host/file.txt",
             )
 
+    async def test_copy_from_container_directory_tree(self):
+        """Directory-tree source: every file under prefix is copied to host with relative path preserved."""
+        adapter = FakeContainerAdapter()
+        container_id = await adapter.create(image="python:3.11")
+
+        # Seed a small tree under /output
+        adapter.write_output_file(container_id, "/output/result.json", "{}")
+        adapter.write_output_file(container_id, "/output/logs/run.txt", "started\n")
+        adapter.write_output_file(container_id, "/output/logs/error.txt", "")
+        # And an unrelated file outside /output that should NOT be picked up
+        adapter.write_output_file(container_id, "/other/ignored.txt", "no")
+
+        await adapter.copy_from_container(
+            container_id=container_id,
+            source="/output",
+            destination="/host/artifacts",
+        )
+
+        assert adapter.get_host_file("/host/artifacts/result.json") == "{}"
+        assert adapter.get_host_file("/host/artifacts/logs/run.txt") == "started\n"
+        assert adapter.get_host_file("/host/artifacts/logs/error.txt") == ""
+        # The unrelated file is not copied (no /host/artifacts/ignored.txt key)
+        with pytest.raises(ResourceNotFoundError):
+            adapter.get_host_file("/host/artifacts/ignored.txt")
+        with pytest.raises(ResourceNotFoundError):
+            adapter.get_host_file("/host/ignored.txt")
+
+    async def test_copy_from_container_directory_tree_trailing_slash(self):
+        """Directory-tree source with trailing slash behaves the same as without."""
+        adapter = FakeContainerAdapter()
+        container_id = await adapter.create(image="python:3.11")
+
+        adapter.write_output_file(container_id, "/output/a.txt", "A")
+        adapter.write_output_file(container_id, "/output/sub/b.txt", "B")
+
+        await adapter.copy_from_container(
+            container_id=container_id,
+            source="/output/",
+            destination="/host/dest",
+        )
+
+        assert adapter.get_host_file("/host/dest/a.txt") == "A"
+        assert adapter.get_host_file("/host/dest/sub/b.txt") == "B"
+
+    async def test_copy_from_container_directory_does_not_match_unrelated_prefix(self):
+        """Source ``/out`` must NOT match ``/output/...`` paths (no prefix bleed)."""
+        adapter = FakeContainerAdapter()
+        container_id = await adapter.create(image="python:3.11")
+
+        # No exact "/out" file; only files under "/output/"
+        adapter.write_output_file(container_id, "/output/file.txt", "data")
+
+        with pytest.raises(ResourceNotFoundError, match="File.*not found"):
+            await adapter.copy_from_container(
+                container_id=container_id,
+                source="/out",
+                destination="/host/dest",
+            )
+
     async def test_seed_host_file_validation(self):
         """Test seed_host_file validates inputs."""
         adapter = FakeContainerAdapter()
