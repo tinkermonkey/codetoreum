@@ -1,6 +1,6 @@
 # Infrastructure Services Output Ports
 
-This documentation covers the output ports for cross-cutting infrastructure concerns: event handling, storage, monitoring, and tracing.
+This documentation covers the output ports for cross-cutting infrastructure concerns: event handling, monitoring, and tracing.
 
 ## Purpose
 
@@ -8,7 +8,6 @@ The infrastructure services output ports define contracts for:
 
 - **IEventEmitter**: Event publication interface
 - **IEventStore**: Event sourcing storage and audit trail
-- **IStorage**: Artifact storage (S3, local filesystem, etc.)
 - **IMetrics**: Observability metrics interface
 - **IMonitoring**: Lifecycle monitoring for services
 - **IMessageBroker**: Message queue/pub-sub infrastructure
@@ -16,6 +15,8 @@ The infrastructure services output ports define contracts for:
 - **ITracer**: Distributed tracing
 
 These ports abstract infrastructure concerns and enable swappable implementations.
+
+> **Design note (D0)**: `IStorage` and its Minio-backed production implementation were retired as part of the coding-agent port redesign (see `~/.claude/plans/coding-agent-port-redesign.md`). Agent execution output flows exclusively through `CodingAgent*` domain events; the orchestrator's source of truth for "what happened during execution" is the event store, not a separate blob store. If binary-artifact persistence becomes a need later, a focused port will be added then.
 
 ## Interface Definition
 
@@ -101,38 +102,6 @@ class IEventStore(ABC):
     @abstractmethod
     async def get_statistics(self) -> dict[str, Any]:
         """Get event store statistics."""
-```
-
-### IStorage
-
-```python
-class IStorage(ABC):
-    """Artifact storage (S3, local filesystem, etc.)."""
-
-    @abstractmethod
-    async def put(self, key: str, content: bytes, metadata: dict[str, str] | None = None) -> str:
-        """Store artifact."""
-        pass
-
-    @abstractmethod
-    async def get(self, key: str) -> bytes:
-        """Retrieve artifact."""
-        pass
-
-    @abstractmethod
-    async def delete(self, key: str) -> None:
-        """Remove artifact."""
-        pass
-
-    @abstractmethod
-    async def list(self, prefix: str | None = None) -> list[StorageObject]:
-        """List artifacts."""
-        pass
-
-    @abstractmethod
-    async def get_url(self, key: str, expires_in: int | None = None) -> str:
-        """Get artifact URL."""
-        pass
 ```
 
 ### IMetrics
@@ -292,7 +261,6 @@ class ITracer(ABC):
 |---|---|---|
 | IEventEmitter | `emit()`, `emit_batch()` | Publish domain events |
 | IEventStore | `append()`, `get_events()`, `replay_events()` | Event sourcing storage (14 methods total) |
-| IStorage | `put()`, `get()`, `delete()`, `list()`, `get_url()` | Artifact storage |
 | IMetrics | `record_counter()`, `record_gauge()`, `record_histogram()`, `record_timing()` | Performance metrics |
 | IMonitoring | `start_monitoring()`, `stop_monitoring()`, `is_monitoring()` | Service lifecycle |
 | IMessageBroker | `publish()`, `subscribe()`, `enqueue()`, `dequeue()` | Message distribution |
@@ -303,10 +271,11 @@ class ITracer(ABC):
 
 These ports do not directly emit events; they propagate events through infrastructure.
 
+> The previous `ArtifactUploadedEvent` and `ArtifactDeletedEvent` (in the retired Storage context) are removed entirely as part of the coding-agent port redesign. Agent output flows through `CodingAgent*` events instead.
+
 ## Error Contracts
 
 - **EventStoreError** — When event storage fails
-- **StorageError** — When artifact storage fails
 - **MetricsError** — When metrics recording fails
 - **MessageBrokerError** — When message publishing fails
 - **TracingError** — When span creation fails
@@ -322,6 +291,8 @@ These ports do not directly emit events; they propagate events through infrastru
 | `InMemoryEventStore` | Testing | `src/codetoreum/adapters/testing/in_memory_event_store.py` | In-memory event store for testing |
 | `MockEventEmitter` | Testing | `src/codetoreum/adapters/secondary/mock_event_emitter.py` | Mock event emitter for testing |
 | `FailedEventStoreAdapter` | Testing | `src/codetoreum/adapters/secondary/failed_event_store_adapter.py` | Dead letter queue adapter |
+
+> `MinioStorageAdapter` (production) and `InMemoryStorageAdapter` (testing) are retired with the `IStorage` port; see the design note above.
 
 ## Diagram
 
@@ -348,15 +319,6 @@ classDiagram
         +get_events_by_type(event_type, since, limit) list
         +get_events_by_correlation_id(correlation_id) list
         +get_statistics() dict
-    }
-
-    class IStorage {
-        <<interface>>
-        +put(key, content, metadata) str
-        +get(key) bytes
-        +delete(key) None
-        +list(prefix) list
-        +get_url(key, expires_in) str
     }
 
     class IMetrics {

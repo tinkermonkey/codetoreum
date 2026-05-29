@@ -271,7 +271,7 @@ timeout_seconds: int = 3600         # 1 hour repair timeout
 - Should we implement a workaround or fix the root cause?
 
 **Integration**:
-- Uses ClaudeCodeAdapter as ILLMProvider
+- Uses `ClaudeCodeAdapter` as `ICodingAgent` (replaces the historical `ILLMProvider` dependency)
 - Supplies context (logs, error messages, system state)
 - Receives structured analysis results
 - Helps prioritize repair efforts

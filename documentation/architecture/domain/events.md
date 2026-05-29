@@ -11,7 +11,7 @@ applies_to: "documentation/architecture/domain/events.md"
 
 ## Overview
 
-Domain events are immutable records of significant state changes in the system. The system defines **151 CodetoreumEvent subclasses** (frozen dataclasses) across 22 files in the `domain/events/` directory.
+Domain events are immutable records of significant state changes in the system. The system defines **160 CodetoreumEvent subclasses** (frozen dataclasses) across 22 files in the `domain/events/` directory.
 
 Events are frozen dataclasses (`@dataclass(frozen=True)`), making them immutable once created—a critical requirement for maintaining an audit trail and enabling event sourcing.
 
@@ -751,6 +751,329 @@ graph TB
     EH -->|IContainer| CONTAINER
     NH -->|INotifier| NOTIFY
     RCH -->|Trigger| REPAIR
+```
+
+---
+
+### Coding Agent Context
+
+**File**: `coding_agent_events.py` (11 events, new in the D-series rewrite)
+
+The Coding Agent context tracks granular per-execution behaviour of coding-agent adapters (Claude Code, GitHub Copilot, Codex, etc.). All 11 events: `CodingAgentInvokedEvent`, `CodingAgentReadyEvent`, `CodingAgentToolCallEvent`, `CodingAgentToolResultEvent`, `CodingAgentTextOutputEvent`, `CodingAgentThinkingEvent`, `CodingAgentRateLimitEvent`, `CodingAgentApiRetryEvent`, `CodingAgentOtlpSpanEvent`, `CodingAgentTokensUsedEvent`, `CodingAgentCompletedEvent`.
+
+All events are frozen dataclasses inheriting `CodetoreumEvent`. **Aggregate ID is `execution_id`** — one execution forms one event stream. `work_item_id` is carried as a non-aggregate field for cross-stream queries.
+
+These events are **agent-level**, distinct from the workflow-level `ExecutionStartedEvent` / `ExecutionCompletedEvent` emitted by `ExecutionService`. They are emitted by `ICodingAgent` adapters as the agent runs.
+
+**Retention**: Lifecycle events (`CodingAgentInvokedEvent`, `CodingAgentReadyEvent`, `CodingAgentCompletedEvent`, `CodingAgentTokensUsedEvent`) follow standard event-store retention. **Granular events** (`CodingAgentToolCallEvent`, `CodingAgentToolResultEvent`, `CodingAgentTextOutputEvent`, `CodingAgentThinkingEvent`, `CodingAgentRateLimitEvent`, `CodingAgentApiRetryEvent`, `CodingAgentOtlpSpanEvent`) carry a **14-day default retention** policy distinct from lifecycle events — they are high-volume behavioural telemetry, optimised for analysis (timings, decisions, input/output dimensions), not replay.
+
+```python
+@dataclass(frozen=True)
+class CodingAgentInvokedEvent(CodetoreumEvent):
+    """Emitted when a coding agent adapter starts the agent.
+
+    Fired by: ICodingAgent adapter (e.g. ClaudeCodeAdapter)
+    Type: ``coding_agent.invoked``
+
+    Attributes:
+        execution_id: Aggregate ID for this execution stream
+        work_item_id: Work item being processed (non-aggregate, for cross-stream queries)
+        coding_agent_id: Adapter identifier (e.g. "claude-code", "github-copilot")
+        invocation_mode: containerized / host / api
+        model: Model name configured for this execution
+        model_options: Vendor-specific options (image, cpu, memory, etc.)
+    """
+    execution_id: str = ""
+    work_item_id: str = ""
+    coding_agent_id: str = ""
+    invocation_mode: str = ""
+    model: str = ""
+    model_options: dict = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class CodingAgentReadyEvent(CodetoreumEvent):
+    """Emitted when the coding agent has finished initialisation and is
+    awaiting its first prompt.
+
+    Type: ``coding_agent.ready``
+
+    Attributes:
+        execution_id: Aggregate ID
+        ready_at: ISO 8601 timestamp when the agent reached ready state
+        init_metadata: Vendor-specific init payload (session id, version, etc.)
+    """
+    execution_id: str = ""
+    ready_at: str = ""
+    init_metadata: dict = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class CodingAgentToolCallEvent(CodetoreumEvent):
+    """Emitted when the coding agent invokes a tool (Read, Edit, Bash, etc.).
+
+    Retention: 14-day default (granular behavioural event).
+
+    Type: ``coding_agent.tool_call``
+
+    Attributes:
+        execution_id: Aggregate ID
+        tool_use_id: Vendor-supplied tool invocation id (correlates to result)
+        tool_name: Tool invoked (e.g. "Read", "Edit", "Bash")
+        tool_input: Tool arguments. May be truncated for large payloads
+                    (see open question O4 in the design doc).
+        parent_message_id: Vendor message id the call originated from
+    """
+    execution_id: str = ""
+    tool_use_id: str = ""
+    tool_name: str = ""
+    tool_input: dict = field(default_factory=dict)
+    parent_message_id: str = ""
+
+
+@dataclass(frozen=True)
+class CodingAgentToolResultEvent(CodetoreumEvent):
+    """Emitted when a tool returns a result to the coding agent.
+
+    Retention: 14-day default (granular behavioural event).
+
+    Type: ``coding_agent.tool_result``
+
+    Attributes:
+        execution_id: Aggregate ID
+        tool_use_id: Correlates to the originating ToolCallEvent
+        result_content: Tool output. May be truncated; see was_truncated.
+        is_error: True if the tool returned an error
+        duration_ms: How long the tool execution took
+    """
+    execution_id: str = ""
+    tool_use_id: str = ""
+    result_content: str = ""
+    is_error: bool = False
+    duration_ms: int = 0
+
+
+@dataclass(frozen=True)
+class CodingAgentTextOutputEvent(CodetoreumEvent):
+    """Emitted when the coding agent produces assistant text.
+
+    Retention: 14-day default (granular behavioural event).
+
+    Type: ``coding_agent.text_output``
+
+    Attributes:
+        execution_id: Aggregate ID
+        message_id: Vendor-supplied message id
+        content: Assistant text content
+        role: "assistant" (vendor-shape, normalised)
+    """
+    execution_id: str = ""
+    message_id: str = ""
+    content: str = ""
+    role: str = "assistant"
+
+
+@dataclass(frozen=True)
+class CodingAgentThinkingEvent(CodetoreumEvent):
+    """Emitted when the coding agent surfaces a thinking / reasoning block.
+
+    Retention: 14-day default (granular behavioural event).
+
+    Type: ``coding_agent.thinking``
+
+    Attributes:
+        execution_id: Aggregate ID
+        message_id: Vendor-supplied message id
+        content: Thinking content text
+    """
+    execution_id: str = ""
+    message_id: str = ""
+    content: str = ""
+
+
+@dataclass(frozen=True)
+class CodingAgentRateLimitEvent(CodetoreumEvent):
+    """Emitted when the vendor reports a rate-limit condition.
+
+    Retention: 14-day default (granular behavioural event).
+
+    Type: ``coding_agent.rate_limit``
+
+    Attributes:
+        execution_id: Aggregate ID
+        rate_limit_type: e.g. "tokens_per_minute", "requests_per_minute"
+        status: Vendor status string
+        resets_at: ISO 8601 timestamp when the limit resets
+        overage_status: Vendor's overage classification (e.g. "warning", "hard")
+    """
+    execution_id: str = ""
+    rate_limit_type: str = ""
+    status: str = ""
+    resets_at: str = ""
+    overage_status: str = ""
+
+
+@dataclass(frozen=True)
+class CodingAgentApiRetryEvent(CodetoreumEvent):
+    """Emitted when the adapter retries a vendor API call.
+
+    Retention: 14-day default (granular behavioural event).
+
+    Type: ``coding_agent.api_retry``
+
+    Attributes:
+        execution_id: Aggregate ID
+        attempt: Current retry attempt number (1-indexed)
+        max_retries: Configured retry ceiling
+        error: Short error identifier for what triggered the retry
+        delay_ms: Backoff delay applied before this attempt
+    """
+    execution_id: str = ""
+    attempt: int = 0
+    max_retries: int = 0
+    error: str = ""
+    delay_ms: int = 0
+
+
+@dataclass(frozen=True)
+class CodingAgentOtlpSpanEvent(CodetoreumEvent):
+    """Emitted when the coding agent emits an OpenTelemetry span.
+
+    The adapter's stream parser catches OTel spans (from stderr / vendor
+    output) and emits them as domain events. An IObservabilityProvider
+    adapter subscribes and forwards to whatever collector is configured.
+    Replaces the prior approach of agent containers exporting OTel
+    directly to a collector (DEF-014).
+
+    Retention: 14-day default (granular behavioural event).
+
+    Type: ``coding_agent.otlp_span``
+
+    Attributes:
+        execution_id: Aggregate ID
+        span: Structured span fields (trace_id, span_id, name, attributes,
+              events). See open question O2 in the design doc — exact
+              shape may carry the raw OTel wire format as a sub-field for
+              re-export.
+    """
+    execution_id: str = ""
+    span: dict = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class CodingAgentTokensUsedEvent(CodetoreumEvent):
+    """Emitted with token-usage / cost accounting summary.
+
+    May be emitted multiple times during a long execution (e.g. per
+    message, per round-trip) or once at completion, depending on
+    adapter granularity.
+
+    Type: ``coding_agent.tokens_used``
+
+    Attributes:
+        execution_id: Aggregate ID
+        input_tokens: Tokens sent to the model
+        output_tokens: Tokens produced by the model
+        cache_read: Cached input tokens read (cost-discounted)
+        cache_write: Cache-writing input tokens (premium-priced)
+        cost_usd: Estimated cost for this measurement window
+        model: Model name (in case multiple models used in one execution)
+    """
+    execution_id: str = ""
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_read: int = 0
+    cache_write: int = 0
+    cost_usd: float = 0.0
+    model: str = ""
+
+
+@dataclass(frozen=True)
+class CodingAgentCompletedEvent(CodetoreumEvent):
+    """Emitted when the coding agent finishes execution.
+
+    This is the agent-level completion; ExecutionService reads it (or
+    the CodingAgentResult returned synchronously) and emits the
+    workflow-level ExecutionCompletedEvent / ExecutionFailedEvent.
+
+    Type: ``coding_agent.completed``
+
+    Attributes:
+        execution_id: Aggregate ID
+        success: Whether execution completed successfully
+        summary_text: Final agent summary / response text
+        total_cost_usd: Total cost across the execution
+        total_tokens: Total tokens (input + output) for the execution
+        tool_call_count: Number of tool invocations made
+        duration_ms: End-to-end duration
+        error_summary: Error description if !success, else None
+    """
+    execution_id: str = ""
+    success: bool = False
+    summary_text: str = ""
+    total_cost_usd: float = 0.0
+    total_tokens: int = 0
+    tool_call_count: int = 0
+    duration_ms: int = 0
+    error_summary: str | None = None
+```
+
+**Event-Flow Diagram**:
+
+```mermaid
+graph TB
+    subgraph "ICodingAgent Adapter"
+        ADAPTER["🟦 ClaudeCodeAdapter<br/>(or Copilot, Codex)"]
+        PARSER["📜 Stream Parser<br/>vendor format → events"]
+        ADAPTER -->|run| PARSER
+    end
+
+    subgraph "Lifecycle Events"
+        PARSER -->|emit| INVOKED["CodingAgentInvokedEvent"]
+        PARSER -->|emit| READY["CodingAgentReadyEvent"]
+        PARSER -->|emit| COMPLETED["CodingAgentCompletedEvent"]
+    end
+
+    subgraph "Granular Events (14-day retention)"
+        PARSER -->|emit| TOOLCALL["CodingAgentToolCallEvent"]
+        PARSER -->|emit| TOOLRES["CodingAgentToolResultEvent"]
+        PARSER -->|emit| TEXT["CodingAgentTextOutputEvent"]
+        PARSER -->|emit| THINK["CodingAgentThinkingEvent"]
+        PARSER -->|emit| RATE["CodingAgentRateLimitEvent"]
+        PARSER -->|emit| RETRY["CodingAgentApiRetryEvent"]
+        PARSER -->|emit| OTEL["CodingAgentOtlpSpanEvent"]
+    end
+
+    subgraph "Accounting"
+        PARSER -->|emit| TOKENS["CodingAgentTokensUsedEvent"]
+    end
+
+    subgraph "Event Bus"
+        BUS["📢 Event Bus"]
+        INVOKED -->|emit| BUS
+        READY -->|emit| BUS
+        TOOLCALL -->|emit| BUS
+        TOOLRES -->|emit| BUS
+        TEXT -->|emit| BUS
+        THINK -->|emit| BUS
+        RATE -->|emit| BUS
+        RETRY -->|emit| BUS
+        OTEL -->|emit| BUS
+        TOKENS -->|emit| BUS
+        COMPLETED -->|emit| BUS
+    end
+
+    subgraph "Subscribers"
+        STORE["💾 IEventStore<br/>(behavioural analysis)"]
+        OBS["📊 IObservabilityProvider<br/>(forwards OTel)"]
+        METRIC["📈 MetricsHandler"]
+        EXEC["⚙️ ExecutionService<br/>(reads CompletedEvent)"]
+    end
+
+    BUS -->|All events| STORE
+    BUS -->|CodingAgentOtlpSpanEvent| OBS
+    BUS -->|CodingAgentTokensUsedEvent<br/>CodingAgentCompletedEvent| METRIC
+    BUS -->|CodingAgentCompletedEvent| EXEC
 ```
 
 ---
@@ -2782,80 +3105,6 @@ graph TB
 
 ---
 
-### Storage Context
-
-**File**: `storage_events.py` (2 events)
-
-Storage context tracks artifact uploads and deletions.
-
-```python
-@dataclass(frozen=True)
-class ArtifactUploadedEvent(CodetoreumEvent):
-    """Emitted when an artifact is uploaded to storage.
-
-    Attributes:
-        artifact_id: Artifact ID
-        work_item_id: Associated work item
-        filename: Uploaded filename
-        size_bytes: File size
-    """
-    artifact_id: str = ""
-    work_item_id: str = ""
-    filename: str = ""
-    size_bytes: int = 0
-
-@dataclass(frozen=True)
-class ArtifactDeletedEvent(CodetoreumEvent):
-    """Emitted when an artifact is deleted.
-
-    Attributes:
-        artifact_id: Artifact being deleted
-        work_item_id: Associated work item
-    """
-    artifact_id: str = ""
-    work_item_id: str = ""
-```
-
-**Event-Flow Diagram**:
-
-```mermaid
-graph TB
-    subgraph "Storage Operations"
-        UPLOAD["⬆️ Artifact<br/>uploaded"]
-        DELETE["🗑️ Artifact<br/>deleted"]
-    end
-
-    subgraph "Storage Events"
-        UPLOAD -->|emit| UPLOADEV["ArtifactUploadedEvent"]
-        DELETE -->|emit| DELETEEV["ArtifactDeletedEvent"]
-    end
-
-    subgraph "Event Bus"
-        BUS["📢 Event Bus"]
-        UPLOADEV -->|emit| BUS
-        DELETEEV -->|emit| BUS
-    end
-
-    subgraph "Event Handlers"
-        SH["💾 StorageHandler"]
-        MH["📈 MetricsHandler"]
-        AH["📊 AuditHandler"]
-    end
-
-    subgraph "External Systems"
-        STORAGE["Object Storage<br/>(S3, GCS, etc)"]
-    end
-
-    BUS -->|Artifact events| SH
-    BUS -->|All events| MH
-    BUS -->|All events| AH
-
-    SH -->|IStorage| STORAGE
-    AH -->|log| AUDIT["Audit Log"]
-```
-
----
-
 ### Adapter Context
 
 **File**: `adapter_events.py` (1 event base class)
@@ -3804,7 +4053,7 @@ event.work_item_id = "WI-456"  # Raises: FrozenInstanceError
 
 ## Summary
 
-The 151 CodetoreumEvent subclasses form a complete audit trail of system behavior. Each event represents an immutable fact about state changes. Event handlers subscribe to events and trigger reactions—calling output ports, updating read models, or emitting new events.
+The 160 CodetoreumEvent subclasses form a complete audit trail of system behavior. Each event represents an immutable fact about state changes. Event handlers subscribe to events and trigger reactions—calling output ports, updating read models, or emitting new events.
 
 Events enable decoupled communication between layers, complete observability through event sourcing, and the ability to replay history for debugging or temporal queries.
 

@@ -1,6 +1,6 @@
 # Domain Services Output Ports
 
-This documentation covers the output ports for specialized domain business logic: review cycles, repair cycles, agent execution, and identity services.
+This documentation covers the output ports for specialized domain business logic: review cycles, repair cycles, agent execution, prompt building, and identity services.
 
 ## Purpose
 
@@ -13,6 +13,7 @@ The domain services output ports define contracts for:
 - **ICIPipelineService**: CI pipeline management
 - **IAgentExecutor**: Agent code execution interface
 - **IAgentRepository**: Agent registry persistence
+- **IPromptBuilder**: Structured prompt assembly for coding agents
 - **IIdentityService**: Bot/human user identification
 - **INotifier**: Notification delivery across multiple channels
 
@@ -219,6 +220,58 @@ class IAgentRepository(ABC):
         pass
 ```
 
+### IPromptBuilder
+
+```python
+@dataclass(frozen=True)
+class StructuredPrompt:
+    """Vendor-agnostic structured prompt produced by an IPromptBuilder.
+
+    Each coding agent adapter renders this to its vendor's expected
+    format: text for Claude Code, a message array for Copilot's chat
+    API, Codex CLI's prompt format, etc. The same structured prompt
+    can drive all three.
+    """
+    role_description: str
+    task_description: str
+    work_item: WorkItem
+    workspace_context: WorkspaceContext
+    instructions: tuple[str, ...]
+    constraints: tuple[str, ...]
+    prior_outputs: tuple[ExecutionOutput, ...]
+
+
+class IPromptBuilder(ABC):
+    """Assembles a StructuredPrompt for a coding agent execution.
+
+    This is the **business-logic** port for prompt assembly: what
+    context the agent needs, what instructions, what constraints.
+    It is separate from any specific coding agent adapter so the
+    same prompt-building strategy applies across Claude Code,
+    GitHub Copilot, Codex, and future vendors.
+
+    Adapters render the resulting StructuredPrompt to their
+    vendor's expected format (the **presentation** concern). The
+    split is enforced by an architectural invariant — adapters do
+    not own what context to include.
+    """
+
+    @abstractmethod
+    async def build(
+        self,
+        agent: Agent,
+        work_item: WorkItem,
+        workspace_context: WorkspaceContext,
+        prior_outputs: tuple[ExecutionOutput, ...] = (),
+    ) -> StructuredPrompt:
+        """Assemble a structured prompt from work item, agent role,
+        workspace context, and any prior stage outputs."""
+```
+
+The default implementation is `DefaultPromptBuilder`, an application-layer concrete class (not an adapter — prompt building is business logic, not infrastructure). Projects can override it for custom prompt strategies; this remains a forward concern.
+
+See [`core-system.md` → ICodingAgent](./core-system.md#icodingagent) for the coding agent port that consumes prompts produced here.
+
 ### IIdentityService
 
 ```python
@@ -326,6 +379,7 @@ class INotifier(ABC):
 | ICIPipelineService | `get_pr_ci_status()`, `run_ci_checks()`, `get_check_result()` | CI pipeline |
 | IAgentExecutor | `execute()`, `validate_execution_context()`, `get_execution_logs()` | Agent execution |
 | IAgentRepository | `save_agent()`, `get_agent()`, `list_agents()`, `delete_agent()` | Agent persistence |
+| IPromptBuilder | `build()` | Assemble StructuredPrompt for a coding agent execution |
 | IIdentityService | `is_bot()`, `get_user_info()`, `is_authorized()` | Identity & auth |
 | INotifier (14 methods) | `send()`, `send_rich()`, `send_batch()`, `send_template()`, `get_delivery_status()`, `register_template()`, `health_check()` | Multi-channel notifications |
 
@@ -359,6 +413,7 @@ class INotifier(ABC):
 | `ContainerRecoveryAdapter` | Production | `adapters/secondary/` | Container failure recovery |
 | `GitHubCIPipelineAdapter` | Production | `adapters/secondary/github/` | GitHub Actions integration |
 | `ExecutionServiceAgentExecutor` | Production | `adapters/secondary/` | Agent execution orchestration |
+| `DefaultPromptBuilder` | Production | `application/prompt_building/default_prompt_builder.py` | Default `IPromptBuilder` implementation — application-layer, project-overridable |
 | `InMemoryAgentRepository` | Testing | `adapters/testing/` | In-memory agent repository |
 | `MockContainerRecoveryAdapter` | Testing | `adapters/testing/` | In-memory container recovery |
 

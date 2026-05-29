@@ -112,7 +112,8 @@ Also in Phase 1b: `AdapterFactory` is instantiated (defaults to `PRODUCTION` mod
 |-------------|-----------------|---------------------|
 | `ticket_system` | `GitHubTicketAdapter` | `GITHUB_TOKEN` |
 | `board` | `GitHubBoardAdapter` | `GITHUB_TOKEN` |
-| `llm_provider` | `ClaudeCodeAdapter` | `ANTHROPIC_API_KEY` (or OAuth) |
+| `coding_agent` | `ClaudeCodeAdapter` (implements `ICodingAgent`; replaces the prior `llm_provider` slot) | `ANTHROPIC_API_KEY` (or OAuth) |
+| `prompt_builder` | `DefaultPromptBuilder` (application-layer, no external creds) | none |
 | `version_control` | `GitHubVersionControlAdapter` | `GITHUB_TOKEN` |
 | `container` | `DockerContainerAdapter` | Docker socket |
 | `event_store` | `ElasticsearchEventStore` | `ELASTICSEARCH_URL` |
@@ -122,6 +123,8 @@ Also in Phase 1b: `AdapterFactory` is instantiated (defaults to `PRODUCTION` mod
 | `run_registry` | `InMemoryActiveWorkflowRunRegistry` | none |
 | `branch_tracker` | in-memory impl | none |
 
+> The `storage` adapter slot is retired with the coding-agent port redesign — see DEF-015 in §9.
+
 Phase 2b initializes the event store: `_initialize_event_store()` calls `initialize_event_store()` which ensures Elasticsearch indices exist. If this fails, the server will not start.
 
 ### Phase 3 — Critical path enforcement
@@ -129,7 +132,7 @@ Phase 2b initializes the event store: `_initialize_event_store()` calls `initial
 `_validate_no_mocks_on_critical_path()` inspects the concrete class name of each adapter in `CRITICAL_ADAPTER_SLOTS`:
 
 ```python
-CRITICAL_ADAPTER_SLOTS = {"board", "ticket", "llm", "version_control", "container", "code_review"}
+CRITICAL_ADAPTER_SLOTS = {"board", "ticket", "coding_agent", "version_control", "container", "code_review"}
 ```
 
 Any adapter whose class name contains `Mock`, `InMemory`, `Fake`, or `Null` causes a `RuntimeError`. This guard ensures bootstrap always exercises real adapters on the execution-critical path.
@@ -143,7 +146,7 @@ Phase 3b: `_validate_event_emitter_is_production()` ensures the resolved event e
 | Adapter | Resilience applied |
 |---------|-------------------|
 | `ticket_system` | Rate limiter → circuit breaker → timeout → retry |
-| `llm_provider` | Rate limiter → circuit breaker → timeout → retry |
+| `coding_agent` | Rate limiter → circuit breaker → timeout → retry (via `ResilientCodingAgentDecorator`, replaces `ResilientLLMProviderDecorator`) |
 | `repository` | Rate limiter → circuit breaker → timeout → retry |
 | `container` | Rate limiter → circuit breaker → timeout → retry |
 | `version_control` | Rate limiter → circuit breaker → timeout → retry |
@@ -154,11 +157,13 @@ Phase 4b: `BranchResolutionAdapter` is constructed after resilience decoration, 
 
 ### Phase 5 — Service creation
 
-`_create_services()` builds all 11 application services. For bootstrap, the critical chain is:
+`_create_services()` builds all 11 application services. For bootstrap, the critical chain (post-redesign) is:
 
 ```
-ExecutionService(llm_provider, container, event_store, storage, vcs=version_control)
-WorkspaceRouter(vcs, container, event_store, branch_resolution_service)
+ClaudeCodeAdapter(coding_agent_config, prompt_builder=DefaultPromptBuilder,
+                  event_emitter, container=container_adapter, credential_provider)
+ExecutionService(coding_agent, event_store, vcs=version_control, event_emitter)
+WorkspaceRouter(vcs, event_store, branch_resolution_service)
 ExecutionServiceAgentExecutor(execution_service, workspace_router, config_store,
                               agent_repository, work_item_service=MockWorkItemService,
                               run_registry, branch_tracker, vcs, clock=RealTimeClock(), ...)
@@ -167,6 +172,8 @@ WorkflowOrchestrator(..., dispatch_via_task_queue=False)
 WorkItemService(event_store)
 MultiProjectOrchestrator(project_manager, workflow_orchestrator, board_service, poll_interval_seconds=30)
 ```
+
+Note: `ExecutionService` and `WorkspaceRouter` no longer depend on `IContainer` or `IStorage` directly. The container is consumed by `ClaudeCodeAdapter`'s containerized strategy; storage is retired.
 
 Note: `ExecutionServiceAgentExecutor` receives `WorkItemService` as a constructor argument. The service is instantiated earlier in `_create_services` (immediately after `WorkspaceRouter`) so it is available when the executor is built. The post-hoc `_work_item_service` swap that previously existed in Phase 5d is gone.
 
@@ -338,9 +345,10 @@ Every port exercised in a bootstrap run, with its production adapter and role.
 |---------------|-------------------|---------------|---------------|
 | `ITicketSystem` | `GitHubTicketAdapter` (wrapped by `ResilientTicketSystemDecorator`) | Work item fetch, comment posting | Yes |
 | `IBoardService` | `GitHubBoardAdapter` | Column position lookup, item move for auto-progression | Yes |
-| `ILLMProvider` | `ClaudeCodeAdapter` (wrapped by resilience decorator) | Runs `claude --print` inside Docker container | Yes |
+| `ICodingAgent` | `ClaudeCodeAdapter` (wrapped by `ResilientCodingAgentDecorator`) | Runs the Claude Code CLI in the configured invocation mode (containerized via `IContainer`, or host via subprocess); emits `CodingAgent*` events for tool calls, text outputs, thinking, rate limits, OTel spans, tokens used, and lifecycle. Replaces the prior `ILLMProvider` row. | Yes |
+| `IPromptBuilder` | `DefaultPromptBuilder` (no resilience decoration; pure application logic) | Assembles a `StructuredPrompt` from work item + agent role + workspace context + prior outputs; coding agent adapters render the structured prompt to their vendor's expected format. | Yes (used by `ICodingAgent` adapters) |
 | `IVersionControlService` | `GitHubVersionControlAdapter` (wrapped by resilience decorator) | Clone repo, status, commit, push | Yes |
-| `IContainer` | `DockerContainerAdapter` (wrapped) | Launches `codetoreum-agent:latest` container for agent execution; post-exit artifact extraction via `copy_from_container("/output", ...)` | Yes (active) |
+| `IContainer` | `DockerContainerAdapter` (wrapped) | Consumed by `ClaudeCodeAdapter`'s containerized invocation strategy (and any future containerized coding-agent adapter). Launches `codetoreum-agent:latest` for agent execution. Filesystem-based output extraction (`copy_from_container("/output", ...)`) is retired — agent output flows through `CodingAgent*` events instead. | Yes (active) |
 | `ICodeReviewService` | `GitHubCodeReviewAdapter` | Not invoked in basic bootstrap | Yes (validated, not called) |
 | `IEventStore` | `ElasticsearchEventStore` | Persists all domain events; `WorkItemService` reads from it | No (infra) |
 | `IConfigStore` | `CachedConfigStore` → `ElasticsearchConfigStorage` | Project config, agent config lookup | No (infra) |
@@ -349,7 +357,6 @@ Every port exercised in a bootstrap run, with its production adapter and role.
 | `IActiveWorkflowRunRegistry` | `RedisActiveWorkflowRunRegistry` (production) / `InMemoryActiveWorkflowRunRegistry` (simulation) | Active run tracking between handler and executor; survives restart in production | No (infra) |
 | `IWorkItemBranchTracker` | in-memory impl | Branch name tracking per work item | No (infra) |
 | `IPipelineLockService` (`IQueuedPipelineLockService`) | `RedisPipelineLockService` (production) / `InMemoryLockService` (simulation) | Pipeline serialization (1 active execution per board); persistent in production | No (infra) |
-| `IStorage` | `MinioStorageAdapter` (production) / `InMemoryStorageAdapter` (simulation) | Execution-log persistence (`executions/{id}/logs.txt`) and artifact persistence (`executions/{id}/artifacts/{relative}`); real presigned URLs in production | No (infra) |
 | `IBranchResolutionService` | `BranchResolutionAdapter` | Branch name computation from ticket + VCS | No |
 | `IAgentExecutor` | `ExecutionServiceAgentExecutor` | Drives the full execution chain | No (wired internally) |
 | `IWorkItemService` | `WorkItemService` (event-sourced from ES) | Work item read by executor | No (infra) |
@@ -393,7 +400,7 @@ The following constraints MUST hold for bootstrap to work correctly. Violating a
 **INV-07**: Simulation-only routes MUST NEVER appear in `ProductionApplicationBootstrap._create_fastapi_app()`. They mount exclusively in `SimulationApplicationBootstrap._create_fastapi_app()`.
 - The two bootstrap classes produce fundamentally different `FastAPI` instances. Merging routes is a production security boundary violation.
 
-**INV-08**: `CRITICAL_ADAPTER_SLOTS = {"board", "ticket", "llm", "version_control", "container", "code_review"}` — no adapter in these slots may be `Mock`, `InMemory`, `Fake`, or `Null`. Phase 3 enforces this with `RuntimeError`.
+**INV-08**: `CRITICAL_ADAPTER_SLOTS = {"board", "ticket", "coding_agent", "version_control", "container", "code_review"}` — no adapter in these slots may be `Mock`, `InMemory`, `Fake`, or `Null`. Phase 3 enforces this with `RuntimeError`.
 
 ### Port discipline constraints
 
@@ -405,6 +412,18 @@ The following constraints MUST hold for bootstrap to work correctly. Violating a
 **INV-11**: Resilience logic (retry loops, circuit breaker checks, rate limit backoff) MUST remain in infrastructure decorator classes, not in adapter bodies. `GitHubTicketAdapter._make_request()` explicitly documents this: it does not embed retry logic; `ResilientTicketSystemDecorator` handles it.
 
 **INV-12**: The domain layer (`src/codetoreum/domain/`) has zero external dependencies. `Agent`, `WorkItem`, `AgentExecution`, and all domain events import only from within the domain package and Python stdlib.
+
+**INV-15 — Coding agent events**: `ICodingAgent` adapters MUST emit `CodingAgent*` events on the event bus for every tool call, tool result, text output, thinking block, rate-limit notice, API retry, OTel span, and tokens-used summary they observe, plus `CodingAgentInvokedEvent` / `CodingAgentReadyEvent` / `CodingAgentCompletedEvent` lifecycle bookends. Granular events (`CodingAgentToolCallEvent`, `CodingAgentToolResultEvent`, `CodingAgentTextOutputEvent`, `CodingAgentThinkingEvent`, `CodingAgentRateLimitEvent`, `CodingAgentApiRetryEvent`, `CodingAgentOtlpSpanEvent`) follow the 14-day default retention policy. See [events.md → Coding Agent Context](../documentation/architecture/domain/events.md#coding-agent-context).
+- Violation: agent execution becomes a black box; behavioural analysis (prompt optimisation, tool selection, context strategy) impossible; OTel routing via the event bus breaks.
+
+**INV-16 — No filesystem extraction**: Agent execution output flows exclusively through `CodingAgent*` events. Filesystem extraction from agent execution environments is **forbidden**. The filesystem may be used to *pass context into* agents (read-only source mounts) but never to *retrieve context out*. A crashed agent + lost filesystem must not equal lost execution data.
+- Violation: introduces a Schrödinger source of truth (some data in events, some on disk); resurrects the `/output` antipattern; breaks event-store-as-audit-trail guarantees.
+
+**INV-17 — Coding agent invocation mode**: The coding agent adapter, not the orchestrator, owns the choice of invocation mode (containerized / host / API). The orchestrator validates that the configured mode is in the adapter's `supported_invocation_modes()` at config-load time. `ExecutionService` does not branch on `agent.requires_docker` — the `requires_docker` flag is gone; mode comes from `AgentConfig.invocation.mode`.
+- Violation: container concepts leak back into the application layer; supporting a new vendor with a different invocation shape (e.g. Copilot's HTTP API) requires application-layer changes instead of being a pure adapter concern.
+
+**INV-18 — Prompt building separation**: Prompt-building business logic (assembling work-item + agent role + workspace context + prior outputs into a `StructuredPrompt`) lives in `IPromptBuilder` implementations, not inside coding agent adapters. Adapters render the structured prompt to their vendor's expected format (text for Claude Code, message array for Copilot, etc.) but do not own *what context to include*.
+- Violation: prompt logic forks across adapters; a Copilot adapter and a Claude Code adapter use divergent context strategies for the same agent role; the same prompt-building improvement has to be made in N places.
 
 ### Authentication constraints
 
@@ -479,6 +498,63 @@ Running record of architectural gaps found and fixed during bootstrap cycles. Mo
 
 ---
 
+### DEF-015 — Coding agent port redesign (in flight)
+
+**Status**: Design landed in `~/.claude/plans/coding-agent-port-redesign.md` (user-confirmed 2026-05-29). Architecture documentation updated in this commit (Phase D0). Implementation pending Phases D1–D7.
+
+**Deficiency** (the three smells the redesign addresses):
+
+1. **The orchestrator owns the execution mode decision.** `ExecutionServiceAgentExecutor` branches on `agent.requires_docker` between `ExecutionService.execute_with_container` and `ExecutionService.execute_with_llm`. That decision belongs to the coding agent, not the application layer.
+2. **Container concepts leak into the application layer.** `ExecutionService` (27+ methods) builds `ContainerConfig`, owns log streaming, cleanup-with-retry, token parsing, artifact upload. The coding agent is reduced to a command string embedded inside a container config.
+3. **The agent's behaviour is invisible to the event store.** Ten execution-lifecycle events, zero events for what the agent *did* during execution. The `/output` question (DEF-011) is a workaround for that gap, not a feature.
+
+Naming reinforces the wrong model: `IAgentLauncher` is an implementation detail (subprocess fork-exec). The role is *coding agent*.
+
+**Redesign principles**:
+
+- **`ICodingAgent` replaces `ILLMProvider` + `IAgentLauncher`** with a minimal port shaped around the role — "do coding work, produce a structured result, emit rich telemetry while you work" — not the invocation mechanism. Two methods only: `supported_invocation_modes()` and `execute(execution, workspace_context, options) -> CodingAgentResult`.
+- **`IPromptBuilder` is a separate port** for assembling a vendor-agnostic `StructuredPrompt`. Coding agent adapters render the structured prompt to their vendor's expected format. Prompt *business logic* is separated from prompt *presentation*. See INV-18.
+- **The adapter owns invocation mode** (`InvocationMode.{CONTAINERIZED, HOST, API}`) via an internal strategy pattern. `ClaudeCodeAdapter` ships with containerized + host strategies; `GitHubCopilotAdapter` will have only API; `CodexAdapter` will have containerized + host. See INV-17.
+- **`CodingAgent*` event family** (11 events) provides granular per-execution telemetry: tool calls, tool results, text outputs, thinking, rate limits, API retries, OTel spans, token usage, lifecycle bookends. Granular events carry 14-day default retention. See INV-15.
+- **No filesystem extraction.** Agent output flows exclusively through events. `/output` is an antipattern that resurrects the audit-trail gap the redesign closes. See INV-16.
+- **OTel routing via event bus.** Coding agents emit OTel spans through `CodingAgentOtlpSpanEvent`; an `IObservabilityProvider` adapter subscribes and forwards to whatever collector is configured. Resolves DEF-014 (agent containers no longer need a specific network).
+- **`IStorage` and Minio retire entirely.** Execution logs and tool outputs flow through events (text inside events), not through a separate blob store. The `MinioStorageAdapter` introduced by DEF-009 is removed; its fix is rendered obsolete by the redesign.
+- **`ExecutionService` slims back to lifecycle.** ~5–8 methods total, down from 27+. Container, storage, log-streaming, artifact-upload, and token-extraction methods all delete.
+- **Zero backwards compatibility.** All aliases, alias modules, deep-import compat paths, and historical references are removed. Greenfield rewrite.
+
+**Phased rollout** (see proposal §6):
+
+| Phase | Action |
+|---|---|
+| D0 | Architecture docs updated (this commit) |
+| D1 | `src/codetoreum/ports/output/coding_agent.py`, `prompt_builder.py`, `domain/events/coding_agent_events.py` |
+| D2 | `DefaultPromptBuilder` in application layer |
+| D3 | `ClaudeCodeAdapter` rewrite (strategies/, stream_parser, prompt_renderer) |
+| D4 | `ExecutionService` rewrite + `ExecutionServiceAgentExecutor` re-wire (drops `requires_docker` branch) |
+| D5 | Bulk deletion commit: `IAgentLauncher`, `ILLMProvider` alias, `ILLMTextProvider`, `IStorage`, `MinioStorageAdapter`, `InMemoryStorageAdapter`, retired `ExecutionService` methods, retired `WorkspaceRouter` methods, Minio service in `docker-compose.yml`, Minio dep, `MINIO_*` env vars |
+| D6 | Config schema migration (`bootstrap/rounds.json` invocation block; loader validation) |
+| D7 | Bootstrap end-to-end validation against `tinkermonkey/rounds` |
+| D8 | Implementation docs update |
+| D9 | Design validation of `GitHubCopilotAdapter` and `CodexAdapter` shapes (no code) |
+
+**Reference**: `~/.claude/plans/coding-agent-port-redesign.md` (the authoritative design proposal).
+
+**Files affected by D0 (this commit)**:
+- `documentation/architecture/ports/output/core-system.md` — `ILLMProvider` → `ICodingAgent`
+- `documentation/architecture/ports/output/infrastructure-services.md` — `IStorage` removed
+- `documentation/architecture/ports/output/domain-services.md` — `IPromptBuilder` added
+- `documentation/architecture/ports/output/agent-launcher.md` — **deleted**
+- `documentation/architecture/domain/events.md` — `CodingAgent*` family added; Storage Context removed
+- `documentation/architecture/application-services/services.md` — `ExecutionService` slimmed; `WorkspaceRouter` returns `WorkspaceContext`
+- `documentation/architecture/adapters/production/claude-code-adapter.md` — substantial rewrite for `ICodingAgent` shape
+- `documentation/architecture/adapters/production/docker-container-adapter.md` — consumer-note added
+- `documentation/architecture/adapters/production/execution-service-agent-executor-adapter.md` — `requires_docker` branch retired
+- `documentation/architecture/infrastructure/observability.md` — OTel via event bus
+- `documentation/architecture/overview.md` — port + adapter names updated
+- `bootstrap/ARCHITECTURE.md` — this entry; §3 (adapter table), §5 (ports table), §6 (INV-15..18) all updated
+
+---
+
 ### DEF-014 — Agent containers default to a Docker network with no internet egress
 
 **Deficiency**: `DockerContainerAdapter.config.agent_network` defaulted to `"codetoreum_default"`, the network docker-compose creates for the orchestrator stack. The default exists because the orchestrator wanted agent containers to share a network with the otel-collector. But on hosts where the codetoreum docker-compose stack has not been started — or where another project has co-opted the network name — the codetoreum_default network has no functioning DNS / outbound routes. Agent containers joined a network they could not escape; `claude --print` saw every Anthropic API call time out and reported `error_status:null, error:"unknown"` in `api_retry` events for 10+ minutes per execution. The bootstrap run that surfaced this had Claude inside the container hammering retries with `apiKeySource:"none"` (which is informational, not the auth failure it looks like) and the orchestrator sitting on a stuck container with no error path.
@@ -529,6 +605,8 @@ The misleading docstring on `WorkspaceRouter.prepare_container_environment` ("CL
 
 ### DEF-011 — IContainer.copy_from_container present on the port but never called
 
+> **Superseded by DEF-015.** The `/output` extraction pattern is recognised as the antipattern that motivated the coding-agent port redesign — see Q7 in `~/.claude/plans/coding-agent-port-redesign.md`. `_extract_and_upload_artifacts` and the artifact-upload flow retire entirely; agent output flows through `CodingAgent*` events. `copy_from_container` is slated for removal in Phase D5. The original deficiency below is preserved for history.
+
 **Deficiency**: `IContainer.copy_from_container` and the corresponding `DockerContainerAdapter` implementation had existed since Gen 2 design and `documentation/architecture/ports/output/core-system.md` documented it, but no application service ever invoked it. Agent containers wrote artifacts under `/output` and the orchestrator immediately discarded them on container removal: the only escape path for execution outputs was the git commit produced by `_commit_workspace`. Anything an agent produced that wasn't committed — structured execution-result JSON, intermediate report files, attachments destined for the work-item — was lost. The port surface promised an artifact extraction primitive that the production code path silently failed to use; a second container orchestrator (Kubernetes) would have inherited the same gap. The artifact-extraction breadth-axis item (D2) made this explicit.
 
 **Fix**:
@@ -542,6 +620,8 @@ The misleading docstring on `WorkspaceRouter.prepare_container_environment` ("CL
 ---
 
 ### DEF-009 — IStorage has no production-grade artifact persistence
+
+> **Superseded by DEF-015.** The `MinioStorageAdapter` introduced by this fix retires entirely as part of the coding-agent port redesign — agent output flows through `CodingAgent*` events rather than through a separate blob store. The original deficiency below is preserved for history.
 
 **Deficiency**: `InMemoryStorageAdapter` was the only `IStorage` implementation available on the production critical path. Agent execution logs and outputs lived in process memory only — they vanished on restart and were never reachable by downstream tooling. `generate_presigned_url` returned synthetic `memory://localhost/...` strings rather than real URLs, so any flow that relied on out-of-band artifact access (future repair-cycle artifact replay, external review tooling) was silently broken.
 

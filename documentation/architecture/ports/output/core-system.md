@@ -1,6 +1,6 @@
 # Core System Output Ports
 
-This documentation covers the fundamental output ports that abstract basic system operations: ticket management, version control, containers, and LLM providers.
+This documentation covers the fundamental output ports that abstract basic system operations: ticket management, version control, containers, and coding agents.
 
 ## Purpose
 
@@ -9,9 +9,11 @@ The core system output ports define contracts for the foundational external syst
 - **ITicketSystem**: Vendor-agnostic interface for issue/ticket management (GitHub Issues, Jira, Linear, etc.)
 - **IVersionControlService**: Abstract version control operations (Git, Mercurial, etc.)
 - **IContainer**: Container runtime abstraction (Docker, Kubernetes, etc.) for agent execution
-- **ILLMProvider**: Language model provider abstraction (Claude, GPT-4, etc.) for agent interactions
+- **ICodingAgent**: Coding agent abstraction (Claude Code, GitHub Copilot, Codex, etc.) for autonomous code work
 
 These ports enable vendor-agnostic implementations and seamless system switching.
+
+> **Design note (D0)**: `ICodingAgent` replaces the historical `ILLMProvider` and `IAgentLauncher` ports as part of the coding-agent port redesign (see `~/.claude/plans/coding-agent-port-redesign.md`). The new port is shaped around the role — "do coding work, produce a structured result, emit rich telemetry while you work" — rather than around any single invocation mechanism (subprocess, HTTP API, or container).
 
 ## Interface Definition
 
@@ -270,69 +272,97 @@ class IContainer(ABC):
         pass
 ```
 
-### ILLMProvider
+### ICodingAgent
 
 ```python
-class ILLMProvider(ABC):
+class InvocationMode(StrEnum):
+    """Where the coding agent's execution happens.
+
+    Orthogonal to *how* the agent communicates (subprocess stream-json,
+    HTTP streaming response, etc.) — that's an adapter-internal choice.
     """
-    Interface for Large Language Model providers.
+    CONTAINERIZED = "containerized"   # adapter uses IContainer
+    HOST = "host"                     # adapter runs the agent locally
+    API = "api"                       # adapter makes HTTP calls (Copilot, future direct APIs)
 
-    This port abstracts LLM operations, supporting various providers
-    like Claude, GPT-4, and local models. For Codetoreum, providers
-    run in containerized environments with context mounted as files.
+
+@dataclass(frozen=True)
+class CodingAgentInvocationOptions:
+    """Per-execution configuration for a coding agent invocation."""
+    invocation_mode: InvocationMode
+    model: str                                # adapter validates against its supported models
+    timeout_seconds: int
+    cost_limit_usd: Decimal | None
+    mode_config: Mapping[str, Any]            # mode-specific (image, cpu, memory for containerized)
+
+
+@dataclass(frozen=True)
+class CodingAgentResult:
+    """Final summary returned by a coding agent execution.
+
+    Granular behaviour (tool calls, text outputs, thinking, rate limits,
+    token usage) flows through CodingAgent* domain events on the event
+    bus during execution. This value object summarises the outcome.
+    """
+    success: bool
+    summary_text: str
+    total_cost_usd: Decimal
+    total_input_tokens: int
+    total_output_tokens: int
+    tool_call_count: int
+    duration_ms: int
+    error_summary: str | None
+
+
+class ICodingAgent(ABC):
+    """
+    Coding agent abstraction (Claude Code, GitHub Copilot, Codex, etc.).
+
+    Replaces the historical ILLMProvider / IAgentLauncher pair. The port
+    expresses the role — "do coding work, produce a structured result,
+    emit rich telemetry while you work" — not the invocation mechanism.
+
+    The adapter owns the choice of invocation mode (containerized via
+    IContainer, host via subprocess, or HTTP API for adapters like
+    Copilot that don't shell out). Granular per-execution behaviour
+    is emitted to the event bus as CodingAgent* events while the agent
+    runs; the `execute()` call returns the final result summary.
     """
 
     @abstractmethod
-    async def execute(self, prompt: str, context: ExecutionContext | None = None,
-                     stream_callback: StreamCallback | None = None) -> ExecutionResult:
-        """Execute a prompt with the LLM."""
-        pass
+    def supported_invocation_modes(self) -> frozenset[InvocationMode]:
+        """The invocation modes this adapter implements.
+
+        For example: ``frozenset({InvocationMode.CONTAINERIZED,
+        InvocationMode.HOST})`` for a CLI-shaped adapter.
+
+        Validated against agent config at load time, not at first
+        invocation — bad config fails fast.
+        """
 
     @abstractmethod
-    async def execute_with_tools(self, prompt: str, tools: list[ToolDefinition],
-                                context: ExecutionContext | None = None,
-                                stream_callback: StreamCallback | None = None) -> ExecutionResult:
-        """Execute prompt with tool/function calling capabilities."""
-        pass
+    async def execute(
+        self,
+        execution: AgentExecution,
+        workspace_context: WorkspaceContext,
+        options: CodingAgentInvocationOptions,
+    ) -> CodingAgentResult:
+        """Execute the coding agent.
 
-    @abstractmethod
-    async def stream_completion(self, prompt: str,
-                               context: ExecutionContext | None = None) -> AsyncIterator[StreamChunk]:
-        """Stream completion tokens as they're generated."""
-        pass
+        The adapter handles invocation mode (containerized via
+        IContainer, host via subprocess, or HTTP API for adapters
+        like Copilot). Granular agent behaviour is emitted to the
+        event bus during execution. This call returns the final
+        result summary once execution completes.
 
-    @abstractmethod
-    async def create_conversation(self, system_prompt: str | None = None,
-                                 parameters: ExecutionContext | None = None) -> str:
-        """Create a new conversation session. Returns conversation ID."""
-        pass
-
-    @abstractmethod
-    async def continue_conversation(self, conversation_id: str, message: str,
-                                   stream_callback: StreamCallback | None = None) -> ExecutionResult:
-        """Continue an existing conversation."""
-        pass
-
-    @abstractmethod
-    async def get_model_info(self) -> ModelInfo:
-        """Get information about the current model."""
-        pass
-
-    @abstractmethod
-    async def list_available_models(self) -> list[ModelInfo]:
-        """List all available models from this provider."""
-        pass
-
-    @abstractmethod
-    async def count_tokens(self, text: str, model: str | None = None) -> int:
-        """Count tokens in text."""
-        pass
-
-    @abstractmethod
-    async def get_usage_stats(self, since: datetime | None = None) -> UsageStats:
-        """Get usage statistics (token usage and costs)."""
-        pass
+        Prompt assembly is delegated to an IPromptBuilder injected
+        via DI; the adapter renders the resulting StructuredPrompt
+        to its vendor's expected format (text for Claude Code,
+        message array for Copilot, etc.).
+        """
 ```
+
+See [`domain-services.md` → IPromptBuilder](./domain-services.md#ipromptbuilder) for the prompt-building port and [`events.md` → Coding Agent Context](../../domain/events.md#coding-agent-context) for the full CodingAgent* event taxonomy.
 
 ### IRepository
 
@@ -468,22 +498,15 @@ class IRepository(ABC):
 | `inspect()` | `container_id` | `dict[str, Any]` | Get detailed container info |
 | `wait()` | `container_id, timeout` | `int` | Wait for container to stop |
 | `copy_to_container()` | `container_id, source, destination` | `None` | Copy files to container |
-| `copy_from_container()` | `container_id, source, destination` | `None` | Copy a file or directory tree from a container to the host (used by `ExecutionService.execute_with_container` for `/output` artifact extraction) |
+| `copy_from_container()` | `container_id, source, destination` | `None` | Copy a file or directory tree from a container to the host. **Retired** following the coding-agent port redesign — agent output flows exclusively through `CodingAgent*` events; filesystem-based extraction (`/output`) is forbidden. Slated for removal in Phase D5 if no remaining call sites are found. |
 | `get_file_content()` | `container_id, file_path` | `bytes` | Get file content from container |
 
-### ILLMProvider Methods
+### ICodingAgent Methods
 
 | Method | Parameters | Return Type | Description |
 |---|---|---|---|
-| `execute()` | `prompt, context, stream_callback` | `ExecutionResult` | Execute prompt with LLM |
-| `execute_with_tools()` | `prompt, tools, context, stream_callback` | `ExecutionResult` | Execute with tool calling |
-| `stream_completion()` | `prompt, context` | `AsyncIterator[StreamChunk]` | Stream completion tokens |
-| `create_conversation()` | `system_prompt, parameters` | `str` | Create conversation session |
-| `continue_conversation()` | `conversation_id, message, stream_callback` | `ExecutionResult` | Continue conversation |
-| `get_model_info()` | — | `ModelInfo` | Get model information |
-| `list_available_models()` | — | `list[ModelInfo]` | List available models |
-| `count_tokens()` | `text, model` | `int` | Count tokens in text |
-| `get_usage_stats()` | `since` | `UsageStats` | Get usage statistics |
+| `supported_invocation_modes()` | — | `frozenset[InvocationMode]` | Declare which invocation modes (CONTAINERIZED, HOST, API) the adapter implements; checked at config-load time |
+| `execute()` | `execution, workspace_context, options` | `CodingAgentResult` | Run the coding agent; granular behaviour is emitted as `CodingAgent*` events while it runs; returns the final summary on completion |
 
 ### IRepository Methods (17 methods)
 
@@ -509,7 +532,23 @@ class IRepository(ABC):
 
 ## Events Emitted
 
-These ports do not emit domain events directly. Events are emitted by adapters when state changes occur in external systems.
+`ITicketSystem`, `IVersionControlService`, `IContainer`, and `IRepository` do not emit domain events directly — events are emitted by their adapters when state changes occur in external systems.
+
+**`ICodingAgent` adapters MUST emit the full `CodingAgent*` event family** during execution (see [events.md → Coding Agent Context](../../domain/events.md#coding-agent-context) for the complete catalog):
+
+- `CodingAgentInvokedEvent` — adapter started the agent
+- `CodingAgentReadyEvent` — agent initialised and awaiting prompt
+- `CodingAgentToolCallEvent` — agent invoked a tool
+- `CodingAgentToolResultEvent` — tool returned a result
+- `CodingAgentTextOutputEvent` — agent produced assistant text
+- `CodingAgentThinkingEvent` — agent emitted a thinking/reasoning block
+- `CodingAgentRateLimitEvent` — vendor reported a rate-limit condition
+- `CodingAgentApiRetryEvent` — adapter retried a vendor API call
+- `CodingAgentOtlpSpanEvent` — agent emitted an OTel span (routed via event bus)
+- `CodingAgentTokensUsedEvent` — token usage / cost accounting summary
+- `CodingAgentCompletedEvent` — agent finished, with success/failure summary
+
+Granular events (ToolCall, ToolResult, TextOutput, Thinking, RateLimit, ApiRetry, OtlpSpan) carry a 14-day default retention policy distinct from lifecycle events.
 
 ## Error Contracts
 
@@ -517,7 +556,8 @@ These ports do not emit domain events directly. Events are emitted by adapters w
 - **RepositoryNotFoundError** — When repository doesn't exist
 - **WorkItemNotFoundError** — When work item doesn't exist
 - **ContainerError** — When container operation fails
-- **TokenLimitExceededError** — When LLM token budget exceeded
+- **CodingAgentError** — When coding agent execution fails (vendor error, timeout, cost limit exceeded)
+- **UnsupportedInvocationModeError** — When agent config requests a mode the adapter does not declare in `supported_invocation_modes()`
 - **TimeoutError** — When external system doesn't respond in time
 - **ValidationError** — When input parameters invalid
 
@@ -527,8 +567,10 @@ These ports do not emit domain events directly. Events are emitted by adapters w
 |---|---|---|---|
 | `GitHubTicketAdapter` | Production | `src/codetoreum/adapters/secondary/github_ticket_adapter.py` | GitHub Issues implementation |
 | `GitRepositoryAdapter` | Production | `src/codetoreum/adapters/secondary/git_repository_adapter.py` | Git version control operations |
-| `DockerContainerAdapter` | Production | `src/codetoreum/adapters/secondary/docker_container_adapter.py` | Docker container runtime |
-| `ClaudeCodeAdapter` | Production | `src/codetoreum/adapters/secondary/claude_code_adapter.py` | Claude API provider |
+| `DockerContainerAdapter` | Production | `src/codetoreum/adapters/secondary/docker_container_adapter.py` | Docker container runtime. After the coding-agent redesign, consumed only by *containerized invocation strategies* inside coding-agent adapters; `ExecutionService` no longer talks to it directly. |
+| `ClaudeCodeAdapter` | Production | `src/codetoreum/adapters/secondary/claude_code/` | First concrete `ICodingAgent` implementation. Supports `{CONTAINERIZED, HOST}` invocation modes. See [claude-code-adapter.md](../../adapters/production/claude-code-adapter.md). |
+| `GitHubCopilotAdapter` | Planned | `src/codetoreum/adapters/secondary/github_copilot/` | Planned `ICodingAgent` implementation. Supports `{API}` only (pure HTTP, no subprocess/container). Validates that the port shape is genuinely vendor-agnostic. |
+| `CodexAdapter` | Planned | `src/codetoreum/adapters/secondary/codex/` | Planned `ICodingAgent` implementation. Supports `{CONTAINERIZED, HOST}` modes (subprocess-shaped like Claude Code). |
 | `DockerContainerRecoveryAdapter` | Production | `src/codetoreum/adapters/secondary/docker_container_recovery_adapter.py` | Docker recovery operations |
 
 ## Diagram
@@ -580,17 +622,10 @@ classDiagram
         +get_file_content(container_id, file_path) bytes
     }
 
-    class ILLMProvider {
+    class ICodingAgent {
         <<interface>>
-        +execute(prompt, context, stream_callback) ExecutionResult
-        +execute_with_tools(prompt, tools, context, stream_callback) ExecutionResult
-        +stream_completion(prompt, context) AsyncIterator[StreamChunk]
-        +create_conversation(system_prompt, parameters) str
-        +continue_conversation(conversation_id, message, stream_callback) ExecutionResult
-        +get_model_info() ModelInfo
-        +list_available_models() list[ModelInfo]
-        +count_tokens(text, model) int
-        +get_usage_stats(since) UsageStats
+        +supported_invocation_modes() frozenset[InvocationMode]
+        +execute(execution, workspace_context, options) CodingAgentResult
     }
 
     class GitHubTicketAdapter {
@@ -602,10 +637,12 @@ classDiagram
     }
 
     class ClaudeCodeAdapter {
-        +api_client: AnthropicAPI
+        +prompt_builder: IPromptBuilder
+        +container: IContainer
+        +event_emitter: IEventEmitter
     }
 
     ITicketSystem <|-- GitHubTicketAdapter: implements
     IContainer <|-- DockerContainerAdapter: implements
-    ILLMProvider <|-- ClaudeCodeAdapter: implements
+    ICodingAgent <|-- ClaudeCodeAdapter: implements
 ```

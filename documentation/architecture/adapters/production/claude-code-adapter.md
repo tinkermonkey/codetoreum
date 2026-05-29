@@ -5,138 +5,75 @@ applies_to: "documentation/architecture/adapters/production/**/*adapter*.md"
 
 # ClaudeCodeAdapter
 
+> **Status**: This document describes the **post-redesign** shape of `ClaudeCodeAdapter` as specified by `~/.claude/plans/coding-agent-port-redesign.md`. The current source code still reflects the prior `ILLMProvider` shape; the rewrite lands in Phase D3.
+
 ## Purpose
 
-**ClaudeCodeAdapter** implements the `ILLMProvider` interface by executing the Claude Code CLI, providing LLM operations including single-turn prompting, multi-turn conversations, tool execution (via MCP), and streaming responses.
+**ClaudeCodeAdapter** implements the `ICodingAgent` interface by launching the Claude Code CLI in autonomous-agent mode. It is the first concrete implementation of the new coding-agent port and serves as the template for `GitHubCopilotAdapter` and `CodexAdapter`.
 
-This adapter is used in production to execute agent logic via Claude Code. When the orchestrator needs an AI agent to analyze a work item, the adapter builds a CLI command, executes it as a subprocess, parses the JSON stream output, and returns the result to the orchestrator. The adapter handles multi-turn conversations via session IDs, MCP-based tool definitions, streaming output, and error recovery.
+The adapter:
+- Declares `supported_invocation_modes() == frozenset({InvocationMode.CONTAINERIZED, InvocationMode.HOST})`.
+- Receives a `StructuredPrompt` from an injected `IPromptBuilder`; renders it to text suitable for `claude --print PROMPT_TEXT` via an internal `prompt_renderer` module.
+- Picks an invocation strategy (containerized via `IContainer`, or host via subprocess) based on `options.invocation_mode`.
+- Streams the agent's `stream-json` output through a `stream_parser` that emits the full `CodingAgent*` event family on the event bus.
+- Returns a `CodingAgentResult` summary on completion.
 
 The adapter translates between:
-- Codetoreum domain models ↔ CLI command-line arguments
-- ExecutionContext (work item, code, history) ↔ Claude CLI args and environment
-- JSON stream output ↔ ExecutionResult with parsed token counts and responses
+- `WorkspaceContext` + `StructuredPrompt` ↔ Claude CLI args, environment, and the rendered prompt text
+- Claude Code `stream-json` output ↔ `CodingAgentToolCallEvent` / `CodingAgentToolResultEvent` / `CodingAgentTextOutputEvent` / `CodingAgentThinkingEvent` / `CodingAgentRateLimitEvent` / `CodingAgentApiRetryEvent` / `CodingAgentOtlpSpanEvent` / `CodingAgentTokensUsedEvent` / `CodingAgentCompletedEvent`
+- Subprocess lifecycle (start, init complete, exit) ↔ `CodingAgentInvokedEvent`, `CodingAgentReadyEvent`, `CodingAgentCompletedEvent`
 
 ## Implementation Strategy
 
-### Claude Code CLI Integration
+### Internal Structure (post-redesign)
 
-ClaudeCodeAdapter uses the **Claude Code CLI** (subprocess-based):
-- Executes the `claude` command-line interface
-- Streaming support via JSON event stream output (`stream-json` format)
-- Session management for multi-turn conversations via `--session-id`
-- MCP (Model Context Protocol) integration for tool availability
-- Containerized execution with configurable working directory
+```
+src/codetoreum/adapters/secondary/claude_code/
+├── __init__.py
+├── adapter.py              (ClaudeCodeAdapter implementing ICodingAgent)
+├── strategies/
+│   ├── __init__.py
+│   ├── containerized.py    (uses IContainer)
+│   └── host.py             (subprocess.run, working_directory = workspace_context.workspace_path)
+├── stream_parser.py        (stream-json → CodingAgent* events)
+└── prompt_renderer.py      (StructuredPrompt → claude --print prompt text)
+```
+
+`adapter.execute()` picks a strategy from `options.invocation_mode`, calls `prompt_builder.build(...)` to get a `StructuredPrompt`, renders it to text via `prompt_renderer`, and the strategy runs the agent. Output flows through `stream_parser`, which emits domain events to the bus as it parses.
 
 ### Key Design Decisions
 
-**1. Credential Provider Pattern**
-```python
-class ICredentialProvider:
-    """Interface for secure credential providers."""
-    async def get_credential(self, key: str) -> str | None:
-        ...
+**1. Strategy split (containerized vs host) is internal**
 
-class EnvironmentCredentialProvider(ICredentialProvider):
-    """Retrieves credentials from environment variables."""
+The choice of strategy is the adapter's, not the application layer's. `ExecutionService` calls `ICodingAgent.execute()` once with `options.invocation_mode`; the adapter dispatches to the right strategy. Each strategy carries its own runtime concerns:
 
-class SecureStoreCredentialProvider(ICredentialProvider):
-    """Retrieves credentials from secure key store."""
-```
+- `strategies/containerized.py`: builds the container, mounts the workspace read-only (per Q7 — no `/output` extraction), runs `codetoreum-agent:latest`, streams the subprocess output, and removes the container after exit. Uses `IContainer`.
+- `strategies/host.py`: runs `claude --print` directly via `subprocess.run`, with `workspace_context.workspace_path` as the working directory. No container.
 
-Credentials are provided via pluggable credential providers:
-- **EnvironmentCredentialProvider**: Reads from environment variables (dev/test)
-- **SecureStoreCredentialProvider**: Reads from system keychain (production)
-- Allows swapping credential sources without changing adapter code
+A future fourth strategy is **not** added if Copilot needs API mode — `GitHubCopilotAdapter` is a separate `ICodingAgent` adapter that supports only `{InvocationMode.API}`.
 
-**2. Configuration Management**
-```python
-@dataclass
-class ClaudeCodeConfig:
-    # Authentication (secure references)
-    api_key_credential_name: str = "ANTHROPIC_API_KEY"
-    oauth_token_credential_name: str = "CLAUDE_CODE_OAUTH_TOKEN"
-    credential_provider: ICredentialProvider | None = None
+**2. Stream parser is the vendor boundary**
 
-    # CLI configuration
-    claude_cli_path: str = "claude"              # Path to Claude CLI executable
-    default_model: str = "claude-sonnet-4-6"
-    permission_mode: str = "bypassPermissions"   # or "askForPermissions"
+`stream_parser.py` is the only place that knows about Claude Code's `stream-json` schema. It consumes JSON events from stdout and emits domain events. Above this boundary, nothing else in Codetoreum knows what shape Claude Code's output takes; everything else consumes `CodingAgent*` events.
 
-    # Output configuration
-    output_format: str = "stream-json"           # or "text"
-    verbose: bool = False
+The parser handles:
+- Non-JSON output lines (progress, stderr leakage) — skip and continue.
+- Truncation of large tool inputs / results — see open question O4 in the design proposal.
+- OTel span lines — emit as `CodingAgentOtlpSpanEvent` rather than forwarding directly to a collector (resolves DEF-014).
 
-    # Execution limits
-    default_timeout_seconds: int = 300           # 5 minutes
-    max_context_tokens: int = 200000
+**3. Prompt renderer is the presentation boundary**
 
-    # Features
-    enable_mcp: bool = True
-    enable_tools: bool = True
-```
+`prompt_renderer.py` takes a `StructuredPrompt` and produces a text string suitable for `claude --print`. It owns the *presentation* of the prompt (header, sections, fenced code, instructions list formatting). It does **not** decide *what* to include — that's the `IPromptBuilder` injected via DI. The split is enforced by an architectural invariant.
 
-Configuration controls CLI path, authentication, model selection, and feature flags.
+**4. Credentials are injected, not embedded**
 
-**3. Multi-turn Conversation Tracking**
-```python
-@dataclass
-class ExecutionContext:
-    """Context for LLM execution."""
-    model: str | None = None                      # Model selection
-    conversation_id: str | None = None            # Unique conversation identifier
-    message_history: tuple[dict, ...] = ()        # Conversation history (immutable)
-    system_prompt: str | None = None              # System instructions
-    timeout_seconds: int = 300                    # Execution timeout
-    working_directory: Path | None = None         # Container working directory
-    environment_variables: dict = {}              # Environment variables
-    mcp_servers: tuple[dict, ...] = ()            # MCP server configurations
-```
+Credentials (`ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`) are passed via the existing `ICredentialProvider` mechanism. The adapter resolves them at `execute()` time and forwards them to the chosen strategy:
+- Containerized strategy injects them into the container env.
+- Host strategy passes them to the subprocess env.
 
-Conversations are tracked via `conversation_id`:
-- Multiple turns supported via `message_history` (preserved message context)
-- Session management handled by Claude CLI with `--session-id` flag
-- Model selection per execution via `model` parameter
-- Container-specific context via `working_directory` and `environment_variables`
+**5. No filesystem-based output extraction**
 
-**4. Tool Execution**
-```python
-@dataclass
-class ToolDefinition:
-    """Definition of a tool available to the LLM."""
-    name: str                           # Tool name (e.g., "create_issue")
-    description: str                    # What this tool does
-    parameters: dict                    # JSON schema for parameters
-
-class Tool:
-    """Actual tool execution handler."""
-    async def execute(self, name: str, args: dict) -> str:
-        """Execute a tool and return result."""
-```
-
-When Claude Code calls a tool:
-1. Adapter receives tool call with name and arguments
-2. Looks up tool handler in application layer
-3. Executes tool and returns result to Claude Code
-4. Claude Code continues conversation with tool result
-
-**5. Streaming Support**
-```python
-async def stream_completion(
-    self,
-    prompt: str,
-    context: ExecutionContext | None = None,
-) -> AsyncIterator[StreamChunk]:
-    """Stream completion tokens as they're generated."""
-    # Builds CLI command with --output-format stream-json
-    # Parses JSON event stream and yields StreamChunk objects
-    async for chunk in self._parse_stream():
-        yield chunk
-```
-
-Streaming allows:
-- Real-time feedback to user (no waiting for full response)
-- Reduced latency perception
-- Efficient handling of long responses
+`/output` directory extraction is **forbidden** (Q7 in the design proposal). Agent execution output flows exclusively through `CodingAgent*` events. The filesystem passes context *in* (read-only source mounts) but never carries context *out*. A crashed agent + lost filesystem must not equal lost execution data.
 
 ### Error Handling Philosophy
 
@@ -156,24 +93,45 @@ Streaming allows:
 
 ## Configuration
 
-### Required Parameters
+### Adapter-level Configuration
+
 ```python
 @dataclass
 class ClaudeCodeConfig:
     # Authentication (secure references)
-    api_key_credential_name: str = "ANTHROPIC_API_KEY"  # Required
-    oauth_token_credential_name: str = "CLAUDE_CODE_OAUTH_TOKEN"  # Alternative
+    api_key_credential_name: str = "ANTHROPIC_API_KEY"
+    oauth_token_credential_name: str = "CLAUDE_CODE_OAUTH_TOKEN"
     credential_provider: ICredentialProvider | None = None
 
     # CLI configuration
-    claude_cli_path: str = "claude"              # Path to CLI executable (required)
-    default_model: str = "claude-sonnet-4-6"
-    permission_mode: str = "bypassPermissions"
-
-    # Features
-    enable_mcp: bool = True
-    enable_tools: bool = True
+    claude_cli_path: str = "claude"              # Path to CLI executable
+    permission_mode: str = "bypassPermissions"   # or "askForPermissions"
 ```
+
+### Per-Execution Configuration (via `CodingAgentInvocationOptions`)
+
+Per-execution settings come from `AgentConfig.invocation` in `bootstrap/rounds.json` and are passed into `execute()` as `CodingAgentInvocationOptions`:
+
+```json
+{
+  "name": "senior_software_engineer",
+  "coding_agent": "claude-code",
+  "invocation": {
+    "mode": "containerized",
+    "model": "claude-sonnet-4-6",
+    "timeout_seconds": 3600,
+    "mode_config": {
+      "image": "codetoreum-agent:latest",
+      "cpu_limit": "2",
+      "memory_limit": "4g"
+    }
+  }
+}
+```
+
+The bootstrap loader validates `coding_agent` resolves to a registered adapter, then validates `invocation.mode` is in `coding_agent.supported_invocation_modes()`. Errors at load, not at first execution.
+
+The `requires_docker` flag is **gone**. Mode lives in the invocation block.
 
 ### Environment Variables
 - `ANTHROPIC_API_KEY`: Anthropic API key (required if using API key auth)
@@ -223,7 +181,7 @@ Claude CLI executable not found at configured path
     ↓
 FileNotFoundError during subprocess execution
     ↓
-raise LLMProviderError("Claude CLI not found at: {path}")
+raise CodingAgentError("Claude CLI not found at: {path}")
 ```
 **Recovery**: Install Claude CLI. Update `claude_cli_path` configuration.
 
@@ -277,190 +235,189 @@ raise RateLimitError()
 ```
 **Recovery**: Implement request queue with rate limiting. Retry after cooldown.
 
-### Conversation Management
-```
-Conversation ID tracked locally, CLI manages session via --session-id
-    ↓
-Session ID persisted in execution metadata
-    ↓
-Subsequent calls with same conversation_id use --session-id
-```
-**Recovery**: Create new conversation (new UUID) if session lost.
+### Rate Limit & API Retry Events
+
+When the parser detects a rate-limit notice or an internal API retry in the `stream-json` output, it emits `CodingAgentRateLimitEvent` or `CodingAgentApiRetryEvent` rather than failing the execution. Adapter-level resilience (circuit breaking, cross-execution throttling) remains an infrastructure concern via `ResilientCodingAgentDecorator` (INV-11). The events provide visibility into the agent's per-execution recovery behaviour for analysis.
 
 ## Testing
 
 ### Unit Tests
-- **CLI subprocess mocking**: Fixture mocks `subprocess.run()` to return canned Claude CLI responses
-- **Configuration validation**: Valid/invalid configs, required parameters
-- **Credential provider mocking**: Test with mocked EnvironmentCredentialProvider and SecureStoreCredentialProvider
-- **Error mapping**: CLI subprocess errors (exit codes, stderr) → port-standard exceptions
-- **Command building**: Verify correct `claude` CLI arguments constructed
-- **Token usage tracking**: Verify token counts extracted from JSON stream output
-- **Conversation state**: Message history, session ID tracking
-- **Streaming support**: Verify JSON stream parsing and StreamChunk generation
+- **`supported_invocation_modes()` contract**: Returns `frozenset({CONTAINERIZED, HOST})`.
+- **Stream parser fixtures**: Captured `stream-json` payloads from real Claude Code runs (we have plenty from prior bootstrap cycles) verify that the parser emits the expected sequence of `CodingAgent*` events. Each fixture asserts the full event ledger.
+- **Strategy tests**: Containerized strategy with a mocked `IContainer`; host strategy with `subprocess.run` mocked. Verify each strategy translates `WorkspaceContext` + rendered prompt + credentials correctly.
+- **Prompt renderer tests**: Golden-file outputs for representative `StructuredPrompt` inputs. Verify the rendered text is stable across runs.
+- **Configuration validation**: Valid/invalid configs; `UnsupportedInvocationModeError` raised when `options.invocation_mode` is outside `supported_invocation_modes()`.
+- **Credential provider mocking**: Test with mocked `EnvironmentCredentialProvider` and `SecureStoreCredentialProvider`.
+- **Error mapping**: CLI exit codes / stderr / parser errors → `CodingAgentError` and friends; verify `error_summary` flows into `CodingAgentCompletedEvent`.
 
-**Location**: `tests/unit/adapters/secondary/test_claude_code_adapter.py`
+**Location**: `tests/unit/adapters/secondary/claude_code/`
 
 ### Integration Tests
-- **Real Claude Code CLI** (with test key): Execute actual prompts via CLI, verify responses
-- **Authentication**: Valid key, invalid key, expired token
-- **Different models**: Test with different available models
-- **Streaming**: Verify streaming output received and parsed correctly
-- **Tool execution**: Define and execute tools via MCP configuration
-- **Rate limiting**: Verify handling of rate limit exit codes
-- **Long conversations**: Multi-turn dialogue via session IDs
+- **Real Claude Code CLI** (with test key): Run host strategy end-to-end against a small toy workspace; verify the `CodingAgent*` event ledger matches the expected shape.
+- **Real Docker** (with test key): Run containerized strategy against `codetoreum-agent:latest`; verify container starts, agent runs, container cleans up.
+- **Authentication**: Valid key, invalid key, expired token; verify error events are emitted rather than silent failures.
+- **Different models**: Verify model selection per `CodingAgentInvocationOptions.model`.
+- **Rate limiting**: Trigger a rate-limit response and verify `CodingAgentRateLimitEvent` is emitted; resilience decorator's behaviour is tested separately.
 
-**Location**: `tests/integration/adapters/secondary/test_claude_code_adapter_integration.py`
+**Location**: `tests/integration/adapters/secondary/claude_code/`
 
 ### Contract Tests
-- Verify ClaudeCodeAdapter implements ILLMProvider fully
-- Shared test suite runs against ClaudeCodeAdapter and MockLLMAdapter
-- Method signatures, exception types, return values
+- Verify `ClaudeCodeAdapter` implements `ICodingAgent` fully (`supported_invocation_modes`, `execute`).
+- Shared test suite runs against `ClaudeCodeAdapter` and `MockClaudeCodeAdapter` (simulation double).
+- Method signatures, exception types, return value shapes (`CodingAgentResult`).
 
-**Location**: `tests/contracts/adapters/test_llm_provider_contract.py`
+**Location**: `tests/contracts/adapters/test_coding_agent_contract.py`
 
 ### Simulation Tests
-- Wrapped in MockLLMAdapter for deterministic testing
-- Scenarios: Prompting, conversations, tool execution, error recovery
-- Verify AgentExecutor uses LLM adapter correctly
+- Use `MockClaudeCodeAdapter` (replaces `MockLLMAdapter`). Deterministic event emission for scenario tests.
+- Scenarios verify the executor → coding-agent → event-bus → completion flow.
 
 **Location**: `tests/simulation/scenarios/`
 
 ### Mocking Strategy
 ```python
-# Test fixture - subprocess mocking
 @pytest.fixture
-def llm_adapter(mocker):
-    # Mock subprocess.run() to return canned Claude CLI output
+def claude_code_adapter(mocker, event_emitter, prompt_builder):
+    # Mock subprocess.run() to feed a canned stream-json payload
+    fixture = load_stream_json_fixture("simple_implementation.jsonl")
     mock_run = mocker.patch("subprocess.run")
     mock_run.return_value = subprocess.CompletedProcess(
-        args=["claude", ...],
+        args=["claude", "--print", "..."],
         returncode=0,
-        stdout='{"type": "text", "text": "Response"}',
+        stdout=fixture,
         stderr=""
     )
 
     config = ClaudeCodeConfig(
         claude_cli_path="claude",
-        default_model="claude-sonnet-4-6",
-        credential_provider=EnvironmentCredentialProvider()
+        credential_provider=EnvironmentCredentialProvider(),
     )
-    return ClaudeCodeAdapter(config)
+    return ClaudeCodeAdapter(
+        config=config,
+        prompt_builder=prompt_builder,
+        event_emitter=event_emitter,
+        container=None,                  # host strategy only in this fixture
+    )
 ```
 
-## Source
+## Source (post-redesign layout)
 
-**File Path**: `src/codetoreum/adapters/secondary/claude_code_adapter.py`
+**Directory**: `src/codetoreum/adapters/secondary/claude_code/`
 
-**Class**: `class ClaudeCodeAdapter(ILLMProvider):`
+**Class**: `class ClaudeCodeAdapter(ICodingAgent):`
+
+**Layout**:
+
+```
+src/codetoreum/adapters/secondary/claude_code/
+├── __init__.py
+├── adapter.py              (ClaudeCodeAdapter implementing ICodingAgent)
+├── strategies/
+│   ├── __init__.py
+│   ├── containerized.py    (uses IContainer)
+│   └── host.py             (subprocess.run)
+├── stream_parser.py        (stream-json → CodingAgent* events)
+└── prompt_renderer.py      (StructuredPrompt → claude --print text)
+```
 
 **Related Files**:
-- Port interface: `src/codetoreum/ports/output/llm_provider.py` (ILLMProvider)
+- Port interface: `src/codetoreum/ports/output/coding_agent.py` (`ICodingAgent`, `InvocationMode`, `CodingAgentInvocationOptions`, `CodingAgentResult`)
+- Prompt builder port: `src/codetoreum/ports/output/prompt_builder.py` (`IPromptBuilder`, `StructuredPrompt`)
+- Events: `src/codetoreum/domain/events/coding_agent_events.py`
 - Configuration: `src/codetoreum/config/claude_config.py`
-- Credential providers: `src/codetoreum/adapters/secondary/claude_code_adapter.py` (ICredentialProvider)
-- Domain types: `src/codetoreum/domain/types.py`
+- Credential providers: `src/codetoreum/adapters/secondary/claude_code/credentials.py` (`ICredentialProvider`)
 - Bootstrap wiring: `src/codetoreum/infrastructure/simulation/bootstrap.py` (Simulation), `documentation/implementations/production-bootstrap.md` (Production)
-- Tests: `tests/unit/adapters/secondary/test_claude_code_adapter.py`
+- Tests: `tests/unit/adapters/secondary/claude_code/`
 
 ## Diagram
 
 ```mermaid
 classDiagram
-    class ILLMProvider {
+    class ICodingAgent {
         <<interface>>
-        +execute(prompt: str, context: ExecutionContext, callback: StreamCallback) ExecutionResult
-        +execute_with_tools(prompt: str, tools: list[ToolDefinition], context: ExecutionContext) ExecutionResult
-        +stream_completion(prompt: str, context: ExecutionContext) AsyncIterator[StreamChunk]
-        +create_conversation(system_prompt: str) str
-        +continue_conversation(conversation_id: str, message: str) ExecutionResult
-        +get_model_info() ModelInfo
-        +count_tokens(text: str) int
+        +supported_invocation_modes() frozenset[InvocationMode]
+        +execute(execution: AgentExecution, workspace_context: WorkspaceContext, options: CodingAgentInvocationOptions) CodingAgentResult
     }
 
     class ClaudeCodeAdapter {
         -config: ClaudeCodeConfig
+        -prompt_builder: IPromptBuilder
+        -event_emitter: IEventEmitter
+        -container: IContainer
         -credential_provider: ICredentialProvider
-        -_conversations: dict[str, dict]
-        -_usage_stats: dict
-        +execute(prompt: str, context: ExecutionContext, callback: StreamCallback) ExecutionResult
-        +execute_with_tools(prompt: str, tools: list[ToolDefinition], context: ExecutionContext) ExecutionResult
-        +stream_completion(prompt: str, context: ExecutionContext) AsyncIterator[StreamChunk]
-        +create_conversation(system_prompt: str) str
-        +continue_conversation(conversation_id: str, message: str) ExecutionResult
-        +get_model_info() ModelInfo
-        +count_tokens(text: str) int
-        -_build_command(prompt: str, context: ExecutionContext) list[str]
-        -_parse_stream_output(process: subprocess.Popen) AsyncIterator[StreamChunk]
-        -_handle_subprocess_error(exit_code: int, stderr: str) Exception
+        +supported_invocation_modes() frozenset[InvocationMode]
+        +execute(execution, workspace_context, options) CodingAgentResult
+        -_select_strategy(mode: InvocationMode) Strategy
     }
 
-    class ICredentialProvider {
+    class ContainerizedStrategy {
+        -container: IContainer
+        +run(command, env, workspace) AsyncIterator[str]
+    }
+
+    class HostStrategy {
+        +run(command, env, workspace) AsyncIterator[str]
+    }
+
+    class StreamParser {
+        +parse(lines: AsyncIterator[str], execution_id: str) AsyncIterator[CodetoreumEvent]
+    }
+
+    class PromptRenderer {
+        +render(prompt: StructuredPrompt) str
+    }
+
+    class IPromptBuilder {
         <<interface>>
-        +get_credential(key: str) str | None
+        +build(agent, work_item, workspace_context, prior_outputs) StructuredPrompt
     }
 
-    class EnvironmentCredentialProvider {
-        +get_credential(key: str) str | None
+    class CodingAgentResult {
+        success: bool
+        summary_text: str
+        total_cost_usd: Decimal
+        total_input_tokens: int
+        total_output_tokens: int
+        tool_call_count: int
+        duration_ms: int
+        error_summary: str | None
     }
 
-    class SecureStoreCredentialProvider {
-        +get_credential(key: str) str | None
+    class IEventEmitter {
+        <<interface>>
+        +emit(event_type, event)
     }
 
-    class ExecutionContext {
-        model: str | None
-        conversation_id: str | None
-        message_history: tuple[dict, ...]
-        system_prompt: str | None
-        timeout_seconds: int
-        working_directory: Path | None
-        environment_variables: dict
-        mcp_servers: tuple[dict, ...]
-    }
-
-    class ExecutionResult {
-        content: str
-        role: str
-        tool_calls: tuple[ToolCall, ...]
-        completion_tokens: int
-        prompt_tokens: int
-        total_tokens: int
-        finish_reason: str
-        conversation_id: str | None
-    }
-
-    class ClaudeCodeCLI {
-        +execute(args: list[str]) CompletedProcess
-        +stream(args: list[str], prompt: str) AsyncIterator[str]
-    }
-
-    ILLMProvider <|-- ClaudeCodeAdapter: implements
-    ClaudeCodeAdapter --> ICredentialProvider: uses
-    ClaudeCodeAdapter --> EnvironmentCredentialProvider: can use
-    ClaudeCodeAdapter --> SecureStoreCredentialProvider: can use
-    ClaudeCodeAdapter --> ExecutionContext: receives
-    ClaudeCodeAdapter --> ExecutionResult: returns
-    ClaudeCodeAdapter --> ClaudeCodeCLI: subprocess calls
+    ICodingAgent <|-- ClaudeCodeAdapter: implements
+    ClaudeCodeAdapter --> ContainerizedStrategy: uses (CONTAINERIZED mode)
+    ClaudeCodeAdapter --> HostStrategy: uses (HOST mode)
+    ClaudeCodeAdapter --> StreamParser: parses output
+    ClaudeCodeAdapter --> PromptRenderer: renders prompt
+    ClaudeCodeAdapter --> IPromptBuilder: injected via DI
+    ClaudeCodeAdapter --> IEventEmitter: emits CodingAgent* events
+    ClaudeCodeAdapter --> CodingAgentResult: returns
 ```
 
 ## Production vs. Mock Comparison
 
-| Aspect | Production (ClaudeCodeAdapter) | Mock (MockLLMAdapter) |
+| Aspect | Production (`ClaudeCodeAdapter`) | Mock (`MockClaudeCodeAdapter`) |
 |---|---|---|
-| **External System** | Claude Code CLI subprocess | In-memory responses |
-| **Latency** | 1-30 seconds (depends on prompt/model) | <1ms |
-| **Determinism** | No (depends on model output) | Yes (deterministic) |
-| **Capabilities** | Full Claude Code CLI capabilities (MCP, tools, streaming) | Configurable mock responses |
-| **Dependencies** | Claude Code CLI installed, API credentials, network | None |
-| **Token Usage** | Real (parsed from JSON output stream) | Simulated/configurable |
-| **Error Handling** | Real CLI/API errors + exit codes + resilience patterns | Configurable mock errors |
+| **External System** | Claude Code CLI subprocess (containerized or host) | In-memory event emission |
+| **Latency** | 1-30 minutes (autonomous agent loop) | <1ms |
+| **Determinism** | No (depends on agent decisions) | Yes (deterministic event ledger) |
+| **Capabilities** | Full Claude Code CLI (file edits, bash, tool use, multi-step) | Configurable canned `CodingAgent*` event sequence |
+| **Dependencies** | Claude CLI binary, API credentials, optional Docker daemon | None |
+| **Token Usage** | Real (parsed from `stream-json` and emitted as `CodingAgentTokensUsedEvent`) | Simulated/configurable |
+| **Error Handling** | Real CLI/API errors + exit codes + resilience decorator | Configurable mock errors |
 | **Use Case** | Production, staging | Testing, development, CI/CD |
 | **Cost** | Per-token pricing (via Anthropic) | Free (simulated) |
 
 ## Cross-References
 
-- **Port Interface**: [ILLMProvider](../ports/output/core-system.md#illmprovider) - Complete interface specification
-- **Related Adapters**: [Systemic Analysis Adapter](./infrastructure-adapters.md#llmsystemicanalysisadapter-isystemicanalysisservice) - LLM-based analysis
-- **Infrastructure**: [Resilience Patterns](../infrastructure/resilience.md) - Rate limiting, retry, circuit breaker
-- **Simulation**: [MockLLMAdapter](../../../implementations/simulation/adapters.md#output-port-adapters) - Test alternative
-- **Domain Models**: [ExecutionResult](../domain/models.md) - Execution result structure
+- **Port Interface**: [ICodingAgent](../ports/output/core-system.md#icodingagent) — Complete interface specification
+- **Prompt Builder Port**: [IPromptBuilder](../ports/output/domain-services.md#ipromptbuilder) — Structured prompt assembly
+- **Event Catalog**: [Coding Agent Context](../domain/events.md#coding-agent-context) — Full `CodingAgent*` event family
+- **Infrastructure**: [Resilience Patterns](../infrastructure/resilience.md) — Rate limiting, retry, circuit breaker via `ResilientCodingAgentDecorator`
+- **Observability**: [Distributed Tracing](../infrastructure/observability.md#distributed-tracing) — OTel routing via event bus
+- **Simulation**: [MockClaudeCodeAdapter](../../../implementations/simulation/adapters.md#output-port-adapters) — Test alternative
+- **Design**: `~/.claude/plans/coding-agent-port-redesign.md` — Full redesign proposal

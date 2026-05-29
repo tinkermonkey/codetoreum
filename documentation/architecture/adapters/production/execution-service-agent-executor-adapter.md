@@ -48,29 +48,27 @@ The `_task_done_callback` surfaces any unhandled exception from `_run_execution`
 | 7 | Build `ExecutionContext` via `ExecutionContextBuilder` | N/A (pure domain, no I/O) |
 | 8 | Create execution record via `ExecutionService.create_execution()` | `ERR_EXEC_CHAIN_CREATE_EXECUTION_FAILURE` |
 | 9 | Start execution via `ExecutionService.start_execution()` | `ERR_EXEC_CHAIN_EXECUTION_START_FAILURE` |
-| 10 | Execute via LLM or Container path (based on `agent.requires_docker`) | `ERR_EXEC_CHAIN_EXECUTION_FAILURE` |
+| 10 | Execute via `ExecutionService.execute(execution, workspace_context, options)` | `ERR_EXEC_CHAIN_EXECUTION_FAILURE` |
 | 11 | Finalize workspace via `WorkspaceRouter.finalize_workspace()` | `ERR_EXEC_CHAIN_FINALIZE_FAILURE` |
 
 Step 11 always runs (even after execution failure) to avoid a stuck workspace state.
 
-### LLM vs. Container Dispatch
+### Invocation Dispatch (post-redesign)
 
-Step 10 routes based on `agent.requires_docker`:
+Step 10 **no longer branches on `agent.requires_docker`**. Invocation mode comes from `AgentConfig.invocation.mode` and is delegated to the coding agent adapter. `ExecutionService` calls `ExecutionService.execute(execution, workspace_context, options)` once; the adapter chooses its strategy (containerized / host / API) based on `options.invocation_mode`:
 
 ```python
-if agent.requires_docker:
-    container_config = ContainerConfig(
-        image="codetoreum-agent:latest",
-        working_dir="/workspace",
-    )
-    exec_result = await self._execution_service.execute_with_container(
-        execution, context, container_config
-    )
-else:
-    exec_result = await self._execution_service.execute_with_llm(execution, context)
+options = CodingAgentInvocationOptions(
+    invocation_mode=agent_config.invocation.mode,   # containerized / host / api
+    model=agent_config.invocation.model,
+    timeout_seconds=agent_config.invocation.timeout_seconds,
+    cost_limit_usd=agent_config.invocation.cost_limit_usd,
+    mode_config=agent_config.invocation.mode_config,
+)
+exec_result = await self._execution_service.execute(execution, workspace_context, options)
 ```
 
-The LLM path is the default. The container path is reserved for agents that require Docker isolation.
+The orchestrator validates `options.invocation_mode in coding_agent.supported_invocation_modes()` at config-load time, not at first execution. The `requires_docker` flag is gone. See `~/.claude/plans/coding-agent-port-redesign.md` §3a/§3h for the full redesign.
 
 ### `ProjectContext` Construction
 
@@ -250,7 +248,7 @@ Finally block clears registry and branch tracker
 ### Unit Tests
 - **Execution chain steps**: Mock each dependency individually; verify correct method calls and argument passing for each of the 11 steps
 - **Step failure isolation**: For each step, simulate failure and verify the chain halts, completion callback is called with `success=False`, and later steps are not invoked
-- **LLM vs. Container dispatch**: Verify `requires_docker=True` routes to `execute_with_container()` and `False` routes to `execute_with_llm()`
+- **Invocation dispatch**: Verify the executor passes `AgentConfig.invocation.mode` into `CodingAgentInvocationOptions` and that `ExecutionService.execute()` receives the expected `WorkspaceContext` and options for each supported invocation mode
 - **Completion callback**: Verify callback invoked with correct `(work_item_id, board_id, success)` args after both success and failure paths
 - **Recovery service delegation**: Simulate callback failure; verify `AgentExecutionRecoveryService.handle_completion_callback_failure()` is called
 - **Watchdog integration**: Verify `get_active_executions()` returns `ActiveExecutionInfo` with correct `timeout_seconds` from agent
@@ -260,7 +258,7 @@ Finally block clears registry and branch tracker
 **Location**: `tests/unit/adapters/secondary/test_execution_service_agent_executor.py`
 
 ### Integration Tests
-- **Full chain with real services**: Wire with `InMemoryEventStore`, `MockLLMAdapter`, `FakeContainerAdapter`, `MockBoardAdapter` and run a complete execution
+- **Full chain with real services**: Wire with `InMemoryEventStore`, `MockClaudeCodeAdapter` (the simulation double for `ICodingAgent`; replaces the prior `MockLLMAdapter`), `FakeContainerAdapter`, `MockBoardAdapter` and run a complete execution
 - **Board progression**: Verify completion callback triggers column transition
 - **Timeout watchdog integration**: Start an execution with a short timeout; verify watchdog cancels it and completion callback fires
 - **Concurrent executions**: Launch multiple executions concurrently; verify `_active_executions` tracks all and cleans up correctly

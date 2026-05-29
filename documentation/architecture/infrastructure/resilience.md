@@ -173,12 +173,13 @@ class ResilienceFactory:
     ) -> ResilientTicketSystemDecorator:
         """Wrap ticket system with resilience."""
 
-    def create_resilient_llm_provider(
+    def create_resilient_coding_agent(
         self,
-        adapter: ILLMProvider,
+        adapter: ICodingAgent,
         service_config: ServiceResilienceConfig | None = None,
-    ) -> ResilientLLMProviderDecorator:
-        """Wrap LLM provider with resilience."""
+    ) -> ResilientCodingAgentDecorator:
+        """Wrap coding agent with resilience (replaces the prior
+        create_resilient_llm_provider factory; see DEF-015)."""
 
     def create_resilient_board_service(
         self,
@@ -426,7 +427,7 @@ Service receives: WorkItem (retries transparent)
 
 1. **decorators.py** — Resilient decorator implementations
    - `ResilientTicketSystemDecorator` — Wraps ITicketSystem
-   - `ResilientLLMProviderDecorator` — Wraps ILLMProvider
+   - `ResilientCodingAgentDecorator` — Wraps ICodingAgent (replaces the prior `ResilientLLMProviderDecorator`)
    - `ResilientBoardServiceDecorator` — Wraps IBoardService
    - `ResilientDiscussionAdapterDecorator` — Wraps IDiscussionAdapter
 

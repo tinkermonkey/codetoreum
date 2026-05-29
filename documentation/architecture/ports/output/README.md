@@ -6,12 +6,12 @@ Output ports define outbound contracts — dependencies on external systems that
 
 Output ports are organized by functional domain and responsibility:
 
-1. **core-system.md** — ITicketSystem, IVersionControlService, IContainer, ILLMProvider, IRepository
+1. **core-system.md** — ITicketSystem, IVersionControlService, IContainer, ICodingAgent, IRepository
    - Fundamental external dependencies
    - Ticket/issue management (GitHub, Jira, Linear, etc.)
    - Version control operations (Git)
    - Container runtime (Docker)
-   - Language model providers (Claude Code, GPT-4, etc.)
+   - Coding agents (Claude Code, GitHub Copilot, Codex, etc.) — replaces the historical `ILLMProvider`
    - Generic repository operations
 
 2. **board-management.md** — IBoardService, IPipelineLockService, IPipelineQueueService
@@ -30,16 +30,16 @@ Output ports are organized by functional domain and responsibility:
    - Workflow configuration persistence
    - Workflow execution orchestration
 
-5. **infrastructure-services.md** — IEventEmitter, IEventStore, IFailedEventStore, IStorage, IMetrics, ITracer, IMonitoredService, IMessageBroker
+5. **infrastructure-services.md** — IEventEmitter, IEventStore, IFailedEventStore, IMetrics, ITracer, IMonitoredService, IMessageBroker
    - Event publication and persistence
    - Failed event handling
-   - Artifact storage (logs, reports, outputs)
    - Metrics collection
-   - Distributed tracing (OpenTelemetry)
+   - Distributed tracing (OpenTelemetry) — agent-side spans route via `CodingAgentOtlpSpanEvent` rather than being exported direct from agent containers
    - Service monitoring lifecycle
    - Asynchronous messaging
+   - (Note: `IStorage` retired as part of the coding-agent port redesign; agent output flows through `CodingAgent*` events instead.)
 
-6. **domain-services.md** — IAgentExecutor, IAgentRepository, IConfigStore, IEncryptionService, IIdentityService, INotifier
+6. **domain-services.md** — IAgentExecutor, IAgentRepository, IConfigStore, IEncryptionService, IPromptBuilder, IIdentityService, INotifier
    - Agent execution context and I/O
    - Agent metadata persistence
    - System configuration storage

@@ -129,7 +129,7 @@ sequenceDiagram
 **Port Dependencies**:
 - [`IDiscussionAdapter`](../ports/output/code-review.md) — Read/write discussion comments
 - [`IBoardService`](../ports/output/board-management.md) — Move items between columns
-- [`ILLMProvider`](../ports/output/core-system.md) — Generate agent responses
+- [`ICodingAgent`](../ports/output/core-system.md#icodingagent) — Generate agent responses (replaces the prior `ILLMProvider` dependency; if a more focused conversational shape is needed later, a dedicated port will be added then)
 - [`IEventEmitter`](../ports/output/infrastructure-services.md) — Publish events
 
 **Domain Dependencies**:
@@ -286,101 +286,115 @@ MultiProjectOrchestrator  — polls all enabled projects every 30s
 
 **File**: `src/codetoreum/application/execution_service.py`
 
-**Responsibility**: Manages complete agent execution lifecycle from initialization through completion or failure.
+**Responsibility**: Manages workflow-level agent execution lifecycle. Delegates the actual agent work to an `ICodingAgent` adapter; owns the workflow-level events that bookend the agent's run and the commit-on-success step.
 
-**Purpose**: Orchestrates agent execution by creating execution records, starting runs, invoking LLM or container execution, capturing output, and handling failures.
+**Purpose**: Orchestrates execution by creating execution records, starting runs, delegating to the coding agent adapter, capturing the result, committing the workspace on success, and emitting workflow lifecycle events. The service no longer owns container concepts, log streaming, artifact upload, or token parsing — those moved into the coding-agent adapter and the event taxonomy.
 
-**Port Dependencies**:
-- [`ILLMProvider`](../ports/output/core-system.md) — Execute LLM-based agents
-- [`IContainer`](../ports/output/core-system.md) — Execute containerized agents
-- [`IRepository`](../ports/output/core-system.md) — Access code repositories
-- [`IStorage`](../ports/output/infrastructure-services.md) — Store execution artifacts
+**Port Dependencies (post-redesign)**:
+- [`ICodingAgent`](../ports/output/core-system.md#icodingagent) — Run the coding agent. **Single source of agent execution.** Replaces the prior `ILLMProvider` + `IContainer` pair on this service.
+- [`IVersionControlService`](../ports/output/core-system.md) — Used by `_commit_workspace` to commit + push the agent's filesystem changes
 - [`IEventStore`](../ports/output/infrastructure-services.md) — Persist execution records
 - [`IEventEmitter`](../ports/output/infrastructure-services.md) — Publish events
 
+Notably **no longer depended on** by this service: `IContainer` (now an adapter-internal concern of containerized strategies inside coding agent adapters), `IStorage` (retired entirely).
+
 **Domain Dependencies**:
 - `AgentExecution` aggregate
-- `ExecutionOutput` value object
-- Domain events: `ExecutionInitialized`, `ExecutionStarted`, `ExecutionCompleted`, `ExecutionFailed`, `ExecutionTimeout`
+- `CodingAgentResult` value object (returned by `ICodingAgent.execute()`)
+- `ExecutionServiceResult` value object (this service's return shape)
+- Domain events: `ExecutionInitializedEvent`, `ExecutionStartedEvent`, `ExecutionCompletedEvent`, `ExecutionFailedEvent`, `ExecutionCancelledEvent`, `ExecutionTimedOutEvent`
 
 **Service Dependencies**:
-- `ContextBuilder` — Prepare execution contexts
-- `WorkspaceRouter` — Route to workspace
+- `WorkspaceRouter` — Produce a `WorkspaceContext` value object (logical, not container-shaped)
 
-**Key Methods**:
+**Key Methods (post-redesign)**: Roughly 5–8 methods total, down from 27+.
 
 ```python
 async def create_execution(
     self,
     agent_id: str,
     work_item_id: str,
-    context: ExecutionContext,
+    context: WorkspaceContext,
 ) -> AgentExecution:
-    """Initialize new execution record."""
+    """Initialize new execution record. Emits ExecutionInitializedEvent."""
 
 async def start_execution(
     self,
     execution_id: str,
 ) -> AgentExecution:
-    """Begin execution workflow."""
+    """Mark execution as running. Emits ExecutionStartedEvent."""
 
-async def execute_with_llm(
+async def execute(
     self,
-    execution_id: str,
+    execution: AgentExecution,
+    context: WorkspaceContext,
+    options: CodingAgentInvocationOptions,
 ) -> ExecutionServiceResult:
-    """Run execution with LLM inference."""
+    """Delegate to coding_agent.execute(); on success commit the
+    workspace; emit ExecutionCompletedEvent or ExecutionFailedEvent.
 
-async def execute_with_container(
-    self,
-    execution_id: str,
-) -> ExecutionServiceResult:
-    """Run execution in container."""
+    The coding agent emits its own CodingAgent* events during the
+    run; ExecutionService consumes only the final CodingAgentResult
+    (returned synchronously) plus the workflow-level lifecycle
+    events it emits itself.
+    """
 
 async def cancel_execution(
     self,
     execution_id: str,
 ) -> AgentExecution:
-    """Terminate active execution."""
+    """Terminate active execution. Emits ExecutionCancelledEvent."""
 
-async def get_execution_logs(
+async def _commit_workspace(
     self,
-    execution_id: str,
-) -> list[LogEntry]:
-    """Retrieve execution output logs."""
-
-async def stream_execution_logs(
-    self,
-    execution_id: str,
-) -> AsyncIterator[LogEntry]:
-    """Stream logs in real-time."""
+    execution: AgentExecution,
+) -> None:
+    """Internal: take the agent's filesystem changes and turn them
+    into a commit + push via the IVersionControlService adapter."""
 ```
+
+**Removed methods** (relative to the prior 27+ method shape):
+
+- `execute_with_container`
+- `execute_with_llm`
+- `_build_agent_container_config`
+- `_extract_token_usage`
+- `_persist_execution_logs`
+- `_extract_and_upload_artifacts`
+- `_stream_container_logs`
+- `_stream_logs_done_callback`
+- `_cleanup_container_with_retry`
+- `_build_container_labels`
+- `subscribe_to_logs` / `unsubscribe_from_logs` / `get_execution_logs` / `stream_execution_logs`
+
+All token extraction, log streaming, artifact upload, container build, and container cleanup logic either moved into the coding-agent adapter (where the invocation strategy owns its runtime concerns) or was retired (e.g., `/output` extraction, log subscription APIs). Agent behaviour is now visible through the `CodingAgent*` event taxonomy rather than through service-side log-streaming APIs.
 
 **Events Emitted**:
 - `ExecutionInitializedEvent` — Execution record created
 - `ExecutionStartedEvent` — Execution began running
-- `ExecutionCompletedEvent` — Execution finished successfully
+- `ExecutionCompletedEvent` — Execution finished successfully (after `_commit_workspace`)
 - `ExecutionFailedEvent` — Execution encountered error
-- `ExecutionTimeoutEvent` — Execution exceeded timeout
+- `ExecutionCancelledEvent` — Execution cancelled before completion
+- `ExecutionTimedOutEvent` — Execution exceeded timeout
 
-**Error Handling**: Validates all inputs. Retries transient errors with exponential backoff. If cleanup fails, logs error but completes execution. Captures all output before failure.
+The `CodingAgent*` event family (tool calls, text outputs, thinking, rate limits, OTel spans, tokens used) is emitted by the coding-agent adapter, not by `ExecutionService`. See [events.md → Coding Agent Context](../domain/events.md#coding-agent-context).
+
+**Error Handling**: Validates all inputs. Coding-agent errors propagate as `ExecutionFailedEvent` (with the `CodingAgentResult.error_summary` in the event payload). If `_commit_workspace` fails after a successful agent run, the execution is reported failed and the failure is logged with `exc_info=True`.
 
 **Workflow**:
 
 ```mermaid
 flowchart TD
-    A[create_execution] --> B[Initialize execution record]
-    B --> C[Emit ExecutionInitializedEvent]
-    C --> D{Execution type?}
-    D -->|LLM| E[execute_with_llm]
-    D -->|Container| F[execute_with_container]
-    E --> G[Invoke LLM provider]
-    F --> H[Invoke container]
-    G --> I{Success?}
-    H --> I
-    I -->|Yes| J[Emit ExecutionCompletedEvent]
-    I -->|No| K[Emit ExecutionFailedEvent]
-    J --> L[Return result]
-    K --> L
+    A[create_execution] --> B[Emit ExecutionInitializedEvent]
+    B --> C[start_execution: Emit ExecutionStartedEvent]
+    C --> D[execute: delegate to ICodingAgent.execute]
+    D --> D2[Coding agent emits CodingAgent* events<br/>tool calls, text, thinking, tokens, etc.]
+    D2 --> E{CodingAgentResult.success?}
+    E -->|Yes| F[_commit_workspace via IVersionControlService]
+    F --> G[Emit ExecutionCompletedEvent]
+    E -->|No| H[Emit ExecutionFailedEvent]
+    G --> L[Return ExecutionServiceResult]
+    H --> L
 ```
 
 #### 6. AgentScheduler
@@ -439,10 +453,11 @@ async def dequeue_next(self) -> Task | None:
 
 **Purpose**: Creates the contextual information (issue details, code snippets, previous output) that agents need for execution.
 
+> **Status after the D-series rewrite**: With prompt assembly extracted into the new [`IPromptBuilder`](../ports/output/domain-services.md#ipromptbuilder) port, ContextBuilder's surface narrows toward work-item details and code retrieval; prompt-shaped context now flows through `StructuredPrompt`. The exact remaining scope is finalised in Phase D2 when `DefaultPromptBuilder` lands.
+
 **Port Dependencies**:
 - [`ITicketSystem`](../ports/output/core-system.md) — Fetch work item details
 - [`IRepository`](../ports/output/core-system.md) — Retrieve code snippets
-- [`IStorage`](../ports/output/infrastructure-services.md) — Store context files
 
 **Domain Dependencies**:
 - `ExecutionContext` aggregate
@@ -489,41 +504,53 @@ async def cleanup_workspace(
 
 **File**: `src/codetoreum/application/workspace_router.py`
 
-**Responsibility**: Routes execution requests to appropriate workspace handlers and manages file mounting.
+**Responsibility**: Produces a `WorkspaceContext` value object describing the workspace *logically* — host-side path, branch, work-item identity, project env vars, code-change permission. Adapter-internal concerns (container env dicts, container volumes, working-directory translations) are no longer part of this service.
 
-**Purpose**: Dispatches executions to workspace implementations and manages container context preparation.
+**Purpose**: Routes execution requests to the right workspace and produces a vendor-agnostic `WorkspaceContext`. Coding-agent adapters consume the context and translate to their runtime concerns (env dict for containerized, working-directory for host, request body for API). No container vocabulary leaks into the application layer.
 
 **Port Dependencies**:
-- [`IContainer`](../ports/output/core-system.md) — Manage container workspaces
-- [`IStorage`](../ports/output/infrastructure-services.md) — Store workspace state
+- [`IVersionControlService`](../ports/output/core-system.md) — Branch + workspace setup
+- [`IBranchResolutionService`](../ports/output/domain-services.md) — Branch name computation
+
+Notably **no longer depended on** by this service: `IContainer` (became an adapter-internal concern of containerized strategies), `IStorage` (retired entirely).
 
 **Service Dependencies**:
-- `ContextBuilder` — Prepare contexts
 - `ExecutionService` — Access execution details
 
-**Key Methods**:
+**Key Methods (post-redesign)**:
 
 ```python
 async def prepare_workspace(
     self,
     execution_id: str,
-    context: ExecutionContext,
-) -> WorkspacePreparationResult:
-    """Prepare container workspace."""
+    work_item: WorkItem,
+    agent: Agent,
+) -> WorkspaceContext:
+    """Produce a logical WorkspaceContext value object:
+
+        WorkspaceContext(
+            project_id, work_item_id, workspace_path, branch_name,
+            workspace_type, allow_code_changes, git_author,
+            project_env_vars,
+        )
+
+    Adapters translate the context to their runtime shape.
+    """
 
 async def finalize_workspace(
     self,
     execution_id: str,
 ) -> WorkspaceFinalizationResult:
     """Clean up workspace after execution."""
-
-async def mount_files(
-    self,
-    workspace_id: str,
-    files: list[ContextFile],
-) -> None:
-    """Mount context files into container."""
 ```
+
+**Removed methods** (relative to the prior shape):
+
+- `prepare_container_environment` — Container env dict construction moved into containerized invocation strategies inside `ClaudeCodeAdapter` (and equivalents in future adapters).
+- `prepare_container_volumes` — Same: moved into adapter-internal containerized strategies.
+- `mount_files` — Adapter-internal concern of the containerized strategy.
+
+These methods leaked container-runtime vocabulary (env dicts, volume mounts) into the application layer. After the redesign, `WorkspaceContext` exposes only the logical fields the adapter actually needs to reason about; how those translate to a container, a subprocess working-directory, or an HTTP request body is the adapter's choice.
 
 ---
 
@@ -611,7 +638,7 @@ async def get_review_status(
 **Purpose**: Converts reviewer comments into structured feedback that maker agents can action.
 
 **Port Dependencies**:
-- [`IStorage`](../ports/output/infrastructure-services.md) — Store parsed feedback
+- [`IEventStore`](../ports/output/infrastructure-services.md) — Persist parsed-feedback events (the prior `IStorage` dependency retires with the redesign; structured feedback lives inside domain events going forward)
 
 **Key Methods**:
 
@@ -1292,15 +1319,18 @@ async def handle_issue_opened(
 - **IEventStore** — 5 services (ExecutionService, WorkItemService, WorkflowRunQueryService, EventSequenceValidator, RepairCycleCIIntegration)
 - **IEventEmitter** — All 23 services (publish domain events)
 - **ITicketSystem** — 5 services (WorkflowOrchestrator, ContextBuilder, WorkItemService, ReviewService, FeedbackProcessor)
-- **ILLMProvider** — 2 services (ExecutionService, ConversationalLoopOrchestrator)
-- **IContainer** — 3 services (ExecutionService, WorkspaceRouter, ContainerRecoveryService)
-- **IRepository** — 2 services (ContextBuilder, ExecutionService)
-- **IStorage** — 5 services (ExecutionService, ContextBuilder, WorkspaceRouter, FeedbackProcessor, MetricsService)
+- **ICodingAgent** — 1 service (ExecutionService). *Replaces the prior `ILLMProvider` + `IContainer` pair on ExecutionService.* `ConversationalLoopOrchestrator`'s prior `ILLMProvider` dependency is retired with the redesign; future conversational use cases will be re-evaluated against `ICodingAgent` or a focused conversational port.
+- **IPromptBuilder** — 1 service (ExecutionService chain — injected into the coding-agent adapter via DI; reachable from any service that drives an `ICodingAgent` invocation).
+- **IContainer** — 1 service (ContainerRecoveryService). *Was previously also used by `ExecutionService` and `WorkspaceRouter`; both no longer depend on it after the redesign — container concerns are encapsulated inside coding-agent adapters' containerized invocation strategies.*
+- **IRepository** — 1 service (ContextBuilder). *`ExecutionService` no longer depends on it directly; the commit step uses `IVersionControlService`.*
+- **IVersionControlService** — 2 services (ExecutionService for `_commit_workspace`, WorkspaceRouter for branch setup)
 - **ICodeReviewService** — 1 service (ReviewService)
 - **IDiscussionAdapter** — 2 services (ConversationalLoopOrchestrator, ReviewService)
 - **IConfigStore** — ConfigurationService
 - **IMetrics** — MetricsService
 - **ILockStore** — PipelineLockService
+
+> `IStorage` is removed from the port set entirely — see [`infrastructure-services.md`](../ports/output/infrastructure-services.md) design note.
 
 ### Input Port Dependencies
 
@@ -1356,7 +1386,7 @@ ExecutionFailedEvent
 ```
 CommentNeedsResponseEvent
   → ConversationalLoopOrchestrator.handle_comment_event()
-    → ILLMProvider (generate response)
+    → ICodingAgent (generate response; replaces prior ILLMProvider edge)
       → AgentResponsePostedEvent
         → WorkflowOrchestrator (advance if approved)
 ```

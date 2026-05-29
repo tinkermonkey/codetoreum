@@ -151,8 +151,9 @@ This mapping ensures that every adapter is documented and traceable to its port(
 
 **Testing Adapters** (Simulation and Unit Testing):
 - `InMemoryEventStore`
-- `InMemoryStorage`
 - `MockBoardAdapter`
 - `MockContainerAdapter`
-- `MockLLMAdapter`
+- `MockClaudeCodeAdapter` (replaces the prior `MockLLMAdapter`)
 - ~25+ total mock/in-memory adapters for comprehensive simulation testing
+
+> `InMemoryStorage` retires with the `IStorage` port — see the coding-agent port redesign (DEF-015 in `bootstrap/ARCHITECTURE.md`).

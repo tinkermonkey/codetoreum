@@ -22,7 +22,7 @@ Implementations connecting to real external systems used in production:
 - **github-ticket-adapter.md** - GitHub Issues for work item management (ITicketSystem)
 - **github-code-review-adapter.md** - GitHub PRs for code review workflows (ICodeReviewService)
 - **docker-container-adapter.md** - Docker for containerized agent execution (IContainer)
-- **claude-code-adapter.md** - Claude Code API for LLM operations (ILLMProvider)
+- **claude-code-adapter.md** - Claude Code CLI for autonomous coding agent operations (ICodingAgent; replaces the historical ILLMProvider)
 - **git-repository-adapter.md** - Git operations and version control (IRepository)
 - **infrastructure-adapters.md** - Event stores, config storage, metrics, and messaging
 
@@ -46,7 +46,11 @@ src/codetoreum/adapters/
 ├── secondary/                      # Outbound adapters
 │   ├── github_*.py                # GitHub integrations (6 adapters)
 │   ├── docker_*.py                # Docker integrations (2 adapters)
-│   ├── claude_code_adapter.py    # LLM provider
+│   ├── claude_code/                # Coding agent adapter (ICodingAgent)
+│   │   ├── adapter.py
+│   │   ├── strategies/
+│   │   ├── stream_parser.py
+│   │   └── prompt_renderer.py
 │   ├── git_repository_adapter.py # Version control
 │   ├── elasticsearch_*.py         # Event store and config (2 adapters)
 │   ├── prometheus_*.py            # Metrics collection
@@ -65,12 +69,14 @@ src/codetoreum/adapters/
 | Port Interface | Production Adapter | Simulation Adapter |
 |---|---|---|
 | `ITicketSystem` | GitHubTicketAdapter | InMemoryTicketAdapter |
-| `ILLMProvider` | ClaudeCodeAdapter | MockLLMAdapter |
+| `ICodingAgent` | ClaudeCodeAdapter | MockClaudeCodeAdapter |
+| `IPromptBuilder` | DefaultPromptBuilder | DefaultPromptBuilder (same impl; deterministic given inputs) |
 | `IContainer` | DockerContainerAdapter | FakeContainerAdapter |
 | `IRepository` | GitRepositoryAdapter | InMemoryRepositoryAdapter |
 | `IEventStore` | ElasticsearchEventStore | InMemoryEventStore |
-| `IStorage` | FileSystemStorageAdapter | InMemoryStorageAdapter |
 | `IConfigStore` | ElasticsearchConfigStorage | InMemoryConfigStore |
+
+> `IStorage` is retired with the coding-agent port redesign. The simulation `InMemoryStorageAdapter` and production `MinioStorageAdapter` are removed; agent output flows through `CodingAgent*` events instead.
 
 ### Board & Work Coordination Ports
 | Port Interface | Production Adapter | Simulation Adapter |

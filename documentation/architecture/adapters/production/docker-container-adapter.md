@@ -5,11 +5,15 @@ applies_to: "documentation/architecture/adapters/production/**/*adapter*.md"
 
 # DockerContainerAdapter
 
+> **Consumer note (post-redesign)**: After the coding-agent port redesign, `DockerContainerAdapter` is consumed only by *containerized invocation strategies inside coding-agent adapters* (`ClaudeCodeAdapter.strategies.containerized`, future `CodexAdapter.strategies.containerized`). It is no longer a direct dependency of `ExecutionService` or `WorkspaceRouter`. `IContainerRecoveryService` remains a direct consumer for failure recovery.
+>
+> `IContainer.copy_from_container` is retired in the same redesign — agent output flows exclusively through `CodingAgent*` events; filesystem extraction is forbidden. The method may be removed from the port surface in Phase D5 if no remaining call sites exist. See `~/.claude/plans/coding-agent-port-redesign.md` §4.
+
 ## Purpose
 
 **DockerContainerAdapter** implements the `IContainer` interface by managing Docker containers, providing container lifecycle management, command execution, file mounting, environment variables, and resource constraints.
 
-This adapter is used in production to execute AI agents in isolated, containerized environments. When the orchestrator needs to run an agent on a work item, it creates a container with mounted context files, runs the agent's commands, captures output, and cleans up resources. The adapter ensures isolation, resource limits, and secure execution boundaries for agent workloads.
+This adapter is used in production to execute AI agents in isolated, containerized environments. When a coding-agent adapter's containerized strategy needs to run an agent on a work item, it creates a container with the workspace mounted, runs the agent's CLI, streams output through its stream parser, and cleans up. The adapter ensures isolation, resource limits, and secure execution boundaries for agent workloads.
 
 The adapter handles:
 - Container creation with custom images

@@ -81,8 +81,9 @@ Input ports are technology-agnostic interfaces. The system provides multiple ada
 
 Output ports define how the application interacts with external systems, hiding vendor-specific details:
 - **Ticket System Port** (`ITicketSystem`): GitHub issues, Jira, Linear, etc.
-- **LLM Provider Port** (`ILLMProvider`): Claude Code, GPT-4, etc.
-- **Container Port** (`IContainer`): Docker, Kubernetes, etc.
+- **Coding Agent Port** (`ICodingAgent`): Claude Code, GitHub Copilot, Codex, etc. Replaces the historical `ILLMProvider` / `IAgentLauncher` pair.
+- **Prompt Builder Port** (`IPromptBuilder`): Assembles structured prompts from work item, agent role, and workspace context; coding agent adapters render the structured prompt to their vendor's expected shape.
+- **Container Port** (`IContainer`): Docker, Kubernetes, etc. After the coding-agent redesign, consumed by adapter-internal containerized strategies, not by application services directly.
 - **Repository Port** (`IRepository`): Git operations
 - **Event Store Port** (`IEventStore`): Event persistence
 - **Board Port** (`IBoardService`): Project board management
@@ -109,12 +110,13 @@ Adapters are organized by type:
 **Secondary Adapters** (implement output ports):
 - **GitHub Adapter**: GitHub API client (GraphQL)
 - **Docker Adapter**: Docker runtime interaction
-- **Claude Code Adapter**: LLM provider integration
+- **ClaudeCodeAdapter** (`ICodingAgent`): First implementation of the coding agent port; supports `{CONTAINERIZED, HOST}` invocation modes
+- **DefaultPromptBuilder** (`IPromptBuilder`): Application-layer prompt assembly (project-overridable)
 - **Redis Adapter**: Event store and caching
 - **PostgreSQL Adapter**: Configuration storage
 
 **Testing Adapters** (`adapters/testing/`):
-- **Mock LLM Adapter**: Deterministic LLM responses for simulation
+- **MockClaudeCodeAdapter**: Deterministic coding agent for simulation (replaces the historical `MockLLMAdapter`)
 - **Mock Board Adapter**: In-memory project board
 - **Mock Code Review Adapter**: In-memory review cycle management
 - **In-Memory Event Store**: Event storage without persistence
@@ -270,6 +272,14 @@ Event Handlers subscribe:
 - Represent facts about external systems
 - Trigger application logic (creating work items, updating status)
 
+**Coding Agent Telemetry Events** (`CodingAgent*` family, new in the D-series rewrite): Granular per-execution telemetry from coding-agent adapters
+- Emitted by `ICodingAgent` implementations during each execution
+- Covers tool calls, tool results, text outputs, thinking blocks, rate limits, API retries, OTel spans, token usage, lifecycle bookends
+- Aggregate by `execution_id`
+- Granular events carry a 14-day default retention policy (distinct from workflow lifecycle events)
+- Designed for behavioural analysis (timings, decisions, input/output dimensions), not replay
+- See [events.md → Coding Agent Context](domain/events.md#coding-agent-context)
+
 ### Event Sourcing
 
 The system maintains a complete **event store**:
@@ -327,7 +337,7 @@ graph TB
     subgraph OP["🔴 Output Ports<br/>(Outbound Dependencies)"]
         direction TB
         TS["ITicketSystem<br/>IRepository"]
-        LLM["ILLMProvider<br/>IContainer"]
+        LLM["ICodingAgent<br/>IPromptBuilder<br/>IContainer"]
         BOARD["IBoardService<br/>ICodeReviewService<br/>IDiscussionAdapter"]
         EV["IEventStore<br/>IEventEmitter"]
         OP_ALL["19 Input Ports<br/>40 Output Ports"]

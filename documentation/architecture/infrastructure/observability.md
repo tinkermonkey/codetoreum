@@ -93,6 +93,8 @@ logger.error(
 
 ### Distributed Tracing
 
+**Orchestrator-side spans** (services, event handlers, adapters running in the Codetoreum process) are created with the standard OpenTelemetry SDK:
+
 ```python
 from opentelemetry import trace
 
@@ -112,6 +114,35 @@ async def handle_card_movement(event):
             # ...
             pass
 ```
+
+**Agent-side spans** (spans emitted from inside a coding agent's execution environment) are routed through the event bus, not exported directly to a collector:
+
+1. The coding agent emits OTel spans via stdout/stderr (or a vendor-specific mechanism — see open question O3 in the design proposal).
+2. The adapter's stream parser catches them and emits a `CodingAgentOtlpSpanEvent` to the event bus.
+3. An `IObservabilityProvider` adapter subscribes to `CodingAgentOtlpSpanEvent` and forwards to whatever collector is configured for the deployment.
+
+```mermaid
+graph LR
+    AGENT["🤖 Coding Agent<br/>(in container / subprocess / API)"]
+    PARSER["📜 Adapter stream parser"]
+    BUS["📢 Event Bus"]
+    OBS["📊 IObservabilityProvider"]
+    COLLECTOR["🔭 OTel Collector<br/>(Jaeger, etc.)"]
+
+    AGENT -->|OTel spans via<br/>stdout/stderr| PARSER
+    PARSER -->|CodingAgentOtlpSpanEvent| BUS
+    BUS -->|subscribes| OBS
+    OBS -->|forwards spans| COLLECTOR
+```
+
+**Why route through events rather than export directly:**
+
+- Codetoreum owns the routing decision (which collector, how to retry, how to redact). Agents don't need direct network access to the collector.
+- This resolves **DEF-014**: agent containers no longer need to share a Docker network with the otel-collector. The `bridge` network default works regardless of the deployment topology.
+- Spans become first-class domain events, queryable alongside the rest of the agent's behaviour (tool calls, text outputs, rate limits) for behavioural analysis.
+- Adapters can decide whether to emit `CodingAgentOtlpSpanEvent` directly to the bus or to attach the spans to the related event (e.g., attach to the relevant `CodingAgentToolCallEvent`); see open question O2 in the design proposal.
+
+The previous approach (`OTEL_EXPORTER_OTLP_ENDPOINT` set inside the container; Claude Code's internal OTel SDK exports directly to the collector) is **retired** as part of the coding-agent port redesign.
 
 ### Metrics Collection
 
