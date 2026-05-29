@@ -427,10 +427,14 @@ class WorkspaceRouter:
         and BEFORE finalize_workspace(). It retrieves the resolved branch name from the
         cache populated during prepare_workspace() and sets CODETOREUM_BRANCH_NAME env var.
 
-        **Security Note**: This method does NOT pass any credentials into the container:
-        - CLAUDE_CODE_OAUTH_TOKEN is NOT passed (Claude Code CLI uses it from server process)
-        - GITHUB_TOKEN is NOT passed (orchestrator handles all git operations)
-        - SSH keys, private keys, or other secrets are NOT passed
+        **Security Note**: This method does NOT pass any credentials into the container.
+        Credentials (CLAUDE_CODE_OAUTH_TOKEN, ANTHROPIC_API_KEY, GITHUB_TOKEN) flow through
+        ExecutionService._build_agent_container_config via `system_credentials`, which is
+        merged with the env dict produced here in execute_with_container. WorkspaceRouter
+        only contributes workspace-shaped variables (CODETOREUM_*, GIT_*); credentials are
+        the orchestrator's responsibility, not the workspace's.
+
+        - SSH keys, private keys, or other host-side secrets are NEVER passed.
 
         **System Environment Variables Injected** (11 base + project-level variables):
         1. CODETOREUM_PROJECT_ID - Project identifier

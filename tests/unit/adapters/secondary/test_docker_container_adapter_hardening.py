@@ -268,7 +268,7 @@ class TestDockerConfigAgentNetwork:
             with patch("os.environ.get", side_effect=lambda k, default: default):
                 config = DockerConfig()
 
-        assert config.agent_network == "codetoreum_default"
+        assert config.agent_network == "bridge"
 
     def test_agent_network_from_env_var(self):
         """Should read AGENT_NETWORK from environment."""

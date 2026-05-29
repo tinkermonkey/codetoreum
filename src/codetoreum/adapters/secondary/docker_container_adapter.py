@@ -58,7 +58,7 @@ class DockerConfig:
     default_timeout: int = 300  # 5 minutes
     remove_on_completion: bool = True
     default_user: str | None = None
-    agent_network: str = field(default_factory=lambda: os.environ.get("AGENT_NETWORK", "codetoreum_default"))
+    agent_network: str = field(default_factory=lambda: os.environ.get("AGENT_NETWORK", "bridge"))
     agent_otel_endpoint: str = field(
         default_factory=lambda: os.environ.get("AGENT_OTEL_ENDPOINT", "http://otel-collector:4317")
     )
