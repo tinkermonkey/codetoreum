@@ -572,3 +572,79 @@ class ExecutionRetryScheduledEvent(CodetoreumEvent):
             retry_count=data.get("retry_count", 0),
             retry_at=data.get("retry_at", ""),
         )
+
+
+@dataclass(frozen=True)
+class AgentExecutionCompletedEvent(CodetoreumEvent):
+    """Emitted when an agent executor finishes processing a work item.
+
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Attempting to modify any field will raise `FrozenInstanceError`.
+
+    This event closes the agent-executor → board-event-handler seam. Previously
+    `ExecutionServiceAgentExecutor` invoked a `set_completion_handler` callback
+    to drive auto-progression. The event-bus mechanism replaces that callback:
+    `BoardColumnEventHandler` subscribes to this event and runs the same
+    auto-progression logic, but the executor no longer needs a direct reference
+    to the handler.
+
+    This event is distinct from `ExecutionCompletedEvent`, which records the
+    outcome of a single `ExecutionService` invocation (with output, tokens,
+    etc.). `AgentExecutionCompletedEvent` is the higher-level signal emitted
+    when the executor's full chain — including workspace finalization and any
+    container teardown — has finished and the orchestrator is free to advance
+    the work item.
+
+    Attributes:
+        type (str): Fixed to "agent_execution.completed"
+        work_item_id (str): Work item that the executor processed
+        board_id (str): Board that contains the work item
+        success (bool): True if execution succeeded, False on any failure
+        error_summary (str | None): Optional short failure description; None on
+            success
+        source (str): Always "execution_service_agent_executor"
+    """
+
+    work_item_id: str = ""
+    board_id: str = ""
+    success: bool = False
+    error_summary: str | None = None
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
+        if not self.work_item_id:
+            msg = "work_item_id is required"
+            raise ValueError(msg)
+        if not self.board_id:
+            msg = "board_id is required"
+            raise ValueError(msg)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update(
+            {
+                "work_item_id": self.work_item_id,
+                "board_id": self.board_id,
+                "success": self.success,
+                "error_summary": self.error_summary,
+            }
+        )
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "AgentExecutionCompletedEvent":
+        """Deserialize from dictionary."""
+        return cls(
+            type=data.get("type", "agent_execution.completed"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", "execution_service_agent_executor"),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            work_item_id=data["work_item_id"],
+            board_id=data["board_id"],
+            success=bool(data.get("success", False)),
+            error_summary=data.get("error_summary"),
+        )

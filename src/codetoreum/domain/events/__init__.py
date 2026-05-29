@@ -93,6 +93,7 @@ from .discussion_events import (
 
 # Execution events
 from .execution_events import (
+    AgentExecutionCompletedEvent,
     ExecutionCancelledEvent,
     ExecutionCompletedEvent,
     ExecutionFailedEvent,
@@ -356,6 +357,7 @@ __all__ = [
     # Container execution events
     "ContainerExecutionCompletedEvent",
     # Execution events
+    "AgentExecutionCompletedEvent",
     "ExecutionCancelledEvent",
     "ExecutionInitializedEvent",
     "ExecutionPausedEvent",
