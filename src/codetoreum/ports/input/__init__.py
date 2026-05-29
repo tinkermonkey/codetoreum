@@ -5,6 +5,7 @@ This module exports all input port interfaces and their related types.
 Input ports define how external systems interact with the application.
 """
 
+from .agent_scheduler import IAgentScheduler
 from .authentication import (
     APIKeyNotFoundError,
     AuthenticationError,
@@ -137,4 +138,6 @@ __all__ = [
     "APIKeyNotFoundError",
     # Conversational Loop Service Port
     "IConversationalLoopService",
+    # Agent Scheduler Port
+    "IAgentScheduler",
 ]

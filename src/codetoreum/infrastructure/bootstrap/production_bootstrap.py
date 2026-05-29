@@ -795,6 +795,13 @@ class ProductionApplicationBootstrap:
         project_config = ProductionProjectConfiguration()
         scheduling_events = ProductionSchedulingEvents(event_emitter=self.adapters.event_emitter)
 
+        # NOTE: The scheduler is constructed with an executor and its consumer
+        # loop is started below, but `WorkflowOrchestrator` is built with
+        # `dispatch_via_task_queue=False` so nothing actually enqueues to it.
+        # BoardColumnEventHandler is the production dispatch path. Flipping
+        # the orchestrator flag without first disabling BEH's direct dispatch
+        # would produce double-dispatch (INV-06). This wiring is the "armed
+        # but unused" seam — see AgentScheduler class docstring.
         agent_scheduler = AgentScheduler(
             task_queue=task_queue,
             resource_monitor=resource_monitor,

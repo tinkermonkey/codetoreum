@@ -14,6 +14,7 @@ from codetoreum.infrastructure.observability.instrumentation import (
     instrument_async_function,
 )
 from codetoreum.ports.exceptions import PortError
+from codetoreum.ports.input.agent_scheduler import IAgentScheduler
 from codetoreum.ports.output import IAgentExecutor, IEventStore
 
 logger = logging.getLogger(__name__)
@@ -149,12 +150,22 @@ class ISchedulingEvents:
         raise NotImplementedError
 
 
-class AgentScheduler:
+class AgentScheduler(IAgentScheduler):
     """
     Agent Scheduler application service.
 
     Manages agent execution scheduling with priority-based queuing,
     resource availability checking, and rate limiting.
+
+    NOTE: In the current production wiring (Phase 5 of
+    ProductionApplicationBootstrap), the executor IS passed at construction
+    and the consumer loop IS started — but `WorkflowOrchestrator` is built
+    with `dispatch_via_task_queue=False`, so nothing enqueues to the
+    scheduler. `BoardColumnEventHandler` owns event-driven dispatch
+    instead, calling the executor directly. This is the "armed but unused"
+    seam INV-06 codifies: flipping `dispatch_via_task_queue` to True
+    without also disabling `BoardColumnEventHandler`'s direct dispatch
+    would produce double-dispatch.
     """
 
     def __init__(
