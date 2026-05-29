@@ -24,6 +24,7 @@ from codetoreum.domain.board_workflow_template import (
     ColumnType,
 )
 from codetoreum.domain.events import (
+    AgentExecutionCompletedEvent,
     CodetoreumEvent,
     LockStuckEvent,
 )
@@ -71,7 +72,7 @@ class _WorkflowRunMetadata:
     current_column: str = ""
 
 
-@event_handler("WorkItemColumnChangedEvent")
+@event_handler("WorkItemColumnChangedEvent", "AgentExecutionCompletedEvent")
 class BoardColumnEventHandler(EventHandler):
     """Handles workitem.column_changed events for board automation.
 
@@ -153,11 +154,17 @@ class BoardColumnEventHandler(EventHandler):
         Returns:
             List of event type names
         """
-        return ["WorkItemColumnChangedEvent"]
+        return ["WorkItemColumnChangedEvent", "AgentExecutionCompletedEvent"]
 
     async def handle(self, event: CodetoreumEvent) -> None:
         """
-        Handle column change event and trigger appropriate workflow actions.
+        Handle a domain event and trigger appropriate workflow actions.
+
+        Dispatches by concrete event type:
+        - WorkItemColumnChangedEvent → column-movement automation
+          (lock acquisition, agent dispatch, exit handling).
+        - AgentExecutionCompletedEvent → auto-progression to the next
+          column once the agent executor publishes completion.
 
         Args:
             event: Domain event to handle
@@ -165,20 +172,31 @@ class BoardColumnEventHandler(EventHandler):
         Raises:
             Exception: If handling fails
         """
-        if not isinstance(event, WorkItemColumnChangedEvent):
-            logger.warning(f"BoardColumnEventHandler received unexpected event type: {event.event_type}")
+        if isinstance(event, WorkItemColumnChangedEvent):
+            try:
+                await self.handle_column_change(event)
+            except Exception as e:
+                logger.error(
+                    f"Error handling column change for {event.work_item_id}: {e}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_BOARD_EVENT_HANDLE_COLUMN_CHANGE_FAILURE"},
+                )
+                raise
             return
 
-        try:
-            await self.handle_column_change(event)
-        except Exception as e:
-            work_item_id = event.work_item_id
-            logger.error(
-                f"Error handling column change for {work_item_id}: {e}",
-                exc_info=True,
-                extra={"error_id": "ERR_BOARD_EVENT_HANDLE_COLUMN_CHANGE_FAILURE"},
-            )
-            raise
+        if isinstance(event, AgentExecutionCompletedEvent):
+            try:
+                await self.handle_agent_execution_completed(event)
+            except Exception as e:
+                logger.error(
+                    f"Error handling agent execution completion for {event.work_item_id}: {e}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_BOARD_EVENT_HANDLE_AGENT_COMPLETION_FAILURE"},
+                )
+                raise
+            return
+
+        logger.warning(f"BoardColumnEventHandler received unexpected event type: {event.event_type}")
 
     async def handle_column_change(self, event: WorkItemColumnChangedEvent) -> None:
         """
@@ -855,6 +873,33 @@ class BoardColumnEventHandler(EventHandler):
                                 exc_info=True,
                                 extra={"error_id": "ERR_BOARD_EVENT_LOCK_STUCK_EMIT_FAILURE"},
                             )
+
+    async def handle_agent_execution_completed(
+        self,
+        event: AgentExecutionCompletedEvent,
+    ) -> None:
+        """
+        Bridge `AgentExecutionCompletedEvent` to the auto-progression logic.
+
+        The executor publishes `AgentExecutionCompletedEvent` on the event bus
+        when it finishes processing a work item. This handler is subscribed to
+        that event by the production and simulation bootstraps; it unwraps the
+        event fields and delegates to `handle_agent_completion`, which contains
+        the actual board-progression logic.
+
+        The previous wiring used `ExecutionServiceAgentExecutor.set_completion_handler`
+        to register `handle_agent_completion` as a direct callback. The event-bus
+        path replaces it; INV-05 in `bootstrap/ARCHITECTURE.md` §6 now describes
+        the subscription requirement instead of the callback requirement.
+
+        Args:
+            event: Completion event published by the agent executor.
+        """
+        await self.handle_agent_completion(
+            work_item_id=event.work_item_id,
+            board_id=event.board_id,
+            success=event.success,
+        )
 
     async def handle_agent_completion(
         self,
