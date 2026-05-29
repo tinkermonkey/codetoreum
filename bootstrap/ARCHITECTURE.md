@@ -281,9 +281,11 @@ sequenceDiagram
     VCS->>VCS: vcs.commit() + vcs.push() returns commit_sha
     Note over ES: Appends ExecutionCompletedEvent(commit_sha, branch)
 
-    Note over Exec,BEH: Step 6 - Auto-progression
+    Note over Exec,BEH: Step 6 - Auto-progression (event-bus mediated)
 
-    Exec->>BEH: completion_callback(work_item_id, board_id, success=True)
+    Exec->>Bus: event_bus.publish(AgentExecutionCompletedEvent(work_item_id, board_id, success=True))
+    Note over Exec,Bus: Publish is fire-and-forget (asyncio.create_task) so the executor's task<br/>completes and drops the work item from _executing_work_items first.
+    Bus->>BEH: handle_agent_execution_completed(event) → handle_agent_completion(...)
     BEH->>Board: board_service.get_item_position(work_item_id)
     BEH->>ES: _advance_workflow_stage() emits WorkflowStageAdvancedEvent
     BEH->>Board: board_service.move_item_to_column(work_item_id, next_column, ORCHESTRATOR)
@@ -312,6 +314,7 @@ sequenceDiagram
 | Execution created | `ExecutionCreatedEvent` | execution_id |
 | Execution started | `ExecutionStartedEvent` | execution_id |
 | Execution completed | `ExecutionCompletedEvent` (with commit_sha, branch) | execution_id |
+| Executor finished | `AgentExecutionCompletedEvent` (published by executor, consumed by BEH) | work_item_id (board scope) |
 | Stage advance | `WorkflowStageAdvancedEvent` | workflow_run_id |
 | Lock released | `LockReleasedEvent` | (internal to lock service) |
 | Workflow done | `WorkflowCompletedEvent` | workflow_run_id |
@@ -320,8 +323,8 @@ sequenceDiagram
 
 If `execute_with_container()` fails or the container exits non-zero:
 - `execution_service.execute_with_container()` appends `ExecutionFailedEvent`
-- `_run_execution` calls `_call_completion(work_item_id, board_id, success=False)`
-- `BEH.handle_agent_completion(success=False)` moves item to `on_failure_column` (if configured)
+- `_run_execution` calls `_call_completion(work_item_id, board_id, success=False, error_summary=...)` which publishes `AgentExecutionCompletedEvent(success=False)` on the event bus
+- `BEH.handle_agent_execution_completed` → `handle_agent_completion(success=False)` moves item to `on_failure_column` (if configured)
 - `_fail_workflow_run()` appends `WorkflowFailedEvent`
 - `lock_service.release_lock()` unblocks the pipeline
 
@@ -376,8 +379,10 @@ The following constraints MUST hold for bootstrap to work correctly. Violating a
 **INV-04**: `self._raw_ticket_adapter` MUST be captured in Phase 4 BEFORE resilience decoration, and used ONLY for bootstrap lifecycle calls not on the `ITicketSystem` port (specifically `register_project_repo()`).
 - Violation: `register_project_repo()` called on the resilience decorator raises `AttributeError`.
 
-**INV-05**: `ExecutionServiceAgentExecutor.set_completion_handler()` MUST be called before the first `execute()` invocation to wire the auto-progression callback to `BoardColumnEventHandler.handle_agent_completion`.
-- Violation: Executor logs `ERR_EXEC_CHAIN_NO_COMPLETION_CALLBACK`; work item stays in current column after agent completes.
+**INV-05**: `ExecutionServiceAgentExecutor` publishes `AgentExecutionCompletedEvent` on the event bus when it finishes processing a work item, and `BoardColumnEventHandler` MUST be subscribed to that event before the first `execute()` invocation can drive auto-progression. The subscription is automatic: `event_bus.register_handler(BoardColumnEventHandler)` in Phase 7 wires both `WorkItemColumnChangedEvent` and `AgentExecutionCompletedEvent` because the handler declares both in `get_event_types()`. The executor takes the event bus as a constructor argument in Phase 5, so the bus is available before the registry is touched.
+- The previous `set_completion_handler()` callback API and the `ERR_EXEC_CHAIN_NO_COMPLETION_CALLBACK` error id were removed when the seam was migrated to the event bus.
+- Violation: handler is constructed but never registered with the bus; work item stays in current column after agent completes. Verification: assert that `event_bus._handlers["AgentExecutionCompletedEvent"]` contains a `BoardColumnEventHandler` before the harness sends its trigger.
+- Scheduling note: the executor publishes via `asyncio.create_task` (fire-and-forget) rather than awaiting the publish inline. Awaiting would keep the executor's task alive across the BEH handler chain — which can re-enter the workflow via deferred bridge tasks and produce an `ALREADY_HELD` re-trigger loop. Publish failures are still routed to `AgentExecutionRecoveryService` via a done-callback on the publish task.
 
 **INV-06**: `dispatch_via_task_queue=False` on `WorkflowOrchestrator` is required in production. `BoardColumnEventHandler` owns event-driven dispatch. Setting this to `True` causes double-dispatch.
 
@@ -471,6 +476,22 @@ Bootstrap does not require any of these handlers for the happy path. The survey 
 ## 9. Deficiency Log
 
 Running record of architectural gaps found and fixed during bootstrap cycles. Most recent first.
+
+---
+
+### DEF-012 — Executor → BoardColumnEventHandler seam coupled via mutable callback
+
+**Deficiency**: `ExecutionServiceAgentExecutor` exposed a `set_completion_handler(callback, default_board_id)` method that bootstrap had to invoke on the executor instance after constructing `BoardColumnEventHandler`. INV-05 was the load-bearing contract: skip the wiring and the executor would silently log `ERR_EXEC_CHAIN_NO_COMPLETION_CALLBACK` after every execution, leaving work items stuck. The seam violated event-driven principles (INV-10) because it relied on direct interface coupling between an adapter and a handler; the executor knew about the handler's API shape instead of emitting a domain event. The wiring also fought INV-09 in spirit — `set_completion_handler` was not part of the `IAgentExecutor` port, but bootstrap depended on it being present on every executor implementation. `MockAgentExecutor` carried a no-op `set_completion_handler` purely to satisfy the bootstrap's `hasattr` check.
+
+**Fix**:
+- Added `AgentExecutionCompletedEvent(work_item_id, board_id, success, error_summary)` as a `CodetoreumEvent` frozen dataclass in `src/codetoreum/domain/events/execution_events.py`; the existing `auto_register_event_types()` walk picks it up so deserialization works without manual registration.
+- Replaced the executor's `_completion_callback` field and `set_completion_handler` method with an `event_bus: EventBus` constructor argument. `_call_completion` now publishes `AgentExecutionCompletedEvent` on the bus. The publish is dispatched via `asyncio.create_task` rather than awaited inline (see INV-05 scheduling note) so the executor's task can complete and drop the work item from `_executing_work_items` before the BEH handler runs — preserving the timing the old callback path produced and avoiding a re-entry loop through `LockStatus.ALREADY_HELD`. Publish failures still route to `AgentExecutionRecoveryService` via a done-callback on the publish task.
+- Extended `BoardColumnEventHandler` to subscribe to `AgentExecutionCompletedEvent` alongside `WorkItemColumnChangedEvent`. The new `handle_agent_execution_completed(event)` method unwraps the event and delegates to the unchanged `handle_agent_completion(work_item_id, board_id, success)` business logic, which preserves the test fixtures that drive completion synthetically.
+- Production and simulation bootstraps now pass `event_bus=self.infrastructure.event_bus` (and `default_board_id`) to the executor constructor and rely on `event_bus.register_handler(BoardColumnEventHandler)` to wire both event types in one call — the bespoke `set_completion_handler` invocation is gone.
+- Removed `ERR_EXEC_CHAIN_NO_COMPLETION_CALLBACK` from `ErrorRegistry`; the corresponding failure mode no longer exists. `ERR_EXEC_CHAIN_COMPLETION_CALLBACK_FAILURE` retains its name because it still tags publish-level failures.
+- Updated INV-05, the §4 sequence diagram, and the §4 domain-event table to describe the event-bus mechanism.
+
+**Files changed**: `src/codetoreum/domain/events/execution_events.py`, `src/codetoreum/domain/events/__init__.py`, `src/codetoreum/adapters/secondary/execution_service_agent_executor.py`, `src/codetoreum/application/event_handlers/board_event_handler.py`, `src/codetoreum/infrastructure/bootstrap/production_bootstrap.py`, `src/codetoreum/infrastructure/simulation/bootstrap.py`, `src/codetoreum/infrastructure/error_ids.py`, `bootstrap/ARCHITECTURE.md`, `tests/unit/adapters/secondary/test_execution_service_agent_executor_production_path.py`, `tests/unit/adapters/testing/test_execution_service_agent_executor.py`, `tests/unit/application/test_execution_service_agent_executor.py`, `tests/simulation/conftest.py`, `tests/simulation/test_failure_recovery_e2e.py`
 
 ---
 
