@@ -10,6 +10,7 @@ from typing import Any, TypeVar
 from codetoreum.domain.comment import Comment
 from codetoreum.domain.types import ProjectId, UserId, WorkItemId
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
+from codetoreum.ports.output.agent_launcher import IAgentLauncher
 from codetoreum.ports.output.board_service import (
     BoardColumn,
     BoardConfig,
@@ -24,7 +25,6 @@ from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
 from codetoreum.ports.output.llm_provider import (
     ExecutionContext,
     ExecutionResult,
-    ILLMProvider,
     ModelInfo,
     StreamCallback,
     StreamChunk,
@@ -324,19 +324,20 @@ class ResilientTicketSystemDecorator(ITicketSystem):
 # ============================================================================
 
 
-class ResilientLLMProviderDecorator(ILLMProvider):
+class ResilientLLMProviderDecorator(IAgentLauncher):
     """
-    Wraps ILLMProvider with resilience patterns.
+    Wraps :class:`IAgentLauncher` (formerly known as ``ILLMProvider``) with
+    resilience patterns.
 
-    Special considerations for LLMs:
+    Special considerations for autonomous-agent launchers:
     - Token-based rate limiting (not just request count)
-    - Longer timeouts (LLM calls can take minutes)
-    - Less aggressive retries (LLM calls are expensive)
+    - Longer timeouts (agent subprocesses can take minutes)
+    - Less aggressive retries (subprocess invocations are expensive)
     """
 
     def __init__(
         self,
-        wrapped: ILLMProvider,
+        wrapped: IAgentLauncher,
         rate_limiter: IRateLimiter | None = None,
         circuit_breaker: ICircuitBreaker | None = None,
         retry_policy: IRetryPolicy | None = None,

@@ -239,7 +239,7 @@ class CredentialValidator:
     async def _check_adapter_llm(self, resolver: AdapterResolver) -> None:
         """Check LLM provider adapter (Claude Code)."""
         try:
-            adapter: ILLMProvider = resolver.resolve_llm()
+            adapter: ILLMProvider = resolver.resolve_agent_launcher()
             concrete_class = type(adapter).__name__
 
             if concrete_class == "ClaudeCodeAdapter":
