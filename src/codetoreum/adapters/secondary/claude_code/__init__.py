@@ -14,9 +14,17 @@ and is removed in Phase D5.
 from codetoreum.adapters.secondary.claude_code.adapter import (
     ClaudeCodeAdapter,
     ClaudeCodeAdapterConfig,
+    UnsupportedInvocationModeError,
+)
+from codetoreum.adapters.secondary.claude_code.credentials import (
+    EnvironmentCredentialProvider,
+    StaticCredentialProvider,
 )
 
 __all__ = [
     "ClaudeCodeAdapter",
     "ClaudeCodeAdapterConfig",
+    "EnvironmentCredentialProvider",
+    "StaticCredentialProvider",
+    "UnsupportedInvocationModeError",
 ]
