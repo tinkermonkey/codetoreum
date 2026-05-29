@@ -15,3 +15,21 @@ publish each emitted event to the supplied
 :class:`~codetoreum.infrastructure.event_bus.EventBus`, and return a final
 :class:`~codetoreum.ports.output.coding_agent.CodingAgentResult`.
 """
+
+from codetoreum.adapters.secondary.claude_code.strategies.base import (
+    ClaudeInvocationStrategy,
+)
+from codetoreum.adapters.secondary.claude_code.strategies.containerized import (
+    ContainerizedClaudeStrategy,
+)
+from codetoreum.adapters.secondary.claude_code.strategies.host import (
+    CredentialProviderProtocol,
+    HostClaudeStrategy,
+)
+
+__all__ = [
+    "ClaudeInvocationStrategy",
+    "ContainerizedClaudeStrategy",
+    "CredentialProviderProtocol",
+    "HostClaudeStrategy",
+]
