@@ -212,7 +212,24 @@ class AdapterResolver:
         return self._factory.create_event_store(adapter_name=self._config.event_store)
 
     def resolve_config_store(self) -> IConfigStore:
-        """Resolve config store adapter."""
+        """Resolve config store adapter.
+
+        For "elasticsearch", construct an AsyncElasticsearch client from
+        ELASTICSEARCH_URL so the same backing storage instance can be
+        reused for the ES-backed agent repository and workflow config
+        service (passed in via ``self._resolved['config_store']``).
+        """
+        if self._config.config_store == "elasticsearch":
+            import os
+
+            from elasticsearch import AsyncElasticsearch
+
+            es_url = os.environ.get("ELASTICSEARCH_URL", "http://localhost:9200")
+            es_client = AsyncElasticsearch([es_url])
+            return self._factory.create_config_store(
+                adapter_name=self._config.config_store,
+                es_client=es_client,
+            )
         return self._factory.create_config_store(adapter_name=self._config.config_store)
 
     def resolve_metrics(self) -> IMetrics:
@@ -350,7 +367,26 @@ class AdapterResolver:
         )
 
     def resolve_agent_repository(self) -> IAgentRepository:
-        """Resolve agent repository adapter."""
+        """Resolve agent repository adapter.
+
+        For "elasticsearch", inject the already-resolved
+        ``ElasticsearchConfigStorage`` (from ``self._resolved['config_store']``)
+        so agent configs round-trip through the same backing store as
+        ``IConfigStore``.
+        """
+        if self._config.agent_repository == "elasticsearch":
+            config_storage = self._resolved.get("config_store")
+            if config_storage is None:
+                raise AdapterConfigurationError(
+                    [
+                        "agent_repository='elasticsearch' requires config_store to be resolved first; "
+                        "ensure resolve_all() runs config_store before agent_repository.",
+                    ]
+                )
+            return self._factory.create_agent_repository(
+                adapter_name=self._config.agent_repository,
+                config_storage=config_storage,
+            )
         return self._factory.create_agent_repository(adapter_name=self._config.agent_repository)
 
     def resolve_run_registry(self) -> IActiveWorkflowRunRegistry:
@@ -384,7 +420,26 @@ class AdapterResolver:
         )
 
     def resolve_workflow_config(self) -> IWorkflowConfigService:
-        """Resolve workflow config service adapter."""
+        """Resolve workflow config service adapter.
+
+        For "elasticsearch", inject the already-resolved
+        ``ElasticsearchConfigStorage`` (from ``self._resolved['config_store']``)
+        so board workflow templates persist alongside the rest of the
+        config plane.
+        """
+        if self._config.workflow_config == "elasticsearch":
+            config_storage = self._resolved.get("config_store")
+            if config_storage is None:
+                raise AdapterConfigurationError(
+                    [
+                        "workflow_config='elasticsearch' requires config_store to be resolved first; "
+                        "ensure resolve_all() runs config_store before workflow_config.",
+                    ]
+                )
+            return self._factory.create_workflow_config_service(
+                adapter_name=self._config.workflow_config,
+                config_storage=config_storage,
+            )
         return self._factory.create_workflow_config_service(adapter_name=self._config.workflow_config)
 
     def resolve_notifier(self) -> INotifier:

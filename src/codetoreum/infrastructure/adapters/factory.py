@@ -937,6 +937,28 @@ class AdapterFactory:
             ),
             set_as_default=True,
         )
+        # ES-backed workflow config service: BoardWorkflowTemplate persists
+        # to ES so auto-progression keeps finding next-stage templates after
+        # restart.
+        from codetoreum.adapters.secondary.elasticsearch_workflow_config_service import (
+            ElasticsearchWorkflowConfigService,
+        )
+
+        self._workflow_config_registry.register(
+            name="elasticsearch",
+            adapter_type=ElasticsearchWorkflowConfigService,
+            description=(
+                "Elasticsearch-backed workflow config service (read-through " "cache on ElasticsearchConfigStorage)"
+            ),
+            version="1.0.0",
+            tags=["production", "persistent"],
+            config_schema=AdapterCredentialRequirement(
+                description=(
+                    "Requires an ElasticsearchConfigStorage instance (injected "
+                    "by AdapterResolver from the resolved config_store)."
+                ),
+            ),
+        )
 
         # Event Emitter Adapters
         self._event_emitter_registry.register(
@@ -1020,6 +1042,26 @@ class AdapterFactory:
                 description="Simulation-only adapter, no credentials required",
             ),
             set_as_default=True,
+        )
+        # ES-backed repository: agent configs persist via
+        # ElasticsearchConfigStorage so the catalog survives server restart
+        # and matches across multi-instance deployments.
+        from codetoreum.adapters.secondary.elasticsearch_agent_repository import (
+            ElasticsearchAgentRepository,
+        )
+
+        self._agent_repository_registry.register(
+            name="elasticsearch",
+            adapter_type=ElasticsearchAgentRepository,
+            description=("Elasticsearch-backed agent repository (read-through cache on " "ElasticsearchConfigStorage)"),
+            version="1.0.0",
+            tags=["production", "persistent"],
+            config_schema=AdapterCredentialRequirement(
+                description=(
+                    "Requires an ElasticsearchConfigStorage instance (injected "
+                    "by AdapterResolver from the resolved config_store)."
+                ),
+            ),
         )
 
         # Work Item Branch Tracker Adapters

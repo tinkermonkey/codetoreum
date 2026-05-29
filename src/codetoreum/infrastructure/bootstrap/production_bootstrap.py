@@ -255,10 +255,13 @@ class ProductionApplicationBootstrap:
                 # The single-instance bootstrap does not exercise cross-process
                 # event distribution; the in-memory MockEventEmitter remains
                 # the default until that scenario becomes part of the harness.
+                config_store="elasticsearch",  # Persist project/agent/board configs to ES
                 project_manager="elasticsearch",  # Read live project configs from ES
                 encryption="local_key",  # Fernet keyed by ENCRYPTION_KEY_BASE64 env var
                 lock_service="redis",  # Persistent pipeline lock; survives restart, coordinates instances
                 run_registry="redis",  # Persistent active-run records; closes DEF-002 across restart
+                agent_repository="elasticsearch",  # Agent catalog survives restart (DEF-008)
+                workflow_config="elasticsearch",  # BoardWorkflowTemplate survives restart (DEF-008)
                 # Non-critical slots use mocks (logged as warnings)
                 review_cycle="basic",
                 pr_review_cycle="basic",
