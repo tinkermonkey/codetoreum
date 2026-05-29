@@ -321,8 +321,94 @@ class AdapterResolver:
         Returns an :class:`IAgentLauncher` — the autonomous-agent launcher port
         introduced by the D3 ``ILLMProvider`` semantics split. ``ILLMProvider``
         is now a deprecated alias of ``IAgentLauncher``.
+
+        Note: this remains the production code path during D3/D4. Phase D4
+        rewires ``ExecutionService`` to dispatch via
+        :meth:`resolve_coding_agent` instead; Phase D5 deletes this method
+        along with :class:`IAgentLauncher`.
         """
         return self._factory.create_llm_provider(adapter_name=self._config.llm)
+
+    def resolve_coding_agent(
+        self,
+        *,
+        prompt_builder: Any,
+        agent_repository: Any | None = None,
+        work_item_service: Any | None = None,
+        container: Any | None = None,
+        workspace_path_resolver: Any | None = None,
+        config: Any | None = None,
+    ) -> Any:
+        """Resolve the new :class:`ICodingAgent` adapter (D3).
+
+        Constructs a production :class:`ClaudeCodeAdapter` directly (or, for
+        simulation mode, a :class:`MockClaudeCodeAdapter`). Wraps the result
+        with :class:`ResilientCodingAgentDecorator` so the standard
+        resilience patterns (rate-limit, circuit breaker, timeout, retry)
+        apply across both invocation modes.
+
+        Coexists with :meth:`resolve_agent_launcher` during D3/D4. Phase
+        D4 will plumb the result into ``ExecutionService``; D5 retires the
+        old launcher path.
+
+        Args:
+            prompt_builder: :class:`IPromptBuilder` injected by the caller.
+                Created in the application layer (D2 default:
+                ``DefaultPromptBuilder``).
+            agent_repository: Defaults to the already-resolved
+                ``agent_repository`` (production wiring) when ``None``.
+            work_item_service: Defaults to the already-resolved
+                ``work_item_service`` when ``None``.
+            container: Optional :class:`IContainer`. When ``None`` the
+                resolver supplies the already-resolved one (or ``None`` if
+                the container slot was never resolved); only ``HOST`` mode
+                is then supported by the resulting adapter.
+            workspace_path_resolver: Optional callable mapping a
+                :class:`WorkspaceContext` to a host path.
+            config: Optional :class:`ClaudeCodeAdapterConfig`.
+
+        Returns:
+            A resilience-wrapped :class:`ICodingAgent` for the configured
+            implementation. Implementation today: production constructs
+            :class:`ClaudeCodeAdapter`; simulation can override by passing
+            an alternative wrapped object via ``prompt_builder`` plumbing.
+        """
+        # Imports are local to avoid hard-coupling the resolver module to
+        # the D3 adapter package — the resolver loads in environments that
+        # might not yet have the new ports.
+        from codetoreum.adapters.secondary.claude_code import (
+            ClaudeCodeAdapter,
+            EnvironmentCredentialProvider,
+        )
+        from codetoreum.infrastructure.resilience.decorators import (
+            ResilientCodingAgentDecorator,
+        )
+
+        ar = agent_repository or self._resolved.get("agent_repository")
+        wis = work_item_service or self._resolved.get("work_item_service")
+        if ar is None or wis is None:
+            raise AdapterConfigurationError(
+                [
+                    "resolve_coding_agent requires agent_repository and "
+                    "work_item_service to be resolved first (or passed in).",
+                ]
+            )
+
+        cont = container if container is not None else self._resolved.get("container")
+
+        adapter = ClaudeCodeAdapter(
+            prompt_builder=prompt_builder,
+            event_bus=self._deps.event_bus,
+            credential_provider=EnvironmentCredentialProvider(),
+            agent_repository=ar,
+            work_item_service=wis,
+            container=cont,
+            workspace_path_resolver=workspace_path_resolver,
+            config=config,
+        )
+        # Resilience wraps the adapter (INV-11). The decorator is structural
+        # — it just needs supported_invocation_modes() and execute().
+        return ResilientCodingAgentDecorator(wrapped=adapter)
 
     def resolve_container(self) -> IContainer:
         """Resolve container adapter."""

@@ -876,3 +876,107 @@ class ResilientDiscussionAdapterDecorator(IDiscussionAdapter):
         if self._retry_policy:
             return await self._retry_policy.execute(timed_operation, operation_name)
         return await timed_operation()
+
+
+# ============================================================================
+# Resilient Coding Agent Decorator
+# ============================================================================
+
+
+class ResilientCodingAgentDecorator:
+    """Wraps ``ICodingAgent`` with resilience patterns.
+
+    Imports the wrapped port type lazily inside the method body so the
+    decorator module can be loaded by environments that don't yet have
+    the post-D3 coding agent ports installed. The structural duck-typing
+    works at runtime because ``ICodingAgent`` has just two methods.
+
+    Per the design proposal (open question O6 Lean): the circuit breaker
+    is **shared across invocation modes** for the same adapter instance
+    (one circuit breaker per logical service, not per mode). A 503 from
+    the vendor backend should trip the breaker regardless of whether
+    the call was containerised or host-mode.
+
+    Coding-agent calls are long-running (the wrapped subprocess can run
+    for minutes inside the adapter's own timeout). The decorator's
+    outer timeout sits **above** the per-execution
+    ``CodingAgentInvocationOptions.timeout_seconds`` and adds a 300 s
+    buffer so the resilience layer only fires if the adapter itself is
+    hung, not because the agent is just slow.
+    """
+
+    def __init__(
+        self,
+        wrapped: Any,
+        rate_limiter: IRateLimiter | None = None,
+        circuit_breaker: ICircuitBreaker | None = None,
+        retry_policy: IRetryPolicy | None = None,
+        timeout: ITimeout | None = None,
+        default_timeout_seconds: float = 300.0,
+    ) -> None:
+        self._wrapped = wrapped
+        self._rate_limiter = rate_limiter
+        self._circuit_breaker = circuit_breaker
+        self._retry_policy = retry_policy
+        self._timeout = timeout
+        self._default_timeout = default_timeout_seconds
+
+    def supported_invocation_modes(self) -> Any:
+        """Pass-through to the wrapped adapter."""
+        return self._wrapped.supported_invocation_modes()
+
+    async def execute(
+        self,
+        execution: Any,
+        workspace_context: Any,
+        options: Any,
+    ) -> Any:
+        """Execute with rate limiting, circuit breaking, timeout and retry.
+
+        The decorator counts each ``execute()`` as a single unit on the
+        rate limiter (the underlying token accounting is captured in the
+        ``CodingAgentTokensUsedEvent`` stream).
+        """
+        # Outer timeout exceeds the per-execution timeout by 300 s so the
+        # resilience layer doesn't preempt the adapter's own bounded run.
+        per_call_timeout = float(getattr(options, "timeout_seconds", 0) or 0)
+        outer_timeout = per_call_timeout + 300.0 if per_call_timeout > 0 else None
+
+        async def _operation() -> Any:
+            return await self._wrapped.execute(execution, workspace_context, options)
+
+        # 1. Rate limit (1 unit per execution; agent-level)
+        if self._rate_limiter:
+            await self._rate_limiter.acquire("coding_agent.execute", 1)
+
+        # 2. Circuit breaker is the outermost dynamic guard so a tripped
+        #    breaker short-circuits before we burn timeout or retry budget.
+        if self._circuit_breaker:
+            return await self._circuit_breaker.call(
+                self._execute_with_timeout_and_retry,
+                "coding_agent.execute",
+                _operation,
+                outer_timeout,
+            )
+        return await self._execute_with_timeout_and_retry(_operation, outer_timeout)
+
+    async def _execute_with_timeout_and_retry(
+        self,
+        operation: Callable[[], Any],
+        timeout_seconds: float | None,
+    ) -> Any:
+        """Apply timeout then retry."""
+        effective_timeout = timeout_seconds or self._default_timeout
+
+        async def _timed() -> Any:
+            if self._timeout:
+                return await self._timeout.execute(
+                    operation,
+                    effective_timeout,
+                    "coding_agent.execute",
+                )
+            return await operation()
+
+        if self._retry_policy:
+            return await self._retry_policy.execute(_timed, "coding_agent.execute")
+        return await _timed()

@@ -243,6 +243,50 @@ class TestAdapterResolver:
         assert llm is not None
         # Should be an adapter instance (may be wrapped by resilience decorator)
 
+    def test_resolve_coding_agent_returns_resilience_wrapped_adapter(
+        self,
+        factory,
+        dependencies,
+        adapter_config,
+    ):
+        """resolve_coding_agent returns a ResilientCodingAgentDecorator-wrapped
+        ICodingAgent. Requires agent_repository and work_item_service to be
+        pre-resolved."""
+        from unittest.mock import AsyncMock
+
+        from codetoreum.infrastructure.resilience.decorators import (
+            ResilientCodingAgentDecorator,
+        )
+        from codetoreum.ports.output.coding_agent import InvocationMode
+
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+        # Pre-resolve the dependencies the new resolver needs.
+        resolver._resolved["agent_repository"] = AsyncMock()
+        resolver._resolved["work_item_service"] = AsyncMock()
+        # IPromptBuilder stub.
+        prompt_builder = AsyncMock()
+
+        agent = resolver.resolve_coding_agent(prompt_builder=prompt_builder)
+        assert isinstance(agent, ResilientCodingAgentDecorator)
+        # With no container slot resolved, only HOST mode is supported.
+        assert agent.supported_invocation_modes() == frozenset({InvocationMode.HOST})
+
+    def test_resolve_coding_agent_raises_without_dependencies(
+        self,
+        factory,
+        dependencies,
+        adapter_config,
+    ):
+        """resolve_coding_agent aggregates a clear error when
+        agent_repository or work_item_service are unresolved."""
+        from unittest.mock import AsyncMock
+
+        from codetoreum.infrastructure.adapters.resolver import AdapterConfigurationError
+
+        resolver = AdapterResolver(adapter_config, factory, dependencies)
+        with pytest.raises(AdapterConfigurationError):
+            resolver.resolve_coding_agent(prompt_builder=AsyncMock())
+
     def test_resolve_board(self, factory, dependencies, adapter_config):
         """Test resolving board service adapter."""
         resolver = AdapterResolver(adapter_config, factory, dependencies)
