@@ -501,6 +501,32 @@ Running record of architectural gaps found and fixed during bootstrap cycles. Mo
 
 ---
 
+### DEF-019 — Agent-side OTel spans not surfaced to event bus (O3 follow-up)
+
+**Status**: Design landed; parser landed; **strategy wiring + image sidecar deferred**.
+
+**Deficiency**: `CodingAgentOtlpSpanEvent` is defined (D1) but no adapter emits it. The post-DEF-014 architecture forbids agent containers from reaching `otel-collector` directly — agents run on Docker's default `bridge` network for outbound internet only, with no path to `codetoreum_default`-attached services like the collector. Claude Code's internal OTel SDK exports to whatever `OTEL_EXPORTER_OTLP_ENDPOINT` it can reach, which by construction is now nothing useful. Distributed-tracing-based behavioural analysis of agent runs is therefore unavailable across all `ICodingAgent` adapters (Gap 5 of D9 validation).
+
+**Fix (this commit series — partial)**:
+
+1. `documentation/architecture/infrastructure/otel-routing.md` documents four candidate mechanisms (in-container `otelcol` sidecar, `host.docker.internal` receiver, OTel file exporter, console exporter) and selects **Approach A — in-container `otelcol` sidecar** as the path forward. The decision rationale walks each option against C1–C6 (DEF-014 bridge-network constraint, INV-16 filesystem-extraction rules, INV-11 resilience placement, etc.). Approaches B/C/D rejected: B requires an `IContainer.extra_hosts` port extension and a long-lived TCP receiver inside the orchestrator; C depends on an OTel SDK feature that doesn't exist in Claude Code; D parses `console.dir` output (JS object-literal syntax, not JSON) which is explicitly unstable per OTel spec.
+
+2. `src/codetoreum/adapters/secondary/claude_code/otel_span_parser.py` lands the **parser** for OTLP/JSON envelopes (as emitted by `otelcol`'s file exporter). The parser is stateless, isolated from the strategy, and flattens OTLP/JSON's typed-attribute encoding to a flat `{k: v}` dict while preserving the original span in `raw_span` for faithful re-export by a future `IObservabilityProvider` adapter. 52 unit tests cover the captured-fixture happy path, typed-attribute unwrapping across all OTLP value types, status code mapping, parent-span-id normalisation, nanosecond timestamp conversion, and malformed-input handling.
+
+**Deferred (next implementation cycle)**:
+
+- `Dockerfile.agent` bundles a static `otelcol` binary at `/usr/local/bin/otelcol` and a config file at `/etc/otelcol/config.yaml` with an OTLP receiver on `127.0.0.1:4318` and a file exporter writing OTLP/JSON to `/var/otel/spans.jsonl`.
+- `scripts/agent-entrypoint.sh` launches `otelcol` in the background, waits for receiver readiness, then `exec`s the agent command.
+- `ContainerizedClaudeStrategy._build_volumes` carves a per-execution telemetry mount at `/var/otel`.
+- `ContainerizedClaudeStrategy.execute` calls `parse_spans_file(...)` after the agent process exits (before container removal) and publishes each `CodingAgentOtlpSpanEvent` to the event bus.
+- End-to-end integration test that runs the agent image, captures spans, and asserts events land in ES under the `coding-agent-<execution_id>` stream.
+
+**Files changed (this round)**: `documentation/architecture/infrastructure/otel-routing.md`, `src/codetoreum/adapters/secondary/claude_code/otel_span_parser.py`, `tests/unit/adapters/secondary/claude_code/test_otel_span_parser.py`, `tests/unit/adapters/secondary/claude_code/fixtures/otlp_spans_sample.jsonl`.
+
+**Cross-references**: O3 in `~/.claude/plans/coding-agent-port-redesign.md` §"Open Questions"; Gap 5 in `documentation/architecture/adapters/planned/coding-agent-port-validation.md`; DEF-014 (motivation); INV-15 / INV-16 (constraints).
+
+---
+
 ### DEF-018 — `CodingAgent*` events never persisted to event store
 
 **Status**: Fixed in commit `5b860f08` (D7).

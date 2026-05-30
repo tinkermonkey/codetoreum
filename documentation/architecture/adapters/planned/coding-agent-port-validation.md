@@ -144,6 +144,8 @@ Each `ICodingAgent` adapter's spec must declare which Tier 2 and Tier 3 events i
 
 **Recommendation**: track separately — this is not an `ICodingAgent` port-shape problem; the port already accepts `CodingAgentOtlpSpanEvent` as a valid event. The blockage is upstream (vendor surfaces) and downstream (sidecar collector design). **No port changes needed; keep tracking as O3 in the proposal.**
 
+**Status update (2026-05-30)**: O3 partially resolved by DEF-019 — see [`../../infrastructure/otel-routing.md`](../../infrastructure/otel-routing.md). Approach chosen: in-container `otelcol` sidecar emitting OTLP/JSON via the collector's file exporter; the adapter reads `/var/otel/spans.jsonl` after the agent exits and emits `CodingAgentOtlpSpanEvent` to the event bus. **Parser landed** (`src/codetoreum/adapters/secondary/claude_code/otel_span_parser.py`, 52 unit tests). **Strategy wiring + agent image sidecar deferred** to the next implementation cycle. Codex (Approach A is mode-agnostic enough that the same image + parser apply) gets it for free once strategy wiring lands; Copilot remains uncovered (no OTel from that vendor at all).
+
 ## Retention Adequacy
 
 The 14-day default retention on granular `CodingAgent*` events (Q1 Lean, INV-15) was sized against the expected high volume from `ClaudeCodeAdapter` (D7 measured 67+ events per execution). Adequacy across the three adapters:
