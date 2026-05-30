@@ -271,8 +271,12 @@ class ProductionApplicationBootstrap:
                 # Non-critical slots use mocks (logged as warnings)
                 review_cycle="basic",
                 pr_review_cycle="basic",
-                systemic_analysis="mock",  # D5 retired ILLMProvider; LLMSystemicAnalysisAdapter not yet migrated to ICodingAgent
-                environment_repair="mock",
+                # Post-D9 cleanup item #2 migrated the three repair adapters
+                # to the new ICodingAgent contract; the production variants
+                # are wireable again via the resolver's
+                # _create_coding_agent_factory helper.
+                systemic_analysis="llm",
+                environment_repair="production",
             )
 
         self.config = adapter_config
