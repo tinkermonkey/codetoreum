@@ -23,7 +23,6 @@ volumes:
   postgres_data:
   redis_data:
   elasticsearch_data:
-  minio_data:
 
 services:
   # ========================================================================
@@ -198,31 +197,6 @@ services:
 
     ports:
       - "${ELASTICSEARCH_PORT:-9200}:9200"
-
-  # ========================================================================
-  # Minio — S3-compatible Object Storage for Agent Artifacts
-  # ========================================================================
-  minio:
-    image: minio/minio:latest
-    container_name: codetoreum-minio
-    restart: unless-stopped
-    command: server /data --console-address ":9001"
-    ports:
-      - "${MINIO_API_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
-    environment:
-      MINIO_ROOT_USER: "${MINIO_ACCESS_KEY:-minioadmin}"
-      MINIO_ROOT_PASSWORD: "${MINIO_SECRET_KEY:-minioadmin}"
-    volumes:
-      - minio_data:/data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-    networks:
-      - default
 
   # ========================================================================
   # OpenTelemetry Collector — Metrics/Traces/Logs Collection

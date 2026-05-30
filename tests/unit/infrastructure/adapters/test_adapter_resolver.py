@@ -47,7 +47,6 @@ from codetoreum.ports.output.repair_cycle_checkpoint_store import IRepairCycleCh
 from codetoreum.ports.output.repair_cycle_service import IRepairCycle
 from codetoreum.ports.output.repository import IRepository
 from codetoreum.ports.output.review_cycle_service import IReviewCycle
-from codetoreum.ports.output.storage import IStorage
 from codetoreum.ports.output.ticket_system import ITicketSystem
 from codetoreum.ports.output.version_control_service import IVersionControlService
 from codetoreum.ports.output.work_item_branch_tracker import IWorkItemBranchTracker
@@ -235,14 +234,6 @@ class TestAdapterResolver:
         # Should implement the IMetrics interface contract
         assert isinstance(metrics, IMetrics)
 
-    def test_resolve_agent_launcher(self, factory, dependencies, adapter_config):
-        """Test resolving LLM provider adapter."""
-        resolver = AdapterResolver(adapter_config, factory, dependencies)
-        llm = resolver.resolve_agent_launcher()
-
-        assert llm is not None
-        # Should be an adapter instance (may be wrapped by resilience decorator)
-
     def test_resolve_coding_agent_returns_resilience_wrapped_adapter(
         self,
         factory,
@@ -348,23 +339,17 @@ class TestAdapterResolver:
         call_order = []
 
         original_resolve_event_store = resolver.resolve_event_store
-        original_resolve_agent_launcher = resolver.resolve_agent_launcher
         original_resolve_review_cycle = resolver.resolve_review_cycle
 
         def track_event_store():
             call_order.append("event_store")
             return original_resolve_event_store()
 
-        def track_llm():
-            call_order.append("llm")
-            return original_resolve_agent_launcher()
-
         def track_review_cycle():
             call_order.append("review_cycle")
             return original_resolve_review_cycle()
 
         resolver.resolve_event_store = track_event_store
-        resolver.resolve_agent_launcher = track_llm
         resolver.resolve_review_cycle = track_review_cycle
 
         result = resolver.resolve_all()
@@ -418,26 +403,6 @@ class TestAdapterResolver:
         # The returned repair_cycle should be from the engine (access as attribute)
         assert result.repair_cycle is mock_repair_cycle
 
-    def test_resolve_review_cycle_passes_llm_to_engine(self, factory, dependencies, adapter_config):
-        """Test that review_cycle resolver passes resolved LLM to engine."""
-        resolver = AdapterResolver(adapter_config, factory, dependencies)
-
-        # Mock the engine
-        mock_review_cycle = Mock()
-        resolver._deps.engine.create_review_cycle_adapter.return_value = mock_review_cycle
-
-        # Populate _resolved with LLM first
-        resolver._resolved["llm"] = resolver.resolve_agent_launcher()
-
-        # Resolve review_cycle
-        resolver.resolve_review_cycle()
-
-        # Engine should have been called with the LLM adapter
-        resolver._deps.engine.create_review_cycle_adapter.assert_called_once()
-        call_kwargs = resolver._deps.engine.create_review_cycle_adapter.call_args[1]
-        assert "llm_adapter" in call_kwargs
-        assert call_kwargs["llm_adapter"] is resolver._resolved["llm"]
-
     def test_resolve_repair_cycle_passes_dependencies_to_engine(self, factory, dependencies, adapter_config):
         """Test that repair_cycle resolver passes resolved dependencies to engine."""
         resolver = AdapterResolver(adapter_config, factory, dependencies)
@@ -484,7 +449,6 @@ class TestAdapterResolver:
             "container",
             "event_store",
             "metrics",
-            "storage",
             "config_store",
             "notifier",
             "encryption",
@@ -537,17 +501,6 @@ class TestAdapterResolver:
             factory.get_registry("nonexistent_slot")
 
         assert "nonexistent_slot" in str(exc_info.value)
-
-    def test_resolve_storage(self, factory, dependencies, adapter_config):
-        """Test resolving storage adapter with event dependencies."""
-        resolver = AdapterResolver(adapter_config, factory, dependencies)
-        # Resolve event_emitter first since storage depends on it
-        resolver._resolved["event_emitter"] = resolver.resolve_event_emitter()
-        storage = resolver.resolve_storage()
-
-        assert storage is not None
-        # Should implement IStorage interface
-        assert isinstance(storage, IStorage)
 
     def test_resolve_encryption(self, factory, dependencies, adapter_config):
         """Test resolving encryption service adapter."""

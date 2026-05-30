@@ -43,7 +43,6 @@ from codetoreum.ports.output.repair_cycle_checkpoint_store import IRepairCycleCh
 from codetoreum.ports.output.repair_cycle_service import IRepairCycle
 from codetoreum.ports.output.repository import IRepository
 from codetoreum.ports.output.review_cycle_service import IReviewCycle
-from codetoreum.ports.output.storage import IStorage
 from codetoreum.ports.output.systemic_analysis_service import ISystemicAnalysisService
 from codetoreum.ports.output.ticket_system import ITicketSystem
 from codetoreum.ports.output.version_control_service import IVersionControlService
@@ -230,48 +229,6 @@ class AdapterResolver:
     def resolve_metrics(self) -> IMetrics:
         """Resolve metrics adapter."""
         return self._factory.create_metrics(adapter_name=self._config.metrics)
-
-    def resolve_storage(self) -> IStorage:
-        """Resolve storage adapter.
-
-        For "minio", construct a ``minio.Minio`` client from the
-        MINIO_* env vars (endpoint, access key, secret key, secure
-        flag) and inject the bucket name (default
-        ``codetoreum-artifacts``).
-        """
-        if self._config.storage == "minio":
-            import os
-
-            from minio import Minio
-
-            endpoint = os.environ.get("MINIO_ENDPOINT", "localhost:9000")
-            access_key = os.environ.get("MINIO_ACCESS_KEY", "minioadmin")
-            secret_key = os.environ.get("MINIO_SECRET_KEY", "minioadmin")
-            bucket = os.environ.get("MINIO_BUCKET", "codetoreum-artifacts")
-            secure = os.environ.get("MINIO_SECURE", "false").strip().lower() in {
-                "true",
-                "1",
-                "yes",
-                "on",
-            }
-            client = Minio(
-                endpoint,
-                access_key=access_key,
-                secret_key=secret_key,
-                secure=secure,
-            )
-            return self._factory.create_storage(
-                adapter_name=self._config.storage,
-                client=client,
-                bucket=bucket,
-                event_emitter=self._resolved["event_emitter"],
-                event_bus=self._deps.event_bus,
-            )
-        return self._factory.create_storage(
-            adapter_name=self._config.storage,
-            event_emitter=self._resolved["event_emitter"],
-            event_bus=self._deps.event_bus,
-        )
 
     def resolve_encryption(self) -> IEncryptionService:
         """Resolve encryption service adapter."""
@@ -870,7 +827,6 @@ class AdapterResolver:
         self._resolved["message_broker"] = self.resolve_message_broker()
 
         # 3. Adapters that depend on event_emitter (resolved in step 2)
-        self._resolved["storage"] = self.resolve_storage()
         self._resolved["container"] = self.resolve_container()
         self._resolved["version_control"] = self.resolve_version_control()
         self._resolved["board"] = self.resolve_board()
@@ -932,7 +888,6 @@ class AdapterResolver:
             repository=self._resolved["repository"],
             event_store=self._resolved["event_store"],
             metrics=self._resolved["metrics"],
-            storage=self._resolved["storage"],
             config_store=self._resolved["config_store"],
             notifier=self._resolved["notifier"],
             encryption=self._resolved["encryption"],

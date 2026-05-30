@@ -113,7 +113,6 @@ from codetoreum.ports.output.repository import (
     MergeResult,
     RepositoryStatus,
 )
-from codetoreum.ports.output.storage import IStorage, StorageObject
 from codetoreum.ports.output.systemic_analysis_service import (
     ISystemicAnalysisService,
 )
@@ -235,8 +234,6 @@ __all__ = [
     "MergeResult",
     "RepositoryStatus",
     # Storage
-    "IStorage",
-    "StorageObject",
     # Ticket System
     "ITicketSystem",
     "Comment",

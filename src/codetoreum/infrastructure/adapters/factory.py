@@ -59,7 +59,6 @@ from codetoreum.adapters.testing import (
     InMemoryMetricsAdapter,
     InMemoryQueueService,
     InMemoryRepositoryAdapter,
-    InMemoryStorageAdapter,
     InMemoryTicketAdapter,
     InMemoryVersionControlService,
     InMemoryWorkflowConfigService,
@@ -240,7 +239,6 @@ from codetoreum.infrastructure.adapters.registries import (
     RepairCycleRegistry,
     RepositoryRegistry,
     ReviewCycleServiceRegistry,
-    StorageRegistry,
     SystemicAnalysisRegistry,
     TicketSystemRegistry,
     VersionControlServiceRegistry,
@@ -287,7 +285,6 @@ from codetoreum.ports.output.repair_cycle_checkpoint_store import IRepairCycleCh
 from codetoreum.ports.output.repair_cycle_service import IRepairCycle
 from codetoreum.ports.output.repository import IRepository
 from codetoreum.ports.output.review_cycle_service import IReviewCycle
-from codetoreum.ports.output.storage import IStorage
 from codetoreum.ports.output.systemic_analysis_service import ISystemicAnalysisService
 from codetoreum.ports.output.ticket_system import ITicketSystem
 from codetoreum.ports.output.version_control_service import IVersionControlService
@@ -338,7 +335,6 @@ class AdapterFactory:
         self._container_registry = ContainerRegistry()
         self._repository_registry = RepositoryRegistry()
         self._event_store_registry = EventStoreRegistry()
-        self._storage_registry = StorageRegistry()
         self._board_service_registry = BoardServiceRegistry()
         self._code_review_registry = CodeReviewServiceRegistry()
         self._discussion_adapter_registry = DiscussionAdapterRegistry()
@@ -477,40 +473,6 @@ class AdapterFactory:
                     description="Elasticsearch connection URL (default: http://localhost:9200)",
                 ),
             )
-
-        # Storage Adapters
-        self._storage_registry.register(
-            name="in_memory",
-            adapter_type=InMemoryStorageAdapter,
-            description="In-memory storage for testing",
-            version="1.0.0",
-            tags=["testing", "simulation", "mock"],
-            config_schema=AdapterCredentialRequirement(
-                simulation_only=True,
-                description="Simulation-only adapter, no credentials required",
-            ),
-            set_as_default=True,
-        )
-        # Minio-backed storage for production artifact persistence.  Closes
-        # DEF-009: agent execution logs survive restart and presigned URLs
-        # are real HTTP URLs (not memory:// placeholders).
-        from codetoreum.adapters.secondary.minio_storage_adapter import MinioStorageAdapter
-
-        self._storage_registry.register(
-            name="minio",
-            adapter_type=MinioStorageAdapter,
-            description="Minio-backed object storage for production artifacts",
-            version="1.0.0",
-            tags=["production", "persistent"],
-            config_schema=AdapterCredentialRequirement(
-                env_vars=("MINIO_ENDPOINT", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY"),
-                description=(
-                    "Requires MINIO_ENDPOINT (host:port), MINIO_ACCESS_KEY, "
-                    "MINIO_SECRET_KEY env vars; optional MINIO_BUCKET and "
-                    "MINIO_SECURE."
-                ),
-            ),
-        )
 
         # Board Service Adapters
         self._board_service_registry.register(
@@ -1217,11 +1179,6 @@ class AdapterFactory:
         return self._event_store_registry
 
     @property
-    def storage_registry(self) -> StorageRegistry:
-        """Get the storage registry."""
-        return self._storage_registry
-
-    @property
     def board_service_registry(self) -> BoardServiceRegistry:
         """Get the board service registry."""
         return self._board_service_registry
@@ -1376,7 +1333,6 @@ class AdapterFactory:
             "container": self._container_registry,
             "event_store": self._event_store_registry,
             "metrics": self._metrics_registry,
-            "storage": self._storage_registry,
             "config_store": self._config_store_registry,
             "notifier": self._notifier_registry,
             "encryption": self._encryption_registry,
@@ -1669,10 +1625,6 @@ class AdapterFactory:
             kwargs["es_client"] = AsyncElasticsearch([es_url])
 
         return self._event_store_registry.create_instance(resolved_name, **kwargs)
-
-    def create_storage(self, adapter_name: str | None = None, **kwargs) -> IStorage:
-        """Create a storage adapter instance."""
-        return self._create_adapter(self._storage_registry, adapter_name, "storage", **kwargs)
 
     def create_board_service(self, adapter_name: str | None = None, **kwargs) -> IBoardService:
         """Create a board service adapter instance."""

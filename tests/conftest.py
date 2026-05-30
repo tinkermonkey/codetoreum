@@ -18,7 +18,6 @@ os.environ.setdefault("OTEL_TRACES_ENABLED", "false")
 
 from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdapter
 from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
-from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
 from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
 from codetoreum.domain.events import CodetoreumEvent, now_iso
 from codetoreum.infrastructure.event_bus import EventBus
@@ -244,18 +243,6 @@ def container_adapter() -> Generator[FakeContainerAdapter, None, None]:
         FakeContainerAdapter instance
     """
     adapter = FakeContainerAdapter()
-    yield adapter
-    adapter.clear()
-
-
-@pytest.fixture
-def storage_adapter() -> Generator[InMemoryStorageAdapter, None, None]:
-    """Create in-memory storage adapter with automatic cleanup.
-
-    Yields:
-        InMemoryStorageAdapter instance
-    """
-    adapter = InMemoryStorageAdapter()
     yield adapter
     adapter.clear()
 

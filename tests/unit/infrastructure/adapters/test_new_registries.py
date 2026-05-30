@@ -25,7 +25,6 @@ from codetoreum.adapters.testing import (
     InMemoryMessageBroker,
     InMemoryMetricsAdapter,
     InMemoryQueueService,
-    InMemoryStorageAdapter,
     InMemoryVersionControlService,
     InMemoryWorkflowConfigService,
     InMemoryWorkItemBranchTracker,

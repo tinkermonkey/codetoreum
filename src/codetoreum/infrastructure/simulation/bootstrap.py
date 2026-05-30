@@ -109,7 +109,6 @@ from codetoreum.adapters.testing import (
     MockReviewCycleAdapter,
     SimpleEncryptionAdapter,
 )
-from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
 from codetoreum.adapters.testing.mock_claude_code_adapter import MockClaudeCodeAdapter
 from codetoreum.adapters.testing.mock_systemic_analysis_adapter import (
     MockSystemicAnalysisAdapter,
@@ -245,7 +244,6 @@ from codetoreum.ports.output.repair_cycle_checkpoint_store import (
 from codetoreum.ports.output.repair_cycle_service import IRepairCycle
 from codetoreum.ports.output.repository import IRepository
 from codetoreum.ports.output.review_cycle_service import IReviewCycle
-from codetoreum.ports.output.storage import IStorage
 from codetoreum.ports.output.systemic_analysis_service import ISystemicAnalysisService
 from codetoreum.ports.output.ticket_system import ITicketSystem
 from codetoreum.ports.output.version_control_service import IVersionControlService
@@ -334,7 +332,6 @@ class SimulationAdapters:
     repository: IRepository
     event_store: IEventStore
     metrics: IMetrics
-    storage: IStorage
     config_store: IConfigStore
     notifier: INotifier
     encryption: IEncryptionService
@@ -643,16 +640,6 @@ class SimulationAdapters:
             msg = f"branch_resolution_service is {type(self.branch_resolution_service).__name__}, not MockBranchResolutionAdapter"
             raise TypeError(msg)
         return cast("MockBranchResolutionAdapter", self.branch_resolution_service)
-
-    def storage_as_memory(self) -> InMemoryStorageAdapter:
-        """Get storage as InMemoryStorageAdapter.
-
-        Raises TypeError if storage is not InMemoryStorageAdapter.
-        """
-        if not isinstance(self.storage, InMemoryStorageAdapter):
-            msg = f"storage is {type(self.storage).__name__}, not InMemoryStorageAdapter"
-            raise TypeError(msg)
-        return cast("InMemoryStorageAdapter", self.storage)
 
     def event_store_as_memory(self) -> InMemoryEventStore:
         """Get event store as InMemoryEventStore.
@@ -1389,11 +1376,6 @@ class SimulationApplicationBootstrap:
         if isinstance(resolved.identity_service, ConfigurableIdentityService):
             resolved.identity_service.set_bot_username("codetoreum-bot")
 
-        # Post-process storage adapter: inject container for file retrieval
-        # (storage depends on container, so we inject it after resolution)
-        if isinstance(resolved.storage, InMemoryStorageAdapter):
-            resolved.storage.container = resolved.container
-
         # Wire systemic analysis service to repair cycle adapter for dispatch logic
         # This enables the mock repair cycle adapter to dispatch to systemic_fix based on cross_cutting
         from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
@@ -1521,7 +1503,7 @@ class SimulationApplicationBootstrap:
 
         Key dependencies documented here:
         - InMemoryQueueService subscribes to WorkItemColumnChangedEvent
-        - InMemoryStorageAdapter subscribes to ContainerExecutionCompletedEvent
+        - (InMemoryStorageAdapter subscription retired in Phase D5)
         - RepairCycleAdapter subscribes to WorkItemColumnChangedEvent
         - ReviewCycleAdapter receives events via event emitter (event-driven)
         """
@@ -1531,13 +1513,8 @@ class SimulationApplicationBootstrap:
 
         registry = self.infrastructure.causal_link_registry
 
-        # Container adapter → Storage adapter (test results flow)
-        registry.register_dependency(
-            source="FakeContainerAdapter",
-            target="InMemoryStorageAdapter",
-            link_type=LinkType.TEST_RESULTS,
-            metadata={"event_type": "ContainerExecutionCompletedEvent", "purpose": "Store execution artifacts"},
-        )
+        # InMemoryStorageAdapter dependency edge retired in Phase D5
+        # (IStorage / Minio storage retired entirely).
 
         # Container adapter → Repair cycle adapter (test output feeds repair decisions)
         registry.register_dependency(
@@ -1572,13 +1549,7 @@ class SimulationApplicationBootstrap:
             metadata={"purpose": "Trigger repair cycle when item moves to repair stage"},
         )
 
-        # Event bus → Storage adapter (container completion stores artifacts)
-        registry.register_event_subscription(
-            publisher="EventBus",
-            subscriber="InMemoryStorageAdapter",
-            event_type="ContainerExecutionCompletedEvent",
-            metadata={"purpose": "Store container execution artifacts"},
-        )
+        # InMemoryStorageAdapter event subscription retired in Phase D5.
 
         logger.info(
             f"Registered {len(registry.get_all_links())} causal links and "

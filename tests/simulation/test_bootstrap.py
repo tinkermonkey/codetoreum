@@ -328,12 +328,7 @@ class TestCausalLinkRegistryIntegration:
         assert len(all_links) > 0, "No causal links registered"
 
         # Check for specific expected links
-        container_to_storage = registry.get_links(
-            source="FakeContainerAdapter",
-            target="InMemoryStorageAdapter",
-        )
-        assert len(container_to_storage) > 0, "Container → Storage link not registered"
-
+        # (InMemoryStorageAdapter link retired in Phase D5)
         container_to_repair = registry.get_links(
             source="FakeContainerAdapter",
             target="MockRepairCycleAdapter",
@@ -363,11 +358,7 @@ class TestCausalLinkRegistryIntegration:
         )
         assert len(queue_subs) > 0, "Queue service subscription not registered"
 
-        storage_subs = registry.get_subscriptions(
-            subscriber="InMemoryStorageAdapter",
-            event_type="ContainerExecutionCompletedEvent",
-        )
-        assert len(storage_subs) > 0, "Storage adapter subscription not registered"
+        # InMemoryStorageAdapter event subscription retired in Phase D5.
 
         await bootstrap.teardown()
 

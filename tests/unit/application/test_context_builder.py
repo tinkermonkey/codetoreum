@@ -99,11 +99,10 @@ def mock_storage():
 
 
 @pytest.fixture
-def context_builder(mock_ticket_system, mock_storage, tmp_path):
+def context_builder(mock_ticket_system, tmp_path):
     """Create context builder with mock adapters."""
     return ContextBuilder(
         ticket_system=mock_ticket_system,
-        storage=mock_storage,
         workspace_base_path=tmp_path,
     )
 
@@ -492,27 +491,24 @@ async def test_build_execution_context_with_previous_session(
 
 
 @pytest.mark.asyncio
-async def test_context_builder_init_with_custom_path(mock_ticket_system, mock_storage, tmp_path):
+async def test_context_builder_init_with_custom_path(mock_ticket_system, tmp_path):
     """Test context builder initialization with custom workspace path."""
     custom_path = tmp_path / "custom_workspace"
 
     builder = ContextBuilder(
         ticket_system=mock_ticket_system,
-        storage=mock_storage,
         workspace_base_path=custom_path,
     )
 
     assert builder.workspace_base_path == custom_path
     assert builder.ticket_system == mock_ticket_system
-    assert builder.storage == mock_storage
 
 
 @pytest.mark.asyncio
-async def test_context_builder_init_with_default_path(mock_ticket_system, mock_storage):
+async def test_context_builder_init_with_default_path(mock_ticket_system):
     """Test context builder initialization with default workspace path."""
     builder = ContextBuilder(
         ticket_system=mock_ticket_system,
-        storage=mock_storage,
     )
 
     # Should use /tmp/codetoreum by default

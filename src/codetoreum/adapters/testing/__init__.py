@@ -28,7 +28,6 @@ from codetoreum.adapters.testing.in_memory_queue_service import InMemoryQueueSer
 from codetoreum.adapters.testing.in_memory_repository_adapter import (
     InMemoryRepositoryAdapter,
 )
-from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
 from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
 from codetoreum.adapters.testing.in_memory_tracer import InMemoryTracer
 from codetoreum.adapters.testing.in_memory_version_control_service import (
@@ -93,7 +92,6 @@ __all__ = [
     "InMemoryMetricsAdapter",
     "InMemoryQueueService",
     "InMemoryRepositoryAdapter",
-    "InMemoryStorageAdapter",
     "InMemoryTicketAdapter",
     "InMemoryTracer",
     "InMemoryVersionControlService",

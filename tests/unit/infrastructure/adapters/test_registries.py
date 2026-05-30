@@ -25,7 +25,6 @@ from codetoreum.infrastructure.adapters import (
     ContainerRegistry,
     EventStoreRegistry,
     RepositoryRegistry,
-    StorageRegistry,
     TicketSystemRegistry,
 )
 
@@ -313,15 +312,6 @@ class TestEventStoreRegistry:
 
         assert registry.has_adapter("in_memory")
         assert registry.get("in_memory") == InMemoryEventStore
-
-
-class TestStorageRegistry:
-    """Test cases for StorageRegistry."""
-
-    def test_initialization(self):
-        """Test registry initialization."""
-        registry = StorageRegistry()
-        assert len(registry) == 0
 
 
 class TestAdapterMetadata:

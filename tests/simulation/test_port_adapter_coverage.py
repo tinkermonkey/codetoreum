@@ -60,7 +60,6 @@ from codetoreum.adapters.testing.in_memory_queue_service import InMemoryQueueSer
 from codetoreum.adapters.testing.in_memory_repository_adapter import (
     InMemoryRepositoryAdapter,
 )
-from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
 from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
 from codetoreum.adapters.testing.in_memory_version_control_service import (
     InMemoryVersionControlService,
@@ -120,7 +119,6 @@ from codetoreum.ports.output.repair_cycle_checkpoint_store import (
 from codetoreum.ports.output.repair_cycle_service import IRepairCycle
 from codetoreum.ports.output.repository import IRepository
 from codetoreum.ports.output.review_cycle_service import IReviewCycle
-from codetoreum.ports.output.storage import IStorage
 from codetoreum.ports.output.ticket_system import ITicketSystem
 from codetoreum.ports.output.version_control_service import IVersionControlService
 from codetoreum.ports.output.work_item_branch_tracker import IWorkItemBranchTracker
@@ -188,7 +186,6 @@ PORT_ADAPTER_MAPPING = [
     # Core Infrastructure
     ("IContainer", IContainer, FakeContainerAdapter),
     ("IEventStore", IEventStore, InMemoryEventStore),
-    ("IStorage", IStorage, InMemoryStorageAdapter),
     ("IConfigStore", IConfigStore, InMemoryConfigStore),
     ("IRepository", IRepository, InMemoryRepositoryAdapter),
     ("ITicketSystem", ITicketSystem, InMemoryTicketAdapter),

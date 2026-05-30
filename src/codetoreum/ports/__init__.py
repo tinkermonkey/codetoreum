@@ -48,7 +48,6 @@ from codetoreum.ports.output import (
     IMetrics,
     INotifier,
     IRepository,
-    IStorage,
     ITicketSystem,
     MergeResult,
     MetricData,
@@ -58,7 +57,6 @@ from codetoreum.ports.output import (
     NotificationResult,
     RepositoryStatus,
     RichContent,
-    StorageObject,
 )
 
 __all__ = [
@@ -113,8 +111,6 @@ __all__ = [
     "IRepository",
     "MergeResult",
     "RepositoryStatus",
-    "IStorage",
-    "StorageObject",
     "ITicketSystem",
     "Comment",
 ]

@@ -32,7 +32,6 @@ from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.identity_service import IIdentityService
 from codetoreum.ports.output.pipeline_lock_service import IPipelineLockService
 from codetoreum.ports.output.repository import IRepository
-from codetoreum.ports.output.storage import IStorage
 from codetoreum.ports.output.version_control_service import IVersionControlService
 from codetoreum.ports.output.work_item_service import IWorkItemService
 
@@ -53,7 +52,6 @@ class ContractTestGenerator:
         "IIdentityService": IIdentityService,
         "IPipelineLockService": IPipelineLockService,
         "IRepository": IRepository,
-        "IStorage": IStorage,
         "IVersionControlService": IVersionControlService,
         "IWorkItemService": IWorkItemService,
     }

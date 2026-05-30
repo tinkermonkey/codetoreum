@@ -18,7 +18,7 @@ from codetoreum.domain.value_objects import ExecutionContext
 from codetoreum.domain.work_item import WorkItem
 from codetoreum.domain.workspace_context import WorkspaceContext
 from codetoreum.ports.exceptions import ResourceNotFoundError, TicketSystemError
-from codetoreum.ports.output import IStorage, ITicketSystem
+from codetoreum.ports.output import ITicketSystem
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +57,6 @@ class ContextBuilder:
     def __init__(
         self,
         ticket_system: ITicketSystem,
-        storage: IStorage,
         workspace_base_path: Path | None = None,
     ):
         """
@@ -65,11 +64,9 @@ class ContextBuilder:
 
         Args:
             ticket_system: Ticket system adapter for fetching work items
-            storage: Storage adapter for persisting context files
             workspace_base_path: Base path for workspace files
         """
         self.ticket_system = ticket_system
-        self.storage = storage
         self.workspace_base_path = workspace_base_path or Path("/tmp/codetoreum")
 
     async def build_execution_context(

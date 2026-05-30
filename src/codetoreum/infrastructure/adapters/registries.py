@@ -39,7 +39,6 @@ from codetoreum.ports.output.repair_cycle_checkpoint_store import IRepairCycleCh
 from codetoreum.ports.output.repair_cycle_service import IRepairCycle
 from codetoreum.ports.output.repository import IRepository
 from codetoreum.ports.output.review_cycle_service import IReviewCycle
-from codetoreum.ports.output.storage import IStorage
 from codetoreum.ports.output.systemic_analysis_service import ISystemicAnalysisService
 from codetoreum.ports.output.ticket_system import ITicketSystem
 from codetoreum.ports.output.version_control_service import IVersionControlService
@@ -356,29 +355,6 @@ class EventStoreRegistry(AdapterRegistry[IEventStore]):
 
         Returns:
             True if adapter implements all IEventStore methods
-        """
-        return _validate_adapter_implements_interface(adapter_type, self._port_interface)
-
-
-class StorageRegistry(AdapterRegistry[IStorage]):
-    """Registry for IStorage adapter implementations."""
-
-    def __init__(self):
-        """Initialize the storage registry."""
-        super().__init__(IStorage)
-
-    def _is_valid_adapter(self, adapter_type: type[IStorage]) -> bool:
-        """
-        Validate that an adapter implements IStorage.
-
-        Uses dynamic introspection to check that the adapter class implements
-        all required methods from the IStorage interface.
-
-        Args:
-            adapter_type: The adapter class to validate
-
-        Returns:
-            True if adapter implements all IStorage methods
         """
         return _validate_adapter_implements_interface(adapter_type, self._port_interface)
 

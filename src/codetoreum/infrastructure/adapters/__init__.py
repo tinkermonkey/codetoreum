@@ -15,7 +15,6 @@ from codetoreum.infrastructure.adapters.registries import (
     ContainerRegistry,
     EventStoreRegistry,
     RepositoryRegistry,
-    StorageRegistry,
     TicketSystemRegistry,
 )
 from codetoreum.infrastructure.adapters.registry_base import (
@@ -32,7 +31,6 @@ __all__ = [
     "ContainerRegistry",
     "RepositoryRegistry",
     "EventStoreRegistry",
-    "StorageRegistry",
     # Factory
     "AdapterFactory",
     "AdapterFactoryConfig",

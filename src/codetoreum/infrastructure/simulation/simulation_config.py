@@ -38,7 +38,6 @@ class AdapterSelectionConfig:
     container: str = "fake"
     event_store: str = "in_memory"
     metrics: str = "in_memory"
-    storage: str = "in_memory"
     config_store: str = "in_memory"
     notifier: str = "mock"
     encryption: str = "simple"
