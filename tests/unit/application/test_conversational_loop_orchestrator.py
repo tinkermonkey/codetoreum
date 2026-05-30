@@ -9,6 +9,7 @@ Tests verify the core orchestration logic without external dependencies:
 """
 
 from datetime import UTC, datetime
+from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -16,6 +17,8 @@ import pytest
 from codetoreum.application.conversational_loop_orchestrator import (
     ConversationalLoopOrchestrator,
 )
+from codetoreum.domain.agent import Agent, AgentCapability, AgentType, CommitPolicy
+from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
 from codetoreum.domain.conversational_session import ConversationalSessionState
 from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.domain.events.discussion_events import (
@@ -24,6 +27,12 @@ from codetoreum.domain.events.discussion_events import (
     CommentContext,
     CommentNeedsResponseEvent,
 )
+from codetoreum.domain.work_item import (
+    WorkItem,
+    WorkItemPriority,
+    WorkItemStatus,
+)
+from codetoreum.ports.output.coding_agent import CodingAgentResult
 
 
 @pytest.fixture
@@ -37,11 +46,108 @@ def mock_discussion_adapter():
 
 
 @pytest.fixture
-def mock_llm_provider():
-    """Create a mock LLM provider."""
-    provider = MagicMock()
-    provider.continue_conversation = AsyncMock()
-    return provider
+def mock_coding_agent():
+    """Create a mock ICodingAgent."""
+    from codetoreum.domain.coding_agent_types import InvocationMode
+
+    agent = MagicMock()
+    agent.supported_invocation_modes = MagicMock(
+        return_value=frozenset({InvocationMode.CONTAINERIZED, InvocationMode.HOST})
+    )
+    agent.execute = AsyncMock(
+        return_value=CodingAgentResult(
+            success=True,
+            summary_text="default mock response",
+            total_cost_usd=Decimal("0.00"),
+            total_input_tokens=0,
+            total_output_tokens=0,
+            tool_call_count=0,
+            duration_ms=0,
+            error_summary=None,
+        )
+    )
+    return agent
+
+
+@pytest.fixture
+def mock_prompt_builder():
+    """Create a mock IPromptBuilder."""
+    builder = MagicMock()
+    builder.build = AsyncMock()
+    return builder
+
+
+@pytest.fixture
+def sample_agent():
+    """Create a sample Agent for tests."""
+    agent = Agent(
+        id="agent-1",
+        name="code-reviewer",
+        display_name="Code Reviewer",
+        agent_type=AgentType.REVIEWER,
+        capabilities={"code_review": AgentCapability(skill="code_review", proficiency=0.9)},
+        role_description="Reviews code changes for correctness",
+        model="claude-sonnet-4-5",
+        timeout_seconds=300,
+        max_retries=3,
+        requires_docker=True,
+        requires_dev_container=False,
+        makes_code_changes=False,
+        filesystem_write_allowed=True,
+        mcp_servers=[],
+        metadata={},
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        coding_agent="claude_code",
+        invocation=AgentInvocationConfig(
+            mode=InvocationMode.CONTAINERIZED,
+            model="claude-sonnet-4-5",
+            timeout_seconds=300,
+            mode_config={"image": "codetoreum-agent:latest"},
+        ),
+    )
+    return agent
+
+
+@pytest.fixture
+def mock_agent_repository(sample_agent):
+    """Create a mock IAgentRepository."""
+    repo = MagicMock()
+    repo.get_by_name = AsyncMock(return_value=sample_agent)
+    repo.get_by_id = AsyncMock(return_value=sample_agent)
+    return repo
+
+
+@pytest.fixture
+def sample_work_item():
+    """Create a sample WorkItem for tests."""
+    return WorkItem(
+        id="issue-42",
+        project_id="proj-1",
+        title="Test issue",
+        description="Test description",
+        status=WorkItemStatus.IN_PROGRESS,
+        priority=WorkItemPriority.MEDIUM,
+        labels=[],
+        external_id="42",
+        external_url=None,
+        assigned_agent_id="agent-1",
+        assigned_at=datetime.now(UTC),
+        current_workflow_id=None,
+        current_stage=None,
+        current_column="In Review",
+        entered_column_at=datetime.now(UTC),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+
+
+@pytest.fixture
+def mock_work_item_service(sample_work_item):
+    """Create a mock IWorkItemService."""
+    service = MagicMock()
+    service.get_work_item = AsyncMock(return_value=sample_work_item)
+    return service
 
 
 @pytest.fixture
@@ -57,11 +163,21 @@ def mock_event_store():
 
 
 @pytest.fixture
-def orchestrator(mock_discussion_adapter, mock_llm_provider, mock_event_store):
+def orchestrator(
+    mock_discussion_adapter,
+    mock_coding_agent,
+    mock_prompt_builder,
+    mock_agent_repository,
+    mock_work_item_service,
+    mock_event_store,
+):
     """Create a ConversationalLoopOrchestrator instance with mocks."""
     return ConversationalLoopOrchestrator(
         discussion_adapter=mock_discussion_adapter,
-        llm_provider=mock_llm_provider,
+        coding_agent=mock_coding_agent,
+        prompt_builder=mock_prompt_builder,
+        agent_repository=mock_agent_repository,
+        work_item_service=mock_work_item_service,
         event_store=mock_event_store,
     )
 
@@ -202,7 +318,8 @@ class TestHandleCommentEvent:
         self,
         orchestrator,
         mock_discussion_adapter,
-        mock_llm_provider,
+        mock_coding_agent,
+        mock_prompt_builder,
         mock_event_store,
         sample_session_state,
         sample_comment,
@@ -213,10 +330,18 @@ class TestHandleCommentEvent:
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         # Mock agent execution
-        mock_execution_result = MagicMock()
-        mock_execution_result.content = "This is the agent's response."
-        mock_execution_result.conversation_id = "conv-abc123"
-        mock_llm_provider.continue_conversation = AsyncMock(return_value=mock_execution_result)
+        mock_coding_agent.execute = AsyncMock(
+            return_value=CodingAgentResult(
+                success=True,
+                summary_text="This is the agent's response.",
+                total_cost_usd=Decimal("0.00"),
+                total_input_tokens=0,
+                total_output_tokens=0,
+                tool_call_count=0,
+                duration_ms=0,
+                error_summary=None,
+            )
+        )
 
         # Mock comment posting with proper Comment object
         mock_response_comment = Comment(
@@ -246,11 +371,15 @@ class TestHandleCommentEvent:
         # Handle comment event
         await orchestrator.handle_comment_event(event)
 
-        # Verify agent execution
-        mock_llm_provider.continue_conversation.assert_called_once()
-        call_kwargs = mock_llm_provider.continue_conversation.call_args[1]
-        assert call_kwargs["conversation_id"] == "conv-abc123"
-        assert "Can you explain section 2" in call_kwargs["message"]
+        # Verify agent execution. The execute() call signature is
+        # (execution, workspace_context, options) — we just confirm it was called
+        # and that the comment text reached the prompt builder.
+        mock_coding_agent.execute.assert_called_once()
+        # Verify prompt_builder.build received prior_outputs containing the
+        # current comment text (the agent-facing channel for thread context).
+        builder_call = mock_prompt_builder.build.call_args
+        prior_outputs = builder_call.kwargs["prior_outputs"]
+        assert any("Can you explain section 2" in po.output for po in prior_outputs)
 
         # Verify response posting
         mock_discussion_adapter.add_comment.assert_called_once()
@@ -274,13 +403,14 @@ class TestHandleCommentEvent:
         assert events[0].comment_id == sample_comment.id  # Human comment being responded to
         assert events[0].response_comment_id == "comment-12"  # Agent's response comment ID
         assert events[0].agent_name == "code-reviewer"
+        # conversation_id flows from session_state.llm_conversation_id (kept for legacy)
         assert events[0].conversation_id == "conv-abc123"
 
     async def test_handle_comment_empty_response(
         self,
         orchestrator,
         mock_discussion_adapter,
-        mock_llm_provider,
+        mock_coding_agent,
         mock_event_store,
         sample_session_state,
         sample_comment,
@@ -293,10 +423,18 @@ class TestHandleCommentEvent:
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         # Mock agent execution returning empty content
-        mock_execution_result = MagicMock()
-        mock_execution_result.content = ""  # Empty response
-        mock_execution_result.conversation_id = "conv-abc123"
-        mock_llm_provider.continue_conversation = AsyncMock(return_value=mock_execution_result)
+        mock_coding_agent.execute = AsyncMock(
+            return_value=CodingAgentResult(
+                success=True,
+                summary_text="",  # Empty response
+                total_cost_usd=Decimal("0.00"),
+                total_input_tokens=0,
+                total_output_tokens=0,
+                tool_call_count=0,
+                duration_ms=0,
+                error_summary=None,
+            )
+        )
 
         # Create event with comment
         event = CommentNeedsResponseEvent(
@@ -320,7 +458,7 @@ class TestHandleCommentEvent:
         assert "empty response" in str(exc_info.value).lower()
 
         # Verify agent execution was called
-        mock_llm_provider.continue_conversation.assert_called_once()
+        mock_coding_agent.execute.assert_called_once()
 
         # Verify no comment was posted (agent response never reached posting stage)
         mock_discussion_adapter.add_comment.assert_not_called()
@@ -415,7 +553,7 @@ class TestHandleCommentEvent:
         self,
         orchestrator,
         mock_discussion_adapter,
-        mock_llm_provider,
+        mock_coding_agent,
         mock_event_store,
         sample_session_state,
         sample_comment,
@@ -455,7 +593,7 @@ class TestHandleCommentEvent:
         await orchestrator.handle_comment_event(event)
 
         # Verify agent was NOT executed
-        mock_llm_provider.continue_conversation.assert_not_called()
+        mock_coding_agent.execute.assert_not_called()
 
         # Verify comment was NOT posted
         mock_discussion_adapter.add_comment.assert_not_called()
@@ -464,7 +602,7 @@ class TestHandleCommentEvent:
         self,
         orchestrator,
         mock_discussion_adapter,
-        mock_llm_provider,
+        mock_coding_agent,
         mock_event_store,
         sample_session_state,
         sample_comment,
@@ -475,10 +613,18 @@ class TestHandleCommentEvent:
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         # Mock agent execution
-        mock_execution_result = MagicMock()
-        mock_execution_result.content = "This is the agent's response."
-        mock_execution_result.conversation_id = "conv-abc123"
-        mock_llm_provider.continue_conversation = AsyncMock(return_value=mock_execution_result)
+        mock_coding_agent.execute = AsyncMock(
+            return_value=CodingAgentResult(
+                success=True,
+                summary_text="This is the agent's response.",
+                total_cost_usd=Decimal("0.00"),
+                total_input_tokens=0,
+                total_output_tokens=0,
+                tool_call_count=0,
+                duration_ms=0,
+                error_summary=None,
+            )
+        )
 
         # Mock adapter returning None (invalid response)
         mock_discussion_adapter.add_comment = AsyncMock(return_value=None)
@@ -504,7 +650,7 @@ class TestHandleCommentEvent:
         self,
         orchestrator,
         mock_discussion_adapter,
-        mock_llm_provider,
+        mock_coding_agent,
         mock_event_store,
         sample_session_state,
         sample_comment,
@@ -515,10 +661,18 @@ class TestHandleCommentEvent:
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         # Mock agent execution
-        mock_execution_result = MagicMock()
-        mock_execution_result.content = "This is the agent's response."
-        mock_execution_result.conversation_id = "conv-abc123"
-        mock_llm_provider.continue_conversation = AsyncMock(return_value=mock_execution_result)
+        mock_coding_agent.execute = AsyncMock(
+            return_value=CodingAgentResult(
+                success=True,
+                summary_text="This is the agent's response.",
+                total_cost_usd=Decimal("0.00"),
+                total_input_tokens=0,
+                total_output_tokens=0,
+                tool_call_count=0,
+                duration_ms=0,
+                error_summary=None,
+            )
+        )
 
         # Mock adapter returning invalid type
         mock_discussion_adapter.add_comment = AsyncMock(return_value={"id": "comment-12"})  # dict instead of Comment
@@ -544,7 +698,7 @@ class TestHandleCommentEvent:
         self,
         orchestrator,
         mock_discussion_adapter,
-        mock_llm_provider,
+        mock_coding_agent,
         mock_event_store,
         sample_session_state,
         sample_comment,
@@ -555,10 +709,18 @@ class TestHandleCommentEvent:
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         # Mock agent execution
-        mock_execution_result = MagicMock()
-        mock_execution_result.content = "This is the agent's response."
-        mock_execution_result.conversation_id = "conv-abc123"
-        mock_llm_provider.continue_conversation = AsyncMock(return_value=mock_execution_result)
+        mock_coding_agent.execute = AsyncMock(
+            return_value=CodingAgentResult(
+                success=True,
+                summary_text="This is the agent's response.",
+                total_cost_usd=Decimal("0.00"),
+                total_input_tokens=0,
+                total_output_tokens=0,
+                tool_call_count=0,
+                duration_ms=0,
+                error_summary=None,
+            )
+        )
 
         # Mock adapter returning comment with empty ID
         # Create a mock that will pass isinstance(obj, Comment) check
@@ -587,7 +749,7 @@ class TestHandleCommentEvent:
         self,
         orchestrator,
         mock_discussion_adapter,
-        mock_llm_provider,
+        mock_coding_agent,
         mock_event_store,
         sample_session_state,
         sample_comment,
@@ -609,10 +771,18 @@ class TestHandleCommentEvent:
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         # Mock agent execution returning None for conversation_id
-        mock_execution_result = MagicMock()
-        mock_execution_result.content = "This is the agent's response."
-        mock_execution_result.conversation_id = None  # LLM returned None
-        mock_llm_provider.continue_conversation = AsyncMock(return_value=mock_execution_result)
+        mock_coding_agent.execute = AsyncMock(
+            return_value=CodingAgentResult(
+                success=True,
+                summary_text="This is the agent's response.",
+                total_cost_usd=Decimal("0.00"),
+                total_input_tokens=0,
+                total_output_tokens=0,
+                tool_call_count=0,
+                duration_ms=0,
+                error_summary=None,
+            )
+        )
 
         # Mock adapter returning comment with ID
         posted_comment = MagicMock(spec=Comment)
@@ -636,7 +806,7 @@ class TestHandleCommentEvent:
         await orchestrator.handle_comment_event(event)
 
         # Verify agent execution was called
-        mock_llm_provider.continue_conversation.assert_called_once()
+        mock_coding_agent.execute.assert_called_once()
 
         # Verify comment was posted
         mock_discussion_adapter.add_comment.assert_called_once()
@@ -651,7 +821,7 @@ class TestHandleCommentEvent:
         self,
         orchestrator,
         mock_discussion_adapter,
-        mock_llm_provider,
+        mock_coding_agent,
         mock_event_store,
         sample_session_state,
         sample_comment,
@@ -679,10 +849,18 @@ class TestHandleCommentEvent:
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         # Mock agent execution
-        mock_execution_result = MagicMock()
-        mock_execution_result.content = "Agent response to the comment."
-        mock_execution_result.conversation_id = "conv-abc123"
-        mock_llm_provider.continue_conversation = AsyncMock(return_value=mock_execution_result)
+        mock_coding_agent.execute = AsyncMock(
+            return_value=CodingAgentResult(
+                success=True,
+                summary_text="Agent response to the comment.",
+                total_cost_usd=Decimal("0.00"),
+                total_input_tokens=0,
+                total_output_tokens=0,
+                tool_call_count=0,
+                duration_ms=0,
+                error_summary=None,
+            )
+        )
 
         # Mock adapter returning comment with ID
         posted_comment = MagicMock(spec=Comment)
@@ -709,7 +887,7 @@ class TestHandleCommentEvent:
         await orchestrator.handle_comment_event(event)
 
         # Verify LLM execution was called (doesn't terminate on column change)
-        mock_llm_provider.continue_conversation.assert_called_once()
+        mock_coding_agent.execute.assert_called_once()
 
         # Verify comment was posted
         mock_discussion_adapter.add_comment.assert_called_once()
@@ -722,7 +900,7 @@ class TestHandleCommentEvent:
         self,
         orchestrator,
         mock_discussion_adapter,
-        mock_llm_provider,
+        mock_coding_agent,
         mock_event_store,
         sample_session_state,
         sample_comment,
@@ -733,10 +911,18 @@ class TestHandleCommentEvent:
         mock_event_store.get_latest_snapshot = AsyncMock(return_value=snapshot_data)
 
         # Mock agent execution
-        mock_execution_result = MagicMock()
-        mock_execution_result.content = "This is the agent's response."
-        mock_execution_result.conversation_id = "conv-abc123"
-        mock_llm_provider.continue_conversation = AsyncMock(return_value=mock_execution_result)
+        mock_coding_agent.execute = AsyncMock(
+            return_value=CodingAgentResult(
+                success=True,
+                summary_text="This is the agent's response.",
+                total_cost_usd=Decimal("0.00"),
+                total_input_tokens=0,
+                total_output_tokens=0,
+                tool_call_count=0,
+                duration_ms=0,
+                error_summary=None,
+            )
+        )
 
         # Mock adapter successfully posting comment
         posted_comment = MagicMock(spec=Comment)
@@ -767,7 +953,7 @@ class TestHandleCommentEvent:
         mock_discussion_adapter.add_comment.assert_called_once()
 
         # Verify agent execution WAS called
-        mock_llm_provider.continue_conversation.assert_called_once()
+        mock_coding_agent.execute.assert_called_once()
 
         # Verify the exception happened during snapshot save
         mock_event_store.save_snapshot.assert_called_once()

@@ -16,6 +16,7 @@ Tests validate correct integration across component boundaries:
 
 import asyncio
 from datetime import UTC, datetime
+from decimal import Decimal
 from unittest.mock import AsyncMock
 
 import pytest
@@ -24,6 +25,9 @@ from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
 from codetoreum.application.conversational_loop_orchestrator import (
     ConversationalLoopOrchestrator,
 )
+from codetoreum.domain.agent import Agent, AgentCapability, AgentType
+from codetoreum.domain.agent_execution import AgentExecution
+from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
 from codetoreum.domain.conversational_session import ConversationalSessionState
 from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.domain.events.discussion_events import (
@@ -31,7 +35,14 @@ from codetoreum.domain.events.discussion_events import (
     CommentContext,
     CommentNeedsResponseEvent,
 )
+from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
+from codetoreum.domain.workspace_context import WorkspaceContext
 from codetoreum.infrastructure.event_bus import EventBus
+from codetoreum.ports.output.coding_agent import (
+    CodingAgentInvocationOptions,
+    CodingAgentResult,
+    ICodingAgent,
+)
 from codetoreum.ports.output.discussion_adapter import (
     DiscussionMonitoringConfig,
     DiscussionThread,
@@ -176,45 +187,53 @@ class MockDiscussionAdapter:
         return self.comments_posted.copy()
 
 
-class MockLLMProvider:
-    """Mock implementation of ILLMProvider for integration testing.
+class MockCodingAgent(ICodingAgent):
+    """Mock ICodingAgent for integration testing.
 
-    Tracks conversation continuity and agent executions with realistic responses.
+    Tracks invocations and produces deterministic responses keyed by patterns
+    matched against the *most recent* prior_output (the human comment). The
+    "conversation history" is still tracked, keyed by ``execution.session_id``
+    so existing assertions on conversation continuity keep working.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.executions: list[dict] = []
         self.conversations: dict[str, list[str]] = {}
         self._response_patterns: dict[str, str] = {}
+        self.last_workspace_context: WorkspaceContext | None = None
+        self.last_options: CodingAgentInvocationOptions | None = None
+        self.last_execution: AgentExecution | None = None
 
     def add_response_pattern(self, pattern_key: str, response: str) -> None:
         """Add deterministic response for specific patterns."""
         self._response_patterns[pattern_key] = response
 
-    async def execute_prompt(self, prompt: str, context=None, stream_callback=None):
-        """Execute a one-time prompt."""
-        from unittest.mock import MagicMock
+    def supported_invocation_modes(self) -> frozenset[InvocationMode]:
+        return frozenset({InvocationMode.CONTAINERIZED, InvocationMode.HOST})
 
-        result = MagicMock()
-        result.content = "Mock response to prompt"
-        result.conversation_id = None
-        return result
-
-    async def continue_conversation(
+    async def execute(
         self,
-        conversation_id: str,
-        message: str,
-        stream_callback=None,
-    ):
-        """Continue an existing conversation."""
-        from unittest.mock import MagicMock
+        execution: AgentExecution,
+        workspace_context: WorkspaceContext,
+        options: CodingAgentInvocationOptions,
+    ) -> CodingAgentResult:
+        self.last_execution = execution
+        self.last_workspace_context = workspace_context
+        self.last_options = options
 
-        # Track conversation
+        # The new CLO uses ``session_id`` (the conversational session id)
+        # as the AgentExecution's session identifier; record it.
+        conversation_id = execution.session_id or "conv-new-session"
+        # The orchestrator's _execute_turn synthesizes the prompt without
+        # surfacing the comment text on the call site — for the integration
+        # test, we rely on the comments tracked by the MockDiscussionAdapter
+        # and the prior_outputs piped through the prompt builder (which the
+        # adapter would normally consume). Record what we can see.
+        message = execution.prompt
         if conversation_id not in self.conversations:
             self.conversations[conversation_id] = []
         self.conversations[conversation_id].append(message)
 
-        # Record execution
         self.executions.append(
             {
                 "conversation_id": conversation_id,
@@ -223,26 +242,23 @@ class MockLLMProvider:
             }
         )
 
-        # Generate response
+        # Pattern matching against the recorded message (synthetic prompt).
         response_text = f"Agent response to: {message[:50]}..."
         for pattern_key, pattern_response in self._response_patterns.items():
             if pattern_key.lower() in message.lower():
                 response_text = pattern_response
                 break
 
-        result = MagicMock()
-        result.content = response_text
-        result.conversation_id = conversation_id or "conv-new-session"
-        result.duration_ms = 100
-        result.finish_reason = "stop"
-        return result
-
-    async def get_model_info(self):
-        """Get model information."""
-        return {
-            "model": "mock-model",
-            "supports_conversations": True,
-        }
+        return CodingAgentResult(
+            success=True,
+            summary_text=response_text,
+            total_cost_usd=Decimal("0.00"),
+            total_input_tokens=10,
+            total_output_tokens=20,
+            tool_call_count=0,
+            duration_ms=100,
+            error_summary=None,
+        )
 
     def get_conversation_history(self, conversation_id: str) -> list[str]:
         """Get all messages in a conversation."""
@@ -251,6 +267,60 @@ class MockLLMProvider:
     def get_execution_count(self) -> int:
         """Get total number of agent executions."""
         return len(self.executions)
+
+
+class _FakeAgentRepository:
+    """In-memory IAgentRepository stub for integration tests."""
+
+    def __init__(self, agent: Agent) -> None:
+        self._agent = agent
+
+    async def get_by_name(self, name: str) -> Agent:
+        return self._agent
+
+    async def get_by_id(self, agent_id: str) -> Agent:
+        return self._agent
+
+    async def save(self, agent: Agent, project_id: str | None = None) -> None:
+        self._agent = agent
+
+    async def list_by_project(self, project_id: str) -> list[Agent]:
+        return [self._agent]
+
+    async def get_all(self) -> list[Agent]:
+        return [self._agent]
+
+
+class _FakeWorkItemService:
+    """In-memory IWorkItemService stub for integration tests."""
+
+    def __init__(self, work_item: WorkItem) -> None:
+        self._work_item = work_item
+
+    async def get_work_item(self, item_id) -> WorkItem:
+        return self._work_item
+
+
+class _FakePromptBuilder:
+    """Minimal IPromptBuilder stub for integration tests.
+
+    The orchestrator calls ``build`` once per turn to surface validation
+    errors early; the integration tests don't inspect the structured
+    prompt directly.
+    """
+
+    async def build(self, agent, work_item, workspace_context, prior_outputs=()):
+        from codetoreum.ports.output.prompt_builder import StructuredPrompt
+
+        return StructuredPrompt(
+            role_description=agent.display_name,
+            task_description=work_item.title,
+            work_item=work_item,
+            workspace_context=workspace_context,
+            instructions=("respond",),
+            constraints=(),
+            prior_outputs=prior_outputs,
+        )
 
 
 @pytest.fixture
@@ -287,13 +357,90 @@ def testable_discussion_adapter(identity_service):
 
 
 @pytest.fixture
-def testable_llm_provider():
-    """Create testable LLM provider for integration tests."""
-    return MockLLMProvider()
+def sample_agent_for_clo():
+    """Sample Agent for the CLO integration fixtures."""
+    return Agent(
+        id="agent-1",
+        name="code-reviewer",
+        display_name="Code Reviewer",
+        agent_type=AgentType.REVIEWER,
+        capabilities={"code_review": AgentCapability(skill="code_review", proficiency=0.9)},
+        role_description="Reviews code changes for correctness",
+        model="claude-sonnet-4-5",
+        timeout_seconds=300,
+        max_retries=3,
+        requires_docker=True,
+        requires_dev_container=False,
+        makes_code_changes=False,
+        filesystem_write_allowed=True,
+        mcp_servers=[],
+        metadata={},
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        coding_agent="claude_code",
+        invocation=AgentInvocationConfig(
+            mode=InvocationMode.CONTAINERIZED,
+            model="claude-sonnet-4-5",
+            timeout_seconds=300,
+            mode_config={"image": "codetoreum-agent:latest"},
+        ),
+    )
 
 
 @pytest.fixture
-async def orchestrator(testable_discussion_adapter, testable_llm_provider, real_event_store):
+def sample_work_item_for_clo():
+    """Sample WorkItem for the CLO integration fixtures."""
+    return WorkItem(
+        id="issue-42",
+        project_id="proj-1",
+        title="Test issue",
+        description="Test description",
+        status=WorkItemStatus.IN_PROGRESS,
+        priority=WorkItemPriority.MEDIUM,
+        labels=[],
+        external_id="42",
+        external_url=None,
+        assigned_agent_id="agent-1",
+        assigned_at=datetime.now(UTC),
+        current_workflow_id=None,
+        current_stage=None,
+        current_column="In Review",
+        entered_column_at=datetime.now(UTC),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+
+
+@pytest.fixture
+def testable_coding_agent():
+    """Create testable ICodingAgent for integration tests."""
+    return MockCodingAgent()
+
+
+@pytest.fixture
+def testable_agent_repository(sample_agent_for_clo):
+    return _FakeAgentRepository(sample_agent_for_clo)
+
+
+@pytest.fixture
+def testable_work_item_service(sample_work_item_for_clo):
+    return _FakeWorkItemService(sample_work_item_for_clo)
+
+
+@pytest.fixture
+def testable_prompt_builder():
+    return _FakePromptBuilder()
+
+
+@pytest.fixture
+async def orchestrator(
+    testable_discussion_adapter,
+    testable_coding_agent,
+    testable_agent_repository,
+    testable_work_item_service,
+    testable_prompt_builder,
+    real_event_store,
+):
     """Create orchestrator with real event infrastructure.
 
     Real components:
@@ -305,7 +452,10 @@ async def orchestrator(testable_discussion_adapter, testable_llm_provider, real_
     """
     return ConversationalLoopOrchestrator(
         discussion_adapter=testable_discussion_adapter,
-        llm_provider=testable_llm_provider,
+        coding_agent=testable_coding_agent,
+        prompt_builder=testable_prompt_builder,
+        agent_repository=testable_agent_repository,
+        work_item_service=testable_work_item_service,
         event_store=real_event_store,
     )
 
@@ -324,7 +474,7 @@ class TestFullLoopLifecycleIntegration:
         self,
         orchestrator,
         testable_discussion_adapter,
-        testable_llm_provider,
+        testable_coding_agent,
         real_event_store,
     ):
         """Integration test: Full loop lifecycle with real EventStore.
@@ -425,9 +575,9 @@ class TestFullLoopLifecycleIntegration:
         assert response2.parent_id == second_comment.id
 
         # Verify LLM conversation continuity
-        assert len(testable_llm_provider.executions) == 2
-        conversation_id = testable_llm_provider.executions[0]["conversation_id"]
-        assert testable_llm_provider.get_conversation_history(conversation_id) is not None
+        assert len(testable_coding_agent.executions) == 2
+        conversation_id = testable_coding_agent.executions[0]["conversation_id"]
+        assert testable_coding_agent.get_conversation_history(conversation_id) is not None
 
         # Step 4: Work item moves out of review column
         from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
@@ -467,7 +617,10 @@ class TestSessionPersistenceAcrossInstancesIntegration:
     async def test_session_persistence_across_instances(
         self,
         testable_discussion_adapter,
-        testable_llm_provider,
+        testable_coding_agent,
+        testable_prompt_builder,
+        testable_agent_repository,
+        testable_work_item_service,
         real_event_store,
     ):
         """Integration test: Session persists across orchestrator restarts.
@@ -484,7 +637,10 @@ class TestSessionPersistenceAcrossInstancesIntegration:
         # First instance: Initialize and process comment
         orchestrator_1 = ConversationalLoopOrchestrator(
             discussion_adapter=testable_discussion_adapter,
-            llm_provider=testable_llm_provider,
+            coding_agent=testable_coding_agent,
+            prompt_builder=testable_prompt_builder,
+            agent_repository=testable_agent_repository,
+            work_item_service=testable_work_item_service,
             event_store=real_event_store,
         )
 
@@ -526,7 +682,10 @@ class TestSessionPersistenceAcrossInstancesIntegration:
         # Second instance: Load session from EventStore
         orchestrator_2 = ConversationalLoopOrchestrator(
             discussion_adapter=testable_discussion_adapter,
-            llm_provider=testable_llm_provider,
+            coding_agent=testable_coding_agent,
+            prompt_builder=testable_prompt_builder,
+            agent_repository=testable_agent_repository,
+            work_item_service=testable_work_item_service,
             event_store=real_event_store,
         )
 
@@ -565,7 +724,7 @@ class TestSessionPersistenceAcrossInstancesIntegration:
         await orchestrator_2.handle_comment_event(event_2)
 
         # Verify only new comment triggered agent (no duplicate)
-        assert len(testable_llm_provider.executions) == 2  # comment-1 and comment-2
+        assert len(testable_coding_agent.executions) == 2  # comment-1 and comment-2
 
 
 @pytest.mark.integration
@@ -582,7 +741,7 @@ class TestErrorHandlingIntegration:
         self,
         orchestrator,
         testable_discussion_adapter,
-        testable_llm_provider,
+        testable_coding_agent,
         real_event_store,
     ):
         """Test recovery after agent execution failure.
@@ -612,7 +771,7 @@ class TestErrorHandlingIntegration:
         )
 
         # Make LLM provider fail to trigger error event
-        testable_llm_provider.continue_conversation = AsyncMock(side_effect=Exception("Agent execution failed"))
+        testable_coding_agent.execute = AsyncMock(side_effect=Exception("Agent execution failed"))
 
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
@@ -692,7 +851,10 @@ class TestConcurrentSessionsWithRealEventStoreIntegration:
     async def test_concurrent_sessions_with_real_event_store(
         self,
         testable_discussion_adapter,
-        testable_llm_provider,
+        testable_coding_agent,
+        testable_prompt_builder,
+        testable_agent_repository,
+        testable_work_item_service,
         real_event_store,
     ):
         """Integration test: Multiple concurrent sessions with real EventStore.
@@ -712,7 +874,10 @@ class TestConcurrentSessionsWithRealEventStoreIntegration:
         orchestrators = [
             ConversationalLoopOrchestrator(
                 discussion_adapter=testable_discussion_adapter,
-                llm_provider=testable_llm_provider,
+                coding_agent=testable_coding_agent,
+                prompt_builder=testable_prompt_builder,
+                agent_repository=testable_agent_repository,
+                work_item_service=testable_work_item_service,
                 event_store=real_event_store,
             )
             for _ in session_configs
@@ -764,7 +929,10 @@ class TestConcurrentSessionsWithRealEventStoreIntegration:
         for work_item_id, _, _ in session_configs:
             orch = ConversationalLoopOrchestrator(
                 discussion_adapter=testable_discussion_adapter,
-                llm_provider=testable_llm_provider,
+                coding_agent=testable_coding_agent,
+                prompt_builder=testable_prompt_builder,
+                agent_repository=testable_agent_repository,
+                work_item_service=testable_work_item_service,
                 event_store=real_event_store,
             )
             updated = await orch.load_session_state(work_item_id)
@@ -775,7 +943,7 @@ class TestConcurrentSessionsWithRealEventStoreIntegration:
         self,
         real_event_store,
         testable_discussion_adapter,
-        testable_llm_provider,
+        testable_coding_agent,
     ):
         """Test that session state is isolated across work items.
 
@@ -783,7 +951,10 @@ class TestConcurrentSessionsWithRealEventStoreIntegration:
         """
         orchestrator = ConversationalLoopOrchestrator(
             discussion_adapter=testable_discussion_adapter,
-            llm_provider=testable_llm_provider,
+            coding_agent=testable_coding_agent,
+            prompt_builder=testable_prompt_builder,
+            agent_repository=testable_agent_repository,
+            work_item_service=testable_work_item_service,
             event_store=real_event_store,
         )
 
@@ -843,7 +1014,7 @@ class TestAdapterInteractionIntegration:
     async def test_llm_provider_conversation_continuity_with_event_store(
         self,
         orchestrator,
-        testable_llm_provider,
+        testable_coding_agent,
         real_event_store,
     ):
         """Test LLM conversation continuity via EventStore persistence.
@@ -904,11 +1075,14 @@ class TestAdapterInteractionIntegration:
 
         await orchestrator.handle_comment_event(event)
 
-        # Verify LLM provider was called with persisted conversation ID
-        assert len(testable_llm_provider.executions) == 1
-        execution = testable_llm_provider.executions[0]
-        assert execution["conversation_id"] == "conv-abc123"
+        # Verify coding agent was called for the turn. With the ICodingAgent
+        # redesign, the AgentExecution.session_id carries the conversational
+        # session id (not the legacy llm_conversation_id, which is kept on
+        # ConversationalSessionState for backwards-compat snapshots).
+        assert len(testable_coding_agent.executions) == 1
+        execution = testable_coding_agent.executions[0]
+        assert execution["conversation_id"].startswith("conv_session_")
 
         # Verify conversation history tracked by LLM
-        history = testable_llm_provider.get_conversation_history("conv-abc123")
+        history = testable_coding_agent.get_conversation_history(execution["conversation_id"])
         assert len(history) > 0
