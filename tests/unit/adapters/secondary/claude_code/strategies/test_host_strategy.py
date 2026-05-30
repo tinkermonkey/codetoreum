@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
@@ -46,11 +47,12 @@ class _FakeCredentialProvider:
         return None
 
 
-def _ws() -> WorkspaceContext:
+def _ws(workspace_path: Path | None = None) -> WorkspaceContext:
     return WorkspaceContext.for_issue(
         project_id="proj-1",
         work_item_id="wi-1",
         branch_name="feature/x",
+        workspace_path=workspace_path or Path("/tmp/ws-stub"),
     )
 
 

@@ -273,7 +273,6 @@ class AdapterResolver:
         agent_repository: Any | None = None,
         work_item_service: Any | None = None,
         container: Any | None = None,
-        workspace_path_resolver: Any | None = None,
         config: Any | None = None,
     ) -> Any:
         """Resolve the new :class:`ICodingAgent` adapter (D3).
@@ -299,9 +298,14 @@ class AdapterResolver:
                 resolver supplies the already-resolved one (or ``None`` if
                 the container slot was never resolved); only ``HOST`` mode
                 is then supported by the resulting adapter.
-            workspace_path_resolver: Optional callable mapping a
-                :class:`WorkspaceContext` to a host path.
             config: Optional :class:`ClaudeCodeAdapterConfig`.
+
+        Note:
+            D6 retired the ``workspace_path_resolver`` callable —
+            strategies now read ``WorkspaceContext.workspace_path``
+            directly (orchestrator must call
+            :meth:`WorkspaceContext.with_workspace_path` before
+            dispatch).
 
         Returns:
             A resilience-wrapped :class:`ICodingAgent` for the configured
@@ -339,7 +343,6 @@ class AdapterResolver:
             agent_repository=ar,
             work_item_service=wis,
             container=cont,
-            workspace_path_resolver=workspace_path_resolver,
             config=config,
         )
         # Resilience wraps the adapter (INV-11). The decorator is structural

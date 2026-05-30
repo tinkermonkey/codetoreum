@@ -22,9 +22,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
 from codetoreum.adapters.secondary.claude_code.strategies.base import (
@@ -61,7 +60,6 @@ class ContainerizedClaudeStrategy(ClaudeInvocationStrategy):
         claude_cli_path: str = "claude",
         api_key_credential_name: str = "ANTHROPIC_API_KEY",
         oauth_token_credential_name: str = "CLAUDE_CODE_OAUTH_TOKEN",  # noqa: S107
-        workspace_path_resolver: Callable[[WorkspaceContext], Path] | None = None,
     ) -> None:
         """Construct the containerised strategy.
 
@@ -78,18 +76,12 @@ class ContainerizedClaudeStrategy(ClaudeInvocationStrategy):
                 fallback.
             oauth_token_credential_name: Credential key for the OAuth
                 token (preferred).
-            workspace_path_resolver: Maps a :class:`WorkspaceContext` to
-                the host directory mounted into the container at
-                ``/workspace``. When ``None``, no workspace mount is
-                added (the container can still run, but won't see source
-                files — useful for tests).
         """
         self._container = container
         self._credential_provider = credential_provider
         self._claude_cli_path = claude_cli_path
         self._api_key_credential_name = api_key_credential_name
         self._oauth_token_credential_name = oauth_token_credential_name
-        self._workspace_path_resolver = workspace_path_resolver
 
     async def execute(
         self,
@@ -220,19 +212,24 @@ class ContainerizedClaudeStrategy(ClaudeInvocationStrategy):
     def _build_volumes(
         self,
         workspace_context: WorkspaceContext,
-    ) -> dict[str, dict[str, str]] | None:
-        if self._workspace_path_resolver is None:
-            return None
-        try:
-            host_path = self._workspace_path_resolver(workspace_context)
-        except Exception:
-            logger.exception(
-                "workspace_path_resolver failed for work_item_id=%s; skipping mount",
-                workspace_context.work_item_id,
+    ) -> dict[str, dict[str, str]]:
+        """Build the volume mount mapping for the container.
+
+        Raises:
+            ValueError: If ``workspace_context.workspace_path`` is unset.
+                D6 requires the orchestrator to populate this field
+                before dispatching execution so the agent can see the
+                cloned repository.
+        """
+        if workspace_context.workspace_path is None:
+            msg = (
+                "ContainerizedClaudeStrategy requires workspace_context.workspace_path "
+                f"(work_item_id={workspace_context.work_item_id!r}); the orchestrator "
+                "must call WorkspaceContext.with_workspace_path() before dispatch."
             )
-            return None
+            raise ValueError(msg)
         return {
-            str(host_path): {"bind": _DEFAULT_WORKDIR, "mode": "rw"},
+            str(workspace_context.workspace_path): {"bind": _DEFAULT_WORKDIR, "mode": "rw"},
         }
 
     async def _open_log_stream(self, container_id: str) -> AsyncIterator[bytes]:

@@ -41,11 +41,12 @@ class _FakeCredentialProvider:
         return None
 
 
-def _ws() -> WorkspaceContext:
+def _ws(workspace_path: Path | None = None) -> WorkspaceContext:
     return WorkspaceContext.for_issue(
         project_id="proj-1",
         work_item_id="wi-1",
         branch_name="feature/x",
+        workspace_path=workspace_path or Path("/tmp/ws-stub"),
     )
 
 
@@ -225,7 +226,7 @@ async def test_containerized_strategy_requires_image():
 
 
 @pytest.mark.asyncio
-async def test_containerized_strategy_mounts_workspace_when_resolver_provided(tmp_path: Path):
+async def test_containerized_strategy_mounts_workspace_from_context(tmp_path: Path):
     host_workspace = tmp_path / "ws"
     host_workspace.mkdir()
     container = _FakeContainer(
@@ -235,7 +236,6 @@ async def test_containerized_strategy_mounts_workspace_when_resolver_provided(tm
     strategy = ContainerizedClaudeStrategy(
         container=container,
         credential_provider=_FakeCredentialProvider(),
-        workspace_path_resolver=lambda _ctx: host_workspace,
     )
     options = CodingAgentInvocationOptions(
         invocation_mode=InvocationMode.CONTAINERIZED,
@@ -248,7 +248,7 @@ async def test_containerized_strategy_mounts_workspace_when_resolver_provided(tm
     await strategy.execute(
         prompt_text="hi",
         execution_id="exec-1",
-        workspace_context=_ws(),
+        workspace_context=_ws(workspace_path=host_workspace),
         options=options,
         event_bus=EventBus(),
         parser=ClaudeStreamJsonParser(),
@@ -259,6 +259,39 @@ async def test_containerized_strategy_mounts_workspace_when_resolver_provided(tm
     assert volumes is not None
     assert str(host_workspace) in volumes
     assert volumes[str(host_workspace)] == {"bind": "/workspace", "mode": "rw"}
+
+
+@pytest.mark.asyncio
+async def test_containerized_strategy_requires_workspace_path():
+    """D6: strategy raises ValueError when WorkspaceContext.workspace_path is unset."""
+    container = _FakeContainer([], exit_code=0)
+    strategy = ContainerizedClaudeStrategy(
+        container=container,
+        credential_provider=_FakeCredentialProvider(),
+    )
+    options = CodingAgentInvocationOptions(
+        invocation_mode=InvocationMode.CONTAINERIZED,
+        model="m",
+        timeout_seconds=30,
+        cost_limit_usd=None,
+        mode_config={"image": "codetoreum-agent:latest"},
+    )
+    # Build a context without workspace_path (None).
+    ctx = WorkspaceContext.for_issue(
+        project_id="proj-1",
+        work_item_id="wi-1",
+        branch_name="feature/x",
+    )
+    with pytest.raises(ValueError, match="workspace_path"):
+        await strategy.execute(
+            prompt_text="hi",
+            execution_id="exec-1",
+            workspace_context=ctx,
+            options=options,
+            event_bus=EventBus(),
+            parser=ClaudeStreamJsonParser(),
+            coding_agent_id="claude-code",
+        )
 
 
 @pytest.mark.asyncio

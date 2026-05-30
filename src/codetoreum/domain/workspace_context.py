@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 
 
 class WorkspaceType(Enum):
@@ -40,6 +41,14 @@ class WorkspaceContext:
     create_commits: bool
     post_comments: bool
 
+    # Host-side workspace path (D6). Optional at construction time because
+    # WorkspaceRouter.route_workspace produces a logical context before the
+    # repository is cloned; the orchestrator populates this via
+    # WorkspaceContext.with_workspace_path() once the path is known so the
+    # coding-agent adapter can mount/cwd to it. ICodingAgent strategies
+    # raise ValueError if this is None at execute time.
+    workspace_path: Path | None = None
+
     def __post_init__(self) -> None:
         """Validate invariants after initialization."""
         # Validate workspace type specific requirements
@@ -64,7 +73,12 @@ class WorkspaceContext:
 
     @classmethod
     def for_issue(
-        cls, project_id: str, work_item_id: str, branch_name: str, create_pr: bool = True
+        cls,
+        project_id: str,
+        work_item_id: str,
+        branch_name: str,
+        create_pr: bool = True,
+        workspace_path: Path | None = None,
     ) -> "WorkspaceContext":
         """
         Create workspace context for issue-based work.
@@ -77,6 +91,9 @@ class WorkspaceContext:
             work_item_id: Work item identifier
             branch_name: Branch name to create/use
             create_pr: Whether to create pull request (default: True)
+            workspace_path: Optional host-side workspace path. The
+                orchestrator typically populates this via
+                ``with_workspace_path()`` after the repository is cloned.
 
         Returns:
             WorkspaceContext configured for issue-based work
@@ -91,10 +108,18 @@ class WorkspaceContext:
             allow_code_changes=True,
             create_commits=True,
             post_comments=True,
+            workspace_path=workspace_path,
         )
 
     @classmethod
-    def for_hybrid(cls, project_id: str, work_item_id: str, branch_name: str, discussion_id: str) -> "WorkspaceContext":
+    def for_hybrid(
+        cls,
+        project_id: str,
+        work_item_id: str,
+        branch_name: str,
+        discussion_id: str,
+        workspace_path: Path | None = None,
+    ) -> "WorkspaceContext":
         """
         Create workspace context for hybrid work.
 
@@ -105,6 +130,9 @@ class WorkspaceContext:
             work_item_id: Work item identifier
             branch_name: Branch name to create/use
             discussion_id: Discussion/issue identifier in external system
+            workspace_path: Optional host-side workspace path. The
+                orchestrator typically populates this via
+                ``with_workspace_path()`` after the repository is cloned.
 
         Returns:
             WorkspaceContext configured for hybrid work
@@ -119,6 +147,36 @@ class WorkspaceContext:
             allow_code_changes=True,
             create_commits=True,
             post_comments=True,
+            workspace_path=workspace_path,
+        )
+
+    def with_workspace_path(self, workspace_path: Path) -> "WorkspaceContext":
+        """Return a copy of this context with the workspace_path populated.
+
+        WorkspaceContext is frozen, so callers cannot mutate the field
+        directly. This helper is the canonical way for the orchestrator to
+        attach the cloned repository path before handing the context to the
+        coding-agent adapter.
+
+        Args:
+            workspace_path: Host-side absolute path to the cloned repo
+                that the agent should mount (containerised mode) or run
+                in (host mode).
+
+        Returns:
+            A new WorkspaceContext instance with ``workspace_path`` set.
+        """
+        return WorkspaceContext(
+            workspace_type=self.workspace_type,
+            project_id=self.project_id,
+            work_item_id=self.work_item_id,
+            branch_name=self.branch_name,
+            create_pr=self.create_pr,
+            discussion_id=self.discussion_id,
+            allow_code_changes=self.allow_code_changes,
+            create_commits=self.create_commits,
+            post_comments=self.post_comments,
+            workspace_path=workspace_path,
         )
 
     # Query methods

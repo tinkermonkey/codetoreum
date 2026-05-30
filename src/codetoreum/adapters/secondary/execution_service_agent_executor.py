@@ -507,6 +507,10 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             # state — D6 retires `requires_docker` along with the rest of the
             # legacy agent-config schema.
             invocation_options = self._build_invocation_options(agent, context)
+            # D6: populate WorkspaceContext.workspace_path so the coding-agent
+            # adapter / strategies can resolve the cloned repo location
+            # (mount target for containerised mode, cwd for host mode).
+            workspace = workspace.with_workspace_path(Path(repo_path))
             exec_result = None
             try:
                 exec_result = await self._execution_service.execute(

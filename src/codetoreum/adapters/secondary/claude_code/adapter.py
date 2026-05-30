@@ -34,9 +34,7 @@ itself carries no resilience logic.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
 from dataclasses import dataclass, field
-from pathlib import Path
 
 from codetoreum.adapters.secondary.claude_code.prompt_renderer import (
     render_structured_prompt_to_text,
@@ -136,7 +134,6 @@ class ClaudeCodeAdapter(ICodingAgent):
         agent_repository: IAgentRepository,
         work_item_service: IWorkItemService,
         container: IContainer | None = None,
-        workspace_path_resolver: Callable[[WorkspaceContext], Path] | None = None,
         config: ClaudeCodeAdapterConfig | None = None,
     ) -> None:
         """Construct the adapter.
@@ -153,14 +150,13 @@ class ClaudeCodeAdapter(ICodingAgent):
             container: :class:`IContainer` adapter. When ``None`` the
                 adapter cannot run containerised executions and
                 :meth:`supported_invocation_modes` reflects that.
-            workspace_path_resolver: Maps a :class:`WorkspaceContext` to
-                the host directory either mounted into the container
-                (containerised mode) or used as the subprocess cwd (host
-                mode). When ``None``, the host strategy uses ``cwd=None``
-                (process default) and the containerised strategy skips
-                the workspace mount.
             config: Adapter-level configuration. Defaults to
                 :class:`ClaudeCodeAdapterConfig` defaults.
+
+        Note:
+            Strategies read ``workspace_context.workspace_path`` directly
+            (D6) — the orchestrator populates the field via
+            :meth:`WorkspaceContext.with_workspace_path` before dispatch.
         """
         self._prompt_builder = prompt_builder
         self._event_bus = event_bus
@@ -174,7 +170,6 @@ class ClaudeCodeAdapter(ICodingAgent):
             claude_cli_path=self._config.claude_cli_path,
             api_key_credential_name=self._config.api_key_credential_name,
             oauth_token_credential_name=self._config.oauth_token_credential_name,
-            workspace_path_resolver=workspace_path_resolver,
         )
         containerised_strategy: ClaudeInvocationStrategy | None = None
         if container is not None:
@@ -184,7 +179,6 @@ class ClaudeCodeAdapter(ICodingAgent):
                 claude_cli_path=self._config.claude_cli_path,
                 api_key_credential_name=self._config.api_key_credential_name,
                 oauth_token_credential_name=self._config.oauth_token_credential_name,
-                workspace_path_resolver=workspace_path_resolver,
             )
         self._strategies = _StrategyBundle(
             host=host_strategy,

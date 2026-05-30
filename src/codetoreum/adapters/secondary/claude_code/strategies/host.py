@@ -1,15 +1,11 @@
 """Host-mode invocation strategy: run ``claude`` directly via subprocess.
 
-No container. The subprocess runs in
-``WorkspaceContext.work_item_id`` … wait, ``WorkspaceContext`` is a
-*logical* workspace; the strategy resolves it to a host path via the
-optional ``workspace_path_resolver`` callable injected at construction.
+No container. The subprocess runs in ``WorkspaceContext.workspace_path``,
+which the orchestrator populates via
+``WorkspaceContext.with_workspace_path()`` after the repository clone.
 
-This keeps the strategy decoupled from the prior
-``WorkspaceRouter.prepare_container_environment`` machinery (which is
-slated for removal in Phase D5). Today, callers wire a resolver that
-returns the existing per-execution workspace directory built by
-``WorkspaceRouter`` upstream.
+If ``workspace_path`` is ``None`` at execute time the strategy raises
+``ValueError`` — the orchestrator is expected to always provide it.
 """
 
 from __future__ import annotations
@@ -17,7 +13,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -61,7 +57,6 @@ class HostClaudeStrategy(ClaudeInvocationStrategy):
         claude_cli_path: str = "claude",
         api_key_credential_name: str = "ANTHROPIC_API_KEY",
         oauth_token_credential_name: str = "CLAUDE_CODE_OAUTH_TOKEN",  # noqa: S107
-        workspace_path_resolver: Callable[[WorkspaceContext], Path] | None = None,
     ) -> None:
         """Construct the host strategy.
 
@@ -74,16 +69,11 @@ class HostClaudeStrategy(ClaudeInvocationStrategy):
                 fallback path.
             oauth_token_credential_name: Credential key for the OAuth
                 token (preferred).
-            workspace_path_resolver: Maps a :class:`WorkspaceContext` to
-                the host directory the subprocess should run in. When
-                ``None``, the strategy uses the current working directory
-                (useful for development; production wires this).
         """
         self._credential_provider = credential_provider
         self._claude_cli_path = claude_cli_path
         self._api_key_credential_name = api_key_credential_name
         self._oauth_token_credential_name = oauth_token_credential_name
-        self._workspace_path_resolver = workspace_path_resolver
 
     async def execute(
         self,
@@ -107,7 +97,7 @@ class HostClaudeStrategy(ClaudeInvocationStrategy):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env=env,
-            cwd=str(cwd) if cwd else None,
+            cwd=str(cwd),
         )
         logger.info(
             "HostClaudeStrategy: spawned PID=%s execution_id=%s cwd=%s",
@@ -185,17 +175,22 @@ class HostClaudeStrategy(ClaudeInvocationStrategy):
         # avoid double-reporting.
         return env
 
-    def _resolve_cwd(self, workspace_context: WorkspaceContext) -> Path | None:
-        if self._workspace_path_resolver is None:
-            return None
-        try:
-            return self._workspace_path_resolver(workspace_context)
-        except Exception:
-            logger.exception(
-                "workspace_path_resolver failed for work_item_id=%s; using cwd=None",
-                workspace_context.work_item_id,
+    def _resolve_cwd(self, workspace_context: WorkspaceContext) -> Path:
+        """Return the host directory the subprocess must run in.
+
+        Raises:
+            ValueError: If ``workspace_context.workspace_path`` is unset.
+                D6 requires the orchestrator to populate this field
+                before dispatching execution.
+        """
+        if workspace_context.workspace_path is None:
+            msg = (
+                "HostClaudeStrategy requires workspace_context.workspace_path "
+                f"(work_item_id={workspace_context.work_item_id!r}); the orchestrator "
+                "must call WorkspaceContext.with_workspace_path() before dispatch."
             )
-            return None
+            raise ValueError(msg)
+        return workspace_context.workspace_path
 
 
 # ---------------------------------------------------------------------------
