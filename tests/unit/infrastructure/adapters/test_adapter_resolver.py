@@ -195,7 +195,7 @@ class TestAdapterResolver:
         """Test that all credential errors are aggregated into single exception."""
         config = AdapterSelectionConfig(
             ticket="nonexistent1",
-            llm="nonexistent2",
+            board="nonexistent2",
         )
         resolver = AdapterResolver(config, factory, dependencies)
 
@@ -205,7 +205,7 @@ class TestAdapterResolver:
         error_msg = str(exc_info.value)
         # Should contain both errors
         assert "nonexistent1" in error_msg or "ticket" in error_msg
-        assert "nonexistent2" in error_msg or "llm" in error_msg
+        assert "nonexistent2" in error_msg or "board" in error_msg
 
     def test_resolve_event_store(self, factory, dependencies, adapter_config):
         """Test resolving event store adapter."""
@@ -329,7 +329,7 @@ class TestAdapterResolver:
         # result is a SimulationAdapters dataclass, not a dict
         assert isinstance(result, SimulationAdapters)
         # The internal _resolved dict should have 33 entries (all adapters resolved, includes pr_review_cycle)
-        assert len(resolver._resolved) == 33
+        assert len(resolver._resolved) == 31
 
     def test_resolve_all_respects_dependency_order(self, factory, dependencies, adapter_config):
         """Test that adapters are resolved in dependency order."""
@@ -358,10 +358,6 @@ class TestAdapterResolver:
         event_store_idx = call_order.index("event_store")
         review_cycle_idx = call_order.index("review_cycle")
         assert event_store_idx < review_cycle_idx
-
-        # llm should be resolved before review_cycle (since review_cycle depends on llm)
-        llm_idx = call_order.index("llm")
-        assert llm_idx < review_cycle_idx
 
     def test_review_cycle_mock_uses_engine(self, factory, dependencies, adapter_config):
         """Test that mock review_cycle uses SimulationEngine."""
@@ -430,7 +426,7 @@ class TestAdapterResolver:
         assert "checkpoint_store" in call_kwargs
         assert "container_adapter" in call_kwargs
 
-    def test_all_29_adapter_slots_resolved(self, factory, dependencies, adapter_config):
+    def test_all_28_adapter_slots_resolved(self, factory, dependencies, adapter_config):
         """Test that all 30 adapter slots are successfully resolved."""
         resolver = AdapterResolver(adapter_config, factory, dependencies)
         result = resolver.resolve_all()
@@ -444,7 +440,6 @@ class TestAdapterResolver:
         expected_fields = {
             "board",
             "ticket_system",
-            "llm_provider",
             "version_control",
             "container",
             "event_store",
@@ -473,7 +468,7 @@ class TestAdapterResolver:
             "ci_pipeline",
         }
 
-        assert len(expected_fields) == 30
+        assert len(expected_fields) == 28
 
         # Verify all expected fields are present and non-None (except agent_executor which is assigned in Phase 3)
         for field_name in expected_fields:
