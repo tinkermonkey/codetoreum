@@ -21,25 +21,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from collections.abc import Callable, Coroutine
-    from typing import Any, Protocol
-
-    from codetoreum.infrastructure.resilience.interfaces import ICircuitBreaker
-    from codetoreum.ports.output.llm_types import ExecutionContext, ExecutionResult
-
-    class ILLMProvider(Protocol):
-        """Duck-typed surrogate for the retired ``ILLMProvider`` port.
-
-        Phase D5 deleted ``IAgentLauncher`` / ``ILLMProvider``; this adapter
-        retains a prompt→completion call site until it migrates to
-        ``ICodingAgent``. The protocol below documents the minimum surface
-        the adapter relies on at runtime."""
-
-        async def execute(self, prompt: str, context: ExecutionContext | None = ...) -> ExecutionResult: ...
-
-    AgentLLMFactory = Callable[[str], Coroutine[Any, Any, ILLMProvider]]
-
+from codetoreum.adapters.secondary.free_form_coding_agent import (
+    synthetic_agent_execution,
+    synthetic_workspace_context,
+)
+from codetoreum.domain.coding_agent_types import InvocationMode
 from codetoreum.domain.events.repair_cycle_events import (
     EnvironmentRebuildCompletedEvent,
     EnvironmentRebuildStartedEvent,
@@ -54,9 +40,25 @@ from codetoreum.domain.repair_cycle_types import (
     VerificationResult,
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.ports.output.coding_agent import CodingAgentInvocationOptions
 from codetoreum.ports.output.environment_repair_service import IEnvironmentRepairService
 from codetoreum.ports.output.event_emitter import IEventEmitter, NullEventEmitter
+from codetoreum.ports.output.prompt_builder import IPromptBuilder, StructuredPrompt
 from codetoreum.ports.output.repair_cycle_service import RepairCycleContext
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
+
+    from codetoreum.domain.agent import Agent
+    from codetoreum.domain.work_item import WorkItem
+    from codetoreum.domain.workspace_context import WorkspaceContext
+    from codetoreum.infrastructure.resilience.interfaces import ICircuitBreaker
+    from codetoreum.ports.output.coding_agent import (
+        CodingAgentResult,
+        ICodingAgent,
+    )
+    from codetoreum.ports.output.prompt_builder import ExecutionOutput
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +85,68 @@ class EnvironmentRepairAdapterConfig:
             raise ValueError(msg)
 
 
+class _EnvironmentRebuildPromptBuilder(IPromptBuilder):
+    """Per-call :class:`IPromptBuilder` for environment rebuild prompts.
+
+    Closure-captures the rebuild task description text. Ignores the
+    standard ``agent`` / ``work_item`` / ``prior_outputs`` arguments —
+    only the supplied ``workspace_context`` is forwarded.
+    """
+
+    def __init__(self, *, task_text: str) -> None:
+        self._task_text = task_text
+
+    async def build(
+        self,
+        agent: Agent,
+        work_item: WorkItem,
+        workspace_context: WorkspaceContext,
+        prior_outputs: tuple[ExecutionOutput, ...] = (),
+    ) -> StructuredPrompt:
+        return StructuredPrompt(
+            role_description="Environment repair specialist",
+            task_description=self._task_text,
+            work_item=work_item,
+            workspace_context=workspace_context,
+            instructions=(
+                "Return a JSON object describing what you did.",
+                'Schema: {"success": <bool>, "actions_taken": [<str>, ...], "error": <str | null>}',
+            ),
+            constraints=(
+                "Do not modify application source code — environment changes only.",
+                "Do not commit anything to git.",
+            ),
+            prior_outputs=(),
+        )
+
+
+class _EnvironmentVerifyPromptBuilder(IPromptBuilder):
+    """Per-call :class:`IPromptBuilder` for environment verification prompts."""
+
+    def __init__(self, *, task_text: str) -> None:
+        self._task_text = task_text
+
+    async def build(
+        self,
+        agent: Agent,
+        work_item: WorkItem,
+        workspace_context: WorkspaceContext,
+        prior_outputs: tuple[ExecutionOutput, ...] = (),
+    ) -> StructuredPrompt:
+        return StructuredPrompt(
+            role_description="Environment verification specialist",
+            task_description=self._task_text,
+            work_item=work_item,
+            workspace_context=workspace_context,
+            instructions=(
+                "Return a JSON object describing the verification result.",
+                'Schema: {"healthy": <bool>, "checks_passed": [<str>, ...], "checks_failed": [<str>, ...]}',
+            ),
+            constraints=("Read-only operation — do not modify the environment.",),
+            prior_outputs=(),
+        )
+
+
 class ProductionEnvironmentRepairAdapter(IEnvironmentRepairService):
     """Production environment repair adapter with LLM integration.
 
@@ -95,14 +159,12 @@ class ProductionEnvironmentRepairAdapter(IEnvironmentRepairService):
             env_rebuild_timeout_seconds=1200,
             env_verification_timeout_seconds=120
         )
-        # llm_factory must be an async callable returning ILLMProvider
-        async def get_llm(agent_name: str) -> ILLMProvider:
-            return await llm_provider_factory(agent_name)
-
         adapter = ProductionEnvironmentRepairAdapter(
-            llm_factory=get_llm,
+            coding_agent_factory=lambda pb: ResilientCodingAgentDecorator(
+                wrapped=FreeFormCodingAgent(prompt_builder=pb, ...),
+            ),
             repair_config=config,
-            event_emitter=event_emitter
+            event_emitter=event_emitter,
         )
 
         result = await adapter.rebuild_environment(
@@ -114,26 +176,50 @@ class ProductionEnvironmentRepairAdapter(IEnvironmentRepairService):
 
     def __init__(
         self,
-        llm_factory: AgentLLMFactory,
+        coding_agent_factory: Callable[[IPromptBuilder], ICodingAgent],
         repair_config: EnvironmentRepairConfig | None = None,
         event_emitter: IEventEmitter | None = None,
         config: EnvironmentRepairAdapterConfig | None = None,
         circuit_breaker: ICircuitBreaker | None = None,
+        *,
+        invocation_mode: InvocationMode = InvocationMode.CONTAINERIZED,
+        model: str = "claude-sonnet-4-6",
+        container_image: str = "codetoreum-agent:latest",
+        workspace_path: Path | None = None,
     ) -> None:
         """Initialize production environment repair adapter.
 
         Args:
-            llm_factory: Async factory callable that takes agent name and returns configured ILLMProvider
-            repair_config: Optional EnvironmentRepairConfig (uses defaults if not provided)
-            event_emitter: Optional event emitter (uses null-object if not provided)
-            config: Optional adapter-specific configuration (uses defaults if not provided)
-            circuit_breaker: Optional circuit breaker for LLM call protection
+            coding_agent_factory: Per-call factory returning a fresh
+                :class:`ICodingAgent` bound to the supplied
+                :class:`IPromptBuilder`. The bootstrap wires this to a
+                resilience-decorated
+                :class:`~codetoreum.adapters.secondary.free_form_coding_agent.FreeFormCodingAgent`.
+            repair_config: Optional EnvironmentRepairConfig (uses
+                defaults if not provided).
+            event_emitter: Optional event emitter (uses null-object if
+                not provided).
+            config: Optional adapter-specific configuration (uses
+                defaults if not provided).
+            circuit_breaker: Optional circuit breaker for coding-agent
+                call protection.
+            invocation_mode: Where the coding agent runs.
+            model: Model name to request.
+            container_image: Docker image when running containerised.
+            workspace_path: Optional workspace path the agent runs in.
         """
-        self._llm_factory = llm_factory
+        if coding_agent_factory is None:
+            msg = "coding_agent_factory cannot be None"
+            raise ValueError(msg)
+        self._coding_agent_factory = coding_agent_factory
         self.repair_config = repair_config or EnvironmentRepairConfig()
         self.event_emitter = event_emitter or NullEventEmitter()
         self.config = config or EnvironmentRepairAdapterConfig()
         self.circuit_breaker = circuit_breaker
+        self._invocation_mode = invocation_mode
+        self._model = model
+        self._container_image = container_image
+        self._workspace_path = workspace_path
         self._test_type_descriptions = {
             RepairTestType.UNIT: "unit tests",
             RepairTestType.INTEGRATION: "integration tests",
@@ -209,41 +295,78 @@ Return a JSON response with the status of the environment rebuild."""
 
 Return a JSON response with the verification status and any issues found."""
 
-    async def _execute_llm_with_timeout(
+    async def _execute_subtask(
         self,
-        llm: ILLMProvider,
-        prompt: str,
-        operation: str,
+        *,
+        purpose: str,
+        prompt_builder: IPromptBuilder,
         timeout_seconds: int,
+        operation: str,
         context: RepairCycleContext,
         extra_log: dict | None = None,
         error_message: str | None = None,
-    ) -> ExecutionResult:
-        """Execute an LLM call with timeout and optional circuit breaker.
+    ) -> CodingAgentResult:
+        """Execute a free-form coding-agent call with timeout + circuit breaker.
 
-        Centralizes timeout enforcement and error handling for all LLM calls,
-        ensuring consistent timeout application and logging.
+        Builds a fresh :class:`ICodingAgent` via the injected factory,
+        bound to the supplied adapter-local prompt builder. Drives a
+        single short execution against a synthetic
+        :class:`AgentExecution` / :class:`WorkspaceContext`.
 
         Args:
-            llm: LLM provider to execute
-            prompt: Prompt to send to the LLM
-            operation: Operation name for circuit breaker (e.g., "repair_cycle.rebuild_env")
-            timeout_seconds: Timeout in seconds for this operation
-            context: Repair cycle context with workflow details
-            extra_log: Optional dict of additional logging context
-            error_message: Optional custom error message prefix
+            purpose: Short label describing the call (e.g.
+                ``"env_rebuild"``). Used in synthetic execution metadata.
+            prompt_builder: Adapter-local builder owning the rendered
+                prompt content.
+            timeout_seconds: Hard timeout for this operation. Applied
+                via the coding agent's invocation options AND via an
+                outer ``asyncio.wait_for`` to guarantee bounded
+                duration.
+            operation: Operation name for circuit-breaker keying.
+            context: Repair cycle context with workflow details.
+            extra_log: Optional dict of additional logging context.
+            error_message: Optional custom error message prefix.
 
         Returns:
-            ExecutionResult from the LLM call
+            :class:`CodingAgentResult` from the coding-agent call.
 
         Raises:
-            TimeoutError: If the LLM call exceeds the configured timeout
+            TimeoutError: If the call exceeds ``timeout_seconds``.
         """
+        coding_agent = self._coding_agent_factory(prompt_builder)
+
+        execution = synthetic_agent_execution(
+            purpose=purpose,
+            model=self._model,
+        )
+        workspace_context = synthetic_workspace_context(
+            purpose=purpose,
+            workspace_path=self._workspace_path,
+        )
+
+        mode_config: dict[str, object] = {}
+        if self._invocation_mode == InvocationMode.CONTAINERIZED:
+            mode_config = {"image": self._container_image}
+
+        options = CodingAgentInvocationOptions(
+            invocation_mode=self._invocation_mode,
+            model=self._model,
+            timeout_seconds=timeout_seconds,
+            cost_limit_usd=None,
+            mode_config=mode_config,
+        )
+
         try:
             coro = (
-                self.circuit_breaker.call(llm.execute, operation, prompt=prompt)
+                self.circuit_breaker.call(
+                    coding_agent.execute,
+                    operation,
+                    execution,
+                    workspace_context,
+                    options,
+                )
                 if self.circuit_breaker
-                else llm.execute(prompt=prompt)
+                else coding_agent.execute(execution, workspace_context, options)
             )
             return await asyncio.wait_for(coro, timeout=timeout_seconds)
         except TimeoutError as e:
@@ -335,14 +458,13 @@ Return a JSON response with the verification status and any issues found."""
         )
 
         try:
-            # Get LLM for environment rebuild task
-            llm, agent_name = await self._get_llm_for_subtask("env_rebuild", context)
+            # Build the rebuild prompt + adapter-local prompt builder.
+            prompt_text = self._build_environment_rebuild_prompt(config)
+            prompt_builder = _EnvironmentRebuildPromptBuilder(task_text=prompt_text)
 
-            # Build and execute rebuild prompt
-            prompt = self._build_environment_rebuild_prompt(config)
-            result = await self._execute_llm_with_timeout(
-                llm=llm,
-                prompt=prompt,
+            result = await self._execute_subtask(
+                purpose="env_rebuild",
+                prompt_builder=prompt_builder,
                 operation="environment_repair.rebuild_env",
                 timeout_seconds=self.repair_config.env_rebuild_timeout_seconds,
                 context=context,
@@ -359,7 +481,7 @@ Return a JSON response with the verification status and any issues found."""
 
             # Parse response
             try:
-                response_data = json.loads(result.content) if isinstance(result.content, str) else result.content
+                response_data = json.loads(result.summary_text)
             except (json.JSONDecodeError, TypeError) as e:
                 logger.error(
                     "Failed to parse environment rebuild response",
@@ -512,14 +634,13 @@ Return a JSON response with the verification status and any issues found."""
         )
 
         try:
-            # Get LLM for environment verification task
-            llm, agent_name = await self._get_llm_for_subtask("env_verification", context)
+            # Build the verification prompt + adapter-local prompt builder.
+            prompt_text = self._build_environment_verify_prompt(config)
+            prompt_builder = _EnvironmentVerifyPromptBuilder(task_text=prompt_text)
 
-            # Build and execute verification prompt
-            prompt = self._build_environment_verify_prompt(config)
-            result = await self._execute_llm_with_timeout(
-                llm=llm,
-                prompt=prompt,
+            result = await self._execute_subtask(
+                purpose="env_verification",
+                prompt_builder=prompt_builder,
                 operation="environment_repair.verify_env",
                 timeout_seconds=self.repair_config.env_verification_timeout_seconds,
                 context=context,
@@ -536,7 +657,7 @@ Return a JSON response with the verification status and any issues found."""
 
             # Parse response
             try:
-                response_data = json.loads(result.content) if isinstance(result.content, str) else result.content
+                response_data = json.loads(result.summary_text)
             except (json.JSONDecodeError, TypeError) as e:
                 logger.error(
                     "Failed to parse environment verification response",
@@ -645,20 +766,3 @@ Return a JSON response with the verification status and any issues found."""
                 context.workflow_run_id,
             )
             raise
-
-    async def _get_llm_for_subtask(self, sub_task: str, context: RepairCycleContext) -> tuple[ILLMProvider, str]:
-        """Resolve the appropriate agent for a sub-task and return its LLM provider.
-
-        Args:
-            sub_task: Sub-task key (e.g., "env_rebuild", "env_verification")
-            context: Repair cycle context with agent configuration
-
-        Returns:
-            Tuple of (ILLMProvider instance, resolved agent name)
-        """
-        agent_name = (
-            context.agent_config.resolve_agent(sub_task, context.agent_name)
-            if context.agent_config
-            else context.agent_name
-        )
-        return await self._llm_factory(agent_name), agent_name

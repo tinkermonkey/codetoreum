@@ -1,4 +1,4 @@
-"""Unit tests for ProductionEnvironmentRepairAdapter.
+"""Unit tests for ProductionEnvironmentRepairAdapter (post-D9 ICodingAgent migration).
 
 Verifies that:
 1. rebuild_environment() emits start and completed events
@@ -7,13 +7,14 @@ Verifies that:
 4. verify_environment() applies verification timeout from EnvironmentRepairConfig
 5. Timeouts are enforced independently for rebuild and verify
 6. Errors are logged with ErrorRegistry IDs and exc_info=True
-7. LLM responses are parsed correctly
+7. Coding-agent responses are parsed correctly (via summary_text)
 8. Malformed JSON responses are handled gracefully
 9. Both methods return structured RebuildResult / VerificationResult
 10. Events contain all required fields
 """
 
 import json
+from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -34,8 +35,26 @@ from codetoreum.domain.repair_cycle_types import (
     RepairTestRunConfig,
     RepairTestType,
 )
-from codetoreum.ports.output.llm_types import ExecutionResult
+from codetoreum.ports.output.coding_agent import (
+    CodingAgentResult,
+    ICodingAgent,
+)
 from codetoreum.ports.output.repair_cycle_service import RepairCycleContext
+
+
+def _make_coding_agent_result(content: str, *, success: bool = True) -> CodingAgentResult:
+    """Build a minimal CodingAgentResult carrying the supplied content."""
+    return CodingAgentResult(
+        success=success,
+        summary_text=content,
+        total_cost_usd=Decimal("0"),
+        total_input_tokens=0,
+        total_output_tokens=0,
+        tool_call_count=0,
+        duration_ms=0,
+        error_summary=None if success else "stubbed failure",
+    )
+
 
 # ============================================================================
 # Test Fixtures and Helpers
@@ -50,9 +69,16 @@ def mock_event_emitter():
 
 @pytest.fixture
 def mock_llm():
-    """Create a mock LLM provider."""
-    llm = AsyncMock()
-    return llm
+    """Create a mock coding agent (named ``mock_llm`` for backwards-compat with existing tests).
+
+    The mock has an ``execute()`` method matching the
+    :class:`ICodingAgent.execute` signature. Tests set
+    ``mock_llm.execute.return_value`` to a
+    :class:`CodingAgentResult` produced via
+    :func:`_make_coding_agent_result`.
+    """
+    coding_agent = AsyncMock(spec=ICodingAgent)
+    return coding_agent
 
 
 @pytest.fixture
@@ -88,26 +114,25 @@ def test_config():
     )
 
 
-def _make_async_factory(llm):
-    """Create an async factory that returns the given LLM for any agent name."""
+def _make_coding_agent_factory(coding_agent):
+    """Create a factory that returns the given coding agent for any prompt builder."""
 
-    async def factory(agent_name):
-        return llm
+    def factory(prompt_builder):
+        return coding_agent
 
     return factory
 
 
 def _make_adapter(
-    llm,
+    coding_agent,
     repair_config=None,
     event_emitter=None,
 ):
-    """Create a ProductionEnvironmentRepairAdapter with the given LLM and config."""
+    """Create a ProductionEnvironmentRepairAdapter wired to the supplied coding agent."""
     if repair_config is None:
         repair_config = EnvironmentRepairConfig()
-    llm_factory = _make_async_factory(llm)
     return ProductionEnvironmentRepairAdapter(
-        llm_factory=llm_factory,
+        coding_agent_factory=_make_coding_agent_factory(coding_agent),
         repair_config=repair_config,
         event_emitter=event_emitter,
     )
@@ -127,7 +152,7 @@ async def test_rebuild_environment_success(mock_llm, repair_config, test_context
         "actions_taken": ["install_deps", "configure_env"],
         "error": None,
     }
-    mock_llm.execute.return_value = ExecutionResult(content=json.dumps(response))
+    mock_llm.execute.return_value = _make_coding_agent_result(json.dumps(response))
 
     adapter = _make_adapter(mock_llm, repair_config, mock_event_emitter)
 
@@ -171,7 +196,7 @@ async def test_rebuild_environment_failure(mock_llm, repair_config, test_context
         "actions_taken": ["install_deps"],
         "error": "Failed to install dependency X",
     }
-    mock_llm.execute.return_value = ExecutionResult(content=json.dumps(response))
+    mock_llm.execute.return_value = _make_coding_agent_result(json.dumps(response))
 
     adapter = _make_adapter(mock_llm, repair_config, mock_event_emitter)
 
@@ -204,11 +229,11 @@ async def test_rebuild_environment_timeout(mock_llm, test_context, test_config, 
     )
 
     # Make LLM take longer than timeout
-    async def slow_execute(**kwargs):
+    async def slow_execute(*args, **kwargs):
         import asyncio
 
         await asyncio.sleep(rebuild_timeout + 1)
-        return ExecutionResult(content="{}")
+        return _make_coding_agent_result("{}")
 
     mock_llm.execute = slow_execute
 
@@ -239,7 +264,7 @@ async def test_rebuild_environment_json_parse_error(
 ):
     """Test rebuild with malformed JSON response."""
     # Setup - return invalid JSON
-    mock_llm.execute.return_value = ExecutionResult(content="not valid json {")
+    mock_llm.execute.return_value = _make_coding_agent_result("not valid json {")
 
     adapter = _make_adapter(mock_llm, repair_config, mock_event_emitter)
 
@@ -269,7 +294,7 @@ async def test_rebuild_environment_no_event_emitter(mock_llm, repair_config, tes
         "actions_taken": ["install_deps"],
         "error": None,
     }
-    mock_llm.execute.return_value = ExecutionResult(content=json.dumps(response))
+    mock_llm.execute.return_value = _make_coding_agent_result(json.dumps(response))
 
     adapter = _make_adapter(mock_llm, repair_config, event_emitter=None)
 
@@ -297,7 +322,7 @@ async def test_verify_environment_success(mock_llm, repair_config, test_context,
         "checks_passed": ["deps_installed", "env_vars_set", "services_running"],
         "checks_failed": [],
     }
-    mock_llm.execute.return_value = ExecutionResult(content=json.dumps(response))
+    mock_llm.execute.return_value = _make_coding_agent_result(json.dumps(response))
 
     adapter = _make_adapter(mock_llm, repair_config, mock_event_emitter)
 
@@ -340,7 +365,7 @@ async def test_verify_environment_failure(mock_llm, repair_config, test_context,
         "checks_passed": ["deps_installed"],
         "checks_failed": ["env_vars_set", "services_running"],
     }
-    mock_llm.execute.return_value = ExecutionResult(content=json.dumps(response))
+    mock_llm.execute.return_value = _make_coding_agent_result(json.dumps(response))
 
     adapter = _make_adapter(mock_llm, repair_config, mock_event_emitter)
 
@@ -374,11 +399,11 @@ async def test_verify_environment_timeout(mock_llm, test_context, test_config, m
     )
 
     # Make LLM take longer than timeout
-    async def slow_execute(**kwargs):
+    async def slow_execute(*args, **kwargs):
         import asyncio
 
         await asyncio.sleep(verify_timeout + 1)
-        return ExecutionResult(content="{}")
+        return _make_coding_agent_result("{}")
 
     mock_llm.execute = slow_execute
 
@@ -409,7 +434,7 @@ async def test_verify_environment_json_parse_error(
 ):
     """Test verification with malformed JSON response."""
     # Setup - return invalid JSON
-    mock_llm.execute.return_value = ExecutionResult(content="not valid json [")
+    mock_llm.execute.return_value = _make_coding_agent_result("not valid json [")
 
     adapter = _make_adapter(mock_llm, repair_config, mock_event_emitter)
 
@@ -439,7 +464,7 @@ async def test_verify_environment_no_event_emitter(mock_llm, repair_config, test
         "checks_passed": ["deps_installed"],
         "checks_failed": [],
     }
-    mock_llm.execute.return_value = ExecutionResult(content=json.dumps(response))
+    mock_llm.execute.return_value = _make_coding_agent_result(json.dumps(response))
 
     adapter = _make_adapter(mock_llm, repair_config, event_emitter=None)
 
@@ -470,7 +495,7 @@ async def test_rebuild_and_verify_independent_timeouts(mock_llm, test_context, t
     # First call (rebuild) will timeout
     call_count = 0
 
-    async def mock_execute(**kwargs):
+    async def mock_execute(*args, **kwargs):
         nonlocal call_count
         import asyncio
 
@@ -480,8 +505,8 @@ async def test_rebuild_and_verify_independent_timeouts(mock_llm, test_context, t
             await asyncio.sleep(2)
         else:
             # Second call (verify) - fast, will succeed
-            return ExecutionResult(
-                content=json.dumps(
+            return _make_coding_agent_result(
+                json.dumps(
                     {
                         "healthy": True,
                         "checks_passed": ["all"],
@@ -489,7 +514,7 @@ async def test_rebuild_and_verify_independent_timeouts(mock_llm, test_context, t
                     }
                 )
             )
-        return ExecutionResult(content="{}")
+        return _make_coding_agent_result("{}")
 
     mock_llm.execute = mock_execute
 
@@ -515,85 +540,75 @@ async def test_rebuild_and_verify_independent_timeouts(mock_llm, test_context, t
 
 
 @pytest.mark.asyncio
-async def test_rebuild_with_specialized_agent(mock_llm, repair_config, test_config):
-    """Test that rebuild uses specialized agent when configured."""
-    from unittest.mock import call
-
-    # Create a mock agent config
-    agent_config = MagicMock()
-    agent_config.resolve_agent.return_value = "specialized_rebuild_agent"
-
-    context = MagicMock(spec=RepairCycleContext)
-    context.work_item_id = "issue-456"
-    context.workflow_run_id = "run-123"
-    context.iteration = 1
-    context.agent_name = "default_agent"
-    context.agent_config = agent_config
+async def test_rebuild_invokes_coding_agent_factory_once(
+    mock_llm,
+    repair_config,
+    test_context,
+    test_config,
+):
+    """rebuild_environment() asks the coding-agent factory for exactly one agent per call."""
+    from codetoreum.adapters.secondary.production_environment_repair_adapter import (
+        _EnvironmentRebuildPromptBuilder,
+    )
 
     response = {"success": True, "actions_taken": [], "error": None}
-    mock_llm.execute.return_value = ExecutionResult(content=json.dumps(response))
+    mock_llm.execute.return_value = _make_coding_agent_result(json.dumps(response))
 
-    llm_calls = []
+    factory_calls: list = []
 
-    async def tracking_factory(agent_name):
-        llm_calls.append(agent_name)
+    def tracking_factory(prompt_builder):
+        factory_calls.append(prompt_builder)
         return mock_llm
 
     adapter = ProductionEnvironmentRepairAdapter(
-        llm_factory=tracking_factory,
+        coding_agent_factory=tracking_factory,
         repair_config=repair_config,
     )
 
-    # Execute rebuild
     await adapter.rebuild_environment(
         project="test-project",
         config=test_config,
-        context=context,
+        context=test_context,
     )
 
-    # Verify specialized agent was used
-    assert "specialized_rebuild_agent" in llm_calls
-    agent_config.resolve_agent.assert_called_with("env_rebuild", "default_agent")
+    assert len(factory_calls) == 1
+    assert isinstance(factory_calls[0], _EnvironmentRebuildPromptBuilder)
 
 
 @pytest.mark.asyncio
-async def test_verify_with_specialized_agent(mock_llm, repair_config, test_config):
-    """Test that verify uses specialized agent when configured."""
-    # Create a mock agent config
-    agent_config = MagicMock()
-    agent_config.resolve_agent.return_value = "specialized_verify_agent"
-
-    context = MagicMock(spec=RepairCycleContext)
-    context.work_item_id = "issue-456"
-    context.workflow_run_id = "run-123"
-    context.iteration = 1
-    context.agent_name = "default_agent"
-    context.agent_config = agent_config
+async def test_verify_invokes_coding_agent_factory_once(
+    mock_llm,
+    repair_config,
+    test_context,
+    test_config,
+):
+    """verify_environment() asks the coding-agent factory for exactly one agent per call."""
+    from codetoreum.adapters.secondary.production_environment_repair_adapter import (
+        _EnvironmentVerifyPromptBuilder,
+    )
 
     response = {"healthy": True, "checks_passed": [], "checks_failed": []}
-    mock_llm.execute.return_value = ExecutionResult(content=json.dumps(response))
+    mock_llm.execute.return_value = _make_coding_agent_result(json.dumps(response))
 
-    llm_calls = []
+    factory_calls: list = []
 
-    async def tracking_factory(agent_name):
-        llm_calls.append(agent_name)
+    def tracking_factory(prompt_builder):
+        factory_calls.append(prompt_builder)
         return mock_llm
 
     adapter = ProductionEnvironmentRepairAdapter(
-        llm_factory=tracking_factory,
+        coding_agent_factory=tracking_factory,
         repair_config=repair_config,
     )
 
-    # Execute verify
     await adapter.verify_environment(
         project="test-project",
         config=test_config,
-        context=context,
+        context=test_context,
     )
 
-    # Verify specialized agent was used
-    assert "specialized_verify_agent" in llm_calls
-    agent_config.resolve_agent.assert_called_with("env_verification", "default_agent")
+    assert len(factory_calls) == 1
+    assert isinstance(factory_calls[0], _EnvironmentVerifyPromptBuilder)
 
 
 # ============================================================================
@@ -612,13 +627,13 @@ async def test_verify_environment_generic_exception_handling(
     for non-TimeoutError exceptions.
     """
 
-    async def failing_factory(agent_name):
-        llm = AsyncMock()
-        llm.execute.side_effect = RuntimeError("LLM provider connection failed")
-        return llm
+    def failing_factory(prompt_builder):
+        coding_agent = AsyncMock(spec=ICodingAgent)
+        coding_agent.execute.side_effect = RuntimeError("LLM provider connection failed")
+        return coding_agent
 
     adapter = ProductionEnvironmentRepairAdapter(
-        llm_factory=failing_factory,
+        coding_agent_factory=failing_factory,
         repair_config=repair_config,
         event_emitter=mock_event_emitter,
     )
@@ -658,13 +673,13 @@ async def test_rebuild_environment_generic_exception_handling(
     completion event with error information.
     """
 
-    async def failing_factory(agent_name):
-        llm = AsyncMock()
-        llm.execute.side_effect = ValueError("Invalid configuration in LLM")
-        return llm
+    def failing_factory(prompt_builder):
+        coding_agent = AsyncMock(spec=ICodingAgent)
+        coding_agent.execute.side_effect = ValueError("Invalid configuration in LLM")
+        return coding_agent
 
     adapter = ProductionEnvironmentRepairAdapter(
-        llm_factory=failing_factory,
+        coding_agent_factory=failing_factory,
         repair_config=repair_config,
         event_emitter=mock_event_emitter,
     )
@@ -763,11 +778,11 @@ async def test_rebuild_with_circuit_breaker_success(
         "actions_taken": ["install_deps"],
         "error": None,
     }
-    mock_llm.execute.return_value = ExecutionResult(content=json.dumps(response))
+    mock_llm.execute.return_value = _make_coding_agent_result(json.dumps(response))
 
     # Create adapter with circuit breaker
     adapter = ProductionEnvironmentRepairAdapter(
-        llm_factory=_make_async_factory(mock_llm),
+        coding_agent_factory=_make_coding_agent_factory(mock_llm),
         repair_config=repair_config,
         event_emitter=mock_event_emitter,
         circuit_breaker=mock_circuit_breaker,
@@ -812,11 +827,11 @@ async def test_verify_with_circuit_breaker_success(
         "checks_passed": ["deps_check"],
         "checks_failed": [],
     }
-    mock_llm.execute.return_value = ExecutionResult(content=json.dumps(response))
+    mock_llm.execute.return_value = _make_coding_agent_result(json.dumps(response))
 
     # Create adapter with circuit breaker
     adapter = ProductionEnvironmentRepairAdapter(
-        llm_factory=_make_async_factory(mock_llm),
+        coding_agent_factory=_make_coding_agent_factory(mock_llm),
         repair_config=repair_config,
         event_emitter=mock_event_emitter,
         circuit_breaker=mock_circuit_breaker,
@@ -853,7 +868,7 @@ async def test_rebuild_with_circuit_breaker_open(
 
     # Create adapter with circuit breaker
     adapter = ProductionEnvironmentRepairAdapter(
-        llm_factory=_make_async_factory(mock_llm),
+        coding_agent_factory=_make_coding_agent_factory(mock_llm),
         repair_config=repair_config,
         event_emitter=mock_event_emitter,
         circuit_breaker=mock_circuit_breaker,
@@ -881,7 +896,7 @@ async def test_verify_with_circuit_breaker_open(mock_llm, repair_config, test_co
 
     # Create adapter with circuit breaker
     adapter = ProductionEnvironmentRepairAdapter(
-        llm_factory=_make_async_factory(mock_llm),
+        coding_agent_factory=_make_coding_agent_factory(mock_llm),
         repair_config=repair_config,
         event_emitter=mock_event_emitter,
         circuit_breaker=mock_circuit_breaker,
