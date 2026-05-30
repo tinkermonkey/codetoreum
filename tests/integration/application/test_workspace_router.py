@@ -356,64 +356,6 @@ async def test_finalize_workspace_no_changes(
     mock_repository.push.assert_not_called()
 
 
-# ============================================================================
-# Tests: Container Environment & Volumes
-# ============================================================================
-
-
-@pytest.mark.asyncio
-async def test_prepare_container_environment(workspace_router, sample_work_item, sample_agent, sample_project):
-    """Test environment variable preparation for containers."""
-    context = await workspace_router.route_workspace(
-        work_item=sample_work_item,
-        agent=sample_agent,
-        project=sample_project,
-    )
-
-    env_vars = await workspace_router.prepare_container_environment(
-        context=context,
-        project=sample_project,
-        agent=sample_agent,
-    )
-
-    assert env_vars["CODETOREUM_PROJECT_ID"] == "test-project"
-    assert env_vars["CODETOREUM_WORK_ITEM_ID"] == "work-item-1"
-    assert env_vars["CODETOREUM_WORKSPACE_TYPE"] == "issue"
-    assert env_vars["CODETOREUM_AGENT_ID"] == "developer-agent"
-    assert env_vars["ENV"] == "test"  # From project env vars
-    # Git identity env vars (replaces .gitconfig bind mount for DinD compatibility)
-    assert env_vars["GIT_AUTHOR_NAME"] == "Codetoreum"
-    assert env_vars["GIT_AUTHOR_EMAIL"] == "noreply@codetoreum.ai"
-    assert env_vars["GIT_COMMITTER_NAME"] == "Codetoreum"
-    assert env_vars["GIT_COMMITTER_EMAIL"] == "noreply@codetoreum.ai"
-
-
-@pytest.mark.asyncio
-async def test_prepare_container_volumes_read_write(
-    workspace_router, sample_work_item, sample_agent, sample_project, repository_path
-):
-    """Test volume mounts for code-changing agents."""
-    context = await workspace_router.route_workspace(
-        work_item=sample_work_item,
-        agent=sample_agent,
-        project=sample_project,
-    )
-
-    volumes = workspace_router.prepare_container_volumes(
-        context=context,
-        project=sample_project,
-        repository_path=repository_path,
-    )
-
-    # Should have read-write mount
-    assert any(":rw" in v for v in volumes.values())
-
-
-# ============================================================================
-# Tests: Branch Resolution Service Integration
-# ============================================================================
-
-
 @pytest.fixture
 def mock_branch_resolution_service():
     """Create mock branch resolution service."""

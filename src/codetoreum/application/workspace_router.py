@@ -133,8 +133,8 @@ class WorkspaceRouter:
         # Track which work items fell back due to resolution failure
         self._branch_resolution_fallbacks: dict[str, str] = {}  # work_item_id -> error_message
         # Cache actual resolved branch names (work_item_id -> branch_name)
-        # Used by finalize_workspace() and prepare_container_environment() to get the actual
-        # branch name after resolution, since WorkspaceContext is frozen with placeholder name
+        # Used by finalize_workspace() to get the actual branch name after
+        # resolution, since WorkspaceContext is frozen with placeholder name
         self._resolved_branch_names: dict[str, str] = {}
         self._branch_resolutions_lock = asyncio.Lock()
 
@@ -213,8 +213,7 @@ class WorkspaceRouter:
         - Ensure branch is up-to-date with base branch
         - Set up file mounts for container execution
 
-        **Expected Call Order**: Call this method BEFORE prepare_container_environment() and
-        finalize_workspace(). The resolved branch name is cached internally and returned in
+        **Expected Call Order**: Call this method BEFORE finalize_workspace(). The resolved branch name is cached internally and returned in
         the result metadata for explicit passing to callers. The cache is cleaned up in
         finalize_workspace's finally block.
 
@@ -331,8 +330,8 @@ class WorkspaceRouter:
                 await self.vcs.pull(repo_path_str, branch=project.default_branch)
                 metadata["updated_from_base"] = True
 
-                # Cache the actual resolved branch name for later use by finalize_workspace()
-                # and prepare_container_environment() (async-safe)
+                # Cache the actual resolved branch name for later use by
+                # finalize_workspace() (async-safe)
                 async with self._branch_resolutions_lock:
                     self._resolved_branch_names[work_item.id] = resolved_branch_name
 
@@ -386,8 +385,8 @@ class WorkspaceRouter:
         ExecutionCompleted event fires, so downstream handlers always see
         committed code.
 
-        **Expected Call Order**: Call AFTER prepare_workspace() /
-        prepare_container_environment() / execute_with_container().
+        **Expected Call Order**: Call AFTER prepare_workspace() and after the
+        coding-agent invocation completes (e.g. ExecutionService.execute()).
 
         Args:
             context: Workspace context
@@ -413,125 +412,6 @@ class WorkspaceRouter:
             # Clean up resolved branch name cache to prevent memory leaks (async-safe)
             async with self._branch_resolutions_lock:
                 self._resolved_branch_names.pop(context.work_item_id, None)
-
-    async def prepare_container_environment(
-        self,
-        context: WorkspaceContext,
-        project: ProjectContext,
-        agent: Agent,
-    ) -> dict[str, str]:
-        """
-        Prepare environment variables for container execution.
-
-        **Expected Call Order**: This method should be called AFTER prepare_workspace()
-        and BEFORE finalize_workspace(). It retrieves the resolved branch name from the
-        cache populated during prepare_workspace() and sets CODETOREUM_BRANCH_NAME env var.
-
-        **Security Note**: This method does NOT pass any credentials into the container.
-        Credentials (CLAUDE_CODE_OAUTH_TOKEN, ANTHROPIC_API_KEY, GITHUB_TOKEN) flow through
-        ExecutionService._build_agent_container_config via `system_credentials`, which is
-        merged with the env dict produced here in execute_with_container. WorkspaceRouter
-        only contributes workspace-shaped variables (CODETOREUM_*, GIT_*); credentials are
-        the orchestrator's responsibility, not the workspace's.
-
-        - SSH keys, private keys, or other host-side secrets are NEVER passed.
-
-        **System Environment Variables Injected** (11 base + project-level variables):
-        1. CODETOREUM_PROJECT_ID - Project identifier
-        2. CODETOREUM_WORK_ITEM_ID - Work item being processed
-        3. CODETOREUM_WORKSPACE_TYPE - Type of workspace (issue, discussion, hybrid)
-        4. CODETOREUM_ALLOW_CODE_CHANGES - Whether agent can modify code
-        5. CODETOREUM_AGENT_ID - Agent identifier
-        6. CODETOREUM_AGENT_TYPE - Agent type (maker, reviewer, specialized, etc.)
-        7. GIT_AUTHOR_NAME - Git author name for commits
-        8. GIT_AUTHOR_EMAIL - Git author email for commits
-        9. GIT_COMMITTER_NAME - Git committer name (same as author)
-        10. GIT_COMMITTER_EMAIL - Git committer email (same as author)
-        11. CODETOREUM_BRANCH_NAME - Resolved branch name (issue workspaces only)
-
-        Also merged: Any project-level environment variables (non-secret)
-
-        Args:
-            context: Workspace context
-            project: Project context
-            agent: Agent configuration
-
-        Returns:
-            Dict[str, str]: Environment variables for container. For issue workspaces,
-                includes CODETOREUM_BRANCH_NAME with the resolved branch name.
-        """
-        # Git author/committer info via env vars instead of .gitconfig bind mount.
-        # .gitconfig file mounts break in Docker-in-Docker (DinD) environments
-        # because the file appears as a directory inside the target container.
-        author_name = getattr(project, "author_name", self.config.default_author_name)
-        author_email = getattr(project, "author_email", self.config.default_author_email)
-
-        env_vars = {
-            # Project identification
-            "CODETOREUM_PROJECT_ID": project.id,
-            "CODETOREUM_WORK_ITEM_ID": context.work_item_id,
-            # Workspace configuration
-            "CODETOREUM_WORKSPACE_TYPE": context.workspace_type.value,
-            "CODETOREUM_ALLOW_CODE_CHANGES": str(context.allow_code_changes),
-            # Agent identification
-            "CODETOREUM_AGENT_ID": agent.id,
-            "CODETOREUM_AGENT_TYPE": agent.agent_type.value,
-            # Git author/committer identity (replaces .gitconfig bind mount)
-            "GIT_AUTHOR_NAME": author_name,
-            "GIT_AUTHOR_EMAIL": author_email,
-            "GIT_COMMITTER_NAME": author_name,
-            "GIT_COMMITTER_EMAIL": author_email,
-        }
-
-        # Add branch info for issue workspaces
-        if context.is_issue_workspace():
-            # Use resolved branch name if available (actual name after resolution),
-            # fall back to context branch name (placeholder from route_workspace)
-            branch_name = await self._get_resolved_branch_name(context.work_item_id, context.branch_name or "")
-            env_vars["CODETOREUM_BRANCH_NAME"] = branch_name
-
-        # Merge with project-level environment variables
-        if hasattr(project, "environment_variables"):
-            env_vars.update(project.environment_variables)
-
-        self._logger.debug(f"Prepared environment variables: {list(env_vars.keys())}")
-        return env_vars
-
-    def prepare_container_volumes(
-        self,
-        context: WorkspaceContext,
-        project: ProjectContext,
-        repository_path: str,
-    ) -> dict[str, str]:
-        """
-        Prepare volume mounts for container execution.
-
-        Args:
-            context: Workspace context
-            project: Project context
-            repository_path: Local path to cloned repository
-
-        Returns:
-            Dict[str, str]: Volume mounts (host_path: container_path:mode)
-        """
-        repo_path = Path(repository_path)
-
-        volumes = {}
-
-        if context.can_make_code_changes():
-            # Read-write mount for code changes
-            volumes[str(repo_path.absolute())] = "/workspace:rw"
-        else:
-            # Read-only mount for analysis
-            volumes[str(repo_path.absolute())] = "/workspace:ro"
-
-        # Add context directory if exists
-        context_dir = repo_path / ".codetoreum" / "context"
-        if context_dir.exists():
-            volumes[str(context_dir.absolute())] = "/context:ro"
-
-        self._logger.debug(f"Prepared volume mounts: {volumes}")
-        return volumes
 
     # ========================================================================
     # Private Methods
