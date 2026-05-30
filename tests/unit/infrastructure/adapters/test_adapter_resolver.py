@@ -740,70 +740,64 @@ class TestAdapterResolver:
         # Should implement IEnvironmentRepairService interface
         assert isinstance(service, IEnvironmentRepairService)
 
-    def test_resolve_environment_repair_service_production_raises_without_agent_repository(self, factory, dependencies):
-        """Test that production environment_repair adapter raises error without agent_repository."""
-        # Configure to use production environment repair adapter
-        config = AdapterSelectionConfig(environment_repair="production")
-        resolver = AdapterResolver(config, factory, dependencies)
+    def test_resolve_environment_repair_service_production_does_not_require_agent_repository(
+        self, factory, dependencies
+    ):
+        """Post-D9: production environment_repair adapter resolves without agent_repository.
 
-        # agent_repository not resolved - should raise AdapterConfigurationError
-        with pytest.raises(AdapterConfigurationError) as exc_info:
-            resolver.resolve_environment_repair_service()
-
-        error_msg = str(exc_info.value)
-        assert "environment_repair" in error_msg.lower()
-        assert "agent_repository" in error_msg.lower()
-
-    def test_resolve_environment_repair_service_production_with_agent_repository(self, factory, dependencies):
-        """Test that production environment_repair adapter resolves with agent_repository."""
-        # Configure to use production environment repair adapter
-        config = AdapterSelectionConfig(environment_repair="production")
-        resolver = AdapterResolver(config, factory, dependencies)
-
-        # Resolve agent_repository first
-        resolver._resolved["agent_repository"] = resolver.resolve_agent_repository()
-        # Resolve event_emitter as well
-        resolver._resolved["event_emitter"] = resolver.resolve_event_emitter()
-
-        # Now resolve environment repair service - should not raise
-        service = resolver.resolve_environment_repair_service()
-
-        assert service is not None
-        # Should implement IEnvironmentRepairService interface
-        assert isinstance(service, IEnvironmentRepairService)
-
-    def test_resolve_environment_repair_service_production_uses_agent_llm_factory(self, factory, dependencies):
-        """Test that production adapter receives correct LLM factory signature.
-
-        Verifies that the factory passed to production adapter:
-        1. Takes agent_name argument
-        2. Returns an async coroutine
-        3. Is the same factory used for repair_cycle
+        After the ICodingAgent migration, the production adapter takes a
+        coding_agent_factory closure that does not depend on the
+        agent_repository slot. Construction succeeds with just the
+        event_emitter resolved.
         """
         config = AdapterSelectionConfig(environment_repair="production")
         resolver = AdapterResolver(config, factory, dependencies)
 
-        # Resolve dependencies
-        resolver._resolved["agent_repository"] = resolver.resolve_agent_repository()
+        # event_emitter is still required (for error event emission)
         resolver._resolved["event_emitter"] = resolver.resolve_event_emitter()
 
-        # Mock the factory's create_environment_repair_service to capture the llm_factory
-        captured_llm_factory = None
+        service = resolver.resolve_environment_repair_service()
+        assert service is not None
+
+    def test_resolve_environment_repair_service_production_with_event_emitter(self, factory, dependencies):
+        """Test that production environment_repair adapter resolves cleanly."""
+        config = AdapterSelectionConfig(environment_repair="production")
+        resolver = AdapterResolver(config, factory, dependencies)
+
+        # Resolve event_emitter (required by the adapter for emitting events)
+        resolver._resolved["event_emitter"] = resolver.resolve_event_emitter()
+
+        service = resolver.resolve_environment_repair_service()
+        assert service is not None
+        assert isinstance(service, IEnvironmentRepairService)
+
+    def test_resolve_environment_repair_service_production_uses_coding_agent_factory(self, factory, dependencies):
+        """Production adapter is wired with the new coding_agent_factory (post-D9).
+
+        Verifies that the factory passed to the production adapter:
+        1. Is the new coding_agent_factory kwarg
+        2. Is a callable taking an IPromptBuilder
+        3. Returns an ICodingAgent (resilience-wrapped)
+        """
+        config = AdapterSelectionConfig(environment_repair="production")
+        resolver = AdapterResolver(config, factory, dependencies)
+
+        resolver._resolved["event_emitter"] = resolver.resolve_event_emitter()
+
+        captured_factory = None
         original_create = resolver._factory.create_environment_repair_service
 
         def capture_create(adapter_name, **kwargs):
-            nonlocal captured_llm_factory
-            captured_llm_factory = kwargs.get("llm_factory")
+            nonlocal captured_factory
+            captured_factory = kwargs.get("coding_agent_factory")
             return original_create(adapter_name, **kwargs)
 
         resolver._factory.create_environment_repair_service = capture_create
 
-        # Resolve the service
-        service = resolver.resolve_environment_repair_service()
+        resolver.resolve_environment_repair_service()
 
-        # Verify the captured factory is callable (the async factory from _create_agent_llm_factory)
-        assert captured_llm_factory is not None
-        assert callable(captured_llm_factory)
+        assert captured_factory is not None
+        assert callable(captured_factory)
 
 
 class TestAdapterResolverIntegration:

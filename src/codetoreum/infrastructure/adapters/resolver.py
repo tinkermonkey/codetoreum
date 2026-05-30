@@ -9,7 +9,7 @@ This module provides:
 
 import logging
 import os
-from collections.abc import Callable, Coroutine
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -615,31 +615,39 @@ class AdapterResolver:
 
         Special handling for SimulationEngine-coupled adapters:
         - If mock variant selected: use engine to create time-aware mock with llm_factory
-        - If real variant: create directly without engine
+        - If real variant: create directly without engine, wiring the new
+          coding_agent_factory (post-D9).
 
         The systemic_analysis_service and environment_repair_service are resolved separately
         in resolve_all() before repair_cycle creation to ensure centralized adapter resolution
         and proper dependency injection at construction time.
         """
         if self._config.repair_cycle == "mock":
-            # Engine creates time-aware mock with llm_factory for contract enforcement
+            # Engine creates time-aware mock with llm_factory for contract enforcement.
+            # The mock keeps the historical ``llm_factory`` slot (an inert stub is
+            # plenty — the mock never invokes the factory). The production path
+            # below uses the new ``coding_agent_factory`` instead.
             checkpoint_store = self._resolved.get("checkpoint_store")
             container_adapter = self._resolved.get("container")
+
+            async def _legacy_mock_llm_factory(_agent_name: str) -> Any:
+                class _Inert:
+                    pass
+
+                return _Inert()
+
             return self._deps.engine.create_repair_cycle_adapter(
-                llm_factory=self._create_agent_llm_factory_stub(),
+                llm_factory=_legacy_mock_llm_factory,
                 checkpoint_store=checkpoint_store,
                 container_adapter=container_adapter,
             )
-        # Real adapter: inject agent-aware factory and pre-resolved services
-        # Use the pre-resolved systemic_analysis_service (resolved in phase 9)
-        # Use the pre-resolved environment_repair_service (resolved in phase 9b)
+        # Real adapter: inject the post-D9 coding_agent_factory.
         systemic_analysis_service = self._resolved.get("systemic_analysis_service")
         environment_repair_service = self._resolved.get("environment_repair_service")
 
         return self._factory.create_repair_cycle(
             adapter_name=self._config.repair_cycle,
-            llm_factory=self._create_agent_llm_factory_stub(),
-            agent_repository=self._resolved["agent_repository"],
+            coding_agent_factory=self._create_coding_agent_factory(),
             systemic_analysis_service=systemic_analysis_service,
             environment_repair_service=environment_repair_service,
         )
@@ -679,34 +687,19 @@ class AdapterResolver:
     def resolve_systemic_analysis_service(self) -> ISystemicAnalysisService:
         """Resolve systemic analysis service adapter.
 
-        Follows the standard resolver pattern: reads from own config key (`systemic_analysis`)
-        and delegates to factory method.
-
-        When the configured adapter requires dependencies (e.g., LLM provider for production):
-        - Ensures those dependencies are already resolved
-        - Passes them to the factory method
-        - Raises AdapterConfigurationError if dependencies are missing in production
+        Post-D9: the ``"llm"`` variant uses the new
+        :class:`ICodingAgent`-based factory injected via
+        ``coding_agent_factory``.
 
         Returns:
-            ISystemicAnalysisService implementation
-
-        Raises:
-            AdapterConfigurationError: If the "llm" variant is requested after
-                Phase D5 retired the underlying ILLMProvider.
+            ISystemicAnalysisService implementation.
         """
-        # The "llm" variant of systemic_analysis depended on the retired
-        # ILLMProvider / IAgentLauncher port. Until LLMSystemicAnalysisAdapter
-        # migrates to ICodingAgent, only the mock variant is wireable.
         if self._config.systemic_analysis == "llm":
-            raise AdapterConfigurationError(
-                [
-                    "systemic_analysis adapter set to 'llm' but the underlying "
-                    "ILLMProvider port retired in Phase D5. Use 'mock' or migrate "
-                    "LLMSystemicAnalysisAdapter to ICodingAgent first.",
-                ]
+            return self._factory.create_systemic_analysis_service(
+                adapter_name=self._config.systemic_analysis,
+                coding_agent_factory=self._create_coding_agent_factory(),
             )
 
-        # For all other adapters (mock, in_memory, etc.), use factory with no extra args
         return self._factory.create_systemic_analysis_service(
             adapter_name=self._config.systemic_analysis,
         )
@@ -714,39 +707,20 @@ class AdapterResolver:
     def resolve_environment_repair_service(self) -> IEnvironmentRepairService:
         """Resolve environment repair service adapter.
 
-        Follows the standard resolver pattern: reads from adapter config
-        and delegates to factory method.
-
-        For "production" adapter, injects the LLM factory for environment
-        rebuild and verification operations. Uses _create_agent_llm_factory()
-        to provide agent-aware LLM resolution, matching the pattern used
-        for repair_cycle adapter.
+        Post-D9: the ``"production"`` variant uses the new
+        :class:`ICodingAgent`-based factory injected via
+        ``coding_agent_factory``.
 
         Returns:
-            IEnvironmentRepairService implementation
-
-        Raises:
-            AdapterConfigurationError: If production adapter is configured but agent_repository
-                                        is not yet resolved
+            IEnvironmentRepairService implementation.
         """
-        # For "production" adapter, we need the agent-aware LLM factory
         if self._config.environment_repair == "production":
-            # Ensure agent_repository is resolved before creating the factory
-            agent_repo = self._resolved.get("agent_repository")
-            if not agent_repo:
-                raise AdapterConfigurationError(
-                    [
-                        "environment_repair adapter set to 'production' but agent_repository is not resolved. "
-                        "Ensure agent_repository is resolved before environment_repair service.",
-                    ]
-                )
             return self._factory.create_environment_repair_service(
                 adapter_name=self._config.environment_repair,
-                llm_factory=self._create_agent_llm_factory_stub(),
+                coding_agent_factory=self._create_coding_agent_factory(),
                 event_emitter=self._resolved["event_emitter"],
             )
 
-        # For all other adapters (mock, in_memory, etc.), use factory with optional event_emitter
         return self._factory.create_environment_repair_service(
             adapter_name=self._config.environment_repair,
             event_emitter=self._resolved["event_emitter"],
@@ -765,40 +739,62 @@ class AdapterResolver:
         )
 
     # =========================================================================
-    # Stub LLM factory for legacy repair-cycle / systemic-analysis adapters
+    # Coding-agent factory for repair-cycle / systemic-analysis / env-repair
     # =========================================================================
     #
-    # The historical _create_agent_llm_factory built per-agent ILLMProvider
-    # instances backed by the old ClaudeCodeAdapter / MockLLMAdapter. Phase
-    # D5 retired both of those plus the IAgentLauncher / ILLMProvider ports.
-    # The repair-cycle, environment-repair, and systemic-analysis adapters
-    # still accept an llm_factory argument because their migration to
-    # ICodingAgent is deferred; passing the stub below keeps construction
-    # working. The stub raises NotImplementedError if any of those adapters
-    # actually invokes the factory at runtime.
+    # Post-D9: the three repair adapters take a
+    # ``coding_agent_factory: Callable[[IPromptBuilder], ICodingAgent]``
+    # construction dep. The factory is invoked once per free-form call
+    # (analyze failures, rebuild env, fix file, etc.) and returns a fresh
+    # ``FreeFormCodingAgent`` wrapped in the resilience decorator, bound
+    # to the per-call adapter-local prompt builder.
     #
-    def _create_agent_llm_factory_stub(
+    def _create_coding_agent_factory(
         self,
-    ) -> "Callable[[str], Coroutine[Any, Any, Any]]":
-        """Return a no-op async factory matching the historical signature.
+    ) -> "Callable[[Any], Any]":
+        """Build a coding-agent factory for the repair / analysis adapters.
 
-        Returns an inert object for any agent name. Repair-cycle adapters
-        consume the factory via ``_resolve_and_record_agent`` (which records
-        the agent and returns the provider). The surviving mock + production
-        repair-cycle paths do not invoke a method on the result; if a
-        deferred-migration adapter does, Python's AttributeError will make
-        the gap visible.
+        The returned callable matches the
+        ``Callable[[IPromptBuilder], ICodingAgent]`` shape the repair
+        adapters expect. Each call constructs a fresh
+        :class:`~codetoreum.adapters.secondary.free_form_coding_agent.FreeFormCodingAgent`
+        bound to the supplied prompt builder, wrapped in
+        :class:`ResilientCodingAgentDecorator` so the standard resilience
+        patterns (rate-limit, circuit breaker, timeout, retry) apply to
+        each free-form call independently.
+
+        Note:
+            The factory closure captures the resolver's resolved
+            event_bus, container, and the configured Claude Code
+            credential provider. The container is the same one the
+            primary :class:`ClaudeCodeAdapter` uses; the credential
+            provider resolves ``ANTHROPIC_API_KEY`` /
+            ``CLAUDE_CODE_OAUTH_TOKEN`` from the environment.
         """
+        from codetoreum.adapters.secondary.claude_code.credentials import (
+            EnvironmentCredentialProvider,
+        )
+        from codetoreum.adapters.secondary.free_form_coding_agent import (
+            FreeFormCodingAgent,
+        )
+        from codetoreum.infrastructure.resilience.decorators import (
+            ResilientCodingAgentDecorator,
+        )
 
-        class _LegacyLLMProviderInert:
-            """Inert stand-in for the retired ILLMProvider (Phase D5)."""
+        event_bus = self._deps.event_bus
+        container = self._resolved.get("container")
+        credential_provider = EnvironmentCredentialProvider()
 
-        _stub_provider = _LegacyLLMProviderInert()
+        def factory(prompt_builder: Any) -> Any:
+            adapter = FreeFormCodingAgent(
+                prompt_builder=prompt_builder,
+                event_bus=event_bus,
+                credential_provider=credential_provider,
+                container=container,
+            )
+            return ResilientCodingAgentDecorator(wrapped=adapter)
 
-        async def _stub_factory(agent_name: str) -> Any:
-            return _stub_provider
-
-        return _stub_factory
+        return factory
 
     def resolve_all(self) -> "SimulationAdapters":
         """
