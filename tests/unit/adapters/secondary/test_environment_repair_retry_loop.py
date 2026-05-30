@@ -35,8 +35,11 @@ from codetoreum.domain.repair_cycle_types import (
     RepairTestType,
     VerificationResult,
 )
+from codetoreum.ports.output.coding_agent import (
+    CodingAgentResult,
+    ICodingAgent,
+)
 from codetoreum.ports.output.event_emitter import IEventEmitter
-from codetoreum.ports.output.llm_types import ExecutionResult
 
 # ---------------------------------------------------------------------------
 # Shared test fixtures and helpers
@@ -101,11 +104,27 @@ class _RepairCycleContext:
         )
 
 
-def _make_async_factory(llm):
-    """Create an async factory that returns the given LLM for any agent name."""
+def _coding_agent_result(content: str, *, success: bool = True) -> CodingAgentResult:
+    """Build a minimal CodingAgentResult carrying the supplied content."""
+    from decimal import Decimal
 
-    async def factory(agent_name):
-        return llm
+    return CodingAgentResult(
+        success=success,
+        summary_text=content,
+        total_cost_usd=Decimal("0"),
+        total_input_tokens=0,
+        total_output_tokens=0,
+        tool_call_count=0,
+        duration_ms=0,
+        error_summary=None if success else "stubbed failure",
+    )
+
+
+def _make_async_factory(coding_agent):
+    """Create a coding-agent factory returning the given coding agent."""
+
+    def factory(prompt_builder):
+        return coding_agent
 
     return factory
 
@@ -115,18 +134,17 @@ def _make_adapter(
     llm_response: str = _ENVIRONMENT_ISSUE_JSON,
     environment_repair_service=None,
 ) -> tuple[ProductionRepairCycleAdapter, AsyncMock]:
-    """Return (adapter, mock_llm) pre-wired for tests."""
-    llm = AsyncMock()
-    llm.execute.return_value = ExecutionResult(content=llm_response)
+    """Return (adapter, mock_coding_agent) pre-wired for tests."""
+    coding_agent = AsyncMock(spec=ICodingAgent)
+    coding_agent.execute.return_value = _coding_agent_result(llm_response)
 
-    llm_factory = _make_async_factory(llm)
     return (
         ProductionRepairCycleAdapter(
-            llm_factory=llm_factory,
+            coding_agent_factory=_make_async_factory(coding_agent),
             config=RepairCycleConfig(),
             environment_repair_service=environment_repair_service,
         ),
-        llm,
+        coding_agent,
     )
 
 
@@ -169,8 +187,8 @@ async def test_environment_issue_single_rebuild_succeeds():
 
     # After rebuild/verify succeeds, tests pass
     llm.execute.side_effect = [
-        ExecutionResult(content=_ENVIRONMENT_ISSUE_JSON),  # Initial test run
-        ExecutionResult(content='{"passed": 1, "failed": 0, "failures": [], "warnings": []}'),  # Re-test after env fix
+        _coding_agent_result(_ENVIRONMENT_ISSUE_JSON),  # Initial test run
+        _coding_agent_result('{"passed": 1, "failed": 0, "failures": [], "warnings": []}'),  # Re-test after env fix
     ]
 
     ctx = _RepairCycleContext()
@@ -221,9 +239,9 @@ async def test_environment_issue_rebuild_fails_then_succeeds():
     adapter._systemic_analysis_service = systemic_service
 
     llm.execute.side_effect = [
-        ExecutionResult(content=_ENVIRONMENT_ISSUE_JSON),  # Initial test run
-        ExecutionResult(
-            content='{"passed": 1, "failed": 0, "failures": [], "warnings": []}'
+        _coding_agent_result(_ENVIRONMENT_ISSUE_JSON),  # Initial test run
+        _coding_agent_result(
+            '{"passed": 1, "failed": 0, "failures": [], "warnings": []}'
         ),  # Re-test after env fix succeeds
     ]
 
@@ -271,7 +289,7 @@ async def test_environment_issue_all_rebuilds_exhausted():
     adapter, llm = _make_adapter(environment_repair_service=env_service)
     adapter._systemic_analysis_service = systemic_service
 
-    llm.execute.return_value = ExecutionResult(content=_ENVIRONMENT_ISSUE_JSON)
+    llm.execute.return_value = _coding_agent_result(_ENVIRONMENT_ISSUE_JSON)
 
     ctx = _RepairCycleContext()
     result = await adapter.execute(ctx)
@@ -317,7 +335,7 @@ async def test_environment_issue_rebuild_succeeds_verify_fails_all_attempts():
     adapter, llm = _make_adapter(environment_repair_service=env_service)
     adapter._systemic_analysis_service = systemic_service
 
-    llm.execute.return_value = ExecutionResult(content=_ENVIRONMENT_ISSUE_JSON)
+    llm.execute.return_value = _coding_agent_result(_ENVIRONMENT_ISSUE_JSON)
 
     ctx = _RepairCycleContext()
     result = await adapter.execute(ctx)
@@ -349,10 +367,10 @@ async def test_environment_issue_without_service_uses_llm_fallback():
 
     # Mock LLM responses for rebuild, verify, and retest
     llm.execute.side_effect = [
-        ExecutionResult(content=_ENVIRONMENT_ISSUE_JSON),  # Initial test
-        ExecutionResult(content='{"success": true}'),  # Rebuild (LLM fallback)
-        ExecutionResult(content='{"ready": true}'),  # Verify (LLM fallback)
-        ExecutionResult(content='{"passed": 1, "failed": 0, "failures": [], "warnings": []}'),  # Retest
+        _coding_agent_result(_ENVIRONMENT_ISSUE_JSON),  # Initial test
+        _coding_agent_result('{"success": true}'),  # Rebuild (LLM fallback)
+        _coding_agent_result('{"ready": true}'),  # Verify (LLM fallback)
+        _coding_agent_result('{"passed": 1, "failed": 0, "failures": [], "warnings": []}'),  # Retest
     ]
 
     ctx = _RepairCycleContext()
@@ -458,7 +476,7 @@ async def test_environment_issue_rebuild_raises_exception_during_retry_loop():
     adapter, llm = _make_adapter(environment_repair_service=env_service)
     adapter._systemic_analysis_service = systemic_service
 
-    llm.execute.return_value = ExecutionResult(content=_ENVIRONMENT_ISSUE_JSON)
+    llm.execute.return_value = _coding_agent_result(_ENVIRONMENT_ISSUE_JSON)
 
     ctx = _RepairCycleContext()
 
@@ -506,7 +524,7 @@ async def test_environment_issue_verify_raises_exception_during_retry_loop():
     adapter, llm = _make_adapter(environment_repair_service=env_service)
     adapter._systemic_analysis_service = systemic_service
 
-    llm.execute.return_value = ExecutionResult(content=_ENVIRONMENT_ISSUE_JSON)
+    llm.execute.return_value = _coding_agent_result(_ENVIRONMENT_ISSUE_JSON)
 
     ctx = _RepairCycleContext()
 
@@ -597,7 +615,7 @@ async def test_environment_rebuild_exhausted_event_emitted():
     adapter._systemic_analysis_service = systemic_service
     adapter.event_emitter = event_emitter
 
-    llm.execute.return_value = ExecutionResult(content=_ENVIRONMENT_ISSUE_JSON)
+    llm.execute.return_value = _coding_agent_result(_ENVIRONMENT_ISSUE_JSON)
 
     ctx = _RepairCycleContext()
     result = await adapter.execute(ctx)
@@ -627,13 +645,13 @@ async def test_emit_event_safely_catches_emitter_failures_in_rebuild(caplog):
 
     # Create adapter with failing event emitter
     llm = AsyncMock()
-    llm.execute.return_value = ExecutionResult(content='{"success": true}')
+    llm.execute.return_value = _coding_agent_result('{"success": true}')
 
-    async def llm_factory(agent_name):
+    def llm_factory(prompt_builder):
         return llm
 
     adapter = ProductionEnvironmentRepairAdapter(
-        llm_factory=llm_factory,
+        coding_agent_factory=llm_factory,
         event_emitter=FailingEventEmitter(),
     )
 
@@ -682,13 +700,13 @@ async def test_emit_event_safely_catches_emitter_failures_in_verify(caplog):
 
     # Create adapter with failing event emitter
     llm = AsyncMock()
-    llm.execute.return_value = ExecutionResult(content='{"healthy": true, "checks_passed": ["test"]}')
+    llm.execute.return_value = _coding_agent_result('{"healthy": true, "checks_passed": ["test"]}')
 
-    async def llm_factory(agent_name):
+    def llm_factory(prompt_builder):
         return llm
 
     adapter = ProductionEnvironmentRepairAdapter(
-        llm_factory=llm_factory,
+        coding_agent_factory=llm_factory,
         event_emitter=FailingEventEmitter(),
     )
 
