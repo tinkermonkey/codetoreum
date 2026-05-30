@@ -51,9 +51,12 @@ The canonical definition of the rounds project for bootstrap purposes. Contains:
 
 ```
 project:   id, name, github_org ("tinkermonkey"), github_repo ("rounds")
-agents:    name, model, timeout, capabilities, commit_policy, requires_docker
+agents:    name, description, coding_agent, invocation { mode, model, timeout_seconds, mode_config },
+           capabilities, makes_code_changes, commit_policy
 board:     id, name, columns[] with type/agent_id/is_pipeline_trigger/is_exit_column/auto_progress_on_completion
 ```
+
+> The agent shape is the D6 schema (proposal §3h). The loader rejects the legacy top-level `model`/`timeout`/`requires_docker` keys with a clear error, and validates `invocation.mode` is in the configured coding-agent adapter's `supported_invocation_modes()` at startup.
 
 This file is the ground truth for what `register_project.py` writes to Elasticsearch and what `project_bootstrap_loader.py` loads into in-memory services at server startup.
 
@@ -498,9 +501,9 @@ Running record of architectural gaps found and fixed during bootstrap cycles. Mo
 
 ---
 
-### DEF-015 — Coding agent port redesign (D5 complete; D6–D9 pending)
+### DEF-015 — Coding agent port redesign (D6 complete; D7–D9 pending)
 
-**Status**: Design landed in `~/.claude/plans/coding-agent-port-redesign.md` (user-confirmed 2026-05-29). Phase D0 (architecture docs), D1 (`ICodingAgent` + `IPromptBuilder` ports + `CodingAgent*` events), D2 (`DefaultPromptBuilder`), D3 (`ClaudeCodeAdapter` rewrite under `adapters/secondary/claude_code/` with internal strategy pattern), D4 (`ExecutionService.execute()` + `ExecutionServiceAgentExecutor` rewire), and D5 (bulk deletion of `IAgentLauncher` / `ILLMProvider` / `ILLMTextProvider` / `IStorage` / old `ClaudeCodeAdapter` / `MockLLMAdapter` / `MinioStorageAdapter` / `InMemoryStorageAdapter` / retired `ExecutionService` + `WorkspaceRouter` methods / `IContainer.copy_from_container` / `ResilientLLMProviderDecorator` / Minio infra) have all landed. D6–D9 (config schema migration, bootstrap validation, implementation docs update, second-adapter design validation) remain.
+**Status**: Design landed in `~/.claude/plans/coding-agent-port-redesign.md` (user-confirmed 2026-05-29). Phase D0 (architecture docs), D1 (`ICodingAgent` + `IPromptBuilder` ports + `CodingAgent*` events), D2 (`DefaultPromptBuilder`), D3 (`ClaudeCodeAdapter` rewrite under `adapters/secondary/claude_code/` with internal strategy pattern), D4 (`ExecutionService.execute()` + `ExecutionServiceAgentExecutor` rewire), D5 (bulk deletion of `IAgentLauncher` / `ILLMProvider` / `ILLMTextProvider` / `IStorage` / old `ClaudeCodeAdapter` / `MockLLMAdapter` / `MinioStorageAdapter` / `InMemoryStorageAdapter` / retired `ExecutionService` + `WorkspaceRouter` methods / `IContainer.copy_from_container` / `ResilientLLMProviderDecorator` / Minio infra), and D6 (config schema migration: `AgentInvocationConfig` value object in `domain/coding_agent_types.py`; `Agent` + `AgentConfig` carry `coding_agent`/`invocation`; bootstrap loader parses the new schema and rejects the legacy shape; `register_project.py` writes the new shape; ES round-trips both new fields; `ExecutionServiceAgentExecutor._build_invocation_options` reads `agent.invocation` directly — no more `requires_docker` bridge; `WorkspaceContext.workspace_path` retires the strategy `workspace_path_resolver` callable) have all landed. D7–D9 (bootstrap validation, implementation docs update, second-adapter design validation) remain.
 
 **Deficiency** (the three smells the redesign addresses):
 
