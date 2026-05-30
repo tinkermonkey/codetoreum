@@ -12,6 +12,8 @@ from datetime import datetime
 from types import MappingProxyType
 from typing import Any
 
+from codetoreum.domain.coding_agent_types import AgentInvocationConfig
+
 
 @dataclass(frozen=True)
 class ProjectConfig:
@@ -138,6 +140,11 @@ class AgentConfig:
 
     All fields validated at construction. Frozen for immutability.
     Lists converted to tuples, dicts to MappingProxyType.
+
+    D6 added ``coding_agent`` and ``invocation``; legacy ``model``,
+    ``timeout``, and ``requires_docker`` remain for the REST API surface
+    but are populated from ``invocation`` by the bootstrap loader so the
+    new fields are the source of truth.
     """
 
     project_id: str
@@ -153,6 +160,10 @@ class AgentConfig:
     created_at: datetime | None = None
     updated_at: datetime | None = None
     metadata: MappingProxyType = field(default_factory=lambda: MappingProxyType({}))
+    # D6 (proposal §3h): coding-agent + invocation block. Optional during
+    # the transition so the legacy ES documents continue to round-trip.
+    coding_agent: str = ""
+    invocation: AgentInvocationConfig | None = None
 
     def __post_init__(self) -> None:
         """Validate all fields at construction time."""

@@ -44,30 +44,23 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal
-from enum import StrEnum
 from typing import Any
 
 from codetoreum.domain.agent_execution import AgentExecution
+from codetoreum.domain.coding_agent_types import InvocationMode
 from codetoreum.domain.workspace_context import WorkspaceContext
 
-
-class InvocationMode(StrEnum):
-    """Where the coding agent's execution happens.
-
-    Orthogonal to *how* the agent communicates (subprocess
-    ``stream-json``, HTTP streaming response, etc.) — that's an
-    adapter-internal implementation choice.
-
-    Members:
-        CONTAINERIZED: adapter uses ``IContainer`` to run the agent
-            inside a sandboxed container.
-        HOST: adapter runs the agent process directly on the host.
-        API: adapter makes HTTP calls (Copilot, future direct APIs).
-    """
-
-    CONTAINERIZED = "containerized"
-    HOST = "host"
-    API = "api"
+# Re-export InvocationMode so existing imports
+# (``from codetoreum.ports.output.coding_agent import InvocationMode``)
+# keep working. The canonical definition now lives in the domain layer
+# (D6 — proposal §3h) so both AgentConfig and the Agent aggregate can
+# reference the same shape without depending on this port.
+__all__ = [
+    "CodingAgentInvocationOptions",
+    "CodingAgentResult",
+    "ICodingAgent",
+    "InvocationMode",
+]
 
 
 @dataclass(frozen=True)

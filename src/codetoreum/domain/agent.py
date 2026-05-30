@@ -6,6 +6,7 @@ from enum import Enum
 from typing import Any
 from uuid import uuid4
 
+from codetoreum.domain.coding_agent_types import AgentInvocationConfig
 from codetoreum.domain.events.adapter_events import CodetoreumEvent, now_iso
 from codetoreum.domain.events.agent_events import (
     AgentCapabilityAddedEvent,
@@ -98,6 +99,14 @@ class Agent:
     max_tokens: int = 4096  # Maximum tokens for LLM responses
     system_prompt: str = ""  # System prompt for the agent
     commit_policy: CommitPolicy = CommitPolicy.ON_SUCCESS  # When to commit file changes
+    # D6 (proposal §3h) coding-agent + invocation block. Optional during
+    # the transition; bootstrap loader populates both from the new
+    # bootstrap JSON shape. Once set, ExecutionServiceAgentExecutor reads
+    # `invocation.mode`, `invocation.model`, `invocation.timeout_seconds`,
+    # and `invocation.mode_config` straight onto
+    # CodingAgentInvocationOptions.
+    coding_agent: str = ""
+    invocation: AgentInvocationConfig | None = None
 
     # Event tracking
     _events: list[CodetoreumEvent] = field(default_factory=list, init=False, repr=False)
