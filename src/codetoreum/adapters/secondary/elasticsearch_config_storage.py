@@ -1445,7 +1445,7 @@ class ElasticsearchConfigStorage(IConfigStore):
 
     def _serialize_agent(self, config: AgentConfig) -> dict[str, Any]:
         """Serialize AgentConfig to dictionary."""
-        return {
+        doc: dict[str, Any] = {
             "project_id": config.project_id,
             "agent_name": config.agent_name,
             "model": config.model,
@@ -1459,10 +1459,38 @@ class ElasticsearchConfigStorage(IConfigStore):
             "created_at": (config.created_at.isoformat() if config.created_at else None),
             "updated_at": (config.updated_at.isoformat() if config.updated_at else None),
             "metadata": dict(config.metadata),
+            # D6 (proposal §3h): new schema fields.
+            "coding_agent": config.coding_agent,
         }
+        if config.invocation is not None:
+            doc["invocation"] = {
+                "mode": config.invocation.mode.value,
+                "model": config.invocation.model,
+                "timeout_seconds": config.invocation.timeout_seconds,
+                "mode_config": dict(config.invocation.mode_config),
+                "cost_limit_usd": (
+                    str(config.invocation.cost_limit_usd) if config.invocation.cost_limit_usd is not None else None
+                ),
+            }
+        return doc
 
     def _deserialize_agent(self, doc: dict[str, Any]) -> AgentConfig:
         """Deserialize dictionary to AgentConfig."""
+        from decimal import Decimal
+
+        from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
+
+        invocation: AgentInvocationConfig | None = None
+        inv_doc = doc.get("invocation")
+        if isinstance(inv_doc, dict):
+            cost_raw = inv_doc.get("cost_limit_usd")
+            invocation = AgentInvocationConfig(
+                mode=InvocationMode(inv_doc["mode"]),
+                model=inv_doc["model"],
+                timeout_seconds=int(inv_doc["timeout_seconds"]),
+                mode_config=dict(inv_doc.get("mode_config", {})),
+                cost_limit_usd=Decimal(cost_raw) if cost_raw is not None else None,
+            )
         return AgentConfig(
             project_id=doc["project_id"],
             agent_name=doc["agent_name"],
@@ -1477,6 +1505,8 @@ class ElasticsearchConfigStorage(IConfigStore):
             created_at=(datetime.fromisoformat(doc["created_at"]) if doc.get("created_at") else None),
             updated_at=(datetime.fromisoformat(doc["updated_at"]) if doc.get("updated_at") else None),
             metadata=doc.get("metadata", {}),
+            coding_agent=doc.get("coding_agent", ""),
+            invocation=invocation,
         )
 
     def _serialize_pipeline(self, config: PipelineConfig) -> dict[str, Any]:

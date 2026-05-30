@@ -20,7 +20,9 @@ from codetoreum.domain.board_workflow_template import (
     ColumnTemplate,
     ColumnType,
 )
+from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
 from codetoreum.ports.output.agent_repository import IAgentRepository
+from codetoreum.ports.output.coding_agent import ICodingAgent
 from codetoreum.ports.output.config_store import IConfigStore, ProjectConfig
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
@@ -56,6 +58,81 @@ def _build_board_template(board_config: dict, project_id: str) -> BoardWorkflowT
     )
 
 
+def _build_invocation(agent_def: dict, agent_name: str) -> AgentInvocationConfig:
+    """Parse the new agent_def["invocation"] block (D6, proposal §3h).
+
+    Reject the legacy shape (top-level ``model``/``timeout``/``requires_docker``)
+    with a clear error so config drift surfaces at startup, not at first
+    execution. Per Q3, zero backwards compatibility.
+    """
+    if "invocation" not in agent_def:
+        legacy_keys = sorted(k for k in ("model", "timeout", "requires_docker") if k in agent_def)
+        msg = (
+            f"Agent '{agent_name}' is missing the required 'invocation' block "
+            f"(proposal §3h). Found legacy top-level keys: {legacy_keys}. "
+            "Migrate to the new shape: "
+            "{ 'invocation': { 'mode': 'containerized', 'model': '...', "
+            "'timeout_seconds': 3600, 'mode_config': { 'image': '...' } } }."
+        )
+        raise ValueError(msg)
+    inv = agent_def["invocation"]
+    if not isinstance(inv, dict):
+        msg = f"Agent '{agent_name}' invocation must be a JSON object, got {type(inv).__name__}"
+        raise ValueError(msg)
+    raw_mode = inv.get("mode")
+    if not isinstance(raw_mode, str):
+        msg = f"Agent '{agent_name}' invocation.mode must be a string"
+        raise ValueError(msg)
+    try:
+        mode = InvocationMode(raw_mode)
+    except ValueError as e:
+        valid = sorted(m.value for m in InvocationMode)
+        msg = f"Agent '{agent_name}' invocation.mode={raw_mode!r} is not a valid " f"InvocationMode (valid: {valid})"
+        raise ValueError(msg) from e
+    model = inv.get("model")
+    if not isinstance(model, str) or not model:
+        msg = f"Agent '{agent_name}' invocation.model must be a non-empty string"
+        raise ValueError(msg)
+    timeout = inv.get("timeout_seconds")
+    if not isinstance(timeout, int) or isinstance(timeout, bool) or timeout <= 0:
+        msg = f"Agent '{agent_name}' invocation.timeout_seconds must be a positive integer"
+        raise ValueError(msg)
+    mode_config = inv.get("mode_config", {})
+    if not isinstance(mode_config, dict):
+        msg = f"Agent '{agent_name}' invocation.mode_config must be a JSON object"
+        raise ValueError(msg)
+    return AgentInvocationConfig(
+        mode=mode,
+        model=model,
+        timeout_seconds=timeout,
+        mode_config=mode_config,
+    )
+
+
+def _validate_invocation_against_adapter(
+    agent_name: str,
+    invocation: AgentInvocationConfig,
+    coding_agent_adapter: ICodingAgent | None,
+) -> None:
+    """Validate the invocation mode is in the adapter's supported modes.
+
+    Skips validation when no adapter is wired (e.g. simulation startup
+    without the production coding-agent slot). Production wires the
+    adapter and surfaces config drift here.
+    """
+    if coding_agent_adapter is None:
+        return
+    supported = coding_agent_adapter.supported_invocation_modes()
+    if invocation.mode not in supported:
+        sup = sorted(m.value for m in supported)
+        msg = (
+            f"Agent '{agent_name}' invocation.mode={invocation.mode.value!r} is not "
+            f"supported by the configured coding-agent adapter "
+            f"(supported: {sup}). Update bootstrap config or wire a different adapter."
+        )
+        raise ValueError(msg)
+
+
 def _build_agent(agent_def: dict, project_id: str) -> Agent:
     now = datetime.now(UTC)
     caps = agent_def.get("capabilities", ["code_generation"])
@@ -64,6 +141,16 @@ def _build_agent(agent_def: dict, project_id: str) -> Agent:
     except ValueError:
         commit_policy = CommitPolicy.ON_SUCCESS
 
+    invocation = _build_invocation(agent_def, agent_def["name"])
+    coding_agent_id = agent_def.get("coding_agent", "claude-code")
+    if not isinstance(coding_agent_id, str) or not coding_agent_id:
+        msg = f"Agent '{agent_def['name']}' coding_agent must be a non-empty string"
+        raise ValueError(msg)
+
+    # Derive legacy fields from invocation so the wider REST API surface
+    # and ES round-trip continue to see the same values they used to.
+    requires_docker = invocation.mode == InvocationMode.CONTAINERIZED
+
     return Agent(
         id=agent_def["name"],
         name=agent_def["name"],
@@ -71,10 +158,10 @@ def _build_agent(agent_def: dict, project_id: str) -> Agent:
         agent_type=AgentType.MAKER,
         capabilities={c: AgentCapability(skill=c, proficiency=1.0, description=c) for c in caps},
         role_description=agent_def.get("description", ""),
-        model=agent_def.get("model", "claude-sonnet-4-6"),
-        timeout_seconds=agent_def.get("timeout", 3600),
+        model=invocation.model,
+        timeout_seconds=invocation.timeout_seconds,
         max_retries=3,
-        requires_docker=agent_def.get("requires_docker", False),
+        requires_docker=requires_docker,
         requires_dev_container=False,
         makes_code_changes=agent_def.get("makes_code_changes", True),
         filesystem_write_allowed=True,
@@ -83,6 +170,8 @@ def _build_agent(agent_def: dict, project_id: str) -> Agent:
         created_at=now,
         updated_at=now,
         commit_policy=commit_policy,
+        coding_agent=coding_agent_id,
+        invocation=invocation,
     )
 
 
@@ -91,10 +180,20 @@ async def load_bootstrap_dir(
     agent_repository: IAgentRepository,
     workflow_config: IWorkflowConfigService,
     config_store: IConfigStore | None = None,
+    coding_agent: ICodingAgent | None = None,
 ) -> int:
     """Load all *.json bootstrap files into in-memory services.
 
     Returns the number of project files successfully loaded.
+
+    Args:
+        bootstrap_dir: Directory containing ``*.json`` project bootstrap files.
+        agent_repository: Where loaded ``Agent`` objects are persisted.
+        workflow_config: Where loaded board workflow templates are persisted.
+        config_store: Optional ``IConfigStore`` for project-config round-tripping.
+        coding_agent: Optional :class:`ICodingAgent`. When supplied, the
+            loader validates each agent's ``invocation.mode`` is in the
+            adapter's ``supported_invocation_modes()`` (D6 §3h).
     """
     if not bootstrap_dir.exists():
         logger.debug(f"Bootstrap directory not found, skipping: {bootstrap_dir}")
@@ -120,6 +219,12 @@ async def load_bootstrap_dir(
         for agent_def in config.get("agents", []):
             try:
                 agent = _build_agent(agent_def, project_id)
+                # D6: validate invocation.mode against the adapter's
+                # supported modes at load time (proposal §3h), so config
+                # drift fails fast on startup rather than at first
+                # execution.
+                if agent.invocation is not None:
+                    _validate_invocation_against_adapter(agent.name, agent.invocation, coding_agent)
                 await agent_repository.save(agent, project_id)
                 logger.info(f"Loaded agent '{agent.id}' for project '{project_id}'")
             except Exception as e:

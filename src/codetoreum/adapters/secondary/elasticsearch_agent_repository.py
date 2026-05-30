@@ -314,6 +314,8 @@ def _agent_to_config(agent: Agent, project_id: str) -> AgentConfig:
         capabilities=tuple(agent.capabilities.keys()),
         version=1,
         metadata=metadata,
+        coding_agent=agent.coding_agent,
+        invocation=agent.invocation,
     )
 
 
@@ -385,6 +387,8 @@ def _agent_from_config(cfg: AgentConfig) -> Agent:
         max_tokens=int(metadata.pop("max_tokens", "4096") or 4096),
         system_prompt=metadata.pop("system_prompt", ""),
         commit_policy=commit_policy,
+        coding_agent=cfg.coding_agent,
+        invocation=cfg.invocation,
     )
 
 

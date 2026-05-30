@@ -11,16 +11,24 @@
     {
       "name": "senior_software_engineer",
       "description": "Implements features and fixes bugs with full codebase access",
-      "model": "claude-sonnet-4-6",
-      "timeout": 3600,
-      "requires_docker": true,
-      "makes_code_changes": true,
+      "coding_agent": "claude-code",
+      "invocation": {
+        "mode": "containerized",
+        "model": "claude-sonnet-4-6",
+        "timeout_seconds": 3600,
+        "mode_config": {
+          "image": "codetoreum-agent:latest",
+          "cpu_limit": "2",
+          "memory_limit": "4g"
+        }
+      },
       "capabilities": [
         "code_generation",
         "debugging",
         "refactoring",
         "testing"
       ],
+      "makes_code_changes": true,
       "commit_policy": "on_success"
     }
   ],

@@ -8,11 +8,14 @@ Reads a project JSON file (default: bootstrap/project.json) and persists
 the project config and agent configs to Elasticsearch. The server loads these
 at startup — restart it to activate new registrations.
 
-JSON format:
+JSON format (D6, proposal §3h):
     {
       "project": { "id", "name", "github_org", "github_repo", "description", "default_branch" },
-      "agents": [{ "name", "model", "timeout", "requires_docker", "makes_code_changes",
-                   "capabilities", "description", "commit_policy" }],
+      "agents": [{
+        "name", "description", "coding_agent",
+        "invocation": { "mode", "model", "timeout_seconds", "mode_config": {...} },
+        "capabilities", "makes_code_changes", "commit_policy"
+      }],
       "board": { "id", "name", "columns": [{ "name", "type", "agent_id",
                  "is_pipeline_trigger", "is_exit_column", "auto_progress_on_completion",
                  "sla_seconds", "on_failure_column" }] }
@@ -34,6 +37,7 @@ from elasticsearch import AsyncElasticsearch
 from codetoreum.adapters.secondary.elasticsearch_config_storage import (
     ElasticsearchConfigStorage,
 )
+from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
 from codetoreum.ports.output.config_store import AgentConfig, ProjectConfig
 
 
@@ -69,24 +73,46 @@ async def _register(config: dict, es_url: str) -> None:
         print(f"  [OK] project '{project_config.id}'  ({project_config.github_org}/{project_config.github_repo})")
 
         for agent_def in config.get("agents", []):
+            inv = agent_def.get("invocation")
+            if not isinstance(inv, dict):
+                msg = (
+                    f"Agent '{agent_def.get('name')}' is missing the required "
+                    "'invocation' block (proposal §3h). Migrate to the new shape: "
+                    "{ 'coding_agent': 'claude-code', 'invocation': { 'mode': "
+                    "'containerized', 'model': '...', 'timeout_seconds': 3600, "
+                    "'mode_config': { 'image': '...' } } }."
+                )
+                raise ValueError(msg)
+            invocation = AgentInvocationConfig(
+                mode=InvocationMode(inv["mode"]),
+                model=inv["model"],
+                timeout_seconds=int(inv["timeout_seconds"]),
+                mode_config=dict(inv.get("mode_config", {})),
+            )
             agent_config = AgentConfig(
                 project_id=project["id"],
                 agent_name=agent_def["name"],
-                model=agent_def.get("model", "claude-sonnet-4-6"),
-                timeout=agent_def.get("timeout", 3600),
-                requires_docker=agent_def.get("requires_docker", True),
+                model=invocation.model,
+                timeout=invocation.timeout_seconds,
+                requires_docker=invocation.mode == InvocationMode.CONTAINERIZED,
                 makes_code_changes=agent_def.get("makes_code_changes", True),
                 capabilities=agent_def.get("capabilities", ["code_generation"]),
                 version=1,
                 created_at=now,
                 updated_at=now,
+                coding_agent=agent_def.get("coding_agent", "claude-code"),
+                invocation=invocation,
                 metadata={
                     "description": agent_def.get("description", ""),
                     "commit_policy": agent_def.get("commit_policy", "on_success"),
                 },
             )
             await store.save_agent_config(agent_config)
-            print(f"  [OK] agent   '{agent_config.agent_name}'  (model: {agent_config.model})")
+            print(
+                f"  [OK] agent   '{agent_config.agent_name}'  "
+                f"(coding_agent: {agent_config.coding_agent}, mode: {invocation.mode.value}, "
+                f"model: {invocation.model})"
+            )
 
     finally:
         await es_client.close()

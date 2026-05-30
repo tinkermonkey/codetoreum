@@ -1011,6 +1011,7 @@ class ProductionApplicationBootstrap:
                 agent_repository=self.adapters.agent_repository,
                 workflow_config=self.adapters.workflow_config,
                 config_store=self.adapters.config_store,
+                coding_agent=getattr(self.adapters, "coding_agent", None),
             )
             if count:
                 logger.info(f"Loaded {count} project bootstrap configuration(s) from {bootstrap_dir}")
