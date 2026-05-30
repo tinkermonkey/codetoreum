@@ -13,7 +13,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from codetoreum.application.prompt_builder import PromptBuilder
 from codetoreum.domain.events import AgentExecutionCompletedEvent, now_iso
 from codetoreum.domain.project_context import ProjectContext
 from codetoreum.domain.services.execution_context_builder import ExecutionContextBuilder
@@ -444,20 +443,13 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
 
             # Step 8: Build comprehensive prompt and create execution
             try:
-                # Fetch workflow template for stage-specific instructions
-                workflow_template = None
-                if self._workflow_config_service:
-                    try:
-                        template = await self._workflow_config_service.get_board_workflow_template(resolved_board_id)
-                        workflow_template = template
-                    except Exception as e:
-                        logger.warning(
-                            f"Failed to fetch workflow template for board '{resolved_board_id}': {e}",
-                            exc_info=True,
-                        )
+                # workflow_template fetching retired in Phase D5 — the
+                # legacy PromptBuilder.build_prompt consumed it. The new
+                # IPromptBuilder receives stage info through WorkspaceContext,
+                # so the workflow_config_service lookup is now moot here.
 
-                # Build comprehensive prompt using PromptBuilder
                 # Try to load previous stage output from context directory
+                # (forwarded to the coding-agent adapter via WorkspaceContext).
                 previous_output = None
                 try:
                     context_file = Path(repo_path) / "context" / "previous_stage.txt"
@@ -467,25 +459,14 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 except OSError as e:
                     logger.warning(f"Failed to read previous stage output: {e}", exc_info=True)
 
-                try:
-                    prompt = PromptBuilder.build_prompt(
-                        work_item=work_item,
-                        agent=agent,
-                        stage_name=run_info.stage_name,
-                        workflow_template=workflow_template,
-                        previous_output=previous_output,
-                    )
-                except Exception as e:
-                    logger.error(
-                        f"Failed to build prompt for '{work_item_id}': {e}",
-                        exc_info=True,
-                        extra={"error_id": ErrorRegistry.ERR_EXEC_CHAIN_PROMPT_BUILD_FAILURE},
-                    )
-                    await self._workspace_router.finalize_workspace(
-                        workspace, project_context, {"success": False}, repo_path
-                    )
-                    await self._call_completion(work_item_id, resolved_board_id, False)
-                    return
+                # Phase D5: legacy PromptBuilder.build_prompt retired. The
+                # coding-agent adapter now invokes IPromptBuilder.build()
+                # internally with the WorkspaceContext + execution metadata,
+                # so this seam only needs a placeholder value for the
+                # AgentExecution.prompt field (kept for audit-trail
+                # serialization).
+                _ = previous_output  # consumed by the coding-agent adapter via WorkspaceContext
+                prompt = f"[stage:{run_info.stage_name}] agent={agent.name} work_item={work_item_id}"
 
                 execution = await self._execution_service.create_execution(
                     agent=agent,

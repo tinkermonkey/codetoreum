@@ -26,12 +26,10 @@ class TestAdapterSelectionConfig:
         config = AdapterSelectionConfig()
         assert config.board == "mock"
         assert config.ticket == "in_memory"
-        assert config.llm == "mock"
         assert config.version_control == "in_memory"
         assert config.container == "fake"
         assert config.event_store == "in_memory"
         assert config.metrics == "in_memory"
-        assert config.storage == "in_memory"
         assert config.config_store == "in_memory"
         assert config.notifier == "mock"
         assert config.encryption == "simple"
@@ -59,12 +57,10 @@ class TestAdapterSelectionConfig:
         expected_adapters = {
             "board",
             "ticket",
-            "llm",
             "version_control",
             "container",
             "event_store",
             "metrics",
-            "storage",
             "config_store",
             "notifier",
             "encryption",
@@ -92,19 +88,17 @@ class TestAdapterSelectionConfig:
             "pr_review_cycle",
         }
         assert field_names == expected_adapters
-        assert len(field_names) == 33
+        assert len(field_names) == 31
 
     def test_create_with_custom_values(self) -> None:
         """Test creating adapter selection config with custom values."""
         config = AdapterSelectionConfig(
             board="github",
-            llm="claude_code",
             container="docker",
             event_store="elasticsearch",
         )
         assert config.board == "github"
         assert config.ticket == "in_memory"  # default
-        assert config.llm == "claude_code"
         assert config.container == "docker"
         assert config.event_store == "elasticsearch"
         assert config.metrics == "in_memory"  # default
@@ -136,8 +130,6 @@ class TestAdapterSelectionConfig:
             AdapterSelectionConfig(board="   ")
         with pytest.raises(ValueError, match="must be a non-empty string"):
             AdapterSelectionConfig(ticket="\t\n")
-        with pytest.raises(ValueError, match="must be a non-empty string"):
-            AdapterSelectionConfig(llm="  \t  ")
 
 
 class TestFidelityLevel:
@@ -554,26 +546,23 @@ class TestAdapterSelectionConfigIntegration:
         config = SimulationConfig(scenario_name="test")
         assert isinstance(config.adapters, AdapterSelectionConfig)
         assert config.adapters.board == "mock"
-        assert config.adapters.llm == "mock"
         assert config.adapters.container == "fake"
 
     def test_simulation_config_accepts_custom_adapters(self) -> None:
         """Test that SimulationConfig can accept custom AdapterSelectionConfig."""
-        adapters = AdapterSelectionConfig(board="github", llm="claude_code")
+        adapters = AdapterSelectionConfig(board="github")
         config = SimulationConfig(scenario_name="test", adapters=adapters)
         assert config.adapters.board == "github"
-        assert config.adapters.llm == "claude_code"
         assert config.adapters.ticket == "in_memory"  # default
 
     def test_to_dict_includes_adapters(self) -> None:
         """Test that to_dict includes adapters configuration."""
-        adapters = AdapterSelectionConfig(board="github", llm="claude_code")
+        adapters = AdapterSelectionConfig(board="github")
         config = SimulationConfig(scenario_name="test", adapters=adapters)
         data = config.to_dict()
 
         assert "adapters" in data
         assert data["adapters"]["board"] == "github"
-        assert data["adapters"]["llm"] == "claude_code"
         assert data["adapters"]["ticket"] == "in_memory"
 
     def test_from_dict_parses_adapters(self) -> None:
@@ -582,14 +571,12 @@ class TestAdapterSelectionConfigIntegration:
             "scenario_name": "test",
             "adapters": {
                 "board": "github",
-                "llm": "claude_code",
                 "container": "docker",
             },
         }
         config = SimulationConfig.from_dict(data)
 
         assert config.adapters.board == "github"
-        assert config.adapters.llm == "claude_code"
         assert config.adapters.container == "docker"
         assert config.adapters.ticket == "in_memory"  # default
 
@@ -599,7 +586,6 @@ class TestAdapterSelectionConfigIntegration:
         config = SimulationConfig.from_dict(data)
 
         assert config.adapters.board == "mock"
-        assert config.adapters.llm == "mock"
         assert config.adapters.container == "fake"
 
     def test_from_dict_merges_partial_adapter_config(self) -> None:
@@ -608,14 +594,12 @@ class TestAdapterSelectionConfigIntegration:
             "scenario_name": "test",
             "adapters": {
                 "board": "github",
-                "llm": "claude_code",
             },
         }
         config = SimulationConfig.from_dict(data)
 
         # Overridden values
         assert config.adapters.board == "github"
-        assert config.adapters.llm == "claude_code"
         # Default values
         assert config.adapters.ticket == "in_memory"
         assert config.adapters.container == "fake"
@@ -624,7 +608,6 @@ class TestAdapterSelectionConfigIntegration:
         """Test that adapter config survives roundtrip through dict."""
         adapters = AdapterSelectionConfig(
             board="github",
-            llm="claude_code",
             container="docker",
             event_store="elasticsearch",
             metrics="prometheus",
@@ -635,7 +618,6 @@ class TestAdapterSelectionConfigIntegration:
         restored = SimulationConfig.from_dict(data)
 
         assert restored.adapters.board == "github"
-        assert restored.adapters.llm == "claude_code"
         assert restored.adapters.container == "docker"
         assert restored.adapters.event_store == "elasticsearch"
         assert restored.adapters.metrics == "prometheus"
@@ -647,7 +629,6 @@ class TestAdapterSelectionConfigIntegration:
         yaml_content = """name: AdapterTest
 adapters:
   board: github
-  llm: claude_code
   container: docker
   event_store: elasticsearch
 """
@@ -659,7 +640,6 @@ adapters:
         try:
             config = SimulationConfig.from_yaml(temp_path)
             assert config.adapters.board == "github"
-            assert config.adapters.llm == "claude_code"
             assert config.adapters.container == "docker"
             assert config.adapters.event_store == "elasticsearch"
             # Verify defaults are preserved for non-specified adapters
@@ -683,7 +663,6 @@ speed_multiplier: 15.0
             config = SimulationConfig.from_yaml(temp_path)
             # All adapters should use defaults
             assert config.adapters.board == "mock"
-            assert config.adapters.llm == "mock"
             assert config.adapters.container == "fake"
             assert config.adapters.ticket == "in_memory"
             # Other config should still be parsed
@@ -698,7 +677,6 @@ speed_multiplier: 15.0
 adapters:
   board: github
   unknown_adapter: some_value
-  llm: claude_code
 """
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(yaml_content)
@@ -718,7 +696,6 @@ adapters:
             "adapters": {
                 "board": "github",
                 "unknown_adapter": "some_value",
-                "llm": "claude_code",
             },
         }
         with pytest.raises(ValueError, match="Unknown adapter keys in configuration: unknown_adapter"):
@@ -741,21 +718,18 @@ adapters:
         """Test that create_fast_config factory method has default adapters."""
         config = SimulationConfig.create_fast_config("test_scenario")
         assert config.adapters.board == "mock"
-        assert config.adapters.llm == "mock"
         assert config.adapters.container == "fake"
 
     def test_create_realistic_config_has_default_adapters(self) -> None:
         """Test that create_realistic_config factory method has default adapters."""
         config = SimulationConfig.create_realistic_config("test_scenario")
         assert config.adapters.board == "mock"
-        assert config.adapters.llm == "mock"
         assert config.adapters.container == "fake"
 
     def test_create_high_fidelity_config_has_default_adapters(self) -> None:
         """Test that create_high_fidelity_config factory method has default adapters."""
         config = SimulationConfig.create_high_fidelity_config("test_scenario")
         assert config.adapters.board == "mock"
-        assert config.adapters.llm == "mock"
         assert config.adapters.container == "fake"
 
     def test_from_yaml_with_nested_simulation_section(self) -> None:
