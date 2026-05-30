@@ -34,7 +34,17 @@ class ExecutorFixture:
 
     @staticmethod
     def make_agent_mock(requires_docker=False, **overrides):
-        """Create a properly configured agent mock for testing."""
+        """Create a properly configured agent mock for testing.
+
+        D6: also populates ``agent.invocation`` (an AgentInvocationConfig)
+        derived from ``requires_docker`` so the executor's
+        ``_build_invocation_options`` reads the new schema directly.
+        """
+        from codetoreum.domain.coding_agent_types import (
+            AgentInvocationConfig,
+            InvocationMode,
+        )
+
         agent = MagicMock()
         agent.id = "agent-1"
         agent.name = "test-agent"
@@ -51,6 +61,13 @@ class ExecutorFixture:
         agent.filesystem_write_allowed = False
         agent.mcp_servers = []
         agent.capabilities = {}
+        agent.coding_agent = "claude-code"
+        agent.invocation = AgentInvocationConfig(
+            mode=(InvocationMode.CONTAINERIZED if requires_docker else InvocationMode.HOST),
+            model=agent.model,
+            timeout_seconds=agent.timeout_seconds,
+            mode_config=({"image": "codetoreum-agent:latest"} if requires_docker else {}),
+        )
         # Apply any overrides
         for key, value in overrides.items():
             setattr(agent, key, value)

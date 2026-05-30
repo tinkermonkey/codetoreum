@@ -19,10 +19,7 @@ from codetoreum.domain.services.execution_context_builder import ExecutionContex
 from codetoreum.domain.types import WorkItemId
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.output.agent_executor import IAgentExecutor
-from codetoreum.ports.output.coding_agent import (
-    CodingAgentInvocationOptions,
-    InvocationMode,
-)
+from codetoreum.ports.output.coding_agent import CodingAgentInvocationOptions
 
 if TYPE_CHECKING:
     from codetoreum.application.agent_execution_recovery_service import (
@@ -502,10 +499,9 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
 
             # Step 10: Dispatch via the unified ExecutionService.execute() path
             # (Phase D4). The coding-agent adapter owns the invocation-mode
-            # decision; we no longer branch on `agent.requires_docker` here.
-            # The flag is still read to derive InvocationMode for the bridge
-            # state — D6 retires `requires_docker` along with the rest of the
-            # legacy agent-config schema.
+            # decision. D6: invocation options are now sourced directly from
+            # `agent.invocation` (populated by the bootstrap loader from the
+            # new schema) — no more requires_docker bridge.
             invocation_options = self._build_invocation_options(agent, context)
             # D6: populate WorkspaceContext.workspace_path so the coding-agent
             # adapter / strategies can resolve the cloned repo location
@@ -587,36 +583,36 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
     ) -> CodingAgentInvocationOptions:
         """Translate the agent + context into a :class:`CodingAgentInvocationOptions`.
 
-        Bridge-state logic for Phase D4:
+        D6: reads ``agent.invocation`` (populated by the bootstrap loader
+        from the new schema — proposal §3h) directly. The mode, model,
+        timeout, and mode_config flow straight through to the
+        coding-agent adapter. ``cost_limit_usd`` flows through too when
+        the agent config supplied one.
 
-        - ``invocation_mode`` is derived from the legacy ``agent.requires_docker``
-          flag (True -> CONTAINERIZED, False -> HOST). D6 retires the flag
-          and sources the mode directly from the new agent-config schema.
-        - ``mode_config`` carries the canonical container image for
-          CONTAINERIZED mode; empty for HOST. D6 sources this from
-          ``agent.invocation.mode_config``.
-        - ``timeout_seconds`` and ``model`` come from existing fields so the
-          downstream adapter sees the same timeout the watchdog enforces.
-        - ``cost_limit_usd`` defaults to ``None`` until the new agent-config
-          schema (D6) introduces a per-execution cost ceiling.
+        Raises:
+            ValueError: When the agent has no ``invocation`` block. The
+                bootstrap loader rejects this shape at load time, so the
+                only way to reach this branch is via an agent persisted
+                under the legacy schema that hasn't been re-registered;
+                surface a clear error rather than silently choosing a
+                mode.
         """
-        requires_docker = bool(getattr(agent, "requires_docker", False))
-        mode = InvocationMode.CONTAINERIZED if requires_docker else InvocationMode.HOST
-        mode_config: dict[str, Any] = {"image": "codetoreum-agent:latest"} if requires_docker else {}
-
-        # Prefer the per-execution context model (preserves any
-        # ExecutionContextBuilder overrides), fall back to the agent's model.
-        model = getattr(context, "model", None) or getattr(agent, "model", "")
-        timeout_seconds = int(
-            getattr(context, "timeout_seconds", None) or getattr(agent, "timeout_seconds", 0) or 3600,
-        )
+        invocation = getattr(agent, "invocation", None)
+        if invocation is None:
+            agent_id = getattr(agent, "id", None) or getattr(agent, "name", "<unknown>")
+            msg = (
+                f"Agent '{agent_id}' has no `invocation` config (D6). "
+                "Re-register the agent through bootstrap/register_project.py "
+                "with the new schema (coding_agent + invocation block)."
+            )
+            raise ValueError(msg)
 
         return CodingAgentInvocationOptions(
-            invocation_mode=mode,
-            model=model,
-            timeout_seconds=timeout_seconds,
-            cost_limit_usd=None,
-            mode_config=mode_config,
+            invocation_mode=invocation.mode,
+            model=invocation.model,
+            timeout_seconds=invocation.timeout_seconds,
+            cost_limit_usd=invocation.cost_limit_usd,
+            mode_config=dict(invocation.mode_config),
         )
 
     async def _call_completion(
