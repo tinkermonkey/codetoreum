@@ -106,7 +106,7 @@ Also in Phase 1b: `AdapterFactory` is instantiated (defaults to `PRODUCTION` mod
 
 ### Phase 2 — Adapter resolution (bootstrap critical path)
 
-`resolver.resolve_all()` creates all 33 adapters. For bootstrap, the adapters that matter are:
+`resolver.resolve_all()` creates all 31 adapters (`llm_provider` + `storage` slots retired in Phase D5). For bootstrap, the adapters that matter are:
 
 | Adapter slot | Production class | Credentials required |
 |-------------|-----------------|---------------------|
@@ -123,7 +123,7 @@ Also in Phase 1b: `AdapterFactory` is instantiated (defaults to `PRODUCTION` mod
 | `run_registry` | `InMemoryActiveWorkflowRunRegistry` | none |
 | `branch_tracker` | in-memory impl | none |
 
-> The `storage` adapter slot is retired with the coding-agent port redesign — see DEF-015 in §9.
+> Both the `llm_provider` and `storage` adapter slots retired with the coding-agent port redesign (Phase D5). The coding-agent adapter owns subprocess invocation directly; agent output flows through the event stream rather than a blob store. See DEF-015 in §9.
 
 Phase 2b initializes the event store: `_initialize_event_store()` calls `initialize_event_store()` which ensures Elasticsearch indices exist. If this fails, the server will not start.
 
@@ -498,9 +498,9 @@ Running record of architectural gaps found and fixed during bootstrap cycles. Mo
 
 ---
 
-### DEF-015 — Coding agent port redesign (in flight)
+### DEF-015 — Coding agent port redesign (D5 complete; D6–D9 pending)
 
-**Status**: Design landed in `~/.claude/plans/coding-agent-port-redesign.md` (user-confirmed 2026-05-29). Architecture documentation updated in this commit (Phase D0). Implementation pending Phases D1–D7.
+**Status**: Design landed in `~/.claude/plans/coding-agent-port-redesign.md` (user-confirmed 2026-05-29). Phase D0 (architecture docs), D1 (`ICodingAgent` + `IPromptBuilder` ports + `CodingAgent*` events), D2 (`DefaultPromptBuilder`), D3 (`ClaudeCodeAdapter` rewrite under `adapters/secondary/claude_code/` with internal strategy pattern), D4 (`ExecutionService.execute()` + `ExecutionServiceAgentExecutor` rewire), and D5 (bulk deletion of `IAgentLauncher` / `ILLMProvider` / `ILLMTextProvider` / `IStorage` / old `ClaudeCodeAdapter` / `MockLLMAdapter` / `MinioStorageAdapter` / `InMemoryStorageAdapter` / retired `ExecutionService` + `WorkspaceRouter` methods / `IContainer.copy_from_container` / `ResilientLLMProviderDecorator` / Minio infra) have all landed. D6–D9 (config schema migration, bootstrap validation, implementation docs update, second-adapter design validation) remain.
 
 **Deficiency** (the three smells the redesign addresses):
 
@@ -605,7 +605,7 @@ The misleading docstring on `WorkspaceRouter.prepare_container_environment` ("CL
 
 ### DEF-011 — IContainer.copy_from_container present on the port but never called
 
-> **Superseded by DEF-015.** The `/output` extraction pattern is recognised as the antipattern that motivated the coding-agent port redesign — see Q7 in `~/.claude/plans/coding-agent-port-redesign.md`. `_extract_and_upload_artifacts` and the artifact-upload flow retire entirely; agent output flows through `CodingAgent*` events. `copy_from_container` is slated for removal in Phase D5. The original deficiency below is preserved for history.
+> **Superseded by DEF-015 (deletion complete in D5).** The `/output` extraction pattern was recognised as the antipattern that motivated the coding-agent port redesign — see Q7 in `~/.claude/plans/coding-agent-port-redesign.md`. `_extract_and_upload_artifacts` and the artifact-upload flow retired entirely in chunk 2 of D5; agent output flows through `CodingAgent*` events. `copy_from_container` (port + Docker + Fake implementations) deleted in chunk 4 of D5. The original deficiency below is preserved for history.
 
 **Deficiency**: `IContainer.copy_from_container` and the corresponding `DockerContainerAdapter` implementation had existed since Gen 2 design and `documentation/architecture/ports/output/core-system.md` documented it, but no application service ever invoked it. Agent containers wrote artifacts under `/output` and the orchestrator immediately discarded them on container removal: the only escape path for execution outputs was the git commit produced by `_commit_workspace`. Anything an agent produced that wasn't committed — structured execution-result JSON, intermediate report files, attachments destined for the work-item — was lost. The port surface promised an artifact extraction primitive that the production code path silently failed to use; a second container orchestrator (Kubernetes) would have inherited the same gap. The artifact-extraction breadth-axis item (D2) made this explicit.
 
@@ -621,7 +621,7 @@ The misleading docstring on `WorkspaceRouter.prepare_container_environment` ("CL
 
 ### DEF-009 — IStorage has no production-grade artifact persistence
 
-> **Superseded by DEF-015.** The `MinioStorageAdapter` introduced by this fix retires entirely as part of the coding-agent port redesign — agent output flows through `CodingAgent*` events rather than through a separate blob store. The original deficiency below is preserved for history.
+> **Superseded by DEF-015 (deletion complete in D5).** The `MinioStorageAdapter` introduced by this fix retired entirely in chunk 6 of D5 as part of the coding-agent port redesign — agent output flows through `CodingAgent*` events rather than through a separate blob store. The `IStorage` port, the Minio docker-compose service, the `MINIO_*` env vars, and the `minio` python dependency are all gone. The original deficiency below is preserved for history.
 
 **Deficiency**: `InMemoryStorageAdapter` was the only `IStorage` implementation available on the production critical path. Agent execution logs and outputs lived in process memory only — they vanished on restart and were never reachable by downstream tooling. `generate_presigned_url` returned synthetic `memory://localhost/...` strings rather than real URLs, so any flow that relied on out-of-band artifact access (future repair-cycle artifact replay, external review tooling) was silently broken.
 
