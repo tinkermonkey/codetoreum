@@ -38,7 +38,10 @@ from codetoreum.domain.repair_cycle_types import (
 from codetoreum.infrastructure.resilience.exceptions import CircuitBreakerOpenError
 from codetoreum.infrastructure.resilience.interfaces import CircuitState
 from codetoreum.infrastructure.resilience.mocks import MockCircuitBreaker
-from codetoreum.ports.output.llm_types import ExecutionResult
+from codetoreum.ports.output.coding_agent import (
+    CodingAgentResult,
+    ICodingAgent,
+)
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -88,16 +91,37 @@ class _RepairCycleContext:
         )
 
 
-def _make_async_factory(llm):
-    """Create an async factory that returns the given LLM for any agent name."""
+def _make_async_factory(coding_agent):
+    """Create a coding-agent factory that returns the given coding agent for any prompt builder.
 
-    async def factory(agent_name):
-        return llm
+    Named ``_make_async_factory`` for backwards-compat with the existing test
+    helpers; the returned callable matches the new
+    ``coding_agent_factory: Callable[[IPromptBuilder], ICodingAgent]`` signature.
+    """
+
+    def factory(prompt_builder):
+        return coding_agent
 
     return factory
 
 
-def _default_response_factory(prompt: str) -> ExecutionResult:
+def _coding_agent_result(content: str, *, success: bool = True) -> CodingAgentResult:
+    """Build a minimal CodingAgentResult carrying the supplied content."""
+    from decimal import Decimal
+
+    return CodingAgentResult(
+        success=success,
+        summary_text=content,
+        total_cost_usd=Decimal("0"),
+        total_input_tokens=0,
+        total_output_tokens=0,
+        tool_call_count=0,
+        duration_ms=0,
+        error_summary=None if success else "stubbed failure",
+    )
+
+
+def _default_response_factory(prompt: str) -> CodingAgentResult:
     """Create a response factory that returns context-aware responses based on the prompt.
 
     Detects operation type from the prompt and returns appropriate JSON response format.
@@ -106,18 +130,18 @@ def _default_response_factory(prompt: str) -> ExecutionResult:
 
     # Detect environment rebuild operation
     if "rebuild" in prompt_lower and "environment" in prompt_lower:
-        return ExecutionResult(content='{"success": true}')
+        return _coding_agent_result('{"success": true}')
 
     # Detect environment verification operation
     if "verify" in prompt_lower and "environment" in prompt_lower:
-        return ExecutionResult(content='{"healthy": true}')
+        return _coding_agent_result('{"healthy": true}')
 
     # Detect dependency fix operation
     if "dependency" in prompt_lower or "install" in prompt_lower:
-        return ExecutionResult(content='{"success": true}')
+        return _coding_agent_result('{"success": true}')
 
     # Default to test result format (for run_tests, fix_failures, etc.)
-    return ExecutionResult(content=_VALID_JSON_RESPONSE)
+    return _coding_agent_result(_VALID_JSON_RESPONSE)
 
 
 def _make_adapter(
@@ -127,35 +151,45 @@ def _make_adapter(
     event_emitter=None,
     llm_response_factory=None,
 ) -> tuple[ProductionRepairCycleAdapter, AsyncMock]:
-    """Return (adapter, mock_llm) pre-wired for tests.
+    """Return (adapter, mock_coding_agent) pre-wired for tests.
 
     Args:
         llm_response: Default response for simple cases. Ignored if llm_response_factory is provided.
-        llm_response_factory: Optional callable(prompt: str) -> ExecutionResult that generates context-aware responses.
+        llm_response_factory: Optional callable(prompt: str) -> CodingAgentResult that generates
+                             context-aware responses. The callable inspects the prompt; the
+                             prompt is reconstructed from the captured _RepairCyclePromptBuilder.
                              Takes precedence over llm_response.
-        circuit_breaker: Optional circuit breaker mock
-        event_emitter: Optional event emitter mock
+        circuit_breaker: Optional circuit breaker mock.
+        event_emitter: Optional event emitter mock.
     """
-    llm = AsyncMock()
+    coding_agent = AsyncMock(spec=ICodingAgent)
+    last_prompt: dict[str, str] = {"value": ""}
 
     if llm_response_factory is not None:
-        # Use factory for context-aware responses via side_effect
-        llm.execute.side_effect = lambda prompt, **kwargs: llm_response_factory(prompt)
-    else:
-        # Use static response
-        llm.execute.return_value = ExecutionResult(content=llm_response)
+        # The factory needs the prompt text; we capture it from the prompt builder
+        # passed to the coding-agent factory and use that for routing.
+        async def execute_side_effect(execution, workspace_context, options):
+            return llm_response_factory(last_prompt["value"])
 
-    # Create async factory that returns the same mock LLM for any agent name
-    llm_factory = _make_async_factory(llm)
+        coding_agent.execute.side_effect = execute_side_effect
+    else:
+        coding_agent.execute.return_value = _coding_agent_result(llm_response)
+
+    def coding_agent_factory(prompt_builder):
+        # Capture the task text from the adapter-local prompt builder for the
+        # llm_response_factory branch above. Access the private attribute is
+        # fine here — the builder is a private adapter type.
+        last_prompt["value"] = getattr(prompt_builder, "_task_text", "")
+        return coding_agent
 
     config = RepairCycleConfig(max_json_parse_retries=1, json_parse_retry_delay_ms=0)
     adapter = ProductionRepairCycleAdapter(
-        llm_factory=llm_factory,
+        coding_agent_factory=coding_agent_factory,
         config=config,
         event_emitter=event_emitter,
         circuit_breaker=circuit_breaker,
     )
-    return adapter, llm
+    return adapter, coding_agent
 
 
 # ---------------------------------------------------------------------------
@@ -1047,7 +1081,7 @@ class TestEnvironmentHelperMethods:
 
         config = RepairCycleConfig(max_json_parse_retries=1, json_parse_retry_delay_ms=0)
         adapter = ProductionRepairCycleAdapter(
-            llm_factory=_make_async_factory(llm),
+            coding_agent_factory=_make_async_factory(llm),
             config=config,
             event_emitter=event_emitter,
             circuit_breaker=None,
@@ -1084,7 +1118,7 @@ class TestEnvironmentHelperMethods:
 
         config = RepairCycleConfig(max_json_parse_retries=1, json_parse_retry_delay_ms=0)
         adapter = ProductionRepairCycleAdapter(
-            llm_factory=_make_async_factory(llm),
+            coding_agent_factory=_make_async_factory(llm),
             config=config,
             event_emitter=event_emitter,
             circuit_breaker=None,
@@ -1392,7 +1426,7 @@ class TestApplyDependencyFix:
 
         config = RepairCycleConfig(max_json_parse_retries=1, json_parse_retry_delay_ms=0)
         adapter = ProductionRepairCycleAdapter(
-            llm_factory=_make_async_factory(llm),
+            coding_agent_factory=_make_async_factory(llm),
             config=config,
             event_emitter=event_emitter,
             circuit_breaker=None,
@@ -1419,30 +1453,35 @@ class TestApplyDependencyFix:
 
 
 class TestAgentConfigRouting:
-    """Tests for _get_llm_for_subtask agent config routing (issue #556)."""
+    """Tests for _resolve_agent_name agent-config routing (post-D9 migration).
+
+    The post-D9 architecture removed _get_llm_for_subtask. Agent-name
+    resolution now happens via _resolve_agent_name, which is used for
+    logging / event-emission only (the coding-agent factory itself
+    receives a per-call adapter-local IPromptBuilder, not an agent name).
+    """
 
     def _make_tracking_adapter(self):
-        """Create adapter with LLM factory that tracks which agent names are resolved."""
-        resolved_agents = []
+        """Create an adapter with a coding-agent factory that records calls."""
+        captured_prompt_builders = []
 
-        async def tracking_factory(agent_name: str):
-            """Async factory that records the agent name requested."""
-            resolved_agents.append(agent_name)
-            llm = AsyncMock()
-            llm.execute.return_value = ExecutionResult(content=_VALID_JSON_RESPONSE)
-            return llm
+        def tracking_factory(prompt_builder):
+            captured_prompt_builders.append(prompt_builder)
+            coding_agent = AsyncMock(spec=ICodingAgent)
+            coding_agent.execute.return_value = _coding_agent_result(_VALID_JSON_RESPONSE)
+            return coding_agent
 
         config = RepairCycleConfig(max_json_parse_retries=1, json_parse_retry_delay_ms=0)
         adapter = ProductionRepairCycleAdapter(
-            llm_factory=tracking_factory,
+            coding_agent_factory=tracking_factory,
             config=config,
         )
-        adapter._resolved_agents = resolved_agents
+        adapter._captured_prompt_builders = captured_prompt_builders
         return adapter
 
     @pytest.mark.asyncio
-    async def test_run_tests_routes_through_test_execution_agent(self):
-        """run_tests routes through agent resolved for 'test_execution' sub-task."""
+    async def test_run_tests_resolves_test_execution_agent_name(self):
+        """run_tests resolves the agent name for 'test_execution' sub-task."""
         from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig
 
         # Create specialized agent config that assigns different agents to sub-tasks
@@ -1453,20 +1492,15 @@ class TestAgentConfigRouting:
 
         adapter = self._make_tracking_adapter()
         ctx = _RepairCycleContext()
-        # Set agent_config on the context
         ctx.agent_config = agent_config
         ctx.agent_name = "default_agent"
 
-        await adapter.run_tests(ctx.test_configs[0], ctx)
-
-        # Verify the test_execution agent was resolved
-        assert (
-            "qa_test_executor" in adapter._resolved_agents
-        ), f"Expected 'qa_test_executor' in resolved agents, got {adapter._resolved_agents}"
+        # _resolve_agent_name returns the configured agent name for the sub-task
+        assert adapter._resolve_agent_name("test_execution", ctx) == "qa_test_executor"
 
     @pytest.mark.asyncio
-    async def test_fix_failures_routes_through_code_fix_agent(self):
-        """fix_failures_by_file routes through agent resolved for 'code_fix' sub-task."""
+    async def test_fix_failures_resolves_code_fix_agent_name(self):
+        """fix_failures_by_file resolves the agent name for 'code_fix' sub-task."""
         from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig
 
         agent_config = RepairCycleAgentConfig(
@@ -1479,86 +1513,35 @@ class TestAgentConfigRouting:
         ctx.agent_config = agent_config
         ctx.agent_name = "default_agent"
 
-        grouped: dict[str, tuple[RepairTestFailure, ...]] = {
-            "test_file.py": (RepairTestFailure(file="test_file.py", test="t1", message="fail"),),
-        }
-
-        await adapter.fix_failures_by_file(grouped, ctx.test_configs[0], ctx)
-
-        # Verify the code_fix agent was resolved
-        assert (
-            "code_fixer" in adapter._resolved_agents
-        ), f"Expected 'code_fixer' in resolved agents, got {adapter._resolved_agents}"
+        assert adapter._resolve_agent_name("code_fix", ctx) == "code_fixer"
 
     @pytest.mark.asyncio
-    async def test_handle_warnings_routes_through_code_fix_agent(self):
-        """handle_warnings routes through agent resolved for 'code_fix' sub-task."""
-        from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig, RepairTestResult, RepairTestWarning
+    async def test_handle_warnings_resolves_code_fix_agent_name(self):
+        """handle_warnings resolves the agent name for 'code_fix' sub-task."""
+        from codetoreum.domain.repair_cycle_types import RepairCycleAgentConfig
 
         agent_config = RepairCycleAgentConfig(
             test_execution="qa_test_executor",
             code_fix="code_fixer",
         )
 
-        # Mock the factory to track which agent name it's called with
-        llm_mock = AsyncMock()
-        llm_mock.execute.return_value = ExecutionResult(content="Fixed")
-        call_tracker = []
-
-        async def tracking_factory(agent_name):
-            call_tracker.append(agent_name)
-            return llm_mock
-
-        config = RepairCycleConfig(max_json_parse_retries=1, json_parse_retry_delay_ms=0)
-        adapter = ProductionRepairCycleAdapter(
-            llm_factory=tracking_factory,
-            config=config,
-        )
-
+        adapter = self._make_tracking_adapter()
         ctx = _RepairCycleContext()
         ctx.agent_config = agent_config
         ctx.agent_name = "default_agent"
 
-        # Create a config with review_warnings=True (default context has it as False)
-        test_config = RepairTestRunConfig(
-            test_type=RepairTestType.UNIT,
-            timeout=30,
-            max_iterations=1,
-            review_warnings=True,  # Important: need this to be True
-        )
-
-        test_result = RepairTestResult(
-            test_type=test_config.test_type,
-            iteration=1,
-            passed=5,
-            failed=0,
-            warnings=1,
-            failures=(),
-            warning_list=(RepairTestWarning(file="src/file.py", message="deprecation warning"),),
-            raw_output="",
-            timestamp="2025-01-01T00:00:00Z",
-        )
-
-        await adapter.handle_warnings(test_result, test_config, ctx)
-
-        # Verify factory was called with the configured code_fix agent
-        assert len(call_tracker) > 0, "Expected llm_factory to be called"
-        assert call_tracker[0] == "code_fixer", f"Expected code_fixer agent, got {call_tracker[0]}"
+        # handle_warnings uses the code_fix agent for warning review.
+        assert adapter._resolve_agent_name("code_fix", ctx) == "code_fixer"
 
     @pytest.mark.asyncio
     async def test_agent_config_fallback_to_default_when_none(self):
-        """When agent_config is None, falls back to context.agent_name."""
+        """When agent_config is None, _resolve_agent_name falls back to context.agent_name."""
         adapter = self._make_tracking_adapter()
         ctx = _RepairCycleContext()
         ctx.agent_config = None
         ctx.agent_name = "default_repair_agent"
 
-        await adapter.run_tests(ctx.test_configs[0], ctx)
-
-        # Verify the default agent was resolved
-        assert (
-            "default_repair_agent" in adapter._resolved_agents
-        ), f"Expected 'default_repair_agent' in resolved agents, got {adapter._resolved_agents}"
+        assert adapter._resolve_agent_name("test_execution", ctx) == "default_repair_agent"
 
     @pytest.mark.asyncio
     async def test_agent_config_partial_mapping(self):
@@ -1576,12 +1559,7 @@ class TestAgentConfigRouting:
         ctx.agent_config = agent_config
         ctx.agent_name = "default_agent"
 
-        await adapter.run_tests(ctx.test_configs[0], ctx)
-
-        # Verify the configured test_execution agent was resolved
-        assert (
-            "qa_executor" in adapter._resolved_agents
-        ), f"Expected 'qa_executor' in resolved agents, got {adapter._resolved_agents}"
+        assert adapter._resolve_agent_name("test_execution", ctx) == "qa_executor"
 
 
 class TestEnvironmentRebuildAndVerifyReturnValueHandling:
@@ -1594,11 +1572,11 @@ class TestEnvironmentRebuildAndVerifyReturnValueHandling:
     """
 
     @staticmethod
-    def _make_llm_factory_with_mock(mock_llm: AsyncMock) -> callable:
-        """Create an LLM factory that returns the given mock LLM."""
+    def _make_llm_factory_with_mock(mock_coding_agent: AsyncMock) -> callable:
+        """Create a coding-agent factory that returns the given mock coding agent."""
 
-        async def factory(agent_name: str) -> AsyncMock:
-            return mock_llm
+        def factory(prompt_builder) -> AsyncMock:
+            return mock_coding_agent
 
         return factory
 
@@ -1607,10 +1585,10 @@ class TestEnvironmentRebuildAndVerifyReturnValueHandling:
         """When rebuild_environment() returns False, the iteration loop breaks."""
         # Setup: LLM returns success for test runs and systemic analysis
         mock_llm = AsyncMock()
-        mock_llm.execute = AsyncMock(return_value=ExecutionResult(content=_VALID_JSON_RESPONSE))
+        mock_llm.execute = AsyncMock(return_value=_coding_agent_result(_VALID_JSON_RESPONSE))
 
         adapter = ProductionRepairCycleAdapter(
-            llm_factory=self._make_llm_factory_with_mock(mock_llm),
+            coding_agent_factory=self._make_llm_factory_with_mock(mock_llm),
             config=RepairCycleConfig(),
         )
 
@@ -1655,10 +1633,10 @@ class TestEnvironmentRebuildAndVerifyReturnValueHandling:
         """When verify_environment() returns False, the iteration loop breaks."""
         # Setup: LLM returns success for test runs and systemic analysis
         mock_llm = AsyncMock()
-        mock_llm.execute = AsyncMock(return_value=ExecutionResult(content=_VALID_JSON_RESPONSE))
+        mock_llm.execute = AsyncMock(return_value=_coding_agent_result(_VALID_JSON_RESPONSE))
 
         adapter = ProductionRepairCycleAdapter(
-            llm_factory=self._make_llm_factory_with_mock(mock_llm),
+            coding_agent_factory=self._make_llm_factory_with_mock(mock_llm),
             config=RepairCycleConfig(),
         )
 
@@ -1705,10 +1683,10 @@ class TestEnvironmentRebuildAndVerifyReturnValueHandling:
         mock_llm = AsyncMock()
         # First call for initial test succeeds with no failures
         success_response = '{"passed": 1, "failed": 0, ' '"failures": [], ' '"warnings": []}'
-        mock_llm.execute = AsyncMock(return_value=ExecutionResult(content=success_response))
+        mock_llm.execute = AsyncMock(return_value=_coding_agent_result(success_response))
 
         adapter = ProductionRepairCycleAdapter(
-            llm_factory=self._make_llm_factory_with_mock(mock_llm),
+            coding_agent_factory=self._make_llm_factory_with_mock(mock_llm),
             config=RepairCycleConfig(),
         )
 
@@ -1751,9 +1729,9 @@ class TestTimeoutHandling:
         """Create an LLM mock that sleeps before returning."""
         llm = AsyncMock()
 
-        async def slow_execute(**kwargs):
+        async def slow_execute(*args, **kwargs):
             await asyncio.sleep(delay_seconds)
-            return ExecutionResult(content=_VALID_JSON_RESPONSE)
+            return _coding_agent_result(_VALID_JSON_RESPONSE)
 
         llm.execute = slow_execute
         return llm
@@ -1762,7 +1740,7 @@ class TestTimeoutHandling:
         """Create a factory that returns a slow LLM."""
         slow_llm = self._make_slow_llm(delay_seconds)
 
-        async def factory(agent_name: str):
+        def factory(prompt_builder):
             return slow_llm
 
         return factory
@@ -1773,7 +1751,7 @@ class TestTimeoutHandling:
         # Create a very short timeout (100ms) and LLM that sleeps 1s
         factory = await self._make_factory_with_slow_llm(delay_seconds=1.0)
         adapter = ProductionRepairCycleAdapter(
-            llm_factory=factory,
+            coding_agent_factory=factory,
             config=RepairCycleConfig(),
         )
 
@@ -1795,7 +1773,7 @@ class TestTimeoutHandling:
         """fix_failures_by_file catches TimeoutError and returns 0 files fixed."""
         factory = await self._make_factory_with_slow_llm(delay_seconds=1.0)
         adapter = ProductionRepairCycleAdapter(
-            llm_factory=factory,
+            coding_agent_factory=factory,
             config=RepairCycleConfig(),
         )
 
@@ -1825,7 +1803,7 @@ class TestTimeoutHandling:
         """handle_warnings catches TimeoutError and returns 0 warnings reviewed."""
         factory = await self._make_factory_with_slow_llm(delay_seconds=1.0)
         adapter = ProductionRepairCycleAdapter(
-            llm_factory=factory,
+            coding_agent_factory=factory,
             config=RepairCycleConfig(),
         )
 
@@ -1865,7 +1843,7 @@ class TestTimeoutHandling:
         # Create LLM that delays 0.5 seconds (much longer than any timeout)
         factory = await self._make_factory_with_slow_llm(delay_seconds=0.5)
         adapter = ProductionRepairCycleAdapter(
-            llm_factory=factory,
+            coding_agent_factory=factory,
             config=RepairCycleConfig(),
         )
 

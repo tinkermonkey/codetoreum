@@ -15,7 +15,7 @@ Key responsibilities:
 8. Circuit breaking: Prevent runaway agent execution
 
 Architecture:
-- Factory injection of ILLMProvider for flexible provider selection
+- Per-call factory injection of ICodingAgent for flexible provider selection
 - Optional event emission (null-object pattern)
 - Retry logic for JSON parsing (3 attempts)
 - Comprehensive error logging with no silent failures
@@ -32,26 +32,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-if TYPE_CHECKING:
-    from collections.abc import Callable, Coroutine
-    from typing import Any, Protocol
-
-    from codetoreum.infrastructure.resilience.interfaces import ICircuitBreaker
-    from codetoreum.ports.output.event_emitter import IEventEmitter
-    from codetoreum.ports.output.llm_types import ExecutionContext, ExecutionResult
-
-    class ILLMProvider(Protocol):
-        """Duck-typed surrogate for the retired ``ILLMProvider`` port.
-
-        Phase D5 deleted ``IAgentLauncher`` / ``ILLMProvider``; this adapter
-        retains a prompt→completion call site until it migrates to
-        ``ICodingAgent``. The protocol below documents the minimum surface
-        the adapter relies on at runtime."""
-
-        async def execute(self, prompt: str, context: ExecutionContext | None = ...) -> ExecutionResult: ...
-
-    AgentLLMFactory = Callable[[str], Coroutine[Any, Any, ILLMProvider]]
-
+from codetoreum.adapters.secondary.free_form_coding_agent import (
+    synthetic_agent_execution,
+    synthetic_workspace_context,
+)
+from codetoreum.domain.coding_agent_types import InvocationMode
 from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.domain.events.repair_cycle_events import (
     EnvironmentRebuildExhaustedEvent,
@@ -87,8 +72,10 @@ from codetoreum.domain.repair_cycle_types import (
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.resilience.exceptions import CircuitBreakerOpenError
+from codetoreum.ports.output.coding_agent import CodingAgentInvocationOptions
 from codetoreum.ports.output.environment_repair_service import IEnvironmentRepairService
 from codetoreum.ports.output.event_emitter import IEventEmitter, NullEventEmitter
+from codetoreum.ports.output.prompt_builder import IPromptBuilder, StructuredPrompt
 from codetoreum.ports.output.repair_cycle_checkpoint_store import (
     IRepairCycleCheckpointStore,
 )
@@ -98,7 +85,64 @@ from codetoreum.ports.output.repair_cycle_service import (
 )
 from codetoreum.ports.output.systemic_analysis_service import ISystemicAnalysisService
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
+
+    from codetoreum.domain.agent import Agent
+    from codetoreum.domain.work_item import WorkItem
+    from codetoreum.domain.workspace_context import WorkspaceContext
+    from codetoreum.infrastructure.resilience.interfaces import ICircuitBreaker
+    from codetoreum.ports.output.coding_agent import (
+        CodingAgentResult,
+        ICodingAgent,
+    )
+    from codetoreum.ports.output.prompt_builder import ExecutionOutput
+
 logger = logging.getLogger(__name__)
+
+
+class _RepairCyclePromptBuilder(IPromptBuilder):
+    """Per-call :class:`IPromptBuilder` for repair-cycle free-form prompts.
+
+    Closure-captures the rendered task text. Ignores the standard
+    ``agent`` / ``work_item`` / ``prior_outputs`` arguments — only the
+    supplied ``workspace_context`` is forwarded.
+
+    Use this for prompts that don't fit one of the more specialised
+    builders. The task text is whatever the call site has assembled
+    (test command, fix instructions, warning review, systemic fix, etc.).
+    """
+
+    def __init__(
+        self,
+        *,
+        task_text: str,
+        role_description: str = "Repair cycle specialist",
+        instructions: tuple[str, ...] = ("Return a JSON object describing what you did.",),
+        constraints: tuple[str, ...] = ("Stay within the mounted workspace.",),
+    ) -> None:
+        self._task_text = task_text
+        self._role_description = role_description
+        self._instructions = instructions
+        self._constraints = constraints
+
+    async def build(
+        self,
+        agent: Agent,
+        work_item: WorkItem,
+        workspace_context: WorkspaceContext,
+        prior_outputs: tuple[ExecutionOutput, ...] = (),
+    ) -> StructuredPrompt:
+        return StructuredPrompt(
+            role_description=self._role_description,
+            task_description=self._task_text,
+            work_item=work_item,
+            workspace_context=workspace_context,
+            instructions=self._instructions,
+            constraints=self._constraints,
+            prior_outputs=(),
+        )
 
 
 class JSONParseError(Exception):
@@ -131,14 +175,16 @@ class ProductionRepairCycleAdapter(IRepairCycle):
     """Production repair cycle adapter with LLM integration.
 
     Implements IRepairCycle by orchestrating test execution, failure analysis,
-    and agent-based fixes. Uses Claude Code via ILLMProvider for intelligent
-    repair coordination.
+    and agent-based fixes. Drives a coding agent (Claude Code by default)
+    via :class:`ICodingAgent` for intelligent repair coordination.
 
     Example:
         config = RepairCycleConfig()
         adapter = ProductionRepairCycleAdapter(
-            llm_factory=lambda agent_name: llm_provider,
-            config=config
+            coding_agent_factory=lambda pb: ResilientCodingAgentDecorator(
+                wrapped=FreeFormCodingAgent(prompt_builder=pb, ...),
+            ),
+            config=config,
         )
 
         context = RepairCycleContext(...)
@@ -147,32 +193,53 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
     def __init__(
         self,
-        llm_factory: AgentLLMFactory,
+        coding_agent_factory: Callable[[IPromptBuilder], ICodingAgent],
         config: RepairCycleConfig | None = None,
         event_emitter: IEventEmitter | None = None,
         checkpoint_store: IRepairCycleCheckpointStore | None = None,
         circuit_breaker: ICircuitBreaker | None = None,
         systemic_analysis_service: ISystemicAnalysisService | None = None,
         environment_repair_service: IEnvironmentRepairService | None = None,
+        *,
+        invocation_mode: InvocationMode = InvocationMode.CONTAINERIZED,
+        model: str = "claude-sonnet-4-6",
+        container_image: str = "codetoreum-agent:latest",
+        workspace_path: Path | None = None,
     ) -> None:
         """Initialize production repair cycle adapter.
 
         Args:
-            llm_factory: Factory callable that takes agent name and returns configured ILLMProvider
-            config: Optional RepairCycleConfig (uses defaults if not provided)
-            event_emitter: Optional event emitter (uses null-object if not provided)
-            checkpoint_store: Optional checkpoint store for resumable repairs
-            circuit_breaker: Optional circuit breaker for LLM call protection
-            systemic_analysis_service: Optional systemic analysis service for failure classification
-            environment_repair_service: Optional environment repair service for rebuilding and verifying environments
+            coding_agent_factory: Per-call factory returning a fresh
+                :class:`ICodingAgent` bound to the supplied
+                :class:`IPromptBuilder`. The bootstrap wires this to a
+                resilience-decorated
+                :class:`~codetoreum.adapters.secondary.free_form_coding_agent.FreeFormCodingAgent`.
+            config: Optional RepairCycleConfig (uses defaults if not provided).
+            event_emitter: Optional event emitter (uses null-object if not provided).
+            checkpoint_store: Optional checkpoint store for resumable repairs.
+            circuit_breaker: Optional circuit breaker for coding-agent
+                call protection.
+            systemic_analysis_service: Optional systemic analysis service.
+            environment_repair_service: Optional environment repair service.
+            invocation_mode: Where the coding agent runs.
+            model: Model name to request.
+            container_image: Docker image when running containerised.
+            workspace_path: Optional workspace path the agent runs in.
         """
-        self._llm_factory = llm_factory
+        if coding_agent_factory is None:
+            msg = "coding_agent_factory cannot be None"
+            raise ValueError(msg)
+        self._coding_agent_factory = coding_agent_factory
         self.config = config or RepairCycleConfig()
         self.event_emitter = event_emitter or NullEventEmitter()
         self.checkpoint_store = checkpoint_store
         self.circuit_breaker = circuit_breaker
         self._systemic_analysis_service = systemic_analysis_service
         self._environment_repair_service = environment_repair_service
+        self._invocation_mode = invocation_mode
+        self._model = model
+        self._container_image = container_image
+        self._workspace_path = workspace_path
 
         # Test type descriptions for prompt generation
         self._test_type_descriptions = {
@@ -214,62 +281,98 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         """
         self._environment_repair_service = service
 
-    async def _get_llm_for_subtask(self, sub_task: str, context: RepairCycleContext) -> tuple[ILLMProvider, str]:
-        """Resolve the appropriate agent for a sub-task and return its LLM provider.
+    def _resolve_agent_name(self, sub_task: str, context: RepairCycleContext) -> str:
+        """Resolve the agent name for a sub-task.
 
-        Centralizes agent name resolution logic to prevent duplication across call
-        sites. Returns both the LLM provider and the resolved agent name.
-
-        Args:
-            sub_task: Sub-task key (e.g., "test_execution", "code_fix")
-            context: Repair cycle context with agent configuration
-
-        Returns:
-            Coroutine that resolves to a tuple of (ILLMProvider instance for the
-            resolved agent, resolved agent name)
+        Free-form repair calls do not have a workflow-level agent_config
+        in most cases; the resolved name is used for logging /
+        event-emission only. Kept here so call sites can record which
+        logical agent the call is *intended* for in events.
         """
-        agent_name = (
+        return (
             context.agent_config.resolve_agent(sub_task, context.agent_name)
             if context.agent_config
             else context.agent_name
         )
-        return await self._llm_factory(agent_name), agent_name
 
-    async def _execute_llm_with_timeout(
+    async def _execute_subtask(
         self,
-        llm: ILLMProvider,
+        *,
         prompt: str,
         operation: str,
         config: RepairTestRunConfig,
         context: RepairCycleContext,
+        purpose: str | None = None,
+        role_description: str = "Repair cycle specialist",
         extra_log: dict | None = None,
         error_message: str | None = None,
-    ) -> ExecutionResult:
-        """Execute an LLM call with timeout and optional circuit breaker.
+    ) -> CodingAgentResult:
+        """Execute a free-form coding-agent call with timeout + circuit breaker.
 
-        Centralizes timeout enforcement and error handling for all LLM calls,
-        ensuring consistent timeout application and logging across the adapter.
+        Builds a fresh :class:`ICodingAgent` via the injected factory,
+        bound to a per-call adapter-local prompt builder that carries
+        the supplied ``prompt`` as the task text. Drives a single
+        short execution against a synthetic
+        :class:`AgentExecution` / :class:`WorkspaceContext`.
 
         Args:
-            llm: LLM provider to execute
-            prompt: Prompt to send to the LLM
-            operation: Operation name for circuit breaker (e.g., "repair_cycle.run_tests")
-            config: Test run configuration containing timeout value
-            context: Repair cycle context with workflow details
-            extra_log: Optional dict of additional logging context
-            error_message: Optional custom error message prefix (defaults to operation name)
+            prompt: The free-form prompt text to send to the agent.
+            operation: Operation name for circuit-breaker keying.
+            config: Test run configuration (provides timeout).
+            context: Repair cycle context with workflow details.
+            purpose: Optional short label for the synthetic execution
+                metadata (e.g. ``"code_fix"``); defaults to
+                ``operation``.
+            role_description: Role description to inject into the
+                :class:`StructuredPrompt`.
+            extra_log: Optional dict of additional logging context.
+            error_message: Optional custom error message prefix.
 
         Returns:
-            ExecutionResult from the LLM call
+            :class:`CodingAgentResult` from the coding-agent call.
 
         Raises:
-            TimeoutError: If the LLM call exceeds the configured timeout
+            TimeoutError: If the call exceeds ``config.timeout``.
         """
+        prompt_builder = _RepairCyclePromptBuilder(
+            task_text=prompt,
+            role_description=role_description,
+        )
+        coding_agent = self._coding_agent_factory(prompt_builder)
+
+        free_form_purpose = purpose or operation.replace(".", "_")
+        execution = synthetic_agent_execution(
+            purpose=free_form_purpose,
+            model=self._model,
+        )
+        workspace_context = synthetic_workspace_context(
+            purpose=free_form_purpose,
+            workspace_path=self._workspace_path,
+        )
+
+        mode_config: dict[str, object] = {}
+        if self._invocation_mode == InvocationMode.CONTAINERIZED:
+            mode_config = {"image": self._container_image}
+
+        options = CodingAgentInvocationOptions(
+            invocation_mode=self._invocation_mode,
+            model=self._model,
+            timeout_seconds=config.timeout,
+            cost_limit_usd=None,
+            mode_config=mode_config,
+        )
+
         try:
             coro = (
-                self.circuit_breaker.call(llm.execute, operation, prompt=prompt)
+                self.circuit_breaker.call(
+                    coding_agent.execute,
+                    operation,
+                    execution,
+                    workspace_context,
+                    options,
+                )
                 if self.circuit_breaker
-                else llm.execute(prompt=prompt)
+                else coding_agent.execute(execution, workspace_context, options)
             )
             return await asyncio.wait_for(coro, timeout=config.timeout)
         except TimeoutError as e:
@@ -456,10 +559,10 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         # Build test command based on framework detection
         test_command = self._detect_and_build_test_command(config)
 
-        # Resolve agent for test execution sub-task
-        llm, resolved_agent_name = await self._get_llm_for_subtask("test_execution", context)
+        # Resolve agent name for logging / event emission
+        resolved_agent_name = self._resolve_agent_name("test_execution", context)
 
-        # Execute tests via LLM
+        # Execute tests via coding agent
         logger.info(
             "Executing tests",
             extra={
@@ -473,20 +576,20 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         )
 
         try:
-            # Call LLM to execute tests (with circuit breaker if configured)
+            # Call the coding agent to execute tests (with circuit breaker if configured)
             prompt = f"Execute the following test command and return results as JSON:\n\n{test_command}"
-            agent_response = await self._execute_llm_with_timeout(
-                llm=llm,
+            agent_response = await self._execute_subtask(
                 prompt=prompt,
                 operation="repair_cycle.run_tests",
                 config=config,
                 context=context,
+                purpose="repair_cycle.test_execution",
                 extra_log={"test_type": config.test_type.value},
                 error_message="Test execution",
             )
 
             # Parse test output with retry logic
-            test_output = await self._parse_test_output_with_retry(agent_response.content, config.test_type)
+            test_output = await self._parse_test_output_with_retry(agent_response.summary_text, config.test_type)
 
             # Parse failures and warnings
             failures = self._extract_failures(test_output, config.test_type)
@@ -502,7 +605,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 warnings=len(warnings),
                 failures=tuple(failures),
                 warning_list=tuple(warnings),
-                raw_output=agent_response.content,
+                raw_output=agent_response.summary_text,
                 timestamp=timestamp,
             )
 
@@ -577,8 +680,8 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         """
         fixed = 0
 
-        # Resolve agent for code fix sub-task
-        llm, resolved_agent_name = await self._get_llm_for_subtask("code_fix", context)
+        # Resolve agent name for logging / event emission
+        resolved_agent_name = self._resolve_agent_name("code_fix", context)
 
         for file_path, failures in grouped_failures.items():
             # Check circuit breaker
@@ -624,12 +727,12 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     exc_info=False,
                 )
 
-                await self._execute_llm_with_timeout(
-                    llm=llm,
+                await self._execute_subtask(
                     prompt=fix_prompt,
                     operation="repair_cycle.fix_failures_by_file",
                     config=config,
                     context=context,
+                    purpose="repair_cycle.file_fix",
                     extra_log={"file": file_path},
                     error_message=f"Fix execution for {file_path}",
                 )
@@ -717,8 +820,8 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
         reviewed = 0
 
-        # Resolve agent for warning review sub-task (uses code_fix agent)
-        llm, resolved_agent_name = await self._get_llm_for_subtask("code_fix", context)
+        # Resolve agent name for logging / event emission (uses code_fix agent)
+        resolved_agent_name = self._resolve_agent_name("code_fix", context)
 
         for warning in test_result.warning_list:
             # Check circuit breaker
@@ -764,12 +867,12 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                     exc_info=False,
                 )
 
-                await self._execute_llm_with_timeout(
-                    llm=llm,
+                await self._execute_subtask(
                     prompt=review_prompt,
                     operation="repair_cycle.handle_warnings",
                     config=config,
                     context=context,
+                    purpose="repair_cycle.warning_review",
                     extra_log={"file": warning.file},
                     error_message=f"Warning review for {warning.file}",
                 )
@@ -913,19 +1016,16 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 exc_info=False,
             )
 
-            # Get LLM provider for the fix agent
-            llm_provider, resolved_agent_name = await self._get_llm_for_subtask("systemic_fix", context)
-
             # Build prompt with failure details and root cause context
             prompt = self._build_systemic_fix_prompt(failures, analysis_result)
 
-            # Execute LLM call
-            execution_result = await self._execute_llm_with_timeout(
-                llm=llm_provider,
+            # Execute coding-agent call
+            execution_result = await self._execute_subtask(
                 prompt=prompt,
                 operation="repair_cycle.fix_failures_systemically",
                 config=config,
                 context=context,
+                purpose="repair_cycle.systemic_fix",
                 error_message="Systemic fix execution",
             )
 
@@ -935,7 +1035,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
             # Parse agent response
             try:
-                response_json = json.loads(execution_result.content or "{}")
+                response_json = json.loads(execution_result.summary_text or "{}")
                 files_modified = tuple(response_json.get("files_modified", []))
                 root_cause_addressed = response_json.get("root_cause_addressed", "")
                 success = True
@@ -1546,16 +1646,15 @@ After making changes, respond with JSON:
                 exc_info=False,
             )
 
-            llm, _ = await self._get_llm_for_subtask(operation_name, context)
-            result = await self._execute_llm_with_timeout(
-                llm=llm,
+            result = await self._execute_subtask(
                 prompt=prompt,
                 operation=f"repair_cycle.{operation_name}",
                 config=config,
                 context=context,
-                error_message=f"LLM operation {operation_name}",
+                purpose=f"repair_cycle.{operation_name}",
+                error_message=f"coding-agent operation {operation_name}",
             )
-            response = result.content
+            response = result.summary_text
 
             # Parse response if it's a string (JSON)
             if isinstance(response, str):
