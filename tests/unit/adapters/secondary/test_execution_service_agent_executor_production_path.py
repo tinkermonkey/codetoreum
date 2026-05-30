@@ -75,6 +75,11 @@ class ProductionPathFixture:
         self.run_registry.get_active_run.return_value = self.run_info
 
         # Step 2a: Agent
+        from codetoreum.domain.coding_agent_types import (
+            AgentInvocationConfig,
+            InvocationMode,
+        )
+
         self.agent = MagicMock()
         self.agent.id = self.AGENT_ID
         self.agent.name = "coder-agent"
@@ -91,7 +96,27 @@ class ProductionPathFixture:
         self.agent.filesystem_write_allowed = True
         self.agent.mcp_servers = []
         self.agent.capabilities = {}
+        self.agent.coding_agent = "claude-code"
+        # D6: executor reads agent.invocation directly. Helper to (re-)build
+        # the invocation block so tests can flip mode by reassigning
+        # requires_docker then calling set_invocation_for_mode().
+        self._AgentInvocationConfig = AgentInvocationConfig
+        self._InvocationMode = InvocationMode
+        self.set_invocation_for_mode(InvocationMode.HOST)
         self.agent_repository.get_by_id.return_value = self.agent
+
+    def set_invocation_for_mode(self, mode):
+        """Reconfigure agent.invocation for a given InvocationMode.
+
+        Mirrors the requires_docker flag so legacy assertions keep working.
+        """
+        self.agent.requires_docker = mode == self._InvocationMode.CONTAINERIZED
+        self.agent.invocation = self._AgentInvocationConfig(
+            mode=mode,
+            model=self.agent.model,
+            timeout_seconds=self.agent.timeout_seconds,
+            mode_config=({"image": "codetoreum-agent:latest"} if mode == self._InvocationMode.CONTAINERIZED else {}),
+        )
 
         # Step 2b: WorkItem
         self.work_item = MagicMock()
@@ -257,7 +282,7 @@ class TestProductionExecutionPath:
         from codetoreum.ports.output.coding_agent import InvocationMode
 
         fx = ProductionPathFixture()
-        fx.agent.requires_docker = True
+        fx.set_invocation_for_mode(InvocationMode.CONTAINERIZED)
 
         container_result = MagicMock()
         container_result.success = True
@@ -517,7 +542,7 @@ class TestProductionPathStep10Execution:
         from codetoreum.ports.output.coding_agent import InvocationMode
 
         fx = ProductionPathFixture()
-        fx.agent.requires_docker = False
+        fx.set_invocation_for_mode(InvocationMode.HOST)
         executor = fx.make_executor()
 
         await executor._run_execution(fx.WORK_ITEM_ID, fx.AGENT_ID, fx.BOARD_ID)
@@ -535,7 +560,7 @@ class TestProductionPathStep10Execution:
         from codetoreum.ports.output.coding_agent import InvocationMode
 
         fx = ProductionPathFixture()
-        fx.agent.requires_docker = True
+        fx.set_invocation_for_mode(InvocationMode.CONTAINERIZED)
 
         container_result = MagicMock()
         container_result.success = True
