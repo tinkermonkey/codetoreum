@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from codetoreum.adapters.primary.routers.agents import create_agents_router
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType
+from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
 from codetoreum.ports.input.agent_command import (
     AddAgentCapabilityCommand,
     AddMcpServerCommand,
@@ -26,6 +27,21 @@ from codetoreum.ports.input.agent_query import (
     IAgentQueryPort,
     SortOrder,
 )
+
+
+def _test_inv(
+    model: str = "claude-sonnet-4-5",
+    timeout_seconds: int = 300,
+    requires_docker: bool = True,
+) -> AgentInvocationConfig:
+    """Build an AgentInvocationConfig for tests (DEF-020 transitional helper)."""
+    return AgentInvocationConfig(
+        mode=InvocationMode.CONTAINERIZED if requires_docker else InvocationMode.HOST,
+        model=model,
+        timeout_seconds=timeout_seconds,
+        mode_config={"image": "codetoreum-agent:latest"} if requires_docker else {},
+    )
+
 
 # ============================================================================
 # Mock Implementations
@@ -146,22 +162,11 @@ def sample_agent():
         display_name="Test Agent",
         agent_type=AgentType.MAKER,
         role_description="A test agent for testing",
-        model="claude-sonnet-4",
         capabilities={
-            "code_review": AgentCapability(
-                skill="code_review",
-                proficiency=0.9,
-                description="Code review skill",
-            ),
-            "testing": AgentCapability(
-                skill="testing",
-                proficiency=0.8,
-                description="Testing skill",
-            ),
+            "code_review": AgentCapability(skill="code_review", proficiency=0.9, description="Code review skill"),
+            "testing": AgentCapability(skill="testing", proficiency=0.8, description="Testing skill"),
         },
-        timeout_seconds=300,
         max_retries=3,
-        requires_docker=True,
         requires_dev_container=False,
         makes_code_changes=True,
         filesystem_write_allowed=True,
@@ -169,6 +174,8 @@ def sample_agent():
         metadata={},
         created_at=now,
         updated_at=now,
+        invocation=_test_inv(model="claude-sonnet-4", timeout_seconds=300, requires_docker=True),
+        coding_agent="",
     )
 
 
@@ -182,10 +189,10 @@ def sample_agent_info(sample_agent):
         display_name=sample_agent.display_name,
         agent_type=sample_agent.agent_type.value,
         role_description=sample_agent.role_description,
-        model=sample_agent.model,
-        timeout_seconds=sample_agent.timeout_seconds,
+        model=sample_agent.invocation.model,
+        timeout_seconds=sample_agent.invocation.timeout_seconds,
         max_retries=sample_agent.max_retries,
-        requires_docker=sample_agent.requires_docker,
+        requires_docker=(sample_agent.invocation.mode == InvocationMode.CONTAINERIZED),
         requires_dev_container=sample_agent.requires_dev_container,
         makes_code_changes=sample_agent.makes_code_changes,
         filesystem_write_allowed=sample_agent.filesystem_write_allowed,

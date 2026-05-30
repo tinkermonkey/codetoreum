@@ -15,6 +15,7 @@ from codetoreum.adapters.secondary.cached_config_store import CachedConfigStore
 from codetoreum.adapters.secondary.elasticsearch_config_storage import (
     ElasticsearchConfigStorage,
 )
+from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
 from codetoreum.infrastructure.redis_config_cache import RedisConfigCache
 from codetoreum.ports.output.config_store import (
     AgentConfig,
@@ -27,6 +28,21 @@ from tests.conftest import (
     docker_available,
     wait_for_elasticsearch_indexing,
 )
+
+
+def _test_inv(
+    model: str = "claude-sonnet-4-5",
+    timeout_seconds: int = 300,
+    requires_docker: bool = True,
+) -> AgentInvocationConfig:
+    """Build an AgentInvocationConfig for tests (DEF-020 transitional helper)."""
+    return AgentInvocationConfig(
+        mode=InvocationMode.CONTAINERIZED if requires_docker else InvocationMode.HOST,
+        model=model,
+        timeout_seconds=timeout_seconds,
+        mode_config={"image": "codetoreum-agent:latest"} if requires_docker else {},
+    )
+
 
 # Mark all tests in this module as requiring Docker
 pytestmark = docker_available
@@ -162,14 +178,13 @@ def sample_agent_config():
     return AgentConfig(
         project_id=f"project-{uuid4().hex[:8]}",
         agent_name="test-agent",
-        model="claude-sonnet-4",
-        timeout=300,
-        requires_docker=True,
         makes_code_changes=True,
         mcp_servers=["artifacts", "logging"],
         capabilities=["code-generation", "testing"],
         version=1,
         metadata={"created_by": "test"},
+        invocation=_test_inv(model="claude-sonnet-4", timeout_seconds=300, requires_docker=True),
+        coding_agent="",
     )
 
 

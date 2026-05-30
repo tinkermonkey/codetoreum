@@ -23,6 +23,7 @@ from codetoreum.adapters.secondary.claude_code.strategies.base import (
 )
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType
 from codetoreum.domain.agent_execution import AgentExecution
+from codetoreum.domain.coding_agent_types import AgentInvocationConfig
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority
 from codetoreum.domain.workspace_context import WorkspaceContext
 from codetoreum.infrastructure.event_bus import EventBus
@@ -35,6 +36,20 @@ from codetoreum.ports.output.prompt_builder import (
     IPromptBuilder,
     StructuredPrompt,
 )
+
+
+def _test_inv(
+    model: str = "claude-sonnet-4-5",
+    timeout_seconds: int = 300,
+    requires_docker: bool = True,
+) -> AgentInvocationConfig:
+    """Build an AgentInvocationConfig for tests (DEF-020 transitional helper)."""
+    return AgentInvocationConfig(
+        mode=InvocationMode.CONTAINERIZED if requires_docker else InvocationMode.HOST,
+        model=model,
+        timeout_seconds=timeout_seconds,
+        mode_config={"image": "codetoreum-agent:latest"} if requires_docker else {},
+    )
 
 
 class _RecordingStrategy(ClaudeInvocationStrategy):
@@ -104,10 +119,8 @@ def _agent() -> Agent:
         display_name="Senior Software Engineer",
         role_description="Implements features",
         name="senior_software_engineer",
-        capabilities={
-            "code_generation": AgentCapability(skill="code_generation", proficiency=0.9),
-        },
-        model="claude-sonnet-4-6",
+        capabilities={"code_generation": AgentCapability(skill="code_generation", proficiency=0.9)},
+        invocation=_test_inv(model="claude-sonnet-4-6", timeout_seconds=300, requires_docker=True),
     )
 
 

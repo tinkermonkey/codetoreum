@@ -18,6 +18,7 @@ import pytest
 
 from codetoreum.application.prompt_building import DefaultPromptBuilder
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType
+from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
 from codetoreum.domain.value_objects import CommitPolicy
 from codetoreum.domain.work_item import WorkItem
 from codetoreum.domain.workspace_context import WorkspaceContext
@@ -26,6 +27,21 @@ from codetoreum.ports.output.prompt_builder import (
     IPromptBuilder,
     StructuredPrompt,
 )
+
+
+def _test_inv(
+    model: str = "claude-sonnet-4-5",
+    timeout_seconds: int = 300,
+    requires_docker: bool = True,
+) -> AgentInvocationConfig:
+    """Build an AgentInvocationConfig for tests (DEF-020 transitional helper)."""
+    return AgentInvocationConfig(
+        mode=InvocationMode.CONTAINERIZED if requires_docker else InvocationMode.HOST,
+        model=model,
+        timeout_seconds=timeout_seconds,
+        mode_config={"image": "codetoreum-agent:latest"} if requires_docker else {},
+    )
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -47,14 +63,13 @@ def _make_agent(
         display_name="Default Agent",
         agent_type=AgentType.MAKER,
         role_description="A senior software engineer.",
-        model="claude-opus-4-7",
         capabilities=caps,
-        requires_docker=True,
         requires_dev_container=False,
         makes_code_changes=makes_code_changes,
         filesystem_write_allowed=filesystem_write_allowed,
         mcp_servers=[],
         commit_policy=CommitPolicy.ON_SUCCESS,
+        invocation=_test_inv(model="claude-opus-4-7", timeout_seconds=300, requires_docker=True),
     )
 
 

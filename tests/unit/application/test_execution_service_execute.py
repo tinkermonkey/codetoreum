@@ -25,6 +25,7 @@ from codetoreum.application.execution_service import (
 )
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType, CommitPolicy
 from codetoreum.domain.agent_execution import AgentExecution, ExecutionStatus
+from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
 from codetoreum.domain.events.execution_events import (
     ExecutionCompletedEvent,
     ExecutionFailedEvent,
@@ -35,8 +36,22 @@ from codetoreum.domain.workspace_context import WorkspaceContext
 from codetoreum.ports.output.coding_agent import (
     CodingAgentInvocationOptions,
     CodingAgentResult,
-    InvocationMode,
 )
+
+
+def _test_inv(
+    model: str = "claude-sonnet-4-5",
+    timeout_seconds: int = 300,
+    requires_docker: bool = True,
+) -> AgentInvocationConfig:
+    """Build an AgentInvocationConfig for tests (DEF-020 transitional helper)."""
+    return AgentInvocationConfig(
+        mode=InvocationMode.CONTAINERIZED if requires_docker else InvocationMode.HOST,
+        model=model,
+        timeout_seconds=timeout_seconds,
+        mode_config={"image": "codetoreum-agent:latest"} if requires_docker else {},
+    )
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -92,15 +107,9 @@ def sample_agent() -> Agent:
         display_name="Test Agent",
         agent_type=AgentType.DEVELOPER,
         role_description="Test role",
-        capabilities={
-            "python": AgentCapability(
-                skill="python",
-                proficiency=0.9,
-                description="Python",
-            ),
-        },
-        model="claude-sonnet-4-5-20250929",
+        capabilities={"python": AgentCapability(skill="python", proficiency=0.9, description="Python")},
         makes_code_changes=True,
+        invocation=_test_inv(model="claude-sonnet-4-5-20250929", timeout_seconds=300, requires_docker=True),
     )
 
 
@@ -131,7 +140,7 @@ def sample_execution_context(sample_agent: Agent, sample_work_item: WorkItem) ->
         workflow_id="wf-1",
         stage_name="stage-1",
         agent_id=sample_agent.id,
-        model=sample_agent.model,
+        model=sample_agent.invocation.model,
         timeout_seconds=300,
         workspace_type="issue",
         branch_name="feature/test",
@@ -163,7 +172,7 @@ def sample_execution(sample_agent: Agent, sample_work_item: WorkItem) -> AgentEx
         workflow_id="wf-1",
         stage_name="stage-1",
         prompt="prompt",
-        model=sample_agent.model,
+        model=sample_agent.invocation.model,
     )
     exec_.clear_events()
     exec_.start(container_name=None)

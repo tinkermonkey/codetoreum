@@ -7,7 +7,23 @@ adapter can resolve agent names without a full scenario seed.
 import pytest
 
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType
+from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
 from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
+
+
+def _test_inv(
+    model: str = "claude-sonnet-4-5",
+    timeout_seconds: int = 300,
+    requires_docker: bool = True,
+) -> AgentInvocationConfig:
+    """Build an AgentInvocationConfig for tests (DEF-020 transitional helper)."""
+    return AgentInvocationConfig(
+        mode=InvocationMode.CONTAINERIZED if requires_docker else InvocationMode.HOST,
+        model=model,
+        timeout_seconds=timeout_seconds,
+        mode_config={"image": "codetoreum-agent:latest"} if requires_docker else {},
+    )
+
 
 _STANDARD_AGENTS = [
     ("senior_software_engineer", AgentType.DEVELOPER, "Implements features and applies repair cycle code fixes"),
@@ -33,7 +49,7 @@ async def seed_standard_agents(
             display_name=name.replace("_", " ").title(),
             agent_type=agent_type,
             role_description=description,
-            model="claude-sonnet-4-6",
             capabilities={"general": AgentCapability(skill="general", proficiency=1.0)},
+            invocation=_test_inv(model="claude-sonnet-4-6", timeout_seconds=300, requires_docker=True),
         )
         await agent_repo.save(agent)

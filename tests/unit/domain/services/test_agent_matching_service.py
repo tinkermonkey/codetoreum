@@ -3,8 +3,23 @@
 import pytest
 
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType
+from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
 from codetoreum.domain.services.agent_matching_service import AgentMatchingService
 from codetoreum.domain.value_objects import Requirement
+
+
+def _test_inv(
+    model: str = "claude-sonnet-4-5",
+    timeout_seconds: int = 300,
+    requires_docker: bool = True,
+) -> AgentInvocationConfig:
+    """Build an AgentInvocationConfig for tests (DEF-020 transitional helper)."""
+    return AgentInvocationConfig(
+        mode=InvocationMode.CONTAINERIZED if requires_docker else InvocationMode.HOST,
+        model=model,
+        timeout_seconds=timeout_seconds,
+        mode_config={"image": "codetoreum-agent:latest"} if requires_docker else {},
+    )
 
 
 @pytest.fixture
@@ -15,12 +30,12 @@ def senior_engineer_agent():
         display_name="Senior Engineer",
         agent_type=AgentType.MAKER,
         role_description="Experienced software engineer",
-        model="claude-sonnet-4-5",
         capabilities={
             "python": AgentCapability("python", 0.9, "Expert Python programmer"),
             "testing": AgentCapability("testing", 0.8, "Strong testing skills"),
             "debugging": AgentCapability("debugging", 0.85, "Excellent debugger"),
         },
+        invocation=_test_inv(model="claude-sonnet-4-5", timeout_seconds=300, requires_docker=True),
     )
 
 
@@ -32,11 +47,11 @@ def junior_developer_agent():
         display_name="Junior Developer",
         agent_type=AgentType.MAKER,
         role_description="Entry-level developer",
-        model="claude-sonnet-4-5",
         capabilities={
             "python": AgentCapability("python", 0.5, "Basic Python knowledge"),
             "testing": AgentCapability("testing", 0.4, "Limited testing experience"),
         },
+        invocation=_test_inv(model="claude-sonnet-4-5", timeout_seconds=300, requires_docker=True),
     )
 
 
@@ -48,12 +63,12 @@ def specialized_agent():
         display_name="DevOps Specialist",
         agent_type=AgentType.SPECIALIZED,
         role_description="Infrastructure and deployment expert",
-        model="claude-sonnet-4-5",
         capabilities={
             "docker": AgentCapability("docker", 0.95, "Docker expert"),
             "kubernetes": AgentCapability("kubernetes", 0.9, "Kubernetes expert"),
             "ci_cd": AgentCapability("ci_cd", 0.85, "CI/CD expert"),
         },
+        invocation=_test_inv(model="claude-sonnet-4-5", timeout_seconds=300, requires_docker=True),
     )
 
 

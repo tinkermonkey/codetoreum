@@ -501,6 +501,41 @@ Running record of architectural gaps found and fixed during bootstrap cycles. Mo
 
 ---
 
+### DEF-020 — Agent / AgentConfig legacy flat fields removed (REST API breaking change)
+
+**Status**: Fixed in this commit series (post-D9 cleanup item #6).
+
+**Deficiency**: D6 introduced the `coding_agent` + `invocation` block on `Agent` (domain) and `AgentConfig` (port DTO) as the new source of truth for execution mode / model / timeout. The legacy flat fields `Agent.requires_docker`, `Agent.model`, `Agent.timeout_seconds`, `AgentConfig.requires_docker`, `AgentConfig.model`, `AgentConfig.timeout` were kept in place as a backwards-compat shim for the REST/frontend surface even though `ExecutionServiceAgentExecutor` stopped reading them. Two sources of truth were left on the wire — readers had to know which was authoritative, and the loader populated both to keep them consistent. ~107 call sites in src/ + tests/ referenced the flat fields.
+
+The user's call ("it will never be easier to fix this than it is now") drove a clean break: drop the flat fields entirely from the domain aggregate and the port DTO; surface readers off `invocation.model` / `invocation.timeout_seconds` / `invocation.mode == InvocationMode.CONTAINERIZED`.
+
+**Fix**:
+
+1. `src/codetoreum/domain/agent.py` — drop `model`, `timeout_seconds`, `requires_docker` from the `Agent` dataclass; promote `invocation: AgentInvocationConfig` to required (previously `| None`); rewrite `Agent.create()` factory accordingly. `update_model` / `update_timeout` rebuild a fresh `AgentInvocationConfig` rather than mutating gone fields. `update_constraints` drops its `requires_docker` parameter — to change mode, build a new `AgentInvocationConfig` and assign to `self.invocation` directly. `can_execute_in_environment` derives the docker requirement from `invocation.mode`.
+
+2. `src/codetoreum/ports/output/config_store.py` — same removal from `AgentConfig`; `coding_agent` and `invocation` are now required positional-required fields.
+
+3. `src/codetoreum/adapters/secondary/elasticsearch_config_storage.py::_deserialize_agent` — read-time migration: legacy ES documents (no `invocation` block, with flat `model`/`timeout`/`requires_docker` keys) synthesise an `AgentInvocationConfig` from the legacy fields. Subsequent saves through `_serialize_agent` write the new shape only — no legacy fields written. Old documents remain readable indefinitely, but the next write drops the legacy keys.
+
+4. `src/codetoreum/infrastructure/redis_config_cache.py` — same read-time migration; the cache now writes the `invocation` block (which the previous implementation actually dropped).
+
+5. Production call sites: `ExecutionContextBuilder`, `ConfigurationService.update_agent_config`, `ExecutionService`, `PipelineManager`, `context_builder`, `ExecutionServiceAgentExecutor`, mock input-port adapters, ES agent repository, simulation seeding, YAML import — all read off `invocation` or build the block from legacy YAML/seed shape.
+
+6. REST/input-port surface (`AgentInfo`, `CreateAgentCommand`, `UpdateAgentCommand`, `AgentResponse`, `CreateAgentRequest`, `UpdateAgentRequest`) — **retained for this cycle**, with the mock input-port adapters now translating those flat-field inputs into an `AgentInvocationConfig` at the boundary. A follow-up cycle will drop them from the REST/input-port DTOs and from the frontend TypeScript types (`frontend/src/types/index.ts` + `frontend/src/pages/AgentConfigPage.tsx`). This is the genuine REST API breaking change for external clients — documented here so consumers can plan their migration.
+
+7. ~25 test files refactored: ~100 `Agent(...)` / `Agent.create(...)` / `AgentConfig(...)` constructors switched to `invocation=AgentInvocationConfig(...)`; reads of `.model` / `.timeout_seconds` / `.requires_docker` switched to `.invocation.model` / `.invocation.timeout_seconds` / `.invocation.mode == InvocationMode.CONTAINERIZED`. Tests of `Agent.update_constraints(requires_docker=...)` rewritten to rebuild the invocation block directly. Tests of `_test_inv()` helpers added to `test_agent.py` and the AST-driven migration script.
+
+**Validation**:
+- `poetry run mypy src/codetoreum` clean.
+- Domain tests (`tests/unit/domain/test_agent.py`) — 48/48 pass.
+- ES `_deserialize_agent` legacy-document path covered by `test_elasticsearch_config_storage` round-trip; legacy documents written under the old shape continue to deserialise into a well-formed `AgentConfig` with an `invocation` block synthesised from the flat fields.
+
+**Cross-references**: D6 (coding-agent port redesign, originating `invocation` block); Q3 in `~/.claude/plans/coding-agent-port-redesign.md` ("zero backwards compatibility" principle); the post-D9 cleanup plan at `~/.claude/plans/post-d9-cleanup-items-2-and-6.md`.
+
+**Files changed**: `src/codetoreum/domain/agent.py`, `src/codetoreum/ports/output/config_store.py`, `src/codetoreum/adapters/secondary/elasticsearch_config_storage.py`, `src/codetoreum/adapters/secondary/elasticsearch_agent_repository.py`, `src/codetoreum/adapters/secondary/execution_service_agent_executor.py`, `src/codetoreum/adapters/primary/input_port_adapters/mock/mock_agent_command_adapter.py`, `src/codetoreum/adapters/primary/input_port_adapters/mock/mock_agent_query_adapter.py`, `src/codetoreum/adapters/primary/input_port_adapters/mock/mock_config_query_adapter.py`, `src/codetoreum/infrastructure/redis_config_cache.py`, `src/codetoreum/infrastructure/simulation/seeding.py`, `src/codetoreum/application/configuration_service.py`, `src/codetoreum/application/context_builder.py`, `src/codetoreum/application/execution_service.py`, `src/codetoreum/application/pipeline_manager.py`, `src/codetoreum/cli/yaml_import.py`, `src/codetoreum/domain/services/execution_context_builder.py`, plus ~25 test files.
+
+---
+
 ### DEF-019 — Agent-side OTel spans not surfaced to event bus (O3 follow-up)
 
 **Status**: Design landed; parser landed; **strategy wiring + image sidecar deferred**.

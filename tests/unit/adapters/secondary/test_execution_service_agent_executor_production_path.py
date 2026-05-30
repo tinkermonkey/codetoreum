@@ -87,34 +87,33 @@ class ProductionPathFixture:
         self.agent.agent_type = AgentType.DEVELOPER
         self.agent.role_description = "A coding agent for implementation"
         self.agent.system_prompt = "You are an expert coder"
-        self.agent.model = "claude-opus-4-7"
-        self.agent.requires_docker = False
         self.agent.requires_dev_container = False
-        self.agent.timeout_seconds = 3600
         self.agent.max_retries = 3
         self.agent.makes_code_changes = True
         self.agent.filesystem_write_allowed = True
         self.agent.mcp_servers = []
         self.agent.capabilities = {}
         self.agent.coding_agent = "claude-code"
-        # D6: executor reads agent.invocation directly. Helper to (re-)build
-        # the invocation block so tests can flip mode by reassigning
-        # requires_docker then calling set_invocation_for_mode().
+        # D6+DEF-020: invocation block is the sole source of truth for
+        # mode / model / timeout. Mutate via set_invocation_for_mode().
         self._AgentInvocationConfig = AgentInvocationConfig
         self._InvocationMode = InvocationMode
+        self._agent_model = "claude-opus-4-7"
+        self._agent_timeout_seconds = 3600
         self.set_invocation_for_mode(InvocationMode.HOST)
         self.agent_repository.get_by_id.return_value = self.agent
 
     def set_invocation_for_mode(self, mode):
         """Reconfigure agent.invocation for a given InvocationMode.
 
-        Mirrors the requires_docker flag so legacy assertions keep working.
+        ``Agent.requires_docker`` / ``.model`` / ``.timeout_seconds`` were
+        removed in DEF-020; the invocation block is now the sole source
+        of truth.
         """
-        self.agent.requires_docker = mode == self._InvocationMode.CONTAINERIZED
         self.agent.invocation = self._AgentInvocationConfig(
             mode=mode,
-            model=self.agent.model,
-            timeout_seconds=self.agent.timeout_seconds,
+            model=self._agent_model,
+            timeout_seconds=self._agent_timeout_seconds,
             mode_config=({"image": "codetoreum-agent:latest"} if mode == self._InvocationMode.CONTAINERIZED else {}),
         )
 

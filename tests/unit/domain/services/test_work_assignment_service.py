@@ -3,6 +3,7 @@
 import pytest
 
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType
+from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
 from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.services.agent_matching_service import AgentMatchingService
 from codetoreum.domain.services.work_assignment_service import (
@@ -11,6 +12,20 @@ from codetoreum.domain.services.work_assignment_service import (
 )
 from codetoreum.domain.value_objects import Requirement
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority
+
+
+def _test_inv(
+    model: str = "claude-sonnet-4-5",
+    timeout_seconds: int = 300,
+    requires_docker: bool = True,
+) -> AgentInvocationConfig:
+    """Build an AgentInvocationConfig for tests (DEF-020 transitional helper)."""
+    return AgentInvocationConfig(
+        mode=InvocationMode.CONTAINERIZED if requires_docker else InvocationMode.HOST,
+        model=model,
+        timeout_seconds=timeout_seconds,
+        mode_config={"image": "codetoreum-agent:latest"} if requires_docker else {},
+    )
 
 
 @pytest.fixture
@@ -53,12 +68,9 @@ def developer_agent():
         display_name="Developer Agent",
         agent_type=AgentType.DEVELOPER,
         role_description="Software developer",
-        model="claude-sonnet-4-5",
-        capabilities={
-            "python": AgentCapability("python", 0.9),
-            "testing": AgentCapability("testing", 0.8),
-        },
+        capabilities={"python": AgentCapability("python", 0.9), "testing": AgentCapability("testing", 0.8)},
         makes_code_changes=True,
+        invocation=_test_inv(model="claude-sonnet-4-5", timeout_seconds=300, requires_docker=True),
     )
 
 
@@ -70,12 +82,9 @@ def reviewer_agent():
         display_name="Code Reviewer",
         agent_type=AgentType.REVIEWER,
         role_description="Code reviewer",
-        model="claude-sonnet-4-5",
-        capabilities={
-            "python": AgentCapability("python", 0.9),
-            "code_review": AgentCapability("code_review", 0.95),
-        },
+        capabilities={"python": AgentCapability("python", 0.9), "code_review": AgentCapability("code_review", 0.95)},
         makes_code_changes=False,
+        invocation=_test_inv(model="claude-sonnet-4-5", timeout_seconds=300, requires_docker=True),
     )
 
 
@@ -87,12 +96,9 @@ def architect_agent():
         display_name="Software Architect",
         agent_type=AgentType.ARCHITECT,
         role_description="System architect",
-        model="claude-sonnet-4-5",
-        capabilities={
-            "architecture": AgentCapability("architecture", 0.95),
-            "python": AgentCapability("python", 0.8),
-        },
+        capabilities={"architecture": AgentCapability("architecture", 0.95), "python": AgentCapability("python", 0.8)},
         makes_code_changes=False,
+        invocation=_test_inv(model="claude-sonnet-4-5", timeout_seconds=300, requires_docker=True),
     )
 
 
@@ -155,10 +161,8 @@ class TestAssignWork:
             display_name="Non-Python Agent",
             agent_type=AgentType.SPECIALIZED,
             role_description="Non-Python specialist",
-            model="claude-sonnet-4-5",
-            capabilities={
-                "java": AgentCapability("java", 0.9),
-            },
+            capabilities={"java": AgentCapability("java", 0.9)},
+            invocation=_test_inv(model="claude-sonnet-4-5", timeout_seconds=300, requires_docker=True),
         )
 
         requirements = [
@@ -194,10 +198,8 @@ class TestAssignWork:
             display_name="Junior Agent",
             agent_type=AgentType.DEVELOPER,
             role_description="Junior developer",
-            model="claude-sonnet-4-5",
-            capabilities={
-                "python": AgentCapability("python", 0.4),  # Low proficiency
-            },
+            capabilities={"python": AgentCapability("python", 0.4)},
+            invocation=_test_inv(model="claude-sonnet-4-5", timeout_seconds=300, requires_docker=True),
         )
 
         # Create new work item for second test
@@ -226,11 +228,9 @@ class TestAssignWork:
             display_name="Junior Developer",
             agent_type=AgentType.DEVELOPER,
             role_description="Junior developer",
-            model="claude-sonnet-4-5",
-            capabilities={
-                "python": AgentCapability("python", 0.5),
-            },
+            capabilities={"python": AgentCapability("python", 0.5)},
             makes_code_changes=True,
+            invocation=_test_inv(model="claude-sonnet-4-5", timeout_seconds=300, requires_docker=True),
         )
 
         requirements = [

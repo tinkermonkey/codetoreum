@@ -52,20 +52,19 @@ class ExecutorFixture:
         agent.agent_type = AgentType.DEVELOPER
         agent.role_description = "A test agent for testing"
         agent.system_prompt = "You are a test agent"
-        agent.model = "claude-opus-4-7"
-        agent.timeout_seconds = 60
         agent.max_retries = 3
-        agent.requires_docker = requires_docker
         agent.requires_dev_container = False
         agent.makes_code_changes = False
         agent.filesystem_write_allowed = False
         agent.mcp_servers = []
         agent.capabilities = {}
         agent.coding_agent = "claude-code"
+        # DEF-020: invocation block is the sole source of truth for
+        # mode / model / timeout (flat fields removed).
         agent.invocation = AgentInvocationConfig(
             mode=(InvocationMode.CONTAINERIZED if requires_docker else InvocationMode.HOST),
-            model=agent.model,
-            timeout_seconds=agent.timeout_seconds,
+            model="claude-opus-4-7",
+            timeout_seconds=60,
             mode_config=({"image": "codetoreum-agent:latest"} if requires_docker else {}),
         )
         # Apply any overrides

@@ -3,6 +3,7 @@
 import pytest
 
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType
+from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
 from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.project_context import ProjectContext
 from codetoreum.domain.services.execution_context_builder import (
@@ -11,6 +12,20 @@ from codetoreum.domain.services.execution_context_builder import (
 from codetoreum.domain.value_objects import ExecutionContext
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority
 from codetoreum.domain.workspace_context import WorkspaceContext, WorkspaceType
+
+
+def _test_inv(
+    model: str = "claude-sonnet-4-5",
+    timeout_seconds: int = 300,
+    requires_docker: bool = True,
+) -> AgentInvocationConfig:
+    """Build an AgentInvocationConfig for tests (DEF-020 transitional helper)."""
+    return AgentInvocationConfig(
+        mode=InvocationMode.CONTAINERIZED if requires_docker else InvocationMode.HOST,
+        model=model,
+        timeout_seconds=timeout_seconds,
+        mode_config={"image": "codetoreum-agent:latest"} if requires_docker else {},
+    )
 
 
 @pytest.fixture
@@ -61,13 +76,10 @@ def developer_agent():
         display_name="Developer Agent",
         agent_type=AgentType.DEVELOPER,
         role_description="Software developer",
-        model="claude-sonnet-4-5",
-        capabilities={
-            "python": AgentCapability("python", 0.9),
-            "testing": AgentCapability("testing", 0.8),
-        },
+        capabilities={"python": AgentCapability("python", 0.9), "testing": AgentCapability("testing", 0.8)},
         makes_code_changes=True,
         filesystem_write_allowed=True,
+        invocation=_test_inv(model="claude-sonnet-4-5", timeout_seconds=300, requires_docker=True),
     )
 
 
@@ -79,12 +91,10 @@ def reviewer_agent():
         display_name="Code Reviewer",
         agent_type=AgentType.REVIEWER,
         role_description="Code reviewer",
-        model="claude-sonnet-4-5",
-        capabilities={
-            "code_review": AgentCapability("code_review", 0.95),
-        },
+        capabilities={"code_review": AgentCapability("code_review", 0.95)},
         makes_code_changes=False,
         filesystem_write_allowed=False,
+        invocation=_test_inv(model="claude-sonnet-4-5", timeout_seconds=300, requires_docker=True),
     )
 
 
@@ -107,8 +117,8 @@ class TestBuildContext:
         assert context.workflow_id == "workflow-123"
         assert context.stage_name == "implementation"
         assert context.agent_id == developer_agent.id
-        assert context.model == developer_agent.model
-        assert context.timeout_seconds == developer_agent.timeout_seconds
+        assert context.model == developer_agent.invocation.model
+        assert context.timeout_seconds == developer_agent.invocation.timeout_seconds
 
     def test_sets_workspace_details(self, work_item, developer_agent, project_context, workspace_context):
         """Test that workspace details are set correctly."""
@@ -297,9 +307,9 @@ class TestBuildContext:
             display_name="Special Agent",
             agent_type=AgentType.SPECIALIZED,
             role_description="Requires dev container",
-            model="claude-sonnet-4-5",
             capabilities={"special": AgentCapability("special", 0.9)},
             requires_dev_container=True,
+            invocation=_test_inv(model="claude-sonnet-4-5", timeout_seconds=300, requires_docker=True),
         )
 
         with pytest.raises(DomainError, match="requires dev container"):
@@ -374,9 +384,9 @@ class TestMergeMcpServers:
             display_name="Agent",
             agent_type=AgentType.MAKER,
             role_description="Test agent",
-            model="claude-sonnet-4-5",
             capabilities={"test": AgentCapability("test", 0.9)},
             mcp_servers=["agent_server_1", "agent_server_2"],
+            invocation=_test_inv(model="claude-sonnet-4-5", timeout_seconds=300, requires_docker=True),
         )
 
         project_context.mcp_servers = ["project_server_1", "project_server_2"]
@@ -395,9 +405,9 @@ class TestMergeMcpServers:
             display_name="Agent",
             agent_type=AgentType.MAKER,
             role_description="Test agent",
-            model="claude-sonnet-4-5",
             capabilities={"test": AgentCapability("test", 0.9)},
             mcp_servers=["shared_server", "agent_server"],
+            invocation=_test_inv(model="claude-sonnet-4-5", timeout_seconds=300, requires_docker=True),
         )
 
         project_context.mcp_servers = ["shared_server", "project_server"]
@@ -415,9 +425,9 @@ class TestMergeMcpServers:
             display_name="Agent",
             agent_type=AgentType.MAKER,
             role_description="Test agent",
-            model="claude-sonnet-4-5",
             capabilities={"test": AgentCapability("test", 0.9)},
             mcp_servers=["agent_first", "agent_second"],
+            invocation=_test_inv(model="claude-sonnet-4-5", timeout_seconds=300, requires_docker=True),
         )
 
         project_context.mcp_servers = ["project_first"]

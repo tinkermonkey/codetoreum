@@ -8,10 +8,26 @@ from codetoreum.application.review_service import (
 )
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType
 from codetoreum.domain.agent_execution import AgentExecution
+from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
 from codetoreum.domain.events import CodetoreumEvent
 from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.review_cycle import ReviewDecision, ReviewStatus
 from codetoreum.ports.exceptions import EventStoreError
+
+
+def _test_inv(
+    model: str = "claude-sonnet-4-5",
+    timeout_seconds: int = 300,
+    requires_docker: bool = True,
+) -> AgentInvocationConfig:
+    """Build an AgentInvocationConfig for tests (DEF-020 transitional helper)."""
+    return AgentInvocationConfig(
+        mode=InvocationMode.CONTAINERIZED if requires_docker else InvocationMode.HOST,
+        model=model,
+        timeout_seconds=timeout_seconds,
+        mode_config={"image": "codetoreum-agent:latest"} if requires_docker else {},
+    )
+
 
 # Fixtures
 
@@ -37,18 +53,10 @@ def maker_agent():
         agent_type=AgentType.MAKER,
         role_description="Writes code",
         capabilities={
-            "code_generation": AgentCapability(
-                skill="code_generation",
-                proficiency=0.9,
-                description="Generates code",
-            ),
-            "code_editing": AgentCapability(
-                skill="code_editing",
-                proficiency=0.8,
-                description="Edits existing code",
-            ),
+            "code_generation": AgentCapability(skill="code_generation", proficiency=0.9, description="Generates code"),
+            "code_editing": AgentCapability(skill="code_editing", proficiency=0.8, description="Edits existing code"),
         },
-        model="claude-3-5-sonnet-20250219",
+        invocation=_test_inv(model="claude-3-5-sonnet-20250219", timeout_seconds=300, requires_docker=True),
     )
 
 
@@ -61,13 +69,9 @@ def reviewer_agent():
         agent_type=AgentType.REVIEWER,
         role_description="Reviews code",
         capabilities={
-            "code_review": AgentCapability(
-                skill="code_review",
-                proficiency=0.9,
-                description="Reviews code quality",
-            ),
+            "code_review": AgentCapability(skill="code_review", proficiency=0.9, description="Reviews code quality")
         },
-        model="claude-3-5-sonnet-20250219",
+        invocation=_test_inv(model="claude-3-5-sonnet-20250219", timeout_seconds=300, requires_docker=True),
     )
 
 
@@ -80,7 +84,7 @@ def maker_execution(maker_agent):
         workflow_id="workflow-1",
         stage_name="coding",
         prompt="Write a function",
-        model=maker_agent.model,
+        model=maker_agent.invocation.model,
     )
 
 
@@ -93,7 +97,7 @@ def reviewer_execution(reviewer_agent):
         workflow_id="workflow-1",
         stage_name="review",
         prompt="Review the code",
-        model=reviewer_agent.model,
+        model=reviewer_agent.invocation.model,
     )
 
 
@@ -312,7 +316,7 @@ async def test_multiple_iterations(
         workflow_id="workflow-1",
         stage_name="coding",
         prompt="Fix issues",
-        model=maker_agent.model,
+        model=maker_agent.invocation.model,
     )
 
     await review_service.start_iteration(
@@ -327,7 +331,7 @@ async def test_multiple_iterations(
         workflow_id="workflow-1",
         stage_name="review",
         prompt="Review again",
-        model=reviewer_agent.model,
+        model=reviewer_agent.invocation.model,
     )
 
     await review_service.submit_review(
@@ -383,7 +387,7 @@ async def test_max_iterations_escalation(
         workflow_id="workflow-1",
         stage_name="coding",
         prompt="Fix issues",
-        model=maker_agent.model,
+        model=maker_agent.invocation.model,
     )
 
     await review_service.start_iteration(
@@ -398,7 +402,7 @@ async def test_max_iterations_escalation(
         workflow_id="workflow-1",
         stage_name="review",
         prompt="Review again",
-        model=reviewer_agent.model,
+        model=reviewer_agent.invocation.model,
     )
 
     await review_service.submit_review(

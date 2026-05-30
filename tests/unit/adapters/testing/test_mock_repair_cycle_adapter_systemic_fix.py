@@ -26,6 +26,7 @@ import pytest
 
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType
+from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
 from codetoreum.domain.repair_cycle_types import (
     AnalysisContext,
     RepairCycleAgentConfig,
@@ -38,6 +39,20 @@ from codetoreum.domain.repair_cycle_types import (
 )
 from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
 from codetoreum.ports.output.repair_cycle_service import RepairCycleContext
+
+
+def _test_inv(
+    model: str = "claude-sonnet-4-5",
+    timeout_seconds: int = 300,
+    requires_docker: bool = True,
+) -> AgentInvocationConfig:
+    """Build an AgentInvocationConfig for tests (DEF-020 transitional helper)."""
+    return AgentInvocationConfig(
+        mode=InvocationMode.CONTAINERIZED if requires_docker else InvocationMode.HOST,
+        model=model,
+        timeout_seconds=timeout_seconds,
+        mode_config={"image": "codetoreum-agent:latest"} if requires_docker else {},
+    )
 
 
 @dataclass
@@ -68,25 +83,17 @@ async def seeded_bootstrap(simulation_bootstrap: SimulationApplicationBootstrap)
         display_name="Senior Software Engineer",
         agent_type=AgentType.MAKER,
         role_description="Expert software engineer for complex fixes",
-        model="claude-sonnet-4-5",
         capabilities={
             "code_analysis": AgentCapability(
-                skill="code_analysis",
-                proficiency=0.95,
-                description="Analyze code for issues",
+                skill="code_analysis", proficiency=0.95, description="Analyze code for issues"
             ),
-            "code_fixing": AgentCapability(
-                skill="code_fixing",
-                proficiency=0.95,
-                description="Fix code defects",
-            ),
+            "code_fixing": AgentCapability(skill="code_fixing", proficiency=0.95, description="Fix code defects"),
         },
-        timeout_seconds=900,
         max_retries=3,
-        requires_docker=True,
         requires_dev_container=False,
         makes_code_changes=True,
         filesystem_write_allowed=True,
+        invocation=_test_inv(model="claude-sonnet-4-5", timeout_seconds=900, requires_docker=True),
     )
 
     # Seed the agent repository

@@ -19,7 +19,23 @@ from codetoreum.application.agent_scheduler import (
     Task,
 )
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType
+from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
+
+
+def _test_inv(
+    model: str = "claude-sonnet-4-5",
+    timeout_seconds: int = 300,
+    requires_docker: bool = True,
+) -> AgentInvocationConfig:
+    """Build an AgentInvocationConfig for tests (DEF-020 transitional helper)."""
+    return AgentInvocationConfig(
+        mode=InvocationMode.CONTAINERIZED if requires_docker else InvocationMode.HOST,
+        model=model,
+        timeout_seconds=timeout_seconds,
+        mode_config={"image": "codetoreum-agent:latest"} if requires_docker else {},
+    )
+
 
 # Test fixtures
 
@@ -34,10 +50,7 @@ def create_test_agent(agent_id: str, agent_name: str, requires_dev_container: bo
         agent_type=AgentType.DEVELOPER,
         capabilities={"code_generation": AgentCapability(skill="code_generation", proficiency=0.9)},
         role_description="Test agent for scheduling",
-        model="claude-sonnet-4-5",
-        timeout_seconds=300,
         max_retries=3,
-        requires_docker=False,
         requires_dev_container=requires_dev_container,
         makes_code_changes=True,
         filesystem_write_allowed=True,
@@ -45,6 +58,8 @@ def create_test_agent(agent_id: str, agent_name: str, requires_dev_container: bo
         metadata={},
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
+        invocation=_test_inv(model="claude-sonnet-4-5", timeout_seconds=300, requires_docker=False),
+        coding_agent="",
     )
 
 

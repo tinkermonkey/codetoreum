@@ -20,9 +20,24 @@ from codetoreum.adapters.secondary.elasticsearch_agent_repository import (
     _agent_to_config,
 )
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType
+from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
 from codetoreum.domain.value_objects import CommitPolicy
 from codetoreum.ports.exceptions import ResourceNotFoundError
 from codetoreum.ports.output.config_store import AgentConfig, ConfigNotFoundError, ProjectConfig
+
+
+def _test_inv(
+    model: str = "claude-sonnet-4-5",
+    timeout_seconds: int = 300,
+    requires_docker: bool = True,
+) -> AgentInvocationConfig:
+    """Build an AgentInvocationConfig for tests (DEF-020 transitional helper)."""
+    return AgentInvocationConfig(
+        mode=InvocationMode.CONTAINERIZED if requires_docker else InvocationMode.HOST,
+        model=model,
+        timeout_seconds=timeout_seconds,
+        mode_config={"image": "codetoreum-agent:latest"} if requires_docker else {},
+    )
 
 
 class _FakeConfigStore:
@@ -56,13 +71,10 @@ def _make_agent(name: str = "claude-code-agent") -> Agent:
         display_name=f"Display {name}",
         agent_type=AgentType.MAKER,
         capabilities={
-            "code_generation": AgentCapability(skill="code_generation", proficiency=0.9, description="Generates code"),
+            "code_generation": AgentCapability(skill="code_generation", proficiency=0.9, description="Generates code")
         },
         role_description="Implements features",
-        model="claude-sonnet-4-6",
-        timeout_seconds=600,
         max_retries=2,
-        requires_docker=True,
         requires_dev_container=False,
         makes_code_changes=True,
         filesystem_write_allowed=True,
@@ -74,6 +86,8 @@ def _make_agent(name: str = "claude-code-agent") -> Agent:
         max_tokens=8192,
         system_prompt="You are a helpful agent.",
         commit_policy=CommitPolicy.ON_SUCCESS,
+        invocation=_test_inv(model="claude-sonnet-4-6", timeout_seconds=600, requires_docker=True),
+        coding_agent="",
     )
 
 
@@ -93,9 +107,9 @@ class TestAgentConfigRoundTrip:
         cfg = _agent_to_config(agent, project_id="proj-1")
         restored = _agent_from_config(cfg)
         assert restored.name == agent.name
-        assert restored.model == agent.model
-        assert restored.timeout_seconds == agent.timeout_seconds
-        assert restored.requires_docker is True
+        assert restored.invocation.model == agent.invocation.model
+        assert restored.invocation.timeout_seconds == agent.invocation.timeout_seconds
+        assert restored.invocation.mode == InvocationMode.CONTAINERIZED
         assert restored.makes_code_changes is True
         assert restored.temperature == pytest.approx(0.5)
         assert restored.max_tokens == 8192

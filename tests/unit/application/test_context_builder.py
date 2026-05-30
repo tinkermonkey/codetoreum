@@ -12,6 +12,7 @@ from codetoreum.application.context_builder import (
     ContextFile,
 )
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType
+from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
 from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.project_context import ProjectContext
 from codetoreum.domain.value_objects import ExecutionContext
@@ -21,6 +22,21 @@ from codetoreum.domain.work_item import (
 )
 from codetoreum.domain.workspace_context import WorkspaceContext
 from codetoreum.ports.exceptions import ResourceNotFoundError, TicketSystemError
+
+
+def _test_inv(
+    model: str = "claude-sonnet-4-5",
+    timeout_seconds: int = 300,
+    requires_docker: bool = True,
+) -> AgentInvocationConfig:
+    """Build an AgentInvocationConfig for tests (DEF-020 transitional helper)."""
+    return AgentInvocationConfig(
+        mode=InvocationMode.CONTAINERIZED if requires_docker else InvocationMode.HOST,
+        model=model,
+        timeout_seconds=timeout_seconds,
+        mode_config={"image": "codetoreum-agent:latest"} if requires_docker else {},
+    )
+
 
 # Mock Adapters
 
@@ -115,15 +131,9 @@ def sample_agent():
         display_name="Test Agent",
         agent_type=AgentType.DEVELOPER,
         role_description="Develops and tests Python code",
-        capabilities={
-            "python": AgentCapability(
-                skill="python",
-                proficiency=0.9,
-                description="Python development",
-            )
-        },
-        model="claude-3-5-sonnet-20250219",
+        capabilities={"python": AgentCapability(skill="python", proficiency=0.9, description="Python development")},
         makes_code_changes=True,
+        invocation=_test_inv(model="claude-3-5-sonnet-20250219", timeout_seconds=300, requires_docker=True),
     )
 
 

@@ -8,8 +8,24 @@ import pytest
 from codetoreum.adapters.testing import InMemoryEventStore
 from codetoreum.application.workspace_router import WorkspaceRouter
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType
+from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
 from codetoreum.domain.project_context import ProjectContext
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
+
+
+def _test_inv(
+    model: str = "claude-sonnet-4-5",
+    timeout_seconds: int = 300,
+    requires_docker: bool = True,
+) -> AgentInvocationConfig:
+    """Build an AgentInvocationConfig for tests (DEF-020 transitional helper)."""
+    return AgentInvocationConfig(
+        mode=InvocationMode.CONTAINERIZED if requires_docker else InvocationMode.HOST,
+        model=model,
+        timeout_seconds=timeout_seconds,
+        mode_config={"image": "codetoreum-agent:latest"} if requires_docker else {},
+    )
+
 
 # ============================================================================
 # Fixtures
@@ -80,14 +96,9 @@ def developer_agent():
         name="developer",
         display_name="Developer",
         agent_type=AgentType.DEVELOPER,
-        capabilities={
-            "code_generation": AgentCapability(skill="code_generation", proficiency=0.9),
-        },
+        capabilities={"code_generation": AgentCapability(skill="code_generation", proficiency=0.9)},
         role_description="Develops code",
-        model="claude-sonnet-4-5",
-        timeout_seconds=300,
         max_retries=3,
-        requires_docker=True,
         requires_dev_container=True,
         makes_code_changes=True,
         filesystem_write_allowed=True,
@@ -95,6 +106,8 @@ def developer_agent():
         metadata={},
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
+        invocation=_test_inv(model="claude-sonnet-4-5", timeout_seconds=300, requires_docker=True),
+        coding_agent="",
     )
 
 
