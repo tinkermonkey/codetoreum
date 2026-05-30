@@ -737,29 +737,14 @@ class ProductionApplicationBootstrap:
             encryption_service=self.adapters.encryption,
         )
 
-        # Execution Service
-        _system_creds: dict[str, str] = {}
-        if hasattr(self, "_credentials"):
-            creds = self._credentials
-            for _key, _val in [
-                ("ANTHROPIC_API_KEY", creds.anthropic_api_key),
-                ("CLAUDE_CODE_OAUTH_TOKEN", creds.claude_code_oauth_token),
-                ("GITHUB_TOKEN", creds.github_token),
-            ]:
-                if _val:
-                    _system_creds[_key] = _val
+        # Execution Service — Phase D5: container/log/storage concerns
+        # retired; ExecutionService delegates to ICodingAgent. Credentials
+        # injection moved into the coding-agent adapter chain (it owns
+        # subprocess invocation now).
         execution_service = ExecutionService(
-            llm_provider=self.adapters.llm_provider,
-            container=self.adapters.container,
-            event_store=self.adapters.event_store,
-            storage=self.adapters.storage,
-            vcs=self.adapters.version_control,
-            system_credentials=_system_creds if _system_creds else None,
-            # D4 bridge state: the new ICodingAgent slot (wired in Phase 4c).
-            # ExecutionService.execute() delegates here; the legacy
-            # llm_provider / container deps remain only for the soon-to-be
-            # deleted execute_with_llm / execute_with_container methods.
             coding_agent=self.adapters.coding_agent,
+            event_store=self.adapters.event_store,
+            vcs=self.adapters.version_control,
         )
 
         # Workspace Router

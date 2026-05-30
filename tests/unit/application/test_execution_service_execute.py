@@ -18,10 +18,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdapter
 from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
-from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
-from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
 from codetoreum.application.execution_service import (
     ExecutionFailureReason,
     ExecutionService,
@@ -52,21 +49,6 @@ def event_store() -> InMemoryEventStore:
 
 
 @pytest.fixture
-def storage() -> InMemoryStorageAdapter:
-    return InMemoryStorageAdapter()
-
-
-@pytest.fixture
-def llm_provider() -> MockLLMAdapter:
-    return MockLLMAdapter(default_response="legacy-not-used")
-
-
-@pytest.fixture
-def container() -> FakeContainerAdapter:
-    return FakeContainerAdapter(default_exit_code=0)
-
-
-@pytest.fixture
 def coding_agent_mock() -> AsyncMock:
     """A :class:`ICodingAgent`-shaped AsyncMock.
 
@@ -94,18 +76,12 @@ def coding_agent_mock() -> AsyncMock:
 
 @pytest.fixture
 def execution_service(
-    llm_provider: MockLLMAdapter,
-    container: FakeContainerAdapter,
     event_store: InMemoryEventStore,
-    storage: InMemoryStorageAdapter,
     coding_agent_mock: AsyncMock,
 ) -> ExecutionService:
     return ExecutionService(
-        llm_provider=llm_provider,
-        container=container,
-        event_store=event_store,
-        storage=storage,
         coding_agent=coding_agent_mock,
+        event_store=event_store,
     )
 
 
@@ -340,39 +316,3 @@ async def test_execute_coding_agent_exception_is_translated_to_failed_result(
 
     events = await event_store.get_events(sample_execution.id)
     assert any(isinstance(e, ExecutionFailedEvent) for e in events)
-
-
-# ---------------------------------------------------------------------------
-# Bridge-state guard: missing coding_agent
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_execute_without_coding_agent_raises(
-    llm_provider: MockLLMAdapter,
-    container: FakeContainerAdapter,
-    event_store: InMemoryEventStore,
-    storage: InMemoryStorageAdapter,
-    sample_execution: AgentExecution,
-    sample_execution_context: ExecutionContext,
-    sample_workspace_context: WorkspaceContext,
-    default_options: CodingAgentInvocationOptions,
-) -> None:
-    """During the D4 bridge state ``coding_agent`` is optional. When it
-    was never wired, calling :meth:`ExecutionService.execute` raises so
-    misconfigured bootstrap is caught loudly."""
-    svc = ExecutionService(
-        llm_provider=llm_provider,
-        container=container,
-        event_store=event_store,
-        storage=storage,
-        # coding_agent intentionally omitted
-    )
-
-    with pytest.raises(RuntimeError, match="coding_agent"):
-        await svc.execute(
-            sample_execution,
-            sample_execution_context,
-            sample_workspace_context,
-            default_options,
-        )

@@ -508,49 +508,18 @@ class PipelineManager:
             if not start_result.success:
                 raise Exception(f"Failed to start execution: {start_result.error}")
 
-            # Execute with LLM (no container execution for pipeline stages)
-            exec_result = await self.execution_service.execute_with_llm(
-                execution=execution,
-                context=exec_context,
-            )
-
-            duration = (datetime.now(UTC) - start_time).total_seconds()
-
-            if exec_result.success:
-                output = exec_result.execution.output or f"Output from stage {stage.name}"
-                stage.complete(output)
-                await self._emit_stage_completed(stage, workflow_id or stage.workflow_id, output, duration)
-
-                return StageResult(
-                    success=True,
-                    stage_name=stage.name,
-                    output=output,
-                    error=None,
-                    duration_seconds=duration,
-                    metadata={
-                        "execution_id": execution_id,
-                        "stage_type": stage.stage_type.value,
-                        "tokens_used": {
-                            "input": exec_result.execution.input_tokens,
-                            "output": exec_result.execution.output_tokens,
-                        },
-                    },
-                )
-            error_msg = exec_result.error or "Execution failed"
-            stage.fail(error_msg)
-            await self._emit_stage_failed(stage, workflow_id or stage.workflow_id, error_msg, duration)
-
-            return StageResult(
-                success=False,
-                stage_name=stage.name,
-                output=None,
-                error=error_msg,
-                duration_seconds=duration,
-                metadata={
-                    "execution_id": execution_id,
-                    "stage_type": stage.stage_type.value,
-                    "failure_reason": str(exec_result.failure_reason),
-                },
+            # PipelineManager has no live production wiring (every
+            # bootstrap constructs it with ``execution_service=None`` and
+            # only the simulated branch above runs). The old call site
+            # invoked the retired ``ExecutionService.execute_with_llm``
+            # which Phase D5 removed. Any caller that wants real agent
+            # execution from PipelineManager must migrate to the new
+            # ``ExecutionService.execute()`` path; that migration is
+            # tracked separately from this redesign.
+            raise NotImplementedError(
+                "PipelineManager.execute_stage no longer supports direct agent execution. "
+                "The legacy ExecutionService.execute_with_llm path retired in Phase D5. "
+                "Use WorkflowOrchestrator + ExecutionServiceAgentExecutor for real agent runs."
             )
 
         except Exception as e:

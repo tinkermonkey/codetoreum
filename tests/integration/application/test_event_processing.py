@@ -4,11 +4,9 @@ from datetime import UTC, datetime
 
 import pytest
 
-from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdapter
 from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
-from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
 from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
-from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
+from codetoreum.adapters.testing.mock_claude_code_adapter import MockClaudeCodeAdapter
 from codetoreum.application.event_bus_wiring import EventBusRegistry, setup_event_bus
 from codetoreum.application.event_handlers import (
     ExecutionEventHandler,
@@ -55,38 +53,24 @@ def ticket_system():
 
 
 @pytest.fixture
-def llm_provider():
-    """Create mock LLM provider."""
-    adapter = MockLLMAdapter()
-    yield adapter
-    adapter.clear_conversations()
-    adapter.reset_stats()
+def coding_agent():
+    """Create a deterministic mock ICodingAgent for event-flow tests."""
+    from codetoreum.infrastructure.event_bus import EventBus
+
+    return MockClaudeCodeAdapter(event_bus=EventBus())
 
 
 @pytest.fixture
-def container():
-    """Create fake container adapter."""
-    adapter = FakeContainerAdapter()
-    yield adapter
-    adapter.clear()
+def execution_service(coding_agent, event_store):
+    """Create execution service.
 
-
-@pytest.fixture
-def storage():
-    """Create in-memory storage adapter."""
-    adapter = InMemoryStorageAdapter()
-    yield adapter
-    adapter.clear()
-
-
-@pytest.fixture
-def execution_service(llm_provider, container, event_store, storage):
-    """Create execution service."""
+    D5 slimmed ExecutionService to coding_agent + event_store; the legacy
+    llm_provider / container / storage / system_credentials slots all
+    retired with execute_with_llm / execute_with_container.
+    """
     return ExecutionService(
-        llm_provider=llm_provider,
-        container=container,
+        coding_agent=coding_agent,
         event_store=event_store,
-        storage=storage,
         max_retries=3,
         retry_delay_seconds=0.1,  # Fast retries for testing
     )

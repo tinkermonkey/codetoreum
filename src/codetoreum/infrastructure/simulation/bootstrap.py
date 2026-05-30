@@ -1734,18 +1734,13 @@ class SimulationApplicationBootstrap:
         # only needed for production mode where they orchestrate between adapters.
         # We create stubs here to satisfy the SimulationServices container structure.
 
-        # Execution Service
-        # D4 bridge state: keep the legacy llm_provider / container deps
-        # (still consumed by execute_with_llm / execute_with_container until
-        # D5 deletes them), plus the new ICodingAgent slot which the new
-        # ExecutionService.execute() path delegates to.
+        # Execution Service — Phase D5: dispatches via ICodingAgent only.
+        # The legacy llm_provider / container / storage deps retired
+        # along with execute_with_llm / execute_with_container.
         execution_service = ExecutionService(
-            llm_provider=self.adapters.llm_provider,
-            container=self.adapters.container,
-            event_store=self.adapters.event_store,
-            storage=self.adapters.storage,
-            vcs=self.adapters.version_control,
             coding_agent=self.adapters.coding_agent,
+            event_store=self.adapters.event_store,
+            vcs=self.adapters.version_control,
         )
 
         # Workspace Router

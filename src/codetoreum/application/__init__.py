@@ -13,7 +13,6 @@ from codetoreum.application.execution_service import (
     ExecutionFailureReason,
     ExecutionService,
     ExecutionServiceResult,
-    LogEntry,
 )
 from codetoreum.application.metrics_service import MetricsService
 from codetoreum.application.pipeline_lock_service import (
@@ -54,7 +53,6 @@ __all__ = [
     "LockAcquisitionResult",
     "LockReleaseResult",
     "LockStatus",
-    "LogEntry",
     "MetricsService",
     "PipelineManager",
     "PipelineQueueState",

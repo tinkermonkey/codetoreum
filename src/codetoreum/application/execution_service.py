@@ -1,33 +1,13 @@
 """Execution Service application service."""
 
-import asyncio
 import logging
-import mimetypes
-import re
-import tempfile
-from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from enum import Enum
-from pathlib import Path
-from types import MappingProxyType
-from typing import Any, cast
 
 from codetoreum.domain.agent import Agent, CommitPolicy
 from codetoreum.domain.agent_execution import AgentExecution, ExecutionStatus
 from codetoreum.domain.exceptions import DomainError
-from codetoreum.domain.types import (
-    CONTAINER_LABEL_AGENT,
-    CONTAINER_LABEL_EXECUTION_ID,
-    CONTAINER_LABEL_PROJECT,
-    CONTAINER_LABEL_TASK_ID,
-    CONTAINER_LABEL_TYPE,
-    CONTAINER_LABEL_WORK_ITEM_ID,
-    CONTAINER_LABEL_WORKFLOW_RUN_ID,
-    ExecutionId,
-)
 from codetoreum.domain.value_objects import (
-    ContainerConfig,
     ExecutionContext,
 )
 from codetoreum.domain.work_item import WorkItem
@@ -37,25 +17,20 @@ from codetoreum.domain.work_item import WorkItem
 from codetoreum.domain.workspace_context import WorkspaceContext
 from codetoreum.infrastructure.observability.instrumentation import (
     instrument_async_function,
-    instrument_function,
 )
 from codetoreum.ports.exceptions import (
-    ContainerError,
     ContainerExecutionError,
     ContainerTimeoutError,
     EventStoreError,
     ExternalServiceError,
-    LLMProviderError,
-    PortError,
     RateLimitError,
 )
-from codetoreum.ports.output import IContainer, IEventStore, ILLMProvider, IStorage
+from codetoreum.ports.output import IEventStore
 from codetoreum.ports.output.coding_agent import (
     CodingAgentInvocationOptions,
     CodingAgentResult,
     ICodingAgent,
 )
-from codetoreum.ports.output.llm_provider import ExecutionContext as LLMExecutionContext
 from codetoreum.ports.output.version_control_service import IVersionControlService
 
 logger = logging.getLogger(__name__)
@@ -73,16 +48,6 @@ class ExecutionFailureReason(Enum):
 
 
 @dataclass
-class LogEntry:
-    """Log entry from execution."""
-
-    timestamp: datetime
-    level: str
-    message: str
-    source: str  # 'container', 'llm', 'service'
-
-
-@dataclass
 class ExecutionServiceResult:
     """Result from execution service operations."""
 
@@ -95,81 +60,55 @@ class ExecutionServiceResult:
     branch: str | None = None  # Branch pushed; None if no commit was made
 
 
-@dataclass
-class StreamUpdate:
-    """Update from streaming execution."""
-
-    execution_id: str
-    content: str
-    timestamp: datetime
-    is_complete: bool = False
-
-
 class ExecutionService:
     """
     Application service for managing agent execution lifecycle.
 
     Responsibilities:
     - Create and initialize agent executions
-    - Coordinate with container and LLM adapters
-    - Manage execution lifecycle (start, monitor, complete)
-    - Handle execution failures and retries
-    - Stream execution logs to subscribers
+    - Delegate execution to the injected ``ICodingAgent`` adapter
+    - Commit workspace changes after a successful agent run
+    - Persist lifecycle events (Initialized, Started, Completed, Failed,
+      Cancelled) to the event store
+
+    Container orchestration, log streaming, artifact upload, and token
+    parsing all retired in Phase D5 — those concerns now live inside the
+    coding-agent adapter (e.g. ``ClaudeCodeAdapter``'s containerized
+    strategy and stream parser).
     """
 
     def __init__(
         self,
-        llm_provider: ILLMProvider,
-        container: IContainer,
+        coding_agent: ICodingAgent,
         event_store: IEventStore,
-        storage: IStorage,
         max_retries: int = 1,
         retry_delay_seconds: float = 5,
         vcs: IVersionControlService | None = None,
-        system_credentials: dict[str, str] | None = None,
-        coding_agent: ICodingAgent | None = None,
     ):
         """
         Initialize ExecutionService.
 
         Args:
-            llm_provider: LLM provider adapter (legacy path — consumed by
-                ``execute_with_llm`` / ``execute_with_container`` which D5
-                deletes once the ``coding_agent`` path is the sole
-                dispatch route).
-            container: Container orchestration adapter (legacy path —
-                deleted in D5 with the rest of the old execute methods).
+            coding_agent: The :class:`ICodingAgent` adapter (Phase D3 port).
+                Owns invocation-mode selection, prompt rendering, and the
+                emission of granular ``CodingAgent*`` events.
             event_store: Event store for domain events
-            storage: Storage adapter for artifacts
-            max_retries: Maximum number of retry attempts
-            retry_delay_seconds: Delay between retry attempts
+            max_retries: Maximum number of retry attempts (reserved — the
+                new execute() path does not yet implement retries).
+            retry_delay_seconds: Delay between retry attempts (reserved —
+                see ``max_retries``).
             vcs: Version control service for post-execution commit+push.
-                 When None the commit step is skipped (e.g. simulation without VCS).
-            system_credentials: Credentials injected at bootstrap time
-                (ANTHROPIC_API_KEY, CLAUDE_CODE_OAUTH_TOKEN, GITHUB_TOKEN).
-                Passed to container executions via environment variables so adapters
-                never need to read os.environ directly.
-            coding_agent: The new (Phase D3) :class:`ICodingAgent` adapter.
-                Required for the new :meth:`execute` dispatch path, which
-                replaces ``execute_with_llm`` / ``execute_with_container``.
-                Defaults to ``None`` during the D4 bridge state so existing
-                construction sites that haven't been rewired yet keep
-                working through the legacy methods. D5 promotes this to a
-                required positional argument and drops the legacy deps.
+                 When None the commit step is skipped (e.g. simulation
+                 without VCS).
         """
-        self.llm_provider = llm_provider
-        self.container = container
+        self.coding_agent: ICodingAgent = coding_agent
         self.event_store = event_store
-        self.storage = storage
         self.max_retries = max_retries
         self.retry_delay_seconds = retry_delay_seconds
         self.vcs = vcs
-        self._system_credentials: dict[str, str] = system_credentials or {}
-        self.coding_agent: ICodingAgent | None = coding_agent
 
-        # Track active executions for streaming
+        # Track active executions for cancel_execution lookups.
         self._active_executions: dict[str, AgentExecution] = {}
-        self._log_subscribers: dict[str, list[Callable[[LogEntry], None]]] = {}
 
     @instrument_async_function(
         name="execution.create_execution",
@@ -245,7 +184,6 @@ class ExecutionService:
         self,
         execution: AgentExecution,
         context: ExecutionContext,
-        container_config: ContainerConfig | None = None,
     ) -> ExecutionServiceResult:
         """
         Start agent execution.
@@ -253,7 +191,6 @@ class ExecutionService:
         Args:
             execution: AgentExecution to start
             context: Execution context
-            container_config: Optional container configuration for Docker execution
 
         Returns:
             ExecutionServiceResult with outcome
@@ -270,13 +207,12 @@ class ExecutionService:
             # Track as active
             self._active_executions[execution.id] = execution
 
-            # Determine container name if using Docker
-            container_name = None
-            if container_config:
-                container_name = f"codetoreum-{execution.agent_id}-{execution.id[:8]}"
-
-            # Start execution
-            execution.start(container_name=container_name)
+            # Start execution. Container naming retired in D5 — the coding
+            # agent adapter owns the invocation runtime (container, host,
+            # API) and no longer surfaces a container name to lifecycle
+            # callers. The legacy container_name argument to
+            # AgentExecution.start is preserved as Optional and left None.
+            execution.start(container_name=None)
 
             # Persist events
             events = execution.get_pending_events()
@@ -284,7 +220,7 @@ class ExecutionService:
                 await self.event_store.append(execution.id, [event])
             execution.clear_events()
 
-            logger.info(f"Started execution {execution.id} (container: {container_name or 'none'})")
+            logger.info(f"Started execution {execution.id}")
 
             return ExecutionServiceResult(
                 success=True,
@@ -357,20 +293,7 @@ class ExecutionService:
 
         Returns:
             ExecutionServiceResult summarising the outcome.
-
-        Raises:
-            RuntimeError: If ``coding_agent`` was not injected at
-                construction (legacy bridge state — this method is only
-                callable once the adapter is wired).
         """
-        if self.coding_agent is None:
-            msg = (
-                "ExecutionService.execute() invoked without a coding_agent dependency; "
-                "wire ICodingAgent into ExecutionService at construction "
-                "(Phase D4 bridge state requires explicit opt-in)."
-            )
-            raise RuntimeError(msg)
-
         # Track as active so cancel_execution can find this run.
         self._active_executions[execution.id] = execution
 
@@ -521,179 +444,6 @@ class ExecutionService:
             return ExecutionFailureReason.RATE_LIMIT
         return ExecutionFailureReason.UNKNOWN
 
-    @instrument_async_function(
-        name="execution.execute_with_llm",
-        attributes={"service": "execution_service", "operation": "execute_llm"},
-    )
-    async def execute_with_llm(
-        self,
-        execution: AgentExecution,
-        context: ExecutionContext,
-        stream_callback: Callable[[str], None] | None = None,
-    ) -> ExecutionServiceResult:
-        """
-        Execute agent with LLM provider.
-
-        Args:
-            execution: AgentExecution to run
-            context: Execution context
-            stream_callback: Optional callback for streaming output
-
-        Returns:
-            ExecutionServiceResult with outcome
-        """
-        retry_count = 0
-        last_error: Exception | None = None
-
-        while retry_count <= self.max_retries:
-            try:
-                # Build LLM execution context
-                llm_context = self._build_llm_context(context, execution_id=ExecutionId(execution.id))
-
-                # Execute with LLM
-                result = await self.llm_provider.execute(
-                    prompt=execution.prompt,
-                    context=llm_context,
-                    stream_callback=(
-                        self._create_stream_callback(execution.id, stream_callback) if stream_callback else None
-                    ),
-                )
-
-                # Commit workspace before completing so ExecutionCompleted carries the
-                # commit SHA and downstream handlers see committed code.
-                commit_sha, commit_branch = None, None
-                try:
-                    commit_sha, commit_branch = await self._commit_workspace(context, execution)
-                except Exception:
-                    logger.error(
-                        f"Commit failed for execution {execution.id}, completing without commit SHA",
-                        exc_info=True,
-                        extra={"error_id": "ERR_EXECUTION_COMMIT_FAILURE", "work_item_id": context.work_item_id},
-                    )
-
-                # Complete execution successfully
-                execution.complete(
-                    output=result.content,
-                    input_tokens=result.prompt_tokens,
-                    output_tokens=result.completion_tokens,
-                    session_id=result.metadata.get("session_id"),
-                    commit_sha=commit_sha,
-                    branch=commit_branch,
-                )
-
-                # Persist events
-                events = execution.get_pending_events()
-                for event in events:
-                    await self.event_store.append(execution.id, [event])
-                execution.clear_events()
-
-                # Clean up tracking
-                self._active_executions.pop(execution.id, None)
-
-                logger.info(f"Completed execution {execution.id} successfully (tokens: {result.total_tokens})")
-
-                return ExecutionServiceResult(success=True, execution=execution, reason="Execution completed")
-
-            except RateLimitError as e:
-                logger.warning(
-                    f"Rate limit hit for execution {execution.id}, retry {retry_count + 1}/{self.max_retries}",
-                    extra={"error_id": "ERR_EXECUTION_LLM_RATE_LIMIT"},
-                )
-                last_error = e
-                retry_count += 1
-                if retry_count <= self.max_retries:
-                    await asyncio.sleep(self.retry_delay_seconds * retry_count)
-                continue
-
-            except (ExternalServiceError, LLMProviderError) as e:
-                logger.error(
-                    f"LLM service error for execution {execution.id}: {e}, retry {retry_count + 1}/{self.max_retries}",
-                    exc_info=True,
-                    extra={"error_id": "ERR_EXECUTION_LLM_SERVICE_ERROR"},
-                )
-                last_error = e
-                retry_count += 1
-                if retry_count <= self.max_retries:
-                    await asyncio.sleep(self.retry_delay_seconds)
-                continue
-
-            except EventStoreError as e:
-                logger.error(
-                    f"Event store error during execution {execution.id}: {e}",
-                    exc_info=True,
-                    extra={"error_id": "ERR_EXECUTION_EVENTSTORE_FAILURE"},
-                )
-                last_error = e
-                break
-
-            except DomainError as e:
-                logger.error(
-                    f"Domain validation error during execution {execution.id}: {e}",
-                    exc_info=True,
-                    extra={"error_id": "ERR_EXECUTION_DOMAIN_VALIDATION_FAILURE"},
-                )
-                last_error = e
-                break
-
-        # All retries exhausted, fail execution
-        error_message = f"Execution failed after {retry_count} retries: {last_error}"
-        execution.fail(error_message=error_message)
-
-        # Persist failure events
-        events = execution.get_pending_events()
-        for event in events:
-            await self.event_store.append(execution.id, [event])
-        execution.clear_events()
-
-        # Clean up tracking
-        self._active_executions.pop(execution.id, None)
-
-        logger.error(
-            f"Failed execution {execution.id}: {error_message}",
-            exc_info=True,
-            extra={"error_id": "ERR_EXECUTION_RETRIES_EXHAUSTED"},
-        )
-
-        return ExecutionServiceResult(
-            success=False,
-            execution=execution,
-            error=error_message,
-            failure_reason=self._classify_failure(last_error),
-        )
-
-    def _build_container_labels(
-        self,
-        execution: AgentExecution,
-        context: ExecutionContext,
-    ) -> dict[str, str]:
-        """
-        Build Docker labels for container.
-
-        Labels are used by the container recovery service to identify and manage
-        containers at orchestrator startup. All labels are immutable metadata
-        extracted from domain objects.
-
-        Args:
-            execution: Agent execution instance
-            context: Execution context with project and task information
-
-        Returns:
-            Dict[str, str]: Container labels following org.codetoreum.* namespace
-        """
-        labels = {
-            CONTAINER_LABEL_TYPE: "agent",
-            CONTAINER_LABEL_PROJECT: context.project_id,
-            CONTAINER_LABEL_AGENT: execution.agent_id,
-            CONTAINER_LABEL_WORK_ITEM_ID: execution.work_item_id,
-            # In the current phase, execution.id serves as both task_id and execution_id.
-            # Phase 2 recovery service uses these for container identification and tracking.
-            # Future phases may introduce separate task IDs from an external scheduler.
-            CONTAINER_LABEL_TASK_ID: execution.id,
-            CONTAINER_LABEL_WORKFLOW_RUN_ID: execution.workflow_id,
-            CONTAINER_LABEL_EXECUTION_ID: execution.id,
-        }
-        return labels
-
     async def _commit_workspace(
         self,
         context: ExecutionContext,
@@ -792,331 +542,6 @@ class ExecutionService:
             )
             raise
 
-    @instrument_function(
-        name="execution.build_agent_container_config",
-        attributes={"service": "execution_service", "operation": "build_container_config"},
-    )
-    def _build_agent_container_config(
-        self,
-        execution: AgentExecution,
-        context: "ExecutionContext",
-        agent: Agent,
-    ) -> ContainerConfig:
-        """Build ContainerConfig for an agent container execution.
-
-        Encapsulates all knowledge about the codetoreum-agent image contract:
-        command format, workspace mount point, required environment variables,
-        and git identity defaults. Credentials come from the system_credentials
-        dict injected at bootstrap — no direct os.environ reads here.
-
-        Args:
-            execution: The execution whose prompt drives the agent
-            context: Execution context (repository path, env overrides, model)
-            agent: Agent domain object supplying the model name
-
-        Returns:
-            Fully configured ContainerConfig ready for execute_with_container
-        """
-        model = context.model or getattr(agent, "model", None)
-        if not model:
-            raise ValueError(
-                f"Agent '{getattr(agent, 'id', agent)}' has no model configured " "— cannot build container config"
-            )
-
-        claude_cmd = (
-            "claude",
-            "--print",
-            "--output-format",
-            "stream-json",
-            "--permission-mode",
-            "bypassPermissions",
-            "--model",
-            model,
-            "--verbose",
-            execution.prompt,
-        )
-
-        volumes: dict[str, dict[str, str]] = {}
-        if context.repository_path:
-            volumes[context.repository_path] = {"bind": "/workspace", "mode": "rw"}
-
-        # Credentials injected at bootstrap take precedence; context env vars can
-        # override on a per-execution basis (e.g. project-specific tokens).
-        env: dict[str, str] = {**self._system_credentials}
-        env.setdefault("GIT_AUTHOR_NAME", "Codetoreum Agent")
-        env.setdefault("GIT_AUTHOR_EMAIL", "agent@codetoreum.ai")
-        env.setdefault("GIT_COMMITTER_NAME", "Codetoreum Agent")
-        env.setdefault("GIT_COMMITTER_EMAIL", "agent@codetoreum.ai")
-        if context.environment_variables:
-            env.update(context.environment_variables)
-
-        return ContainerConfig(
-            image="codetoreum-agent:latest",
-            command=claude_cmd,
-            working_dir="/workspace",
-            volumes=volumes if volumes else None,
-            environment=env if env else None,
-        )
-
-    async def execute_agent_with_container(
-        self,
-        execution: AgentExecution,
-        context: "ExecutionContext",
-        agent: Agent,
-        stream_callback: Callable[[str], None] | None = None,
-    ) -> "ExecutionServiceResult":
-        """Build ContainerConfig and execute agent in Docker container.
-
-        Convenience wrapper over execute_with_container that builds the
-        ContainerConfig from the agent + context so adapters do not need to
-        know about image names, command formats, or credential layout.
-
-        Args:
-            execution: AgentExecution to run
-            context: Execution context
-            agent: Agent domain object (supplies model name)
-            stream_callback: Optional callback for streaming logs
-
-        Returns:
-            ExecutionServiceResult with outcome
-        """
-        container_config = self._build_agent_container_config(execution, context, agent)
-        return await self.execute_with_container(execution, context, container_config, stream_callback)
-
-    async def execute_with_container(
-        self,
-        execution: AgentExecution,
-        context: ExecutionContext,
-        container_config: ContainerConfig,
-        stream_callback: Callable[[str], None] | None = None,
-    ) -> ExecutionServiceResult:
-        """
-        Execute agent in Docker container.
-
-        Containers start detached with a bounded wait timeout. Log streaming runs
-        as a background task. DockerContainerRecoveryAdapter handles reconnection
-        if the orchestrator restarts mid-execution.
-
-        Args:
-            execution: AgentExecution to run
-            context: Execution context
-            container_config: Container configuration
-            stream_callback: Optional callback for streaming logs
-
-        Returns:
-            ExecutionServiceResult with outcome
-        """
-        container_id = None
-
-        try:
-            # Build container labels for recovery tracking
-            labels = self._build_container_labels(execution, context)
-
-            # Create container (detached, non-blocking)
-            # Use helper methods to convert immutable types (tuple, Mapping) to mutable types
-            # (list, dict) for adapter compatibility, while maintaining domain layer immutability
-            container_id = await self.container.create(
-                image=container_config.image,
-                name=execution.container_name,
-                command=container_config.get_command_as_list(),
-                volumes=container_config.get_volumes_as_dict(),
-                environment=container_config.get_environment_as_dict(),
-                working_dir=container_config.working_dir,
-                user=container_config.user,
-                network=container_config.network,
-                labels=labels,
-            )
-
-            logger.info(f"Created container {container_id} for execution {execution.id}")
-
-            # Start container (detached, non-blocking)
-            await self.container.start(container_id)
-
-            logger.info(f"Started container {container_id} for execution {execution.id}")
-
-            # Stream logs in background if callback provided
-            # This does not block execution
-            if stream_callback:
-                task = asyncio.create_task(self._stream_container_logs(container_id, execution.id, stream_callback))
-                task.add_done_callback(self._stream_logs_done_callback)
-
-            # Wait for container to complete with bounded timeout
-            # Orchestrator restart drops this task, and DockerContainerRecoveryAdapter
-            # picks up the container on next start
-            exit_code = await self.container.wait(container_id, timeout=context.timeout_seconds)
-
-            # Get output
-            logs = await self.container.logs(container_id)
-
-            # Persist logs to IStorage so artifacts survive restart and are
-            # available to the repair-cycle / PR-review-cycle handlers.
-            # Failure here MUST NOT block execution completion — degrade
-            # gracefully and continue.
-            await self._persist_execution_logs(execution, logs, context)
-
-            # Extract and upload any artifacts the agent wrote under /output.
-            # Best-effort: the container's primary deliverable is the git
-            # commit; artifact extraction failure must not fail the
-            # execution.
-            await self._extract_and_upload_artifacts(execution, container_id, context)
-
-            # Extract token usage from logs (if available)
-            input_tokens, output_tokens = self._extract_token_usage(logs)
-
-            if exit_code == 0:
-                # Commit workspace changes before firing ExecutionCompleted so that
-                # the event carries the commit SHA and downstream handlers (workflow
-                # progression, PR creation) see committed code.  A transient VCS
-                # failure must not orphan the execution in RUNNING state — degrade
-                # gracefully with commit_sha=None so the execution still completes.
-                commit_sha, branch = None, None
-                try:
-                    commit_sha, branch = await self._commit_workspace(context, execution)
-                except Exception:
-                    logger.error(
-                        f"Commit failed for execution {execution.id}, completing without commit SHA",
-                        exc_info=True,
-                        extra={"error_id": "ERR_EXECUTION_COMMIT_FAILURE", "work_item_id": context.work_item_id},
-                    )
-
-                execution.complete(
-                    output=logs,
-                    input_tokens=input_tokens,
-                    output_tokens=output_tokens,
-                    commit_sha=commit_sha,
-                    branch=branch,
-                )
-
-                # Persist events
-                events = execution.get_pending_events()
-                for event in events:
-                    await self.event_store.append(execution.id, [event])
-                execution.clear_events()
-
-                logger.info(f"Container execution {execution.id} completed successfully")
-
-                return ExecutionServiceResult(
-                    success=True,
-                    execution=execution,
-                    reason="Container execution completed",
-                    commit_sha=commit_sha,
-                    branch=branch,
-                )
-            # Execution failed — commit partial progress for ALWAYS policy agents
-            # so that incremental work is not lost even when the container exits non-zero.
-            failure_commit_sha, failure_branch = None, None
-            if context.commit_policy == CommitPolicy.ALWAYS:
-                try:
-                    failure_commit_sha, failure_branch = await self._commit_workspace(context, execution)
-                except Exception:
-                    logger.warning(
-                        f"Partial commit failed for execution {execution.id} (ALWAYS policy), "
-                        "proceeding with failure result",
-                        exc_info=True,
-                        extra={
-                            "error_id": "ERR_EXECUTION_COMMIT_PARTIAL_FAILURE",
-                            "work_item_id": context.work_item_id,
-                        },
-                    )
-
-            error_message = f"Container exited with code {exit_code}"
-            execution.fail(error_message=error_message, exit_code=exit_code)
-
-            # Persist events
-            events = execution.get_pending_events()
-            for event in events:
-                await self.event_store.append(execution.id, [event])
-            execution.clear_events()
-
-            logger.error(
-                f"Container execution {execution.id} failed: {error_message}",
-                extra={"error_id": "ERR_EXECUTION_CONTAINER_EXIT_FAILURE"},
-            )
-
-            return ExecutionServiceResult(
-                success=False,
-                execution=execution,
-                error=error_message,
-                failure_reason=ExecutionFailureReason.CONTAINER_ERROR,
-                commit_sha=failure_commit_sha,
-                branch=failure_branch,
-            )
-
-        except ContainerTimeoutError as e:
-            logger.error(
-                f"Container execution {execution.id} timed out: {e}",
-                exc_info=True,
-                extra={"error_id": "ERR_EXECUTION_CONTAINER_TIMEOUT"},
-            )
-            execution.timeout()
-
-            # Persist events
-            events = execution.get_pending_events()
-            for event in events:
-                await self.event_store.append(execution.id, [event])
-            execution.clear_events()
-
-            return ExecutionServiceResult(
-                success=False,
-                execution=execution,
-                error=str(e),
-                failure_reason=ExecutionFailureReason.TIMEOUT,
-            )
-
-        except ContainerExecutionError as e:
-            logger.error(
-                f"Container execution error for {execution.id}: {e}",
-                exc_info=True,
-                extra={"error_id": "ERR_EXECUTION_CONTAINER_ERROR"},
-            )
-
-            error_message = f"Container execution error: {e}"
-            execution.fail(error_message=error_message)
-
-            # Persist events
-            events = execution.get_pending_events()
-            for event in events:
-                await self.event_store.append(execution.id, [event])
-            execution.clear_events()
-
-            return ExecutionServiceResult(
-                success=False,
-                execution=execution,
-                error=error_message,
-                failure_reason=ExecutionFailureReason.CONTAINER_ERROR,
-            )
-
-        except EventStoreError as e:
-            logger.error(
-                f"Event store error during container execution {execution.id}: {e}",
-                exc_info=True,
-                extra={"error_id": "ERR_EXECUTION_CONTAINER_EVENTSTORE_FAILURE"},
-            )
-
-            error_message = f"Event store error: {e}"
-            execution.fail(error_message=error_message)
-
-            return ExecutionServiceResult(
-                success=False,
-                execution=execution,
-                error=error_message,
-                failure_reason=ExecutionFailureReason.UNKNOWN,
-            )
-
-        finally:
-            # Clean up container with retry
-            if container_id:
-                cleanup_success = await self._cleanup_container_with_retry(container_id, max_attempts=3)
-                if not cleanup_success:
-                    logger.error(
-                        f"CRITICAL: Failed to cleanup container {container_id} after retries. "
-                        f"Manual intervention may be required.",
-                        extra={"error_id": "ERR_EXECUTION_CONTAINER_CLEANUP_CRITICAL"},
-                    )
-
-            # Clean up tracking
-            self._active_executions.pop(execution.id, None)
-
     @instrument_async_function(
         name="execution.cancel_execution",
         attributes={"service": "execution_service", "operation": "cancel"},
@@ -1133,14 +558,11 @@ class ExecutionService:
         """
         try:
             if not execution.is_terminal():
-                # Stop container if running in Docker
-                if execution.container_id:
-                    cleanup_success = await self._cleanup_container_with_retry(execution.container_id, max_attempts=3)
-                    if not cleanup_success:
-                        logger.error(
-                            f"Failed to stop container {execution.container_id} during cancellation",
-                            extra={"error_id": "ERR_EXECUTION_CANCEL_CONTAINER_STOP_FAILURE"},
-                        )
+                # D5: container teardown moved into the coding-agent
+                # adapter; cancel_execution only records the lifecycle
+                # transition. The adapter's own timeout / cleanup paths
+                # are responsible for releasing any subprocess or
+                # container backing the run.
 
                 # Mark as cancelled
                 execution.cancel(reason="Execution cancelled by user")
@@ -1177,488 +599,6 @@ class ExecutionService:
                 extra={"error_id": "ERR_EXECUTION_CANCEL_DOMAIN_FAILURE"},
             )
             return ExecutionServiceResult(success=False, execution=execution, error=str(e))
-
-    async def get_execution_logs(self, execution: AgentExecution, tail: int | None = None) -> list[LogEntry]:
-        """
-        Get execution logs.
-
-        Args:
-            execution: AgentExecution to get logs for
-            tail: Optional number of lines from end
-
-        Returns:
-            List of log entries
-        """
-        logs: list[LogEntry] = []
-
-        try:
-            if execution.container_id:
-                # Get container logs
-                container_logs = await self.container.logs(execution.container_id, stream=False, tail=tail)
-
-                # Parse logs into entries
-                for line in container_logs.split("\n"):
-                    if line.strip():
-                        logs.append(
-                            LogEntry(
-                                timestamp=datetime.now(UTC),
-                                level="INFO",
-                                message=line,
-                                source="container",
-                            )
-                        )
-
-        except ContainerExecutionError as e:
-            logger.error(
-                f"Container error getting logs for execution {execution.id}: {e}",
-                exc_info=True,
-                extra={"error_id": "ERR_EXECUTION_GET_LOGS_CONTAINER_ERROR"},
-            )
-            # Return empty list on container errors
-        except PortError as e:
-            logger.error(
-                f"Unexpected error getting logs for execution {execution.id}: {e}",
-                exc_info=True,
-                extra={"error_id": "ERR_EXECUTION_GET_LOGS_UNEXPECTED_ERROR"},
-            )
-            # Return empty list on unexpected errors
-
-        return logs
-
-    async def stream_execution_logs(self, execution: AgentExecution) -> AsyncIterator[LogEntry]:
-        """
-        Stream execution logs in real-time.
-
-        Args:
-            execution: AgentExecution to stream logs for
-
-        Yields:
-            LogEntry: Log entries as they arrive
-        """
-        if not execution.container_id:
-            return
-
-        try:
-            log_stream = await self.container.logs(execution.container_id, stream=True, follow=True)
-
-            async for log_line in log_stream:
-                if log_line.strip():
-                    yield LogEntry(
-                        timestamp=datetime.now(UTC),
-                        level="INFO",
-                        message=log_line,
-                        source="container",
-                    )
-
-        except PortError as e:
-            logger.error(
-                f"Error streaming logs for execution {execution.id}: {e}",
-                exc_info=True,
-                extra={"error_id": "ERR_EXECUTION_STREAM_LOGS_ERROR"},
-            )
-            yield LogEntry(
-                timestamp=datetime.now(UTC),
-                level="ERROR",
-                message=f"Log streaming error: {e}",
-                source="service",
-            )
-
-    def subscribe_to_logs(self, execution_id: str, callback: Callable[[LogEntry], None]) -> None:
-        """
-        Subscribe to log updates for an execution.
-
-        Args:
-            execution_id: Execution to subscribe to
-            callback: Callback function for log entries
-        """
-        if execution_id not in self._log_subscribers:
-            self._log_subscribers[execution_id] = []
-        self._log_subscribers[execution_id].append(callback)
-
-    def unsubscribe_from_logs(self, execution_id: str, callback: Callable[[LogEntry], None]) -> None:
-        """
-        Unsubscribe from log updates.
-
-        Args:
-            execution_id: Execution to unsubscribe from
-            callback: Callback to remove
-        """
-        if execution_id in self._log_subscribers:
-            self._log_subscribers[execution_id].remove(callback)
-            if not self._log_subscribers[execution_id]:
-                del self._log_subscribers[execution_id]
-
-    # Helper methods
-
-    def _build_llm_context(
-        self, context: ExecutionContext, execution_id: ExecutionId | None = None
-    ) -> LLMExecutionContext:
-        """
-        Build LLM execution context from domain context.
-
-        Args:
-            context: Domain execution context
-            execution_id: AgentExecution.id to include in the LLM context
-
-        Returns:
-            LLM provider execution context
-        """
-        # Cast metadata to MappingProxyType for type safety.
-        # LLMExecutionContext.__post_init__ will validate it at runtime.
-        return LLMExecutionContext(
-            model=context.model,
-            timeout_seconds=context.timeout_seconds,
-            environment_variables=MappingProxyType(context.environment_variables or {}),
-            session_id=context.previous_session_id,
-            execution_id=execution_id,
-            metadata=cast("MappingProxyType", context.metadata),
-            working_directory=Path(context.repository_path) if context.repository_path else None,
-        )
-
-    def _create_stream_callback(
-        self, execution_id: str, user_callback: Callable[[str], None] | None
-    ) -> Callable[[Any], Awaitable[None]]:
-        """
-        Create streaming callback that notifies subscribers and user callback.
-
-        Args:
-            execution_id: Execution ID
-            user_callback: Optional user-provided callback
-
-        Returns:
-            Async callback function that accepts stream chunks
-        """
-
-        async def callback(chunk: Any) -> None:
-            content = chunk.content if hasattr(chunk, "content") else str(chunk)
-
-            # Notify log subscribers
-            if execution_id in self._log_subscribers:
-                log_entry = LogEntry(
-                    timestamp=datetime.now(UTC),
-                    level="INFO",
-                    message=content,
-                    source="llm",
-                )
-                for subscriber in self._log_subscribers[execution_id]:
-                    try:
-                        subscriber(log_entry)
-                    except Exception as e:
-                        logger.error(
-                            f"Error in log subscriber: {e}",
-                            exc_info=True,
-                            extra={"error_id": "ERR_EXECUTION_LOG_SUBSCRIBER_ERROR"},
-                        )
-
-            # Call user callback
-            if user_callback:
-                try:
-                    user_callback(content)
-                except Exception as e:
-                    logger.error(
-                        f"Error in user stream callback: {e}",
-                        exc_info=True,
-                        extra={"error_id": "ERR_EXECUTION_USER_CALLBACK_ERROR"},
-                    )
-
-        return callback
-
-    async def _stream_container_logs(
-        self,
-        container_id: str,
-        execution_id: str,
-        callback: Callable[[str], None],
-    ) -> None:
-        """
-        Stream container logs to callback.
-
-        Args:
-            container_id: Container to stream from
-            execution_id: Execution ID
-            callback: Callback for log lines
-        """
-        try:
-            log_stream = await self.container.logs(container_id, stream=True, follow=True)
-
-            async for log_line in log_stream:
-                if log_line.strip():
-                    callback(log_line)
-
-        except PortError as e:
-            logger.error(
-                f"Error streaming container logs: {e}",
-                exc_info=True,
-                extra={"error_id": "ERR_EXECUTION_STREAM_CONTAINER_LOGS_ERROR"},
-            )
-
-    def _stream_logs_done_callback(self, task: asyncio.Task[None]) -> None:
-        """Handle completion of background log streaming task.
-
-        Surfaces any unhandled exceptions from _stream_container_logs so they
-        are not silently swallowed by asyncio's default task exception handler.
-
-        Args:
-            task: The completed asyncio.Task
-        """
-        try:
-            task.result()
-        except asyncio.CancelledError:
-            pass
-        except Exception as e:
-            logger.error(
-                f"Unhandled exception in container log streaming: {e}",
-                exc_info=True,
-                extra={"error_id": "ERR_EXECUTION_LOG_STREAMING_EXCEPTION"},
-            )
-
-    async def _persist_execution_logs(
-        self,
-        execution: AgentExecution,
-        logs: str,
-        context: ExecutionContext,
-    ) -> None:
-        """Persist container logs to IStorage under executions/{execution_id}/logs.txt.
-
-        Failure to persist logs MUST NOT block execution completion — the
-        storage upload happens after the container has finished and is a
-        recoverable artifact concern, not a correctness concern.  Errors
-        are logged with ``exc_info=True`` and swallowed; the execution
-        result is unaffected.
-        """
-        if self.storage is None:
-            return
-
-        key = f"executions/{execution.id}/logs.txt"
-        metadata = {
-            "execution_id": execution.id,
-            "work_item_id": context.work_item_id,
-        }
-        if context.project_id:
-            metadata["project_id"] = context.project_id
-        try:
-            await self.storage.upload(
-                key=key,
-                content=logs.encode("utf-8"),
-                content_type="text/plain",
-                metadata=metadata,
-            )
-            logger.debug(
-                f"Persisted container logs for execution {execution.id} to {key}",
-                extra={"execution_id": execution.id, "storage_key": key},
-            )
-        except Exception as e:
-            logger.error(
-                f"Failed to persist container logs for execution {execution.id}: {e}",
-                exc_info=True,
-                extra={
-                    "error_id": "ERR_EXECUTION_LOG_PERSISTENCE_FAILED",
-                    "execution_id": execution.id,
-                    "storage_key": key,
-                },
-            )
-
-    async def _extract_and_upload_artifacts(
-        self,
-        execution: AgentExecution,
-        container_id: str,
-        context: ExecutionContext,
-    ) -> None:
-        """Harvest /output from the container and upload to IStorage.
-
-        Called after the agent container exits (and after logs are
-        persisted) but before container cleanup. Walks the extracted
-        directory and uploads each file to
-        ``executions/{execution_id}/artifacts/{relative_path}``.
-
-        Failure modes are intentionally swallowed: the container's primary
-        deliverable is the git commit, and artifact extraction is a
-        best-effort observability concern. Every failure is logged with
-        ``exc_info=True`` and a unique ``error_id``; nothing is silent.
-
-        - Missing ``/output`` directory (agent produced no artifacts):
-          common case, logged at debug, returns cleanly.
-        - Copy / extract failures: logged at error, returns cleanly.
-        - Per-file upload failures: logged at error per file, continues
-          uploading the remaining files.
-        """
-        if self.storage is None:
-            return
-
-        artifact_source = "/output"
-
-        # Use a temp directory so we don't pollute the workspace (which is
-        # version-controlled and may have its own /output ignored by .gitignore).
-        # tempfile.TemporaryDirectory cleans up on context exit even on errors.
-        with tempfile.TemporaryDirectory(prefix=f"codetoreum-artifacts-{execution.id}-") as tmpdir:
-            artifacts_root = Path(tmpdir)
-            try:
-                await self.container.copy_from_container(
-                    container_id,
-                    artifact_source,
-                    str(artifacts_root),
-                )
-            except ContainerError as e:
-                # ResourceNotFoundError (subclass of ContainerError-family) when
-                # /output does not exist is the common case for agents that
-                # do not produce structured artifacts. Log at debug and exit.
-                logger.debug(
-                    f"No artifacts to extract from execution {execution.id} " f"({artifact_source!r}): {e}",
-                    extra={
-                        "execution_id": execution.id,
-                        "container_id": container_id,
-                        "artifact_source": artifact_source,
-                    },
-                )
-                return
-            except Exception:
-                # Defensive: any unexpected error from the container adapter.
-                logger.error(
-                    f"Unexpected error extracting artifacts for execution {execution.id}",
-                    exc_info=True,
-                    extra={
-                        "error_id": "ERR_EXECUTION_ARTIFACT_EXTRACT_FAILED",
-                        "execution_id": execution.id,
-                        "container_id": container_id,
-                        "artifact_source": artifact_source,
-                    },
-                )
-                return
-
-            # Walk the extracted tree and upload each file.
-            try:
-                files = [p for p in artifacts_root.rglob("*") if p.is_file()]
-            except OSError:
-                logger.error(
-                    f"Failed to walk artifact directory for execution {execution.id}",
-                    exc_info=True,
-                    extra={
-                        "error_id": "ERR_EXECUTION_ARTIFACT_WALK_FAILED",
-                        "execution_id": execution.id,
-                    },
-                )
-                return
-
-            if not files:
-                logger.debug(
-                    f"Artifact directory empty for execution {execution.id}",
-                    extra={"execution_id": execution.id},
-                )
-                return
-
-            metadata = {
-                "execution_id": execution.id,
-                "work_item_id": context.work_item_id,
-            }
-            if context.project_id:
-                metadata["project_id"] = context.project_id
-
-            for file_path in files:
-                try:
-                    relative = file_path.relative_to(artifacts_root).as_posix()
-                except ValueError:
-                    # Should not happen given rglob root, but skip defensively
-                    continue
-                key = f"executions/{execution.id}/artifacts/{relative}"
-                try:
-                    content = file_path.read_bytes()
-                    guessed_type, _ = mimetypes.guess_type(file_path.name)
-                    content_type = guessed_type or "application/octet-stream"
-                    await self.storage.upload(
-                        key=key,
-                        content=content,
-                        content_type=content_type,
-                        metadata=metadata,
-                    )
-                    logger.debug(
-                        f"Uploaded artifact {relative} for execution {execution.id} to {key}",
-                        extra={
-                            "execution_id": execution.id,
-                            "storage_key": key,
-                        },
-                    )
-                except Exception:
-                    logger.error(
-                        f"Failed to upload artifact {relative} for execution {execution.id}",
-                        exc_info=True,
-                        extra={
-                            "error_id": "ERR_EXECUTION_ARTIFACT_UPLOAD_FAILED",
-                            "execution_id": execution.id,
-                            "storage_key": key,
-                        },
-                    )
-
-    def _extract_token_usage(self, logs: str) -> tuple[int, int]:
-        """
-        Extract token usage from logs.
-
-        This method attempts to parse token usage from structured log output.
-        If token information is not found, returns (0, 0).
-
-        Expected log format: "Token usage: input=<N>, output=<M>"
-        This format should be emitted by LLM provider adapters.
-
-        Args:
-            logs: Container logs
-
-        Returns:
-            Tuple of (input_tokens, output_tokens), or (0, 0) if not found
-        """
-        input_tokens = 0
-        output_tokens = 0
-
-        # Look for standardized token usage pattern
-        # LLM provider adapters should emit this format
-        pattern = r"Token usage: input=(\d+), output=(\d+)"
-        match = re.search(pattern, logs)
-        if match:
-            input_tokens = int(match.group(1))
-            output_tokens = int(match.group(2))
-        else:
-            # Token information not found in logs
-            # This is expected if the LLM provider doesn't emit token usage
-            logger.debug("Token usage information not found in logs")
-
-        return input_tokens, output_tokens
-
-    async def _cleanup_container_with_retry(self, container_id: str, max_attempts: int = 3) -> bool:
-        """
-        Clean up container with exponential backoff retry.
-
-        Args:
-            container_id: Container ID to clean up
-            max_attempts: Maximum cleanup attempts
-
-        Returns:
-            True if cleanup succeeded, False otherwise
-        """
-        for attempt in range(max_attempts):
-            try:
-                # Stop container first
-                await self.container.stop(container_id, timeout=5)
-
-                # Then remove it
-                await self.container.remove(container_id, force=True)
-
-                logger.info(f"Successfully cleaned up container {container_id}")
-                return True
-
-            except ContainerExecutionError as e:
-                logger.warning(
-                    f"Cleanup attempt {attempt + 1}/{max_attempts} failed for container {container_id}: {e}",
-                    extra={"error_id": "ERR_EXECUTION_CLEANUP_ATTEMPT_FAILURE"},
-                )
-                if attempt < max_attempts - 1:
-                    # Exponential backoff: 1s, 2s, 4s
-                    await asyncio.sleep(2**attempt)
-                else:
-                    logger.error(
-                        f"Failed to cleanup container {container_id} after {max_attempts} attempts",
-                        exc_info=True,
-                        extra={"error_id": "ERR_EXECUTION_CLEANUP_FINAL_FAILURE"},
-                    )
-                    return False
-
-        return False
 
     def _classify_failure(self, error: Exception | None) -> ExecutionFailureReason:
         """
