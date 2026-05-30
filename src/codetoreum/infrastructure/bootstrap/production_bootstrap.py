@@ -131,7 +131,9 @@ logger = logging.getLogger(__name__)
 CRITICAL_ADAPTER_SLOTS = {
     "board",
     "ticket",
-    "llm",
+    # The "llm" slot retired in D5; the ICodingAgent slot ("coding_agent") is
+    # validated separately because it is constructed in Phase 4c, after Phase 2
+    # resolve_all() runs, so the generic critical-path scan would not see it.
     "version_control",
     "container",
     "code_review",
@@ -286,6 +288,10 @@ class ProductionApplicationBootstrap:
         self._is_setup = False
         self._adapter_factory: AdapterFactory | None = None
         self._slot_info: dict[str, str] = {}
+        # Created in Phase 4c; reused by _create_services and Phase 6 so the
+        # REST API, ICodingAgent, and executor all share one event-sourced
+        # WorkItemService instance (D7 / DEF-016).
+        self._production_work_item_service: WorkItemService | None = None
 
     def get_adapter_slot_info(self) -> dict[str, str]:
         """
@@ -419,11 +425,22 @@ class ProductionApplicationBootstrap:
             # ResilientCodingAgentDecorator (constructed inside
             # AdapterResolver.resolve_coding_agent). Must run after Phase 4
             # so the wrapped adapter sees the resilience-decorated container.
+            #
+            # We construct the production WorkItemService HERE (it only needs
+            # the event store) so the new ClaudeCodeAdapter receives the same
+            # event-sourced service that the REST API and executor use. The
+            # AdapterSelectionConfig.work_item_service slot resolves to a mock
+            # whose state is not shared with the API command port; passing it
+            # to ClaudeCodeAdapter would cause WorkItemNotFoundError at execute
+            # time (D7 surfaced this; DEF-016).
+            self._production_work_item_service = WorkItemService(
+                event_store=self.adapters.event_store,
+            )
             logger.info("Phase 4c: Resolving coding-agent (ICodingAgent) adapter...")
             self.adapters.coding_agent = resolver.resolve_coding_agent(
                 prompt_builder=DefaultPromptBuilder(),
                 agent_repository=self.adapters.agent_repository,
-                work_item_service=self.adapters.work_item_service,
+                work_item_service=self._production_work_item_service,
                 container=self.adapters.container,
             )
             self._slot_info["coding_agent"] = type(self.adapters.coding_agent).__name__
@@ -759,14 +776,14 @@ class ProductionApplicationBootstrap:
             failed_event_store=self.infrastructure.failed_event_store,
         )
 
-        # WorkItemService must be constructed BEFORE the executor so it can
-        # be passed in as a constructor argument. Previously this lived later
-        # in _create_services and Phase 5d swapped self.adapters.agent_executor
-        # ._work_item_service after the fact. The post-hoc swap depended on a
-        # private attribute and broke if the executor cached the reference.
-        work_item_service = WorkItemService(
-            event_store=self.adapters.event_store,
-        )
+        # WorkItemService is created earlier (Phase 4c) so the new
+        # ClaudeCodeAdapter receives the production event-sourced service that
+        # the REST API and executor share. Reuse the same instance here so all
+        # three (API command port, ICodingAgent, executor) read/write the same
+        # event stream. D7 surfaced that constructing a second instance also
+        # worked because both read the same event store, but reusing the
+        # single instance is clearer and avoids accidental divergence later.
+        work_item_service = self._production_work_item_service
 
         # For production, use the execution service executor with a real time clock
         import os as _os
