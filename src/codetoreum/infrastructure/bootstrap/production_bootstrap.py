@@ -445,6 +445,60 @@ class ProductionApplicationBootstrap:
             )
             self._slot_info["coding_agent"] = type(self.adapters.coding_agent).__name__
 
+            # Phase 4d: Bridge CodingAgent* events published on the EventBus to
+            # the event store so the ES events-* index records the full agent
+            # invocation history (D7 / DEF-018). The new ICodingAgent strategy
+            # publishes lifecycle, tool, text, and completion events to the
+            # event bus directly — no application service writes them — so
+            # nothing was persisting them. Subscribe a small wildcard callback
+            # that appends each CodingAgent* event to the
+            # ``coding-agent-<execution_id>`` stream.
+            from codetoreum.domain.events.coding_agent_events import (
+                CodingAgentApiRetryEvent,
+                CodingAgentCompletedEvent,
+                CodingAgentInvokedEvent,
+                CodingAgentOtlpSpanEvent,
+                CodingAgentRateLimitEvent,
+                CodingAgentReadyEvent,
+                CodingAgentTextOutputEvent,
+                CodingAgentThinkingEvent,
+                CodingAgentTokensUsedEvent,
+                CodingAgentToolCallEvent,
+                CodingAgentToolResultEvent,
+            )
+
+            _coding_agent_event_types: tuple[type, ...] = (
+                CodingAgentApiRetryEvent,
+                CodingAgentCompletedEvent,
+                CodingAgentInvokedEvent,
+                CodingAgentOtlpSpanEvent,
+                CodingAgentRateLimitEvent,
+                CodingAgentReadyEvent,
+                CodingAgentTextOutputEvent,
+                CodingAgentThinkingEvent,
+                CodingAgentTokensUsedEvent,
+                CodingAgentToolCallEvent,
+                CodingAgentToolResultEvent,
+            )
+
+            _coding_agent_event_store = self.adapters.event_store
+
+            async def _persist_coding_agent_event(event: Any) -> None:
+                if not isinstance(event, _coding_agent_event_types):
+                    return
+                stream_id = f"coding-agent-{event.execution_id}"
+                try:
+                    await _coding_agent_event_store.append(stream_id, [event])
+                except Exception:
+                    logger.exception(
+                        "Failed to persist CodingAgent event_type=%s execution_id=%s",
+                        event.event_type,
+                        event.execution_id,
+                    )
+
+            self.infrastructure.event_bus.subscribe(None, _persist_coding_agent_event)
+            logger.info("Phase 4d: Subscribed CodingAgent* event persistence (target: event_store)")
+
             # Log non-critical slots with mock implementations
             self._log_non_critical_slots()
 
