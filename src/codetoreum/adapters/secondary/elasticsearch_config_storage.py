@@ -1444,13 +1444,16 @@ class ElasticsearchConfigStorage(IConfigStore):
         )
 
     def _serialize_agent(self, config: AgentConfig) -> dict[str, Any]:
-        """Serialize AgentConfig to dictionary."""
+        """Serialize AgentConfig to dictionary.
+
+        DEF-020: legacy flat ``model`` / ``timeout`` / ``requires_docker``
+        are no longer written — readers must consume the ``invocation``
+        block. Legacy ES documents written under the old shape remain
+        readable via ``_deserialize_agent`` (read-time migration).
+        """
         doc: dict[str, Any] = {
             "project_id": config.project_id,
             "agent_name": config.agent_name,
-            "model": config.model,
-            "timeout": config.timeout,
-            "requires_docker": config.requires_docker,
             "makes_code_changes": config.makes_code_changes,
             "mcp_servers": list(config.mcp_servers),
             "capabilities": list(config.capabilities),
@@ -1459,11 +1462,8 @@ class ElasticsearchConfigStorage(IConfigStore):
             "created_at": (config.created_at.isoformat() if config.created_at else None),
             "updated_at": (config.updated_at.isoformat() if config.updated_at else None),
             "metadata": dict(config.metadata),
-            # D6 (proposal §3h): new schema fields.
             "coding_agent": config.coding_agent,
-        }
-        if config.invocation is not None:
-            doc["invocation"] = {
+            "invocation": {
                 "mode": config.invocation.mode.value,
                 "model": config.invocation.model,
                 "timeout_seconds": config.invocation.timeout_seconds,
@@ -1471,16 +1471,24 @@ class ElasticsearchConfigStorage(IConfigStore):
                 "cost_limit_usd": (
                     str(config.invocation.cost_limit_usd) if config.invocation.cost_limit_usd is not None else None
                 ),
-            }
+            },
+        }
         return doc
 
     def _deserialize_agent(self, doc: dict[str, Any]) -> AgentConfig:
-        """Deserialize dictionary to AgentConfig."""
+        """Deserialize dictionary to AgentConfig.
+
+        DEF-020: tolerate documents that pre-date the cleanup — if the
+        legacy flat fields ``model`` / ``timeout`` / ``requires_docker``
+        are present and ``invocation`` is absent, construct an
+        ``AgentInvocationConfig`` from them so old documents still load.
+        Only the ``invocation`` block is written back on save.
+        """
         from decimal import Decimal
 
         from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
 
-        invocation: AgentInvocationConfig | None = None
+        invocation: AgentInvocationConfig
         inv_doc = doc.get("invocation")
         if isinstance(inv_doc, dict):
             cost_raw = inv_doc.get("cost_limit_usd")
@@ -1491,12 +1499,19 @@ class ElasticsearchConfigStorage(IConfigStore):
                 mode_config=dict(inv_doc.get("mode_config", {})),
                 cost_limit_usd=Decimal(cost_raw) if cost_raw is not None else None,
             )
+        else:
+            # Legacy document — derive invocation from the flat fields.
+            legacy_requires_docker = bool(doc.get("requires_docker", True))
+            invocation = AgentInvocationConfig(
+                mode=(InvocationMode.CONTAINERIZED if legacy_requires_docker else InvocationMode.HOST),
+                model=str(doc.get("model", "claude-sonnet-4-6")),
+                timeout_seconds=int(doc.get("timeout", 3600)),
+                mode_config=({"image": "codetoreum-agent:latest"} if legacy_requires_docker else {}),
+                cost_limit_usd=None,
+            )
         return AgentConfig(
             project_id=doc["project_id"],
             agent_name=doc["agent_name"],
-            model=doc["model"],
-            timeout=doc["timeout"],
-            requires_docker=doc["requires_docker"],
             makes_code_changes=doc["makes_code_changes"],
             mcp_servers=doc.get("mcp_servers", []),
             capabilities=doc.get("capabilities", []),

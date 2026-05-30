@@ -233,7 +233,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         timeout_seconds = 3600  # Fallback default (1 hour) if agent load fails
         try:
             agent = await self._agent_repository.get_by_id(agent_id)
-            timeout_seconds = agent.timeout_seconds
+            timeout_seconds = agent.invocation.timeout_seconds
         except Exception as e:
             logger.warning(
                 f"Failed to load agent '{agent_id}' for timeout in execute(): {e}, "

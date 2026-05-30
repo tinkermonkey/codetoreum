@@ -24,6 +24,7 @@ from codetoreum.domain.board_workflow_template import (
     ColumnTemplate,
     ColumnType,
 )
+from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
 from codetoreum.domain.repair_cycle_types import RepairTestType
 from codetoreum.domain.work_item import WorkItemPriority, WorkItemStatus
 from codetoreum.infrastructure.simulation.bootstrap import (
@@ -350,18 +351,23 @@ class SimulationDataSeeder:
                 }
             )
 
+            cfg_requires_docker = agent_def.get("requires_docker", True)
             agent_config = AgentConfig(
                 project_id=project_id,
                 agent_name=agent_name,
-                model=agent_def.get("llm_model", "claude-3-5-sonnet-20241022"),
-                timeout=agent_def.get("timeout", 3600),
-                requires_docker=agent_def.get("requires_docker", True),
                 makes_code_changes=agent_def.get("makes_code_changes", True),
                 capabilities=capabilities,
                 version=1,
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
                 metadata=metadata,
+                coding_agent="",
+                invocation=AgentInvocationConfig(
+                    mode=(InvocationMode.CONTAINERIZED if cfg_requires_docker else InvocationMode.HOST),
+                    model=agent_def.get("llm_model", "claude-3-5-sonnet-20241022"),
+                    timeout_seconds=agent_def.get("timeout", 3600),
+                    mode_config=({"image": "codetoreum-agent:latest"} if cfg_requires_docker else {}),
+                ),
             )
 
             await self._config_store.save_agent_config(agent_config)
@@ -381,6 +387,7 @@ class SimulationDataSeeder:
                 except ValueError:
                     commit_policy = CommitPolicy.ON_SUCCESS
 
+                agent_requires_docker = agent_def.get("requires_docker", False)
                 agent_domain = Agent(
                     id=agent_name,  # Use agent_name as ID so column_config.agent_id matches
                     name=agent_name,
@@ -388,10 +395,7 @@ class SimulationDataSeeder:
                     agent_type=AgentType.MAKER,
                     capabilities=default_capabilities,
                     role_description=agent_def.get("description", ""),
-                    model=agent_def.get("llm_model", "claude-sonnet-4-6"),
-                    timeout_seconds=agent_def.get("timeout", 3600),
                     max_retries=3,
-                    requires_docker=agent_def.get("requires_docker", False),
                     requires_dev_container=False,
                     makes_code_changes=agent_def.get("makes_code_changes", True),
                     filesystem_write_allowed=True,
@@ -400,6 +404,13 @@ class SimulationDataSeeder:
                     created_at=datetime.now(UTC),
                     updated_at=datetime.now(UTC),
                     commit_policy=commit_policy,
+                    coding_agent="",
+                    invocation=AgentInvocationConfig(
+                        mode=(InvocationMode.CONTAINERIZED if agent_requires_docker else InvocationMode.HOST),
+                        model=agent_def.get("llm_model", "claude-sonnet-4-6"),
+                        timeout_seconds=agent_def.get("timeout", 3600),
+                        mode_config=({"image": "codetoreum-agent:latest"} if agent_requires_docker else {}),
+                    ),
                 )
                 await self._agent_repository.save(agent_domain, project_id)
 

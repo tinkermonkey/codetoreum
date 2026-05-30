@@ -7,6 +7,7 @@ In-memory implementation of IAgentQueryPort for development and testing.
 from threading import RLock
 
 from codetoreum.domain.agent import Agent
+from codetoreum.domain.coding_agent_types import InvocationMode
 from codetoreum.domain.exceptions import AgentNotFoundError
 from codetoreum.ports.input.agent_query import (
     AgentExecutionStats,
@@ -56,10 +57,10 @@ class MockAgentQueryAdapter(IAgentQueryPort):
             display_name=agent.display_name,
             agent_type=agent.agent_type.value,
             role_description=agent.role_description,
-            model=agent.model,
-            timeout_seconds=agent.timeout_seconds,
+            model=agent.invocation.model,
+            timeout_seconds=agent.invocation.timeout_seconds,
             max_retries=agent.max_retries,
-            requires_docker=agent.requires_docker,
+            requires_docker=(agent.invocation.mode == InvocationMode.CONTAINERIZED),
             requires_dev_container=agent.requires_dev_container,
             makes_code_changes=agent.makes_code_changes,
             filesystem_write_allowed=agent.filesystem_write_allowed,

@@ -25,6 +25,7 @@ from rich.progress import Progress
 from rich.table import Table
 
 from codetoreum.adapters.secondary.config_storage_factory import ConfigStorageFactory
+from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.output.config_store import (
     AgentConfig,
@@ -337,18 +338,23 @@ class YAMLConfigImporter:
 
     async def _import_agent_config(self, project_id: str, agent_name: str, agent_data: dict[str, Any]):
         """Import agent configuration."""
+        requires_docker = agent_data.get("requires_docker", True)
         agent_config = AgentConfig(
             project_id=project_id,
             agent_name=agent_name,
-            model=agent_data.get("model", "claude-sonnet-4-5-20250929"),
-            timeout=agent_data.get("timeout", 3600),
-            requires_docker=agent_data.get("requires_docker", True),
             makes_code_changes=agent_data.get("makes_code_changes", True),
             mcp_servers=agent_data.get("mcp_servers", []),
             capabilities=agent_data.get("capabilities", []),
             constraints=agent_data.get("constraints", {}),
             version=1,
             metadata={"imported_from_yaml": True},
+            coding_agent="",
+            invocation=AgentInvocationConfig(
+                mode=InvocationMode.CONTAINERIZED if requires_docker else InvocationMode.HOST,
+                model=agent_data.get("model", "claude-sonnet-4-5-20250929"),
+                timeout_seconds=agent_data.get("timeout", 3600),
+                mode_config=({"image": "codetoreum-agent:latest"} if requires_docker else {}),
+            ),
         )
         await self.config_store.save_agent_config(agent_config)
 

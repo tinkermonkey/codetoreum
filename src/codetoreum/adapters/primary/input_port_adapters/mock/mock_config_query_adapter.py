@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from threading import RLock
 from typing import TYPE_CHECKING, Any, Optional
 
+from codetoreum.domain.coding_agent_types import InvocationMode
 from codetoreum.domain.exceptions import (
     AgentNotFoundError,
     ConfigNotFoundError,
@@ -84,15 +85,19 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
 
     @staticmethod
     def _agent_config_to_info(cfg) -> AgentConfigInfo:
-        """Convert a storage-layer AgentConfig to a port-layer AgentConfigInfo."""
+        """Convert a storage-layer AgentConfig to a port-layer AgentConfigInfo.
+
+        DEF-020: legacy ``model`` / ``timeout`` / ``requires_docker`` are
+        read off ``cfg.invocation``.
+        """
         return AgentConfigInfo(
             project_id=cfg.project_id,
             agent_name=cfg.agent_name,
             display_name=cfg.metadata.get("description", cfg.agent_name),
-            model=cfg.model,
-            timeout_seconds=cfg.timeout,
+            model=cfg.invocation.model,
+            timeout_seconds=cfg.invocation.timeout_seconds,
             max_retries=cfg.metadata.get("max_retries", 3),
-            requires_docker=cfg.requires_docker,
+            requires_docker=cfg.invocation.mode == InvocationMode.CONTAINERIZED,
             requires_dev_container=False,
             makes_code_changes=cfg.makes_code_changes,
             filesystem_write_allowed=True,

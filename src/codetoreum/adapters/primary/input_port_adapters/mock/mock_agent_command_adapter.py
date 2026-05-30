@@ -9,6 +9,7 @@ from threading import RLock
 from uuid import uuid4
 
 from codetoreum.domain.agent import Agent, AgentCapability
+from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
 from codetoreum.domain.exceptions import AgentNotFoundError, DomainError
 from codetoreum.ports.input.agent_command import (
     AddAgentCapabilityCommand,
@@ -56,10 +57,7 @@ class MockAgentCommandAdapter(IAgentCommandPort):
                 agent_type=command.agent_type,
                 capabilities=command.capabilities.copy(),
                 role_description=command.role_description,
-                model=command.model,
-                timeout_seconds=command.timeout_seconds,
                 max_retries=command.max_retries,
-                requires_docker=command.requires_docker,
                 requires_dev_container=command.requires_dev_container,
                 makes_code_changes=command.makes_code_changes,
                 filesystem_write_allowed=command.filesystem_write_allowed,
@@ -67,6 +65,13 @@ class MockAgentCommandAdapter(IAgentCommandPort):
                 metadata={},
                 created_at=now,
                 updated_at=now,
+                coding_agent="",
+                invocation=AgentInvocationConfig(
+                    mode=(InvocationMode.CONTAINERIZED if command.requires_docker else InvocationMode.HOST),
+                    model=command.model,
+                    timeout_seconds=command.timeout_seconds,
+                    mode_config=({"image": "codetoreum-agent:latest"} if command.requires_docker else {}),
+                ),
             )
 
             # Store agent
@@ -90,17 +95,26 @@ class MockAgentCommandAdapter(IAgentCommandPort):
             if command.role_description is not None:
                 agent.role_description = command.role_description
 
-            if command.model is not None:
-                agent.model = command.model
-
-            if command.timeout_seconds is not None:
-                agent.timeout_seconds = command.timeout_seconds
+            if command.model is not None or command.timeout_seconds is not None or command.requires_docker is not None:
+                # Rebuild invocation block (DEF-020 — legacy flat fields removed).
+                inv = agent.invocation
+                new_mode = inv.mode
+                if command.requires_docker is not None:
+                    new_mode = InvocationMode.CONTAINERIZED if command.requires_docker else InvocationMode.HOST
+                agent.invocation = AgentInvocationConfig(
+                    mode=new_mode,
+                    model=command.model if command.model is not None else inv.model,
+                    timeout_seconds=(
+                        command.timeout_seconds if command.timeout_seconds is not None else inv.timeout_seconds
+                    ),
+                    mode_config=(
+                        {"image": "codetoreum-agent:latest"} if new_mode == InvocationMode.CONTAINERIZED else {}
+                    ),
+                    cost_limit_usd=inv.cost_limit_usd,
+                )
 
             if command.max_retries is not None:
                 agent.max_retries = command.max_retries
-
-            if command.requires_docker is not None:
-                agent.requires_docker = command.requires_docker
 
             if command.requires_dev_container is not None:
                 agent.requires_dev_container = command.requires_dev_container
