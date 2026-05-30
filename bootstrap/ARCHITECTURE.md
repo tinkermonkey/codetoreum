@@ -554,9 +554,9 @@ Also dropped the now-retired `"llm"` slot from `CRITICAL_ADAPTER_SLOTS` — D5 r
 
 ---
 
-### DEF-015 — Coding agent port redesign (D8 complete; D9 pending)
+### DEF-015 — Coding agent port redesign (complete — D0 through D9 all landed)
 
-**Status**: Design landed in `~/.claude/plans/coding-agent-port-redesign.md` (user-confirmed 2026-05-29). Phase D0 (architecture docs), D1 (`ICodingAgent` + `IPromptBuilder` ports + `CodingAgent*` events), D2 (`DefaultPromptBuilder`), D3 (`ClaudeCodeAdapter` rewrite under `adapters/secondary/claude_code/` with internal strategy pattern), D4 (`ExecutionService.execute()` + `ExecutionServiceAgentExecutor` rewire), D5 (bulk deletion of `IAgentLauncher` / `ILLMProvider` / `ILLMTextProvider` / `IStorage` / old `ClaudeCodeAdapter` / `MockLLMAdapter` / `MinioStorageAdapter` / `InMemoryStorageAdapter` / retired `ExecutionService` + `WorkspaceRouter` methods / `IContainer.copy_from_container` / `ResilientLLMProviderDecorator` / Minio infra), D6 (config schema migration: `AgentInvocationConfig` value object in `domain/coding_agent_types.py`; `Agent` + `AgentConfig` carry `coding_agent`/`invocation`; bootstrap loader parses the new schema and rejects the legacy shape; `register_project.py` writes the new shape; ES round-trips both new fields; `ExecutionServiceAgentExecutor._build_invocation_options` reads `agent.invocation` directly — no more `requires_docker` bridge; `WorkspaceContext.workspace_path` retires the strategy `workspace_path_resolver` callable), D7 (end-to-end bootstrap validation against `tinkermonkey/rounds` issue #65 — surfaced and fixed DEF-016 / DEF-017 / DEF-018; ES recorded 67+ `CodingAgent*` events across 9 distinct types under stream `coding-agent-<execution_id>`), and D8 (implementation documentation update: `documentation/implementations/production-bootstrap.md` gained Phase 4c/4d sections; `documentation/implementations/simulation/adapters.md` replaced `MockLLMAdapter`/`InMemoryStorageAdapter` references with `MockClaudeCodeAdapter` and added a dedicated design section; `bootstrap-wiring.md`, `README.md`, `scenarios.md`, `tests/simulation/README.md`, `CLAUDE.md` updated to new shape; legacy footprint analyses banner-marked as superseded) have all landed. D9 (second-adapter design validation for `GitHubCopilotAdapter` and `CodexAdapter`) remains.
+**Status**: **Resolved.** Design landed in `~/.claude/plans/coding-agent-port-redesign.md` (user-confirmed 2026-05-29). Phase D0 (architecture docs), D1 (`ICodingAgent` + `IPromptBuilder` ports + `CodingAgent*` events), D2 (`DefaultPromptBuilder`), D3 (`ClaudeCodeAdapter` rewrite under `adapters/secondary/claude_code/` with internal strategy pattern), D4 (`ExecutionService.execute()` + `ExecutionServiceAgentExecutor` rewire), D5 (bulk deletion of `IAgentLauncher` / `ILLMProvider` / `ILLMTextProvider` / `IStorage` / old `ClaudeCodeAdapter` / `MockLLMAdapter` / `MinioStorageAdapter` / `InMemoryStorageAdapter` / retired `ExecutionService` + `WorkspaceRouter` methods / `IContainer.copy_from_container` / `ResilientLLMProviderDecorator` / Minio infra), D6 (config schema migration: `AgentInvocationConfig` value object in `domain/coding_agent_types.py`; `Agent` + `AgentConfig` carry `coding_agent`/`invocation`; bootstrap loader parses the new schema and rejects the legacy shape; `register_project.py` writes the new shape; ES round-trips both new fields; `ExecutionServiceAgentExecutor._build_invocation_options` reads `agent.invocation` directly — no more `requires_docker` bridge; `WorkspaceContext.workspace_path` retires the strategy `workspace_path_resolver` callable), D7 (end-to-end bootstrap validation against `tinkermonkey/rounds` issue #65 — surfaced and fixed DEF-016 / DEF-017 / DEF-018; ES recorded 67+ `CodingAgent*` events across 9 distinct types under stream `coding-agent-<execution_id>`), D8 (implementation documentation update: `documentation/implementations/production-bootstrap.md` gained Phase 4c/4d sections; `documentation/implementations/simulation/adapters.md` replaced `MockLLMAdapter`/`InMemoryStorageAdapter` references with `MockClaudeCodeAdapter` and added a dedicated design section; `bootstrap-wiring.md`, `README.md`, `scenarios.md`, `tests/simulation/README.md`, `CLAUDE.md` updated to new shape; legacy footprint analyses banner-marked as superseded), and **D9 (second-adapter design validation for `GitHubCopilotAdapter` and `CodexAdapter`: new `documentation/architecture/adapters/planned/` directory + `README.md` + `github-copilot-adapter.md` + `codex-adapter.md` + `coding-agent-port-validation.md`; verdict: `ICodingAgent` port shape holds across all three target adapters; four non-breaking additive enhancements recommended for an optional D10 phase before Copilot adapter implementation — see `coding-agent-port-validation.md` §Recommended Changes for the full list)** have all landed.
 
 **Deficiency** (the three smells the redesign addresses):
 
@@ -590,8 +590,9 @@ Naming reinforces the wrong model: `IAgentLauncher` is an implementation detail 
 | D5 | Bulk deletion commit: `IAgentLauncher`, `ILLMProvider` alias, `ILLMTextProvider`, `IStorage`, `MinioStorageAdapter`, `InMemoryStorageAdapter`, retired `ExecutionService` methods, retired `WorkspaceRouter` methods, Minio service in `docker-compose.yml`, Minio dep, `MINIO_*` env vars |
 | D6 | Config schema migration (`bootstrap/rounds.json` invocation block; loader validation) |
 | D7 | Bootstrap end-to-end validation against `tinkermonkey/rounds` (**complete**: DEF-016/017/018 fixed, 67+ `CodingAgent*` events landed in ES) |
-| D8 | Implementation docs update (**complete**: this commit) |
-| D9 | Design validation of `GitHubCopilotAdapter` and `CodexAdapter` shapes (no code) |
+| D8 | Implementation docs update (**complete**) |
+| D9 | Design validation of `GitHubCopilotAdapter` and `CodexAdapter` shapes, no code (**complete**: `documentation/architecture/adapters/planned/` directory + README + two adapter design specs + port-validation summary; port shape holds; four additive enhancements recommended) |
+| D10 (proposed, optional) | Pre-Copilot port enhancements: `CodingAgentResourceUsage` discriminated union; `CodingAgentToolCallEvent.tool_category` optional field; event-catalog tiering + INV-19; `CodingAgentCostLimitNotEnforceableEvent` advisory event. All additive, no breaking changes. See `documentation/architecture/adapters/planned/coding-agent-port-validation.md` §Recommended Changes. |
 
 **Reference**: `~/.claude/plans/coding-agent-port-redesign.md` (the authoritative design proposal).
 
@@ -608,6 +609,22 @@ Naming reinforces the wrong model: `IAgentLauncher` is an implementation detail 
 - `documentation/architecture/infrastructure/observability.md` — OTel via event bus
 - `documentation/architecture/overview.md` — port + adapter names updated
 - `bootstrap/ARCHITECTURE.md` — this entry; §3 (adapter table), §5 (ports table), §6 (INV-15..18) all updated
+
+**Files affected by D9 (this commit)**:
+- `documentation/architecture/adapters/planned/` — **new directory**
+- `documentation/architecture/adapters/planned/README.md` — explains the directory's purpose; documents promotion criteria
+- `documentation/architecture/adapters/planned/github-copilot-adapter.md` — `GitHubCopilotAdapter` design spec (API mode only; 8 of 11 `CodingAgent*` events emittable; flags three port-shape critique items)
+- `documentation/architecture/adapters/planned/codex-adapter.md` — `CodexAdapter` design spec (CONTAINERIZED + HOST modes mirroring Claude Code; 10 of 11 `CodingAgent*` events emittable; one tool-category drift item)
+- `documentation/architecture/adapters/planned/coding-agent-port-validation.md` — cross-adapter validation summary; verdict: port holds; four additive enhancements recommended for optional D10
+- `bootstrap/ARCHITECTURE.md` — this entry: DEF-015 status updated to "complete — D0 through D9 all landed"; phased-rollout table updated with D9 completion + D10 proposed
+
+**D9 validation verdict** (full detail in `coding-agent-port-validation.md`):
+- `ICodingAgent` two-method interface holds unchanged across all three target adapters.
+- `InvocationMode.{CONTAINERIZED, HOST, API}` enum is right-sized; no fourth mode surfaced.
+- Strategy split validated as a true template (Codex mirrors Claude Code one-for-one).
+- `IPromptBuilder` / `StructuredPrompt` separation works for text (Claude Code), Markdown (Copilot issue body), and Codex prompt formats without strain.
+- 14-day granular-event retention adequate across all three adapters.
+- Gaps surfaced: (1) Copilot is request-priced not token-priced → recommend additive `CodingAgentResourceUsage` discriminated union; (2) tool-call categories differ → recommend optional `tool_category` field; (3) not every adapter emits every event → recommend doc-only tiering of the catalog; (4) `cost_limit_usd` unenforceable by Copilot → recommend advisory event. **No breaking changes required.**
 
 ---
 
