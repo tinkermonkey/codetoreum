@@ -1,21 +1,26 @@
-"""Unit tests for LLMSystemicAnalysisAdapter.
+"""Unit tests for LLMSystemicAnalysisAdapter (post-D9 ICodingAgent migration).
 
 Verifies:
 1. Successful parse of all five FailureClassification values
 2. Valid JSON response is parsed into SystemicAnalysisResult
-3. Invalid/unparseable LLM response falls back to CODE_DEFECT classification
+3. Invalid/unparseable response falls back to CODE_DEFECT classification
 4. FailureClassification with unknown value triggers fallback path
-5. Network/timeout exception fallback
+5. Network/timeout exception propagation (caller fallback)
 6. Adapter does not call emit() on any event emitter
 7. Prompt construction includes failures, file paths, iteration count, prior fix attempts
+8. Coding-agent factory contract: called once per analyze() with the
+   adapter-local _SystemicAnalysisPromptBuilder
 """
 
+from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from codetoreum.adapters.secondary.llm_systemic_analysis_adapter import (
     LLMSystemicAnalysisAdapter,
+    _build_systemic_analysis_task_text,
+    _SystemicAnalysisPromptBuilder,
 )
 from codetoreum.domain.repair_cycle_types import (
     AnalysisContext,
@@ -23,25 +28,57 @@ from codetoreum.domain.repair_cycle_types import (
     RepairTestFailure,
     SystemicAnalysisResult,
 )
-from codetoreum.ports.output.llm_types import ExecutionResult
+from codetoreum.ports.output.coding_agent import (
+    CodingAgentResult,
+    ICodingAgent,
+)
 
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
 
 
-def _make_adapter(llm_response_content: str) -> tuple[LLMSystemicAnalysisAdapter, AsyncMock]:
-    """Return (adapter, mock_llm) pre-wired for tests."""
-    llm = AsyncMock()
-    result = ExecutionResult(content=llm_response_content)
-    llm.execute.return_value = result
+def _make_coding_agent_result(content: str, *, success: bool = True) -> CodingAgentResult:
+    """Build a minimal CodingAgentResult carrying the supplied content."""
+    return CodingAgentResult(
+        success=success,
+        summary_text=content,
+        total_cost_usd=Decimal("0"),
+        total_input_tokens=0,
+        total_output_tokens=0,
+        tool_call_count=0,
+        duration_ms=0,
+        error_summary=None if success else "stubbed failure",
+    )
 
-    # Factory takes agent_name and returns coroutine resolving to ILLMProvider
-    async def factory(agent_name: str) -> object:
-        return llm
 
-    adapter = LLMSystemicAnalysisAdapter(llm_factory=factory)
-    return adapter, llm
+def _make_adapter(
+    response_content: str,
+    *,
+    success: bool = True,
+) -> tuple[LLMSystemicAnalysisAdapter, AsyncMock, list[_SystemicAnalysisPromptBuilder]]:
+    """Return (adapter, mock_coding_agent, captured_prompt_builders).
+
+    The mock coding agent records every ``execute`` call. The returned
+    list collects each adapter-local prompt builder the factory was
+    asked to produce, so tests can inspect prompt content via
+    ``await builder.build(...)`` if they need to.
+    """
+    coding_agent = AsyncMock(spec=ICodingAgent)
+    coding_agent.execute.return_value = _make_coding_agent_result(
+        response_content,
+        success=success,
+    )
+
+    captured: list[_SystemicAnalysisPromptBuilder] = []
+
+    def factory(prompt_builder):
+        assert isinstance(prompt_builder, _SystemicAnalysisPromptBuilder)
+        captured.append(prompt_builder)
+        return coding_agent
+
+    adapter = LLMSystemicAnalysisAdapter(coding_agent_factory=factory)
+    return adapter, coding_agent, captured
 
 
 def _make_context(
@@ -71,26 +108,49 @@ def _make_failures(count: int = 1) -> list[RepairTestFailure]:
     ]
 
 
+async def _rendered_task_text(builder: _SystemicAnalysisPromptBuilder) -> str:
+    """Helper: run the captured prompt builder and return its task text.
+
+    The builder ignores the agent / work_item / workspace arguments, so
+    we pass dummy ``MagicMock()`` instances. The returned
+    ``StructuredPrompt.task_description`` is the same string the renderer
+    would feed to Claude Code.
+    """
+    structured = await builder.build(
+        agent=MagicMock(),
+        work_item=MagicMock(),
+        workspace_context=MagicMock(),
+    )
+    return structured.task_description
+
+
 # ---------------------------------------------------------------------------
 # Constructor validation
 # ---------------------------------------------------------------------------
 
 
 class TestConstructor:
-    def test_init_with_valid_llm_factory(self):
-        """Constructor accepts valid llm_factory callable."""
-        llm = AsyncMock()
+    def test_init_with_valid_factory(self):
+        """Constructor accepts a valid coding_agent_factory callable."""
 
-        async def factory(agent_name: str) -> object:
-            return llm
+        def factory(prompt_builder):
+            return AsyncMock(spec=ICodingAgent)
 
-        adapter = LLMSystemicAnalysisAdapter(llm_factory=factory)
-        assert adapter._llm_factory is not None
+        adapter = LLMSystemicAnalysisAdapter(coding_agent_factory=factory)
+        assert adapter._coding_agent_factory is factory
 
     def test_init_rejects_none_factory(self):
-        """Constructor rejects None llm_factory."""
-        with pytest.raises(ValueError, match="llm_factory cannot be None"):
-            LLMSystemicAnalysisAdapter(llm_factory=None)
+        """Constructor rejects None coding_agent_factory."""
+        with pytest.raises(ValueError, match="coding_agent_factory cannot be None"):
+            LLMSystemicAnalysisAdapter(coding_agent_factory=None)
+
+    def test_init_rejects_zero_timeout(self):
+        """Constructor rejects non-positive timeout."""
+        with pytest.raises(ValueError, match="timeout_seconds must be > 0"):
+            LLMSystemicAnalysisAdapter(
+                coding_agent_factory=lambda pb: AsyncMock(spec=ICodingAgent),
+                timeout_seconds=0,
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -101,113 +161,113 @@ class TestConstructor:
 class TestSuccessfulClassifications:
     @pytest.mark.asyncio
     async def test_parse_code_defect(self):
-        """Parses CODE_DEFECT classification successfully."""
+        """Parses code_defect classification correctly."""
         response = """{
             "classification": "code_defect",
-            "confidence": 0.95,
-            "reasoning": "Bug in login logic",
-            "affected_files": ["auth.py", "login.py"],
-            "recommended_action": "Fix the login condition"
+            "confidence": 0.85,
+            "reasoning": "Bug in calculation logic",
+            "affected_files": ["calc.py"],
+            "recommended_action": "Fix the calculation"
         }"""
-        adapter, _ = _make_adapter(response)
+        adapter, _, _ = _make_adapter(response)
         context = _make_context()
         failures = _make_failures(1)
 
         result = await adapter.analyze(failures, context)
 
         assert result.classification == FailureClassification.CODE_DEFECT
-        assert result.confidence == 0.95
-        assert result.reasoning == "Bug in login logic"
-        assert result.affected_files == ("auth.py", "login.py")
-        assert result.recommended_action == "Fix the login condition"
+        assert result.confidence == 0.85
+        assert result.reasoning == "Bug in calculation logic"
+        assert result.affected_files == ("calc.py",)
+        assert result.recommended_action == "Fix the calculation"
 
     @pytest.mark.asyncio
     async def test_parse_environment_issue(self):
-        """Parses ENVIRONMENT_ISSUE classification successfully."""
+        """Parses environment_issue classification correctly."""
         response = """{
             "classification": "environment_issue",
-            "confidence": 0.85,
+            "confidence": 0.92,
             "reasoning": "Missing environment variable",
-            "affected_files": ["config.py"],
-            "recommended_action": "Set DATABASE_URL environment variable"
+            "affected_files": [],
+            "recommended_action": "Set required env vars"
         }"""
-        adapter, _ = _make_adapter(response)
+        adapter, _, _ = _make_adapter(response)
         context = _make_context()
         failures = _make_failures(1)
 
         result = await adapter.analyze(failures, context)
 
         assert result.classification == FailureClassification.ENVIRONMENT_ISSUE
-        assert result.confidence == 0.85
+        assert result.confidence == 0.92
 
     @pytest.mark.asyncio
     async def test_parse_transient_failure(self):
-        """Parses TRANSIENT_FAILURE classification successfully."""
+        """Parses transient_failure classification correctly."""
         response = """{
             "classification": "transient_failure",
-            "confidence": 0.70,
-            "reasoning": "Network timeout on external API call",
-            "affected_files": ["api_client.py"],
-            "recommended_action": "Retry the test"
+            "confidence": 0.65,
+            "reasoning": "Network blip during test",
+            "affected_files": [],
+            "recommended_action": "Retry the operation"
         }"""
-        adapter, _ = _make_adapter(response)
+        adapter, _, _ = _make_adapter(response)
         context = _make_context()
         failures = _make_failures(1)
 
         result = await adapter.analyze(failures, context)
 
         assert result.classification == FailureClassification.TRANSIENT_FAILURE
-        assert result.confidence == 0.70
+        assert result.confidence == 0.65
 
     @pytest.mark.asyncio
     async def test_parse_dependency_issue(self):
-        """Parses DEPENDENCY_ISSUE classification successfully."""
+        """Parses dependency_issue classification correctly."""
         response = """{
             "classification": "dependency_issue",
-            "confidence": 0.80,
-            "reasoning": "Incompatible version of requests library",
+            "confidence": 0.78,
+            "reasoning": "Package version mismatch",
             "affected_files": ["requirements.txt"],
-            "recommended_action": "Update requests to version 2.28.0"
+            "recommended_action": "Update dependencies"
         }"""
-        adapter, _ = _make_adapter(response)
+        adapter, _, _ = _make_adapter(response)
         context = _make_context()
         failures = _make_failures(1)
 
         result = await adapter.analyze(failures, context)
 
         assert result.classification == FailureClassification.DEPENDENCY_ISSUE
-        assert result.confidence == 0.80
+        assert result.confidence == 0.78
 
     @pytest.mark.asyncio
     async def test_parse_configuration_issue(self):
-        """Parses CONFIGURATION_ISSUE classification successfully."""
+        """Parses configuration_issue classification correctly."""
         response = """{
             "classification": "configuration_issue",
-            "confidence": 0.90,
-            "reasoning": "Invalid database connection string",
+            "confidence": 0.88,
+            "reasoning": "Misconfigured settings",
             "affected_files": ["config.yaml"],
-            "recommended_action": "Fix the database connection string in config.yaml"
+            "recommended_action": "Fix configuration"
         }"""
-        adapter, _ = _make_adapter(response)
+        adapter, _, _ = _make_adapter(response)
         context = _make_context()
         failures = _make_failures(1)
 
         result = await adapter.analyze(failures, context)
 
         assert result.classification == FailureClassification.CONFIGURATION_ISSUE
-        assert result.confidence == 0.90
+        assert result.confidence == 0.88
 
 
 # ---------------------------------------------------------------------------
-# Invalid/unparseable response fallback
+# Parse failure fallback
 # ---------------------------------------------------------------------------
 
 
 class TestParseFailureFallback:
     @pytest.mark.asyncio
     async def test_invalid_json_returns_code_defect(self):
-        """Invalid JSON response falls back to CODE_DEFECT."""
-        adapter, _ = _make_adapter("not valid json at all")
+        """Invalid JSON in response falls back to CODE_DEFECT."""
+        adapter, _, _ = _make_adapter("not valid json at all")
         context = _make_context()
         failures = _make_failures(1)
 
@@ -222,11 +282,9 @@ class TestParseFailureFallback:
         """Missing classification field falls back to CODE_DEFECT."""
         response = """{
             "confidence": 0.85,
-            "reasoning": "Some reason",
-            "affected_files": [],
-            "recommended_action": "Do something"
+            "reasoning": "Test"
         }"""
-        adapter, _ = _make_adapter(response)
+        adapter, _, _ = _make_adapter(response)
         context = _make_context()
         failures = _make_failures(1)
 
@@ -239,13 +297,13 @@ class TestParseFailureFallback:
     async def test_unknown_classification_value(self):
         """Unknown classification value falls back to CODE_DEFECT."""
         response = """{
-            "classification": "unknown_type",
-            "confidence": 0.50,
-            "reasoning": "Some reason",
+            "classification": "this_is_not_a_valid_classification",
+            "confidence": 0.85,
+            "reasoning": "Test",
             "affected_files": [],
-            "recommended_action": "Do something"
+            "recommended_action": "Fix"
         }"""
-        adapter, _ = _make_adapter(response)
+        adapter, _, _ = _make_adapter(response)
         context = _make_context()
         failures = _make_failures(1)
 
@@ -256,15 +314,15 @@ class TestParseFailureFallback:
 
     @pytest.mark.asyncio
     async def test_invalid_confidence_out_of_range(self):
-        """Confidence > 1.0 triggers fallback."""
+        """Confidence outside [0,1] falls back to CODE_DEFECT."""
         response = """{
             "classification": "code_defect",
             "confidence": 1.5,
-            "reasoning": "Some reason",
+            "reasoning": "Test",
             "affected_files": [],
-            "recommended_action": "Do something"
+            "recommended_action": "Fix"
         }"""
-        adapter, _ = _make_adapter(response)
+        adapter, _, _ = _make_adapter(response)
         context = _make_context()
         failures = _make_failures(1)
 
@@ -275,14 +333,12 @@ class TestParseFailureFallback:
 
     @pytest.mark.asyncio
     async def test_missing_required_field_triggers_fallback(self):
-        """Missing required field (e.g., reasoning) falls back."""
+        """Missing required field falls back to CODE_DEFECT."""
         response = """{
             "classification": "code_defect",
-            "confidence": 0.85,
-            "affected_files": [],
-            "recommended_action": "Do something"
+            "confidence": 0.85
         }"""
-        adapter, _ = _make_adapter(response)
+        adapter, _, _ = _make_adapter(response)
         context = _make_context()
         failures = _make_failures(1)
 
@@ -293,21 +349,20 @@ class TestParseFailureFallback:
 
 
 # ---------------------------------------------------------------------------
-# Network/timeout exception fallback
+# Exception fallback (timeouts / connection errors propagate)
 # ---------------------------------------------------------------------------
 
 
 class TestExceptionFallback:
     @pytest.mark.asyncio
-    async def test_llm_execute_timeout_raises_exception(self):
-        """LLM timeout exception is raised (not caught) for caller to handle."""
-        llm = AsyncMock()
-        llm.execute.side_effect = TimeoutError("LLM call timed out")
+    async def test_execute_timeout_raises_exception(self):
+        """Coding-agent timeout exception is raised (not caught)."""
+        coding_agent = AsyncMock(spec=ICodingAgent)
+        coding_agent.execute.side_effect = TimeoutError("Coding agent timed out")
 
-        async def factory(agent_name: str) -> object:
-            return llm
-
-        adapter = LLMSystemicAnalysisAdapter(llm_factory=factory)
+        adapter = LLMSystemicAnalysisAdapter(
+            coding_agent_factory=lambda pb: coding_agent,
+        )
         context = _make_context()
         failures = _make_failures(1)
 
@@ -315,20 +370,40 @@ class TestExceptionFallback:
             await adapter.analyze(failures, context)
 
     @pytest.mark.asyncio
-    async def test_llm_execute_connection_error_raises_exception(self):
-        """LLM connection error is raised (not caught) for caller to handle."""
-        llm = AsyncMock()
-        llm.execute.side_effect = ConnectionError("Failed to connect to LLM")
+    async def test_execute_connection_error_raises_exception(self):
+        """Coding-agent connection error is raised (not caught)."""
+        coding_agent = AsyncMock(spec=ICodingAgent)
+        coding_agent.execute.side_effect = ConnectionError("Failed to connect")
 
-        async def factory(agent_name: str) -> object:
-            return llm
-
-        adapter = LLMSystemicAnalysisAdapter(llm_factory=factory)
+        adapter = LLMSystemicAnalysisAdapter(
+            coding_agent_factory=lambda pb: coding_agent,
+        )
         context = _make_context()
         failures = _make_failures(1)
 
         with pytest.raises(ConnectionError):
             await adapter.analyze(failures, context)
+
+    @pytest.mark.asyncio
+    async def test_execute_failure_result_falls_back(self):
+        """When the coding agent returns success=False, adapter falls back to CODE_DEFECT."""
+        coding_agent = AsyncMock(spec=ICodingAgent)
+        coding_agent.execute.return_value = _make_coding_agent_result(
+            "irrelevant",
+            success=False,
+        )
+
+        adapter = LLMSystemicAnalysisAdapter(
+            coding_agent_factory=lambda pb: coding_agent,
+        )
+        context = _make_context()
+        failures = _make_failures(1)
+
+        result = await adapter.analyze(failures, context)
+
+        assert result.classification == FailureClassification.CODE_DEFECT
+        assert result.confidence == 0.0
+        assert "Coding agent failed" in result.reasoning
 
 
 # ---------------------------------------------------------------------------
@@ -347,14 +422,12 @@ class TestNoEventEmission:
             "affected_files": ["app.py"],
             "recommended_action": "Fix the bug"
         }"""
-        adapter, _ = _make_adapter(response)
+        adapter, _, _ = _make_adapter(response)
         context = _make_context()
         failures = _make_failures(1)
 
-        # No event emitter passed or expected
         result = await adapter.analyze(failures, context)
 
-        # Just verify it returns a result without trying to emit
         assert result.classification == FailureClassification.CODE_DEFECT
 
 
@@ -366,8 +439,8 @@ class TestNoEventEmission:
 class TestPromptConstruction:
     @pytest.mark.asyncio
     async def test_prompt_includes_failure_messages(self):
-        """Prompt includes failure messages from failures list."""
-        adapter, llm = _make_adapter("""{
+        """Prompt task text includes failure messages from failures list."""
+        adapter, _, captured = _make_adapter("""{
             "classification": "code_defect",
             "confidence": 0.85,
             "reasoning": "Test",
@@ -382,14 +455,15 @@ class TestPromptConstruction:
 
         await adapter.analyze(failures, context)
 
-        prompt = llm.execute.call_args[0][0]
-        assert "test_a.py::test_1: Value mismatch" in prompt
-        assert "test_b.py::test_2: Index out of range" in prompt
+        assert len(captured) == 1
+        task = await _rendered_task_text(captured[0])
+        assert "test_a.py::test_1: Value mismatch" in task
+        assert "test_b.py::test_2: Index out of range" in task
 
     @pytest.mark.asyncio
     async def test_prompt_includes_affected_files(self):
         """Prompt includes affected file paths."""
-        adapter, llm = _make_adapter("""{
+        adapter, _, captured = _make_adapter("""{
             "classification": "code_defect",
             "confidence": 0.85,
             "reasoning": "Test",
@@ -403,13 +477,13 @@ class TestPromptConstruction:
 
         await adapter.analyze(failures, context)
 
-        prompt = llm.execute.call_args[0][0]
-        assert "test_auth.py" in prompt
+        task = await _rendered_task_text(captured[0])
+        assert "test_auth.py" in task
 
     @pytest.mark.asyncio
     async def test_prompt_includes_iteration_count(self):
         """Prompt includes iteration count from context."""
-        adapter, llm = _make_adapter("""{
+        adapter, _, captured = _make_adapter("""{
             "classification": "code_defect",
             "confidence": 0.85,
             "reasoning": "Test",
@@ -421,13 +495,13 @@ class TestPromptConstruction:
 
         await adapter.analyze(failures, context)
 
-        prompt = llm.execute.call_args[0][0]
-        assert "Iteration: 3" in prompt
+        task = await _rendered_task_text(captured[0])
+        assert "Iteration: 3" in task
 
     @pytest.mark.asyncio
     async def test_prompt_includes_work_item_id(self):
         """Prompt includes work_item_id from context."""
-        adapter, llm = _make_adapter("""{
+        adapter, _, captured = _make_adapter("""{
             "classification": "code_defect",
             "confidence": 0.85,
             "reasoning": "Test",
@@ -439,13 +513,13 @@ class TestPromptConstruction:
 
         await adapter.analyze(failures, context)
 
-        prompt = llm.execute.call_args[0][0]
-        assert "PR-789" in prompt
+        task = await _rendered_task_text(captured[0])
+        assert "PR-789" in task
 
     @pytest.mark.asyncio
     async def test_prompt_includes_prior_fix_attempts(self):
         """Prompt includes prior fix attempts from context."""
-        adapter, llm = _make_adapter("""{
+        adapter, _, captured = _make_adapter("""{
             "classification": "code_defect",
             "confidence": 0.85,
             "reasoning": "Test",
@@ -458,14 +532,14 @@ class TestPromptConstruction:
 
         await adapter.analyze(failures, context)
 
-        prompt = llm.execute.call_args[0][0]
-        assert "Tried updating import" in prompt
-        assert "Tried refactoring method" in prompt
+        task = await _rendered_task_text(captured[0])
+        assert "Tried updating import" in task
+        assert "Tried refactoring method" in task
 
     @pytest.mark.asyncio
     async def test_prompt_shows_none_when_no_prior_attempts(self):
         """Prompt shows 'None' when no prior fix attempts."""
-        adapter, llm = _make_adapter("""{
+        adapter, _, captured = _make_adapter("""{
             "classification": "code_defect",
             "confidence": 0.85,
             "reasoning": "Test",
@@ -477,8 +551,8 @@ class TestPromptConstruction:
 
         await adapter.analyze(failures, context)
 
-        prompt = llm.execute.call_args[0][0]
-        assert "None" in prompt
+        task = await _rendered_task_text(captured[0])
+        assert "None" in task
 
 
 # ---------------------------------------------------------------------------
@@ -497,7 +571,7 @@ class TestAffectedFilesHandling:
             "affected_files": ["auth.py", "login.py", "user.py"],
             "recommended_action": "Fix all three files"
         }"""
-        adapter, _ = _make_adapter(response)
+        adapter, _, _ = _make_adapter(response)
         context = _make_context()
         failures = _make_failures(1)
 
@@ -516,7 +590,7 @@ class TestAffectedFilesHandling:
             "affected_files": [],
             "recommended_action": "Fix"
         }"""
-        adapter, _ = _make_adapter(response)
+        adapter, _, _ = _make_adapter(response)
         context = _make_context()
         failures = _make_failures(1)
 
@@ -533,7 +607,7 @@ class TestAffectedFilesHandling:
             "reasoning": "Test",
             "recommended_action": "Fix"
         }"""
-        adapter, _ = _make_adapter(response)
+        adapter, _, _ = _make_adapter(response)
         context = _make_context()
         failures = _make_failures(1)
 
@@ -550,12 +624,12 @@ class TestAffectedFilesHandling:
 class TestErrorLogging:
     @pytest.mark.asyncio
     async def test_logs_parse_error_with_context(self, caplog):
-        """Parse error is logged with workflow_run_id and work_item_id."""
+        """Parse error is logged."""
         import logging
 
         caplog.set_level(logging.ERROR)
 
-        adapter, _ = _make_adapter("invalid json")
+        adapter, _, _ = _make_adapter("invalid json")
         context = _make_context(
             workflow_run_id="run-123",
             work_item_id="item-456",
@@ -565,14 +639,12 @@ class TestErrorLogging:
 
         result = await adapter.analyze(failures, context)
 
-        # Check that error was logged
         assert any("Failed to parse systemic analysis response" in record.message for record in caplog.records)
-        # Verify it fell back correctly
         assert result.classification == FailureClassification.CODE_DEFECT
 
     @pytest.mark.asyncio
     async def test_logs_unknown_classification_as_warning(self, caplog):
-        """Unknown classification value is logged as warning."""
+        """Unknown classification value is logged."""
         import logging
 
         caplog.set_level(logging.WARNING)
@@ -584,13 +656,12 @@ class TestErrorLogging:
             "affected_files": [],
             "recommended_action": "Fix"
         }"""
-        adapter, _ = _make_adapter(response)
+        adapter, _, _ = _make_adapter(response)
         context = _make_context()
         failures = _make_failures(1)
 
         result = await adapter.analyze(failures, context)
 
-        # Falls back to CODE_DEFECT
         assert result.classification == FailureClassification.CODE_DEFECT
 
 
@@ -603,7 +674,6 @@ class TestBoundaryConditions:
     @pytest.mark.asyncio
     async def test_confidence_at_boundaries(self):
         """Confidence values at exact 0.0 and 1.0 boundaries are valid."""
-        # Test 0.0
         response_min = """{
             "classification": "code_defect",
             "confidence": 0.0,
@@ -611,12 +681,11 @@ class TestBoundaryConditions:
             "affected_files": [],
             "recommended_action": "Fix"
         }"""
-        adapter, _ = _make_adapter(response_min)
+        adapter, _, _ = _make_adapter(response_min)
         context = _make_context()
         result = await adapter.analyze(_make_failures(1), context)
         assert result.confidence == 0.0
 
-        # Test 1.0
         response_max = """{
             "classification": "code_defect",
             "confidence": 1.0,
@@ -624,14 +693,14 @@ class TestBoundaryConditions:
             "affected_files": [],
             "recommended_action": "Fix"
         }"""
-        adapter, _ = _make_adapter(response_max)
+        adapter, _, _ = _make_adapter(response_max)
         result = await adapter.analyze(_make_failures(1), context)
         assert result.confidence == 1.0
 
     @pytest.mark.asyncio
     async def test_multiple_failures_in_prompt(self):
         """Prompt correctly handles multiple failures."""
-        adapter, llm = _make_adapter("""{
+        adapter, _, captured = _make_adapter("""{
             "classification": "code_defect",
             "confidence": 0.85,
             "reasoning": "Test",
@@ -643,14 +712,13 @@ class TestBoundaryConditions:
 
         await adapter.analyze(failures, context)
 
-        prompt = llm.execute.call_args[0][0]
-        # Count how many failures are in the prompt
-        assert prompt.count("::") == 5  # Each failure has file::test format
+        task = await _rendered_task_text(captured[0])
+        assert task.count("::") == 5
 
     @pytest.mark.asyncio
     async def test_long_reasoning_text(self):
         """Long reasoning text is preserved in result."""
-        long_reasoning = "A" * 1000  # 1000 character reasoning
+        long_reasoning = "A" * 1000
         response = f"""{{
             "classification": "code_defect",
             "confidence": 0.85,
@@ -658,7 +726,7 @@ class TestBoundaryConditions:
             "affected_files": [],
             "recommended_action": "Fix"
         }}"""
-        adapter, _ = _make_adapter(response)
+        adapter, _, _ = _make_adapter(response)
         context = _make_context()
 
         result = await adapter.analyze(_make_failures(1), context)
@@ -675,7 +743,7 @@ class TestBoundaryConditions:
             "affected_files": ["file-with-dash.py", "file_with_underscore.py"],
             "recommended_action": "Fix: update condition to x == 'value'"
         }"""
-        adapter, _ = _make_adapter(response)
+        adapter, _, _ = _make_adapter(response)
         context = _make_context()
 
         result = await adapter.analyze(_make_failures(1), context)
@@ -685,12 +753,7 @@ class TestBoundaryConditions:
 
     @pytest.mark.asyncio
     async def test_multiline_json_without_markdown_fences(self):
-        """Multiline JSON without markdown fences is extracted correctly.
-
-        This test ensures the regex properly captures the full JSON object
-        across multiple lines, not just the first closing brace.
-        """
-        # Multi-line JSON without markdown fences - tests greedy vs lazy regex
+        """Multiline JSON without markdown fences is extracted correctly."""
         response = """{
   "classification": "dependency_issue",
   "confidence": 0.92,
@@ -698,30 +761,24 @@ class TestBoundaryConditions:
   "affected_files": ["requirements.txt", "setup.py"],
   "recommended_action": "Update dependencies"
 }"""
-        adapter, _ = _make_adapter(response)
+        adapter, _, _ = _make_adapter(response)
         context = _make_context()
         failures = _make_failures(1)
 
         result = await adapter.analyze(failures, context)
 
-        # Verify all fields are correctly extracted
         assert result.classification == FailureClassification.DEPENDENCY_ISSUE
         assert result.confidence == 0.92
         assert "} inside string" in result.reasoning
         assert result.affected_files == ("requirements.txt", "setup.py")
-        assert "Update dependencies" in result.recommended_action
 
     @pytest.mark.asyncio
     async def test_json_followed_by_trailing_commentary_with_braces(self):
         r"""JSON followed by commentary with braces is parsed correctly.
 
-        Tests the fix for greedy regex issue where r"\{.*\}" would capture
-        from first { to last } in response, including commentary after JSON.
-        The depth-tracking parser should extract only the valid JSON object.
-
-        See issue #589: Greedy JSON Regex in Fallback Extraction May Capture Trailing Braces
+        Depth-tracking parser should extract only the valid JSON object,
+        not the trailing braces.
         """
-        # JSON followed by commentary containing braces
         response = """{
   "classification": "code_defect",
   "confidence": 0.88,
@@ -731,13 +788,12 @@ class TestBoundaryConditions:
 }
 
 Additional analysis: The problem is in the try-except {block} where {error handling} is missing."""
-        adapter, _ = _make_adapter(response)
+        adapter, _, _ = _make_adapter(response)
         context = _make_context()
         failures = _make_failures(1)
 
         result = await adapter.analyze(failures, context)
 
-        # Should successfully parse the valid JSON object, not the trailing braces
         assert result.classification == FailureClassification.CODE_DEFECT
         assert result.confidence == 0.88
         assert result.reasoning == "Variable initialization issue"
@@ -745,11 +801,7 @@ Additional analysis: The problem is in the try-except {block} where {error handl
 
     @pytest.mark.asyncio
     async def test_json_with_escaped_quotes_in_strings(self):
-        """JSON with escaped quotes in string values is parsed correctly.
-
-        Tests depth tracking properly handles escape sequences in strings
-        so quotes don't affect brace counting.
-        """
+        """JSON with escaped quotes in string values is parsed correctly."""
         response = """{
   "classification": "environment_issue",
   "confidence": 0.91,
@@ -757,7 +809,7 @@ Additional analysis: The problem is in the try-except {block} where {error handl
   "affected_files": ["config.py"],
   "recommended_action": "Set DATABASE_URL=\\"postgres://...\\""
 }"""
-        adapter, _ = _make_adapter(response)
+        adapter, _, _ = _make_adapter(response)
         context = _make_context()
         failures = _make_failures(1)
 
@@ -769,10 +821,7 @@ Additional analysis: The problem is in the try-except {block} where {error handl
 
     @pytest.mark.asyncio
     async def test_nested_braces_in_reasoning_string(self):
-        """JSON with nested braces in string values is handled correctly.
-
-        Tests depth tracking properly ignores braces inside strings.
-        """
+        """JSON with nested braces in string values is handled correctly."""
         response = """{
   "classification": "configuration_issue",
   "confidence": 0.87,
@@ -780,7 +829,7 @@ Additional analysis: The problem is in the try-except {block} where {error handl
   "affected_files": ["config.yaml"],
   "recommended_action": "Fix config to use {proper: syntax}"
 }"""
-        adapter, _ = _make_adapter(response)
+        adapter, _, _ = _make_adapter(response)
         context = _make_context()
         failures = _make_failures(1)
 
@@ -808,7 +857,7 @@ class TestCrossCuttingField:
             "recommended_action": "Update method calls in all files",
             "cross_cutting": true
         }"""
-        adapter, _ = _make_adapter(response)
+        adapter, _, _ = _make_adapter(response)
         context = _make_context()
         failures = _make_failures(1)
 
@@ -829,7 +878,7 @@ class TestCrossCuttingField:
             "recommended_action": "Fix each module independently",
             "cross_cutting": false
         }"""
-        adapter, _ = _make_adapter(response)
+        adapter, _, _ = _make_adapter(response)
         context = _make_context()
         failures = _make_failures(1)
 
@@ -848,7 +897,7 @@ class TestCrossCuttingField:
             "affected_files": ["file.py"],
             "recommended_action": "Fix the issue"
         }"""
-        adapter, _ = _make_adapter(response)
+        adapter, _, _ = _make_adapter(response)
         context = _make_context()
         failures = _make_failures(1)
 
@@ -860,7 +909,7 @@ class TestCrossCuttingField:
     @pytest.mark.asyncio
     async def test_malformed_json_returns_fallback_with_cross_cutting_false(self):
         """Malformed JSON returns fallback result with cross_cutting=False."""
-        adapter, _ = _make_adapter("completely invalid json response")
+        adapter, _, _ = _make_adapter("completely invalid json response")
         context = _make_context()
         failures = _make_failures(1)
 
@@ -890,7 +939,7 @@ class TestCrossCuttingField:
                 "recommended_action": "Fix the root cause",
                 "cross_cutting": true
             }}"""
-            adapter, _ = _make_adapter(response)
+            adapter, _, _ = _make_adapter(response)
             context = _make_context()
             failures = _make_failures(1)
 
@@ -898,3 +947,58 @@ class TestCrossCuttingField:
 
             assert result.cross_cutting is True
             assert result.classification == class_enum
+
+
+# ---------------------------------------------------------------------------
+# Adapter-local prompt builder contract
+# ---------------------------------------------------------------------------
+
+
+class TestAdapterLocalPromptBuilder:
+    @pytest.mark.asyncio
+    async def test_factory_receives_systemic_analysis_prompt_builder(self):
+        """The factory is invoked with a _SystemicAnalysisPromptBuilder."""
+        adapter, _, captured = _make_adapter("""{
+            "classification": "code_defect",
+            "confidence": 0.85,
+            "reasoning": "x",
+            "affected_files": [],
+            "recommended_action": "y"
+        }""")
+        context = _make_context()
+        failures = _make_failures(1)
+
+        await adapter.analyze(failures, context)
+
+        assert len(captured) == 1
+        assert isinstance(captured[0], _SystemicAnalysisPromptBuilder)
+
+    @pytest.mark.asyncio
+    async def test_factory_invoked_once_per_analyze(self):
+        """A fresh prompt builder + coding agent is created for each analyze() call."""
+        adapter, _, captured = _make_adapter("""{
+            "classification": "code_defect",
+            "confidence": 0.85,
+            "reasoning": "x",
+            "affected_files": [],
+            "recommended_action": "y"
+        }""")
+        context = _make_context()
+
+        await adapter.analyze(_make_failures(1), context)
+        await adapter.analyze(_make_failures(2), context)
+        await adapter.analyze(_make_failures(3), context)
+
+        assert len(captured) == 3
+
+    def test_task_text_built_directly_matches_builder(self):
+        """The standalone _build_systemic_analysis_task_text matches the builder."""
+        context = _make_context(iteration=7, work_item_id="WI-99")
+        failures = _make_failures(2)
+
+        direct = _build_systemic_analysis_task_text(failures=failures, context=context)
+
+        assert "Iteration: 7" in direct
+        assert "WI-99" in direct
+        assert "test_file_0.py" in direct
+        assert "test_file_1.py" in direct

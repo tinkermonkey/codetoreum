@@ -1,48 +1,46 @@
 """Production LLM-based systemic analysis adapter.
 
-Implements ISystemicAnalysisService by delegating failure classification to the LLM
-agent using the existing systemic_analysis sub-task infrastructure.
+Implements :class:`~codetoreum.ports.output.systemic_analysis_service.ISystemicAnalysisService`
+by delegating failure classification to a coding agent via the
+:class:`~codetoreum.ports.output.coding_agent.ICodingAgent` port.
 
-This adapter analyzes test failures and classifies their root causes using Claude Code,
-enabling the repair cycle to dispatch to the correct handling strategy (code fix,
+This adapter analyzes test failures and classifies their root causes
+using Claude Code (or any other ``ICodingAgent`` implementation), enabling
+the repair cycle to dispatch to the correct handling strategy (code fix,
 environment rebuild, dependency fix, or transient retry).
 
-Architecture:
-- Async factory injection for agent-based LLM provider resolution
-- Factory resolves providers by agent name (e.g., "systemic_analysis")
-- Prompt construction with comprehensive context (failures, prior attempts, iteration)
-- JSON parsing with fallback to CODE_DEFECT classification on parse errors
-- No event emission (caller's responsibility)
-- Comprehensive error logging with no silent failures
+Architecture
+------------
+
+- A bootstrap-wired ``coding_agent_factory: Callable[[IPromptBuilder], ICodingAgent]``
+  is injected at construction. For each call, the adapter builds a
+  call-local :class:`_SystemicAnalysisPromptBuilder` that closure-captures
+  the failures + analysis context, then asks the factory for a fresh
+  ``ICodingAgent`` bound to that builder.
+- The adapter then drives the coding agent with a minimal synthetic
+  :class:`AgentExecution` / :class:`WorkspaceContext` and a
+  :class:`CodingAgentInvocationOptions`. The adapter-local prompt
+  builder ignores the synthetic ``agent`` / ``work_item`` arguments
+  and assembles the :class:`StructuredPrompt` from its closure-captured
+  state.
+- JSON parsing falls back to ``CODE_DEFECT`` on parse errors so a
+  malformed agent response does not blow up the repair cycle.
+- No event emission (caller's responsibility).
+- Comprehensive error logging with no silent failures.
 """
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import re
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from collections.abc import Callable, Coroutine
-    from typing import Any, Protocol
-
-    from codetoreum.ports.output.llm_types import ExecutionContext, ExecutionResult
-
-    class _LLMProviderLike(Protocol):
-        """Duck-typed interface for the prompt-execution call sites.
-
-        The historical ``ILLMProvider`` port retired in Phase D5; this
-        adapter still needs a callable that takes a prompt+context and
-        returns an ``ExecutionResult``. Until the systemic-analysis
-        adapter migrates to ``ICodingAgent``, it relies on the duck type
-        below."""
-
-        async def execute(self, prompt: str, context: ExecutionContext | None = ...) -> ExecutionResult: ...
-
-    AgentLLMFactory = Callable[[str], Coroutine[Any, Any, _LLMProviderLike]]
-
+from codetoreum.adapters.secondary.free_form_coding_agent import (
+    synthetic_agent_execution,
+    synthetic_workspace_context,
+)
+from codetoreum.domain.coding_agent_types import InvocationMode
 from codetoreum.domain.repair_cycle_types import (
     AnalysisContext,
     FailureClassification,
@@ -50,139 +48,95 @@ from codetoreum.domain.repair_cycle_types import (
     SystemicAnalysisResult,
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.ports.output.coding_agent import CodingAgentInvocationOptions
+from codetoreum.ports.output.prompt_builder import IPromptBuilder, StructuredPrompt
 from codetoreum.ports.output.systemic_analysis_service import ISystemicAnalysisService
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
+
+    from codetoreum.domain.agent import Agent
+    from codetoreum.domain.work_item import WorkItem
+    from codetoreum.domain.workspace_context import WorkspaceContext
+    from codetoreum.ports.output.coding_agent import ICodingAgent
+    from codetoreum.ports.output.prompt_builder import ExecutionOutput
 
 logger = logging.getLogger(__name__)
 
 
-class LLMSystemicAnalysisAdapter(ISystemicAnalysisService):
-    """Production systemic analysis adapter using LLM for classification.
+# ---------------------------------------------------------------------------
+# Adapter-local prompt builder
+# ---------------------------------------------------------------------------
 
-    Analyzes test failures by delegating to Claude Code via the LLM provider factory,
-    constructing rich context prompts that include failure details, prior fix
-    attempts, and iteration count.
 
-    Example:
-        adapter = LLMSystemicAnalysisAdapter(llm_factory=lambda agent_name: provider_coro)
-        result = await adapter.analyze(failures, context)
+class _SystemicAnalysisPromptBuilder(IPromptBuilder):
+    """Per-call :class:`IPromptBuilder` for systemic failure analysis.
+
+    Closure-captures the test failures and analysis context. The
+    :meth:`build` method ignores the standard ``agent`` / ``work_item``
+    / ``prior_outputs`` arguments — only the synthetic ``workspace_context``
+    is used.
+
+    The resulting :class:`StructuredPrompt` carries the full failure-
+    analysis prompt in its ``task_description`` field. The rendered text
+    (via :func:`render_structured_prompt_to_text`) becomes the prompt
+    Claude Code receives.
     """
 
-    def __init__(self, llm_factory: AgentLLMFactory, timeout_seconds: int = 300) -> None:
-        """Initialize production systemic analysis adapter.
-
-        Args:
-            llm_factory: Factory callable that takes agent name (str) and returns coroutine
-                        resolving to configured ILLMProvider instance
-            timeout_seconds: Timeout for LLM execution in seconds (default 300)
-
-        Raises:
-            ValueError: If llm_factory is None or timeout_seconds is invalid
-        """
-        if llm_factory is None:
-            msg = "llm_factory cannot be None"
-            raise ValueError(msg)
-        if timeout_seconds <= 0:
-            msg = "timeout_seconds must be > 0"
-            raise ValueError(msg)
-        self._llm_factory = llm_factory
-        self._timeout_seconds = timeout_seconds
-        self._logger = logging.getLogger(__name__)
-
-    async def analyze(
+    def __init__(
         self,
+        *,
         failures: list[RepairTestFailure],
         context: AnalysisContext,
-    ) -> SystemicAnalysisResult:
-        """Classify test failures by analyzing with LLM.
+    ) -> None:
+        self._failures = failures
+        self._context = context
 
-        Constructs a comprehensive prompt including failure messages, affected files,
-        iteration count, and prior fix attempts. Sends to LLM for classification and
-        parses the JSON response.
-
-        Args:
-            failures: List of test failures to classify.
-            context: Context including work item id, iteration count,
-                     and prior fix attempt history.
-
-        Returns:
-            SystemicAnalysisResult with classification, confidence, reasoning,
-            affected files, and recommended action.
-
-        Raises:
-            TimeoutError: If LLM execution exceeds timeout
-            ConnectionError: If LLM provider is unreachable
-            Exception: Other LLM provider failures (propagated for caller fallback)
-
-        Note:
-            Response parsing errors (json.JSONDecodeError, ValueError, KeyError) are
-            caught internally and result in a CODE_DEFECT fallback response rather than
-            propagating to the caller.
-        """
-        prompt = self._build_prompt(failures, context)
-
-        # Create execution context with timeout and agent specialization metadata
-        from codetoreum.ports.output.llm_types import ExecutionContext as ExecutionContextImpl
-
-        execution_context = ExecutionContextImpl(
-            timeout_seconds=self._timeout_seconds,
-            metadata={
-                "subtask_name": "systemic_analysis",
-                "workflow_run_id": context.workflow_run_id,
-                "work_item_id": context.work_item_id,
-                "iteration": context.iteration,
-            },
+    async def build(
+        self,
+        agent: Agent,
+        work_item: WorkItem,
+        workspace_context: WorkspaceContext,
+        prior_outputs: tuple[ExecutionOutput, ...] = (),
+    ) -> StructuredPrompt:
+        """Assemble the structured prompt for systemic failure analysis."""
+        task_description = _build_systemic_analysis_task_text(
+            failures=self._failures,
+            context=self._context,
+        )
+        return StructuredPrompt(
+            role_description="Systemic analysis specialist",
+            task_description=task_description,
+            work_item=work_item,
+            workspace_context=workspace_context,
+            instructions=(
+                "Respond with JSON only — no markdown, no commentary.",
+                "Use the schema described in the task description.",
+            ),
+            constraints=(
+                "Do not modify any files in the repository.",
+                "Do not invoke any tools beyond what is needed to read the failures.",
+            ),
+            prior_outputs=(),
         )
 
-        response = await self._execute_llm_with_timeout(prompt, execution_context, context)
-        try:
-            return self._parse_response(response.content, context)
-        except (json.JSONDecodeError, ValueError, KeyError) as e:
-            # Parse error: response received but couldn't parse/validate it
-            # Fall back to CODE_DEFECT for malformed responses
-            self._logger.error(
-                "Failed to parse systemic analysis response, defaulting to code_defect",
-                extra={
-                    "workflow_run_id": context.workflow_run_id,
-                    "work_item_id": context.work_item_id,
-                    "iteration": context.iteration,
-                    "error": str(e),
-                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
-                },
-                exc_info=True,
-            )
-            return SystemicAnalysisResult(
-                classification=FailureClassification.CODE_DEFECT,
-                confidence=0.0,
-                reasoning=f"Parse failure: {e}",
-                affected_files=(),
-                recommended_action="Fix code defects",
-                cross_cutting=False,
-            )
 
-    def _build_prompt(
-        self,
-        failures: list[RepairTestFailure],
-        context: AnalysisContext,
-    ) -> str:
-        """Build comprehensive prompt for LLM systemic analysis.
+def _build_systemic_analysis_task_text(
+    *,
+    failures: list[RepairTestFailure],
+    context: AnalysisContext,
+) -> str:
+    """Build the textual systemic-analysis task body.
 
-        Includes:
-        - Iteration count (for escalation context)
-        - Work item ID (for reference)
-        - Prior fix attempts (to avoid re-analyzing same issues)
-        - Test failure details (file, test name, message)
+    Includes the failure list, prior fix attempts, iteration count, and
+    the JSON-output schema. Kept as a module-level function so tests can
+    exercise it directly.
+    """
+    failure_lines = "\n".join(f"- {f.file}::{f.test}: {f.message}" for f in failures)
+    prior_attempts = "\n".join(context.prior_fix_attempts) if context.prior_fix_attempts else "None"
 
-        Args:
-            failures: List of test failures
-            context: Analysis context with iteration and prior attempts
-
-        Returns:
-            Formatted prompt for LLM
-        """
-        failure_lines = "\n".join(f"- {f.file}::{f.test}: {f.message}" for f in failures)
-        prior_attempts = "\n".join(context.prior_fix_attempts) if context.prior_fix_attempts else "None"
-
-        return f"""Analyze the following test failures and classify the root cause.
+    return f"""Analyze the following test failures and classify the root cause.
 
 Iteration: {context.iteration}
 Work item: {context.work_item_id}
@@ -210,81 +164,221 @@ Field definitions:
 - recommended_action: What action should be taken to fix this issue
 - cross_cutting: Set to true if the identified root cause is a single change that propagates failures across multiple files simultaneously (e.g., renamed method, changed interface contract, modified base class, API contract change, schema migration, shared import path change). Set to false when failures in different files are independent and can be fixed in isolation."""
 
-    async def _execute_llm_with_timeout(
-        self,
-        prompt: str,
-        execution_context: ExecutionContext,
-        analysis_context: AnalysisContext,
-    ) -> ExecutionResult:
-        """Execute LLM with timeout protection.
 
-        Wraps the LLM execution with asyncio timeout to prevent classification
-        calls from hanging indefinitely.
+# ---------------------------------------------------------------------------
+# Adapter
+# ---------------------------------------------------------------------------
+
+
+class LLMSystemicAnalysisAdapter(ISystemicAnalysisService):
+    """Production systemic analysis adapter using a coding agent.
+
+    Constructs a per-call adapter-local
+    :class:`_SystemicAnalysisPromptBuilder`, asks the injected
+    ``coding_agent_factory`` for an :class:`ICodingAgent` bound to that
+    builder, and drives a single short-lived execution to classify the
+    failures.
+
+    Example:
+        adapter = LLMSystemicAnalysisAdapter(
+            coding_agent_factory=lambda pb: ResilientCodingAgentDecorator(
+                wrapped=FreeFormCodingAgent(prompt_builder=pb, ...),
+            ),
+        )
+        result = await adapter.analyze(failures, context)
+    """
+
+    def __init__(
+        self,
+        coding_agent_factory: Callable[[IPromptBuilder], ICodingAgent],
+        *,
+        timeout_seconds: int = 300,
+        invocation_mode: InvocationMode = InvocationMode.CONTAINERIZED,
+        model: str = "claude-sonnet-4-6",
+        container_image: str = "codetoreum-agent:latest",
+        workspace_path: Path | None = None,
+    ) -> None:
+        """Initialize the systemic-analysis adapter.
 
         Args:
-            prompt: Prompt to send to LLM
-            execution_context: Execution context with timeout and metadata
-            analysis_context: Analysis context for logging
-
-        Returns:
-            LLM response object
+            coding_agent_factory: Per-call factory returning a fresh
+                :class:`ICodingAgent` bound to the supplied
+                :class:`IPromptBuilder`. The bootstrap wires this to a
+                resilience-decorated
+                :class:`~codetoreum.adapters.secondary.free_form_coding_agent.FreeFormCodingAgent`.
+            timeout_seconds: Hard timeout for each coding-agent
+                invocation (default 300s).
+            invocation_mode: Where the coding agent runs. Defaults to
+                :class:`InvocationMode.CONTAINERIZED` for production
+                isolation; tests may pass :class:`InvocationMode.HOST`.
+            model: Model name to request from the coding agent.
+            container_image: Docker image for containerised mode. Only
+                consumed when ``invocation_mode == CONTAINERIZED``.
+            workspace_path: Optional workspace path the coding agent
+                runs in. Systemic analysis has no workspace of its own;
+                callers typically pass the orchestrator's working
+                directory (or a temp dir for tests).
 
         Raises:
-            TimeoutError: If execution exceeds timeout
-            Exception: Any exception raised by the LLM provider
+            ValueError: If ``coding_agent_factory`` is None or
+                ``timeout_seconds`` is non-positive.
         """
+        if coding_agent_factory is None:
+            msg = "coding_agent_factory cannot be None"
+            raise ValueError(msg)
+        if timeout_seconds <= 0:
+            msg = "timeout_seconds must be > 0"
+            raise ValueError(msg)
+        self._coding_agent_factory = coding_agent_factory
+        self._timeout_seconds = timeout_seconds
+        self._invocation_mode = invocation_mode
+        self._model = model
+        self._container_image = container_image
+        self._workspace_path = workspace_path
+        self._logger = logging.getLogger(__name__)
+
+    async def analyze(
+        self,
+        failures: list[RepairTestFailure],
+        context: AnalysisContext,
+    ) -> SystemicAnalysisResult:
+        """Classify test failures via the injected coding agent.
+
+        Constructs an adapter-local prompt builder for the call, asks
+        the factory for a fresh coding agent bound to it, then drives
+        a single short-lived execution. Parses the agent's
+        ``summary_text`` as JSON; falls back to ``CODE_DEFECT`` on
+        parse errors.
+
+        Args:
+            failures: List of test failures to classify.
+            context: Context including work item id, iteration count,
+                and prior fix attempt history.
+
+        Returns:
+            :class:`SystemicAnalysisResult` with classification,
+            confidence, reasoning, affected files, and recommended
+            action.
+
+        Raises:
+            TimeoutError: If the coding agent exceeds its timeout.
+            Exception: Other coding-agent failures (propagated for
+                caller fallback).
+
+        Note:
+            Response parsing errors (json.JSONDecodeError, ValueError,
+            KeyError) are caught internally and result in a
+            ``CODE_DEFECT`` fallback response rather than propagating
+            to the caller.
+        """
+        prompt_builder = _SystemicAnalysisPromptBuilder(
+            failures=failures,
+            context=context,
+        )
+        coding_agent = self._coding_agent_factory(prompt_builder)
+
+        execution = synthetic_agent_execution(
+            purpose="systemic_analysis",
+            model=self._model,
+        )
+        workspace_context = synthetic_workspace_context(
+            purpose="systemic_analysis",
+            workspace_path=self._workspace_path,
+        )
+
+        mode_config: dict[str, object] = {}
+        if self._invocation_mode == InvocationMode.CONTAINERIZED:
+            mode_config = {"image": self._container_image}
+
+        options = CodingAgentInvocationOptions(
+            invocation_mode=self._invocation_mode,
+            model=self._model,
+            timeout_seconds=self._timeout_seconds,
+            cost_limit_usd=None,
+            mode_config=mode_config,
+        )
+
         try:
-            llm_provider = await self._llm_factory("systemic_analysis")
-            return await asyncio.wait_for(
-                llm_provider.execute(prompt, context=execution_context),
-                timeout=execution_context.timeout_seconds,
-            )
-        except TimeoutError as e:
+            result = await coding_agent.execute(execution, workspace_context, options)
+        except TimeoutError:
             self._logger.error(
-                "LLM systemic analysis execution timed out",
+                "Systemic analysis coding agent timed out",
                 extra={
-                    "workflow_run_id": analysis_context.workflow_run_id,
-                    "work_item_id": analysis_context.work_item_id,
-                    "iteration": analysis_context.iteration,
-                    "timeout_seconds": execution_context.timeout_seconds,
+                    "workflow_run_id": context.workflow_run_id,
+                    "work_item_id": context.work_item_id,
+                    "iteration": context.iteration,
+                    "timeout_seconds": self._timeout_seconds,
                     "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
                 },
                 exc_info=True,
             )
-            raise TimeoutError(
-                f"Systemic analysis classification exceeded {execution_context.timeout_seconds}s timeout"
-            ) from e
+            raise
+
+        if not result.success:
+            self._logger.error(
+                "Systemic analysis coding agent failed",
+                extra={
+                    "workflow_run_id": context.workflow_run_id,
+                    "work_item_id": context.work_item_id,
+                    "iteration": context.iteration,
+                    "error_summary": result.error_summary,
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                },
+            )
+            return SystemicAnalysisResult(
+                classification=FailureClassification.CODE_DEFECT,
+                confidence=0.0,
+                reasoning=f"Coding agent failed: {result.error_summary or 'unknown error'}",
+                affected_files=(),
+                recommended_action="Fix code defects",
+                cross_cutting=False,
+            )
+
+        try:
+            return self._parse_response(result.summary_text, context)
+        except (json.JSONDecodeError, ValueError, KeyError) as e:
+            # Parse error: response received but couldn't parse/validate it
+            # Fall back to CODE_DEFECT for malformed responses
+            self._logger.error(
+                "Failed to parse systemic analysis response, defaulting to code_defect",
+                extra={
+                    "workflow_run_id": context.workflow_run_id,
+                    "work_item_id": context.work_item_id,
+                    "iteration": context.iteration,
+                    "error": str(e),
+                    "error_id": ErrorRegistry.ERR_REPAIR_CYCLE_ERROR,
+                },
+                exc_info=True,
+            )
+            return SystemicAnalysisResult(
+                classification=FailureClassification.CODE_DEFECT,
+                confidence=0.0,
+                reasoning=f"Parse failure: {e}",
+                affected_files=(),
+                recommended_action="Fix code defects",
+                cross_cutting=False,
+            )
+
+    # ------------------------------------------------------------------
+    # Response parsing (kept identical to pre-migration behaviour)
+    # ------------------------------------------------------------------
 
     def _parse_response(
         self,
         response_text: str,
         context: AnalysisContext,
     ) -> SystemicAnalysisResult:
-        """Parse LLM response into SystemicAnalysisResult.
+        """Parse coding-agent response into :class:`SystemicAnalysisResult`.
 
-        Strips markdown code fences from response and extracts JSON.
-        Validates JSON structure and enum values. On parse error or invalid enum,
-        raises exception that will be caught by analyze() for fallback handling.
-
-        Args:
-            response_text: Raw LLM response text (may contain markdown fences)
-            context: Analysis context for logging
-
-        Returns:
-            Parsed SystemicAnalysisResult
-
-        Raises:
-            json.JSONDecodeError: If response is not valid JSON
-            ValueError: If classification value is not a valid FailureClassification
-            KeyError: If required JSON fields are missing
+        Strips markdown code fences from the response and extracts JSON.
+        Validates JSON structure and enum values. On parse error or
+        invalid enum, raises an exception that :meth:`analyze` catches
+        for fallback handling.
         """
-        # Extract JSON from markdown code fences or plain response
         json_text = self._extract_json_from_response(response_text, context)
 
-        # Parse JSON (may raise json.JSONDecodeError)
         data = json.loads(json_text)
 
-        # Validate classification enum (may raise ValueError)
         classification_str = data["classification"]
         try:
             classification = FailureClassification(classification_str)
@@ -301,16 +395,13 @@ Field definitions:
             )
             raise ValueError(f"Invalid classification value: {classification_str}") from e
 
-        # Extract and validate confidence
         confidence = float(data["confidence"])
         if not 0.0 <= confidence <= 1.0:
             msg = f"Confidence must be between 0.0 and 1.0, got {confidence}"
             raise ValueError(msg)
 
-        # Extract cross_cutting - optional field, defaults to False (backward-compatible)
         cross_cutting = bool(data.get("cross_cutting", False))
 
-        # Build result
         return SystemicAnalysisResult(
             classification=classification,
             confidence=confidence,
@@ -327,24 +418,10 @@ Field definitions:
     ) -> str:
         """Extract JSON from response, stripping markdown code fences.
 
-        Attempts to extract JSON from markdown code blocks (```json ... ```),
-        falling back to finding JSON object in response if no fences found.
-
-        Uses depth-tracking to find matching braces, avoiding greedy matching
-        that would capture trailing braces from commentary.
-
-        Args:
-            response_text: Raw response text from LLM
-            context: Analysis context for logging
-
-        Returns:
-            JSON string ready for parsing
-
-        Raises:
-            ValueError: If no valid JSON found in response
+        Attempts to extract JSON from markdown code blocks
+        (```json ... ```), falling back to depth-tracked brace matching
+        if no fences are found.
         """
-        # Try to extract JSON from markdown code fence first
-        # Pattern: ```json ... ``` or ``` ... ```
         json_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", response_text, re.DOTALL)
         if json_match:
             json_text = json_match.group(1).strip()
@@ -357,8 +434,6 @@ Field definitions:
             )
             return json_text
 
-        # Fallback: find JSON object by tracking brace depth
-        # This avoids greedy matching (r"\{.*\}") which captures from first { to last }
         json_text = self._find_json_by_depth(response_text)
         if json_text:
             self._logger.debug(
@@ -370,29 +445,20 @@ Field definitions:
             )
             return json_text
 
-        # No JSON found
-        msg = f"No JSON found in LLM response: {response_text[:200]}"
+        msg = f"No JSON found in coding-agent response: {response_text[:200]}"
         raise ValueError(msg)
 
     def _find_json_by_depth(self, response_text: str) -> str | None:
         """Find JSON object by tracking brace depth.
 
-        Locates the first opening brace and finds its matching closing brace
-        by tracking depth. This prevents capturing trailing braces from
-        commentary that would be included by greedy matching.
-
-        Args:
-            response_text: Text to search for JSON object
-
-        Returns:
-            JSON string if found, None otherwise
+        Locates the first opening brace and finds its matching closing
+        brace by tracking depth. This prevents greedy matching from
+        capturing trailing braces from commentary.
         """
-        # Find the first opening brace
         start_idx = response_text.find("{")
         if start_idx == -1:
             return None
 
-        # Track brace depth from the opening brace
         depth = 0
         in_string = False
         escape_next = False
@@ -400,7 +466,6 @@ Field definitions:
         for idx in range(start_idx, len(response_text)):
             char = response_text[idx]
 
-            # Handle string boundaries and escape sequences
             if escape_next:
                 escape_next = False
                 continue
@@ -411,15 +476,12 @@ Field definitions:
                 in_string = not in_string
                 continue
 
-            # Only count braces outside strings
             if not in_string:
                 if char == "{":
                     depth += 1
                 elif char == "}":
                     depth -= 1
                     if depth == 0:
-                        # Found matching closing brace
                         return response_text[start_idx : idx + 1]
 
-        # Unmatched braces
         return None
