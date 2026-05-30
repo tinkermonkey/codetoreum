@@ -12,7 +12,18 @@ Tests cover:
 
 import pytest
 
-from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
+# MockLLMAdapter retired in Phase D5; tests of MockReviewCycleAdapter use a
+# minimal stand-in that records call counts via _request_count attribute.
+
+
+class _LLMAdapterStub:
+    def __init__(self) -> None:
+        self._request_count = 0
+
+    def get_request_count(self) -> int:
+        return self._request_count
+
+
 from codetoreum.adapters.testing.mock_review_cycle_adapter import (
     MockReviewCycleAdapter,
     ReviewSequenceItem,
@@ -635,7 +646,7 @@ class TestCausalLinkingWithLLMOutput:
         rather than generating a new LLM call.
         """
         # Setup: Create adapter with LLM support
-        llm_adapter = MockLLMAdapter()
+        llm_adapter = _LLMAdapterStub()
         adapter = MockReviewCycleAdapter(clock=clock, llm_adapter=llm_adapter)
         adapter.current_project = "test-project"
 
@@ -678,7 +689,7 @@ class TestCausalLinkingWithLLMOutput:
     @pytest.mark.asyncio
     async def test_evaluates_output_with_errors(self, clock):
         """Test evaluation of prior output containing errors - should request changes."""
-        llm_adapter = MockLLMAdapter()
+        llm_adapter = _LLMAdapterStub()
         adapter = MockReviewCycleAdapter(clock=clock, llm_adapter=llm_adapter)
         adapter.current_project = "test-project"
 
@@ -712,7 +723,7 @@ class TestCausalLinkingWithLLMOutput:
     @pytest.mark.asyncio
     async def test_evaluates_incomplete_output(self, clock):
         """Test evaluation of incomplete prior output - should request changes."""
-        llm_adapter = MockLLMAdapter()
+        llm_adapter = _LLMAdapterStub()
         adapter = MockReviewCycleAdapter(clock=clock, llm_adapter=llm_adapter)
         adapter.current_project = "test-project"
 
@@ -750,7 +761,7 @@ class TestCausalLinkingWithLLMOutput:
         evaluate the actual prior_stage_output from the request, not construct a new
         LLM call to generate review content.
         """
-        llm_adapter = MockLLMAdapter()
+        llm_adapter = _LLMAdapterStub()
         adapter = MockReviewCycleAdapter(clock=clock, llm_adapter=llm_adapter)
         adapter.current_project = "test-project"
 

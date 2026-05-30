@@ -5,7 +5,6 @@ import pytest
 from codetoreum.adapters.testing import (
     FakeContainerAdapter,
     InMemoryEventStore,
-    MockLLMAdapter,
 )
 from codetoreum.domain.events import WorkItemCreatedEvent
 from codetoreum.domain.events.adapter_events import now_iso
@@ -109,104 +108,6 @@ class TestHighFidelityFakeContainerAdapter:
 
         # LOW fidelity should return 0 delay
         delay = adapter._calculate_delay_seconds("echo test")
-        assert delay == 0.0, "LOW fidelity should have zero delay"
-
-
-@pytest.mark.asyncio
-class TestHighFidelityMockLLMAdapter:
-    """Tests for HIGH fidelity timing and probabilistic failures in MockLLMAdapter."""
-
-    @pytest.fixture
-    def high_fidelity_config(self):
-        """Create HIGH fidelity config."""
-        return SimulationConfig.create_high_fidelity_config(
-            scenario_name="test_high_fidelity_llm",
-            speed_multiplier=5.0,
-            ms_per_token=50.0,
-        )
-
-    @pytest.fixture
-    def medium_fidelity_config(self):
-        """Create MEDIUM fidelity config."""
-        return SimulationConfig.create_realistic_config(
-            scenario_name="test_medium_fidelity_llm",
-            fidelity_level=FidelityLevel.MEDIUM,
-        )
-
-    async def test_high_fidelity_llm_jitter(self, high_fidelity_config):
-        """Test that HIGH fidelity adds timing jitter to LLM execution."""
-        adapter = MockLLMAdapter(
-            default_response="Test response",
-            config=high_fidelity_config,
-        )
-
-        # Test the delay calculation directly
-        prompt = "Test prompt " * 40
-        response = "Test response " * 20
-        delays = []
-        for _ in range(5):
-            delay = adapter._calculate_delay_seconds(prompt, response)
-            delays.append(delay)
-
-        # Check that delays vary (jitter is applied)
-        delays_unique = len({round(d, 4) for d in delays})
-        assert delays_unique > 1, "HIGH fidelity should add variance with jitter"
-
-    async def test_high_fidelity_llm_probabilistic_failure(self, high_fidelity_config):
-        """Test that HIGH fidelity produces probabilistic LLM failures."""
-        adapter = MockLLMAdapter(
-            default_response="Test response",
-            config=high_fidelity_config,
-        )
-
-        # Run 25 prompts; expect failure on 25th execution
-        failures = 0
-        successes = 0
-        for i in range(25):
-            prompt = f"Prompt {i}"
-            try:
-                await adapter.execute(prompt)
-                successes += 1
-            except RateLimitError:
-                failures += 1
-
-        # Deterministic counter: fail every 25th execution
-        # So with 25 runs, we should get exactly 1 failure
-        assert failures == 1, f"Expected 1 failure (every 25th), got {failures}"
-        assert successes == 24
-
-    async def test_medium_fidelity_llm_no_jitter(self, medium_fidelity_config):
-        """Test that MEDIUM fidelity has no jitter."""
-        adapter = MockLLMAdapter(
-            default_response="Test response",
-            config=medium_fidelity_config,
-        )
-
-        # Same prompt/response should have consistent delay
-        prompt = "Test prompt " * 40
-        response = "Test response " * 20
-        delays = []
-        for _ in range(3):
-            delay = adapter._calculate_delay_seconds(prompt, response)
-            delays.append(delay)
-
-        # MEDIUM should be consistent (no jitter)
-        assert delays[0] == delays[1] == delays[2], "MEDIUM should have no jitter"
-        assert delays[0] > 0, "MEDIUM should have proportional delay"
-
-    async def test_low_fidelity_llm_no_delay(self):
-        """Test that LOW fidelity has no delay."""
-        config = SimulationConfig.create_fast_config(
-            scenario_name="test_low_fidelity_llm",
-            fidelity_level=FidelityLevel.LOW,
-        )
-        adapter = MockLLMAdapter(
-            default_response="Test response",
-            config=config,
-        )
-
-        # LOW fidelity should return 0 delay
-        delay = adapter._calculate_delay_seconds("Test prompt", "Test response")
         assert delay == 0.0, "LOW fidelity should have zero delay"
 
 

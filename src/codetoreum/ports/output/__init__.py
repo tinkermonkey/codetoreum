@@ -3,7 +3,6 @@
 from codetoreum.domain.repair_cycle_types import EnvironmentRepairConfig
 from codetoreum.domain.value_objects import ProjectConfig
 from codetoreum.ports.output.agent_executor import IAgentExecutor
-from codetoreum.ports.output.agent_launcher import IAgentLauncher
 from codetoreum.ports.output.board_service import (
     BoardColumn,
     BoardConfig,
@@ -63,44 +62,7 @@ from codetoreum.ports.output.identity_service import (
     BotIdentityConfig,
     IIdentityService,
 )
-from codetoreum.ports.output.llm_provider import (
-    ExecutionContext,
-    ExecutionResult,
-    ModelInfo,
-    StreamCallback,
-    StreamChunk,
-    ToolCall,
-    ToolCallDelta,
-    ToolDefinition,
-    UsageStats,
-)
-from codetoreum.ports.output.llm_text_provider import ILLMTextProvider
-
-# ``ILLMProvider`` is the historical name for the autonomous-agent launcher
-# port. It is now an alias of ``IAgentLauncher`` (the only production
-# implementation, ``ClaudeCodeAdapter``, is an agent launcher). New code
-# should import ``IAgentLauncher`` or ``ILLMTextProvider`` directly; see
-# ``documentation/architecture/ports/output/agent-launcher.md``.
-ILLMProvider = IAgentLauncher
-
-# ``AgentLLMFactory`` is the async factory callable used throughout the
-# orchestration layer to obtain an agent launcher configured for a given
-# agent (system prompt, model, etc.). Defined here (after the alias) so the
-# alias is resolved.
-from collections.abc import Callable, Coroutine
-from typing import Any
-
-AgentLLMFactory = Callable[[str], Coroutine[Any, Any, IAgentLauncher]]
-"""Async factory callable that creates a configured IAgentLauncher for an agent.
-
-Input:  agent_name (str) - e.g., "senior_software_engineer"
-Output: Coroutine resolving to a configured IAgentLauncher with the agent's
-        model, temperature, system prompt, tool config.
-
-This factory is async-safe and can be called from both sync and async contexts
-(via ``await factory(agent_name)``). Pre-populated caches in the resolver
-ensure most calls complete without needing the event loop.
-"""
+from codetoreum.ports.output.llm_types import ExecutionContext, ExecutionResult
 from codetoreum.ports.output.metrics import IMetrics, MetricData
 from codetoreum.ports.output.monitoring import (
     IMonitoredService,
@@ -183,7 +145,7 @@ __all__ = [
     "ProjectBoard",
     "ReconciliationResult",
     "WorkItemPosition",
-    # Coding Agent (D1 — replaces ILLMProvider / IAgentLauncher in Phase D5)
+    # Coding Agent (sole agent-execution port after Phase D5)
     "ICodingAgent",
     "InvocationMode",
     "CodingAgentInvocationOptions",
@@ -222,20 +184,10 @@ __all__ = [
     # Identity Service
     "IIdentityService",
     "BotIdentityConfig",
-    # LLM Provider (split into agent launcher + text provider; ILLMProvider is a deprecated alias)
-    "AgentLLMFactory",
-    "IAgentLauncher",
-    "ILLMProvider",
-    "ILLMTextProvider",
+    # Legacy LLM types (kept for the prompt→completion repair-cycle adapters
+    # that haven't migrated to ICodingAgent yet; see ports/output/llm_types.py)
     "ExecutionContext",
     "ExecutionResult",
-    "ModelInfo",
-    "StreamCallback",
-    "StreamChunk",
-    "ToolCall",
-    "ToolCallDelta",
-    "ToolDefinition",
-    "UsageStats",
     # Metrics
     "IMetrics",
     "MetricData",

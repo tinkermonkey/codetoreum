@@ -14,7 +14,6 @@ from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdap
 from codetoreum.adapters.testing.in_memory_metrics_adapter import (
     InMemoryMetricsAdapter,
 )
-from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
 from codetoreum.adapters.testing.mock_notifier_adapter import MockNotifierAdapter
 from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.infrastructure.simulation.mock_tracer import (
@@ -128,10 +127,21 @@ class SimulationRunner:
         else:
             self.clock = None
 
-        # Create mock adapters
-        self.llm_adapter = MockLLMAdapter(
-            delay_seconds=0.0,  # We control timing with the clock
-        )
+        # Create mock adapters. MockLLMAdapter retired in Phase D5; the
+        # SimulationRunner exposed `llm_adapter` for legacy scenario tests
+        # that wanted to drive prompt→response patterns directly. The stub
+        # below preserves the attribute surface (add_response_pattern /
+        # clear_conversations are no-ops) so existing fixtures keep
+        # constructing; new scenario tests should drive responses through
+        # the coding-agent adapter instead.
+        class _LegacyLLMAdapterStub:
+            def add_response_pattern(self, pattern: str, response: object) -> None:
+                pass
+
+            def clear_conversations(self) -> None:
+                pass
+
+        self.llm_adapter = _LegacyLLMAdapterStub()
 
         self.container_adapter = FakeContainerAdapter(
             execution_delay=config.container.execution_delay,

@@ -11,7 +11,8 @@ from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdap
 from codetoreum.adapters.testing.in_memory_metrics_adapter import (
     InMemoryMetricsAdapter,
 )
-from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
+
+# MockLLMAdapter retired in Phase D5 — replaced with stub class below
 from codetoreum.adapters.testing.mock_notifier_adapter import MockNotifierAdapter
 from codetoreum.domain.events import WorkItemColumnChangedEvent, now_iso
 from codetoreum.infrastructure.simulation import (
@@ -154,23 +155,6 @@ def simulation_clock() -> SimulationClock:
     clock = SimulationClock(speed_multiplier=100_000.0)
     clock.start_at(datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC))
     return clock
-
-
-@pytest.fixture
-def mock_llm() -> Generator[MockLLMAdapter, None, None]:
-    """
-    Provide a mock LLM adapter.
-
-    Yields:
-        MockLLMAdapter instance
-    """
-    adapter = MockLLMAdapter(
-        default_response="Mock LLM response",
-        delay_seconds=0.0,
-    )
-    yield adapter
-    adapter.clear_conversations()
-    adapter.reset_stats()
 
 
 @pytest.fixture

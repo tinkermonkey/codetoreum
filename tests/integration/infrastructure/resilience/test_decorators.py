@@ -18,11 +18,8 @@ from codetoreum.infrastructure.resilience import (
     OperationMode,
     ResilienceFactory,
 )
-from codetoreum.ports.output.llm_provider import (
-    ExecutionContext,
-    ExecutionResult,
-    ILLMProvider,
-)
+
+# ILLMProvider / llm_provider types retired in Phase D5
 from codetoreum.ports.output.ticket_system import ITicketSystem
 
 # ============================================================================
@@ -137,59 +134,6 @@ class FlakyTicketSystem(ITicketSystem):
         raise NotImplementedError
 
 
-class FlakyLLMProvider(ILLMProvider):
-    """Mock LLM provider that fails intermittently."""
-
-    def __init__(self, fail_count: int = 0):
-        self.fail_count = fail_count
-        self.call_count = 0
-
-    async def execute(
-        self, prompt: str, context: ExecutionContext | None = None, stream_callback=None
-    ) -> ExecutionResult:
-        self.call_count += 1
-        if self.call_count <= self.fail_count:
-            raise Exception("Simulated transient LLM failure")
-
-        return ExecutionResult(
-            content="Test response",
-            model="test-model",
-            completion_tokens=10,
-            prompt_tokens=5,
-            total_tokens=15,
-        )
-
-    # Stub implementations
-    async def execute_with_tools(self, prompt: str, tools, context=None, stream_callback=None):
-        raise NotImplementedError
-
-    async def stream_completion(self, prompt: str, context=None):
-        raise NotImplementedError
-
-    async def create_conversation(self, system_prompt=None, parameters=None) -> str:
-        raise NotImplementedError
-
-    async def continue_conversation(self, conversation_id: str, message: str, stream_callback=None):
-        raise NotImplementedError
-
-    async def get_model_info(self):
-        raise NotImplementedError
-
-    async def list_available_models(self):
-        raise NotImplementedError
-
-    async def count_tokens(self, text: str, model=None) -> int:
-        raise NotImplementedError
-
-    async def get_usage_stats(self, since=None):
-        raise NotImplementedError
-
-
-# ============================================================================
-# Integration Tests
-# ============================================================================
-
-
 class TestResilientTicketSystemIntegration:
     """Integration tests for resilient ticket system decorator."""
 
@@ -239,25 +183,6 @@ class TestResilientTicketSystemIntegration:
         # Circuit should now be open after 3 failures
         with pytest.raises(CircuitBreakerOpenError):
             await resilient.get_work_item(WorkItemId("123"))
-
-
-class TestResilientLLMProviderIntegration:
-    """Integration tests for resilient LLM provider decorator."""
-
-    @pytest.mark.asyncio
-    async def test_retries_llm_failures(self):
-        """Test that LLM failures are retried."""
-        # Create LLM that fails once then succeeds
-        flaky_llm = FlakyLLMProvider(fail_count=1)
-
-        factory = ResilienceFactory(mode=OperationMode.INTEGRATION_TEST)
-        resilient = factory.create_resilient_llm_provider(flaky_llm)
-
-        # Should succeed after retry
-        result = await resilient.execute("test prompt")
-
-        assert result.content == "Test response"
-        assert flaky_llm.call_count == 2  # Initial + 1 retry
 
 
 class TestEndToEndResilience:

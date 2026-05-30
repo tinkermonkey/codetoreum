@@ -13,7 +13,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
+# MockLLMAdapter retired in Phase D5 — replaced with stub class below
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import (
     MockRepairCycleAdapter,
 )
@@ -33,8 +33,12 @@ from codetoreum.infrastructure.simulation.simulation_clock import SimulationCloc
 
 @pytest.fixture
 def llm_factory():
-    """Async factory that returns a MockLLMAdapter regardless of agent name."""
-    llm_adapter = MockLLMAdapter()
+    """Async factory that returns an inert stub (MockLLMAdapter retired in D5)."""
+
+    class _LLMStub:
+        pass
+
+    llm_adapter = _LLMStub()
 
     async def factory(agent_name: str):
         # Return the same mock adapter for all agents

@@ -10,13 +10,13 @@ from codetoreum.adapters.testing import (
     FakeContainerAdapter,
     InMemoryRepositoryAdapter,
     InMemoryTicketAdapter,
-    MockLLMAdapter,
 )
 from codetoreum.infrastructure.adapters import AdapterFactory, AdapterFactoryConfig
 from codetoreum.infrastructure.resilience import OperationMode
 from codetoreum.ports.output.container import IContainer
 from codetoreum.ports.output.event_store import IEventStore
-from codetoreum.ports.output.llm_provider import ILLMProvider
+
+# ILLMProvider / llm_provider types retired in Phase D5
 from codetoreum.ports.output.repository import IRepository
 from codetoreum.ports.output.ticket_system import ITicketSystem
 
@@ -45,20 +45,6 @@ class TestTicketSystemSwapping:
 
         # They should be different instances
         assert adapter1 is not adapter2
-
-
-class TestLLMProviderSwapping:
-    """Test swapping LLM provider adapters."""
-
-    @pytest.mark.asyncio
-    async def test_mock_adapter_creation(self, factory: AdapterFactory):
-        """Test creating mock LLM adapter."""
-        # Disable resilience to get direct adapter instance
-        factory.enable_resilience(False)
-        adapter = factory.create_llm_provider(adapter_name="mock")
-
-        # Verify we got a mock adapter
-        assert isinstance(adapter, MockLLMAdapter)
 
 
 class TestContainerSwapping:
@@ -111,13 +97,11 @@ class TestModeBasedSwapping:
 
         # Get default adapters (would be production adapters)
         ticket_system = factory.create_ticket_system(adapter_name="in_memory")
-        llm_provider = factory.create_llm_provider(adapter_name="mock")
         container = factory.create_container(adapter_name="fake")
         repository = factory.create_repository(adapter_name="in_memory")
 
         # Verify they're the right type
         assert isinstance(ticket_system, ITicketSystem)
-        assert isinstance(llm_provider, ILLMProvider)
         assert isinstance(container, IContainer)
         assert isinstance(repository, IRepository)
 
@@ -132,13 +116,11 @@ class TestModeBasedSwapping:
 
         # Use mock/in-memory adapters for simulation
         ticket_system = factory.create_ticket_system(adapter_name="in_memory")
-        llm_provider = factory.create_llm_provider(adapter_name="mock")
         container = factory.create_container(adapter_name="fake")
         repository = factory.create_repository(adapter_name="in_memory")
 
         # Verify they're the mock implementations
         assert isinstance(ticket_system, InMemoryTicketAdapter)
-        assert isinstance(llm_provider, MockLLMAdapter)
         assert isinstance(container, FakeContainerAdapter)
         assert isinstance(repository, InMemoryRepositoryAdapter)
 
@@ -175,14 +157,12 @@ class TestMultipleAdapterTypes:
         """Test using multiple adapter types at the same time."""
         # Create all adapter types
         ticket_system = factory.create_ticket_system(adapter_name="in_memory")
-        llm_provider = factory.create_llm_provider(adapter_name="mock")
         container = factory.create_container(adapter_name="fake")
         repository = factory.create_repository(adapter_name="in_memory")
         event_store = factory.create_event_store(adapter_name="in_memory")
 
         # Verify all created
         assert isinstance(ticket_system, ITicketSystem)
-        assert isinstance(llm_provider, ILLMProvider)
         assert isinstance(container, IContainer)
         assert isinstance(repository, IRepository)
         assert isinstance(event_store, IEventStore)

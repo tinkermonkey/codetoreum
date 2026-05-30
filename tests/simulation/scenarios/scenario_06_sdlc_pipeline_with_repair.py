@@ -9,7 +9,7 @@ Comprehensive test scenarios validating the full SDLC pipeline workflow includin
 
 import pytest
 
-from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
+# MockLLMAdapter retired in Phase D5 — replaced with stub class below
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
 from codetoreum.adapters.testing.mock_review_cycle_adapter import MockReviewCycleAdapter
 from codetoreum.application.event_handlers.repair_cycle_event_handler import (
@@ -25,6 +25,17 @@ from codetoreum.infrastructure.simulation.bootstrap import (
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.ports.output.review_cycle_service import ReviewCycleRequest
 from tests.simulation.test_event_helpers import WorkItemColumnChanged
+
+
+class MockLLMAdapter:
+    """Inert stub for the retired MockLLMAdapter (Phase D5).
+
+    The repair-cycle scenarios pass an LLM adapter to the factory but never
+    invoke a method on it. This stub keeps construction working until the
+    scenarios migrate to ICodingAgent."""
+
+    def __init__(self, *args, **kwargs) -> None:
+        pass
 
 
 @pytest.fixture

@@ -8,7 +8,6 @@ and dependency injection.
 import pytest
 
 from codetoreum.adapters.secondary import (
-    ClaudeCodeConfig,
     DockerConfig,
     GitConfig,
     GitHubConfig,
@@ -30,7 +29,8 @@ from codetoreum.infrastructure.resilience import (
 )
 from codetoreum.ports.output.container import IContainer
 from codetoreum.ports.output.event_store import IEventStore
-from codetoreum.ports.output.llm_provider import ILLMProvider
+
+# ILLMProvider / llm_provider types retired in Phase D5
 from codetoreum.ports.output.repository import IRepository
 from codetoreum.ports.output.ticket_system import ITicketSystem
 
@@ -90,7 +90,6 @@ class TestAdapterFactory:
         factory = AdapterFactory()
 
         assert factory.ticket_system_registry is not None
-        assert factory.llm_provider_registry is not None
         assert factory.container_registry is not None
         assert factory.repository_registry is not None
         assert factory.event_store_registry is not None
@@ -105,9 +104,6 @@ class TestAdapterFactory:
         assert factory.ticket_system_registry.get_default_name() == "github"
 
         # Check LLM provider adapters
-        assert factory.llm_provider_registry.has_adapter("claude_code")
-        assert factory.llm_provider_registry.has_adapter("mock")
-        assert factory.llm_provider_registry.get_default_name() == "claude_code"
 
         # Check container adapters
         assert factory.container_registry.has_adapter("docker")
@@ -170,38 +166,6 @@ class TestTicketSystemCreation:
 
 class TestLLMProviderCreation:
     """Test cases for LLM provider adapter creation."""
-
-    def test_create_default_llm_provider(self):
-        """Test creating default LLM provider adapter."""
-        factory = AdapterFactory()
-
-        claude_config = ClaudeCodeConfig(api_key_credential_name="ANTHROPIC_API_KEY", default_model="claude-sonnet-4")
-
-        adapter = factory.create_llm_provider(adapter_config=claude_config)
-        assert isinstance(adapter, ILLMProvider)
-
-    def test_create_mock_llm_provider(self):
-        """Test creating mock LLM provider."""
-        factory = AdapterFactory()
-
-        adapter = factory.create_llm_provider(adapter_name="mock")
-        # When resilience is enabled, returns decorated adapter
-        assert isinstance(adapter, ILLMProvider)
-
-    def test_create_llm_provider_with_custom_resilience(self):
-        """Test creating LLM provider with custom resilience config."""
-        factory = AdapterFactory()
-
-        custom_resilience = ServiceResilienceConfig(
-            service_name="llm_provider",
-            rate_limit=RateLimitConfig(max_requests=10, window_seconds=60),
-            circuit_breaker=CircuitBreakerConfig(failure_threshold=2),
-            retry=RetryConfig(max_retries=1),
-            timeout=TimeoutConfig(default_timeout_seconds=60),
-        )
-
-        adapter = factory.create_llm_provider(adapter_name="mock", resilience_config=custom_resilience)
-        assert isinstance(adapter, ILLMProvider)
 
 
 class TestContainerCreation:
@@ -363,14 +327,12 @@ class TestFactoryIntegration:
 
         # Create all adapters
         ticket_system = factory.create_ticket_system(adapter_name="in_memory")
-        llm_provider = factory.create_llm_provider(adapter_name="mock")
         container = factory.create_container(adapter_name="fake")
         repository = factory.create_repository(adapter_name="in_memory")
         event_store = factory.create_event_store(adapter_name="in_memory")
 
         # Verify all created
         assert isinstance(ticket_system, ITicketSystem)
-        assert isinstance(llm_provider, ILLMProvider)
         assert isinstance(container, IContainer)
         assert isinstance(repository, IRepository)
         assert isinstance(event_store, IEventStore)
@@ -382,12 +344,10 @@ class TestFactoryIntegration:
 
         # Create adapters for simulation
         ticket_system = factory.create_ticket_system(adapter_name="in_memory")
-        llm_provider = factory.create_llm_provider(adapter_name="mock")
         container = factory.create_container(adapter_name="fake")
 
         # Verify all use simulation/mock implementations
         assert isinstance(ticket_system, ITicketSystem)
-        assert isinstance(llm_provider, ILLMProvider)
         assert isinstance(container, IContainer)
 
     def test_production_mode_workflow(self):
@@ -397,11 +357,9 @@ class TestFactoryIntegration:
 
         # Create test adapters (using in-memory for test isolation)
         ticket_system = factory.create_ticket_system(adapter_name="in_memory")
-        llm_provider = factory.create_llm_provider(adapter_name="mock")
 
         # Verify adapters created with resilience
         assert isinstance(ticket_system, ITicketSystem)
-        assert isinstance(llm_provider, ILLMProvider)
 
     def test_switch_modes_at_runtime(self):
         """Test switching operation modes at runtime."""

@@ -14,7 +14,6 @@ from codetoreum.infrastructure.adapters.factory import (
 from codetoreum.infrastructure.adapters.registries import (
     ContainerRegistry,
     EventStoreRegistry,
-    LLMProviderRegistry,
     RepositoryRegistry,
     StorageRegistry,
     TicketSystemRegistry,
@@ -30,7 +29,6 @@ __all__ = [
     "AdapterMetadata",
     # Specific registries
     "TicketSystemRegistry",
-    "LLMProviderRegistry",
     "ContainerRegistry",
     "RepositoryRegistry",
     "EventStoreRegistry",

@@ -32,7 +32,6 @@ from codetoreum.infrastructure.simulation.simulation_engine import SimulationEng
 from codetoreum.ports.output.board_service import IBoardService
 from codetoreum.ports.output.code_review_service import ICodeReviewService
 from codetoreum.ports.output.container import IContainer
-from codetoreum.ports.output.llm_provider import ILLMProvider
 from codetoreum.ports.output.ticket_system import ITicketSystem
 from codetoreum.ports.output.version_control_service import IVersionControlService
 
@@ -237,42 +236,35 @@ class CredentialValidator:
             )
 
     async def _check_adapter_llm(self, resolver: AdapterResolver) -> None:
-        """Check LLM provider adapter (Claude Code)."""
-        try:
-            adapter: ILLMProvider = resolver.resolve_agent_launcher()
-            concrete_class = type(adapter).__name__
+        """Check coding-agent adapter (Claude Code).
 
-            if concrete_class == "ClaudeCodeAdapter":
-                try:
-                    # Cheap check: verify token is accepted by Claude Code CLI
-                    # This invokes `claude --version` which tests authentication
-                    await self._verify_claude_code_token()
-                    self._add_result("llm", concrete_class, "PASS")
-                except Exception as e:
-                    error_msg = str(e)
-                    if "claude" in error_msg.lower() and "not found" in error_msg.lower():
-                        self._add_result(
-                            "llm",
-                            concrete_class,
-                            "FAIL",
-                            "Claude Code CLI not installed or not in PATH",
-                        )
-                    else:
-                        self._add_result(
-                            "llm",
-                            concrete_class,
-                            "FAIL",
-                            f"Claude Code token validation failed: {error_msg[:80]}",
-                        )
-            else:
-                self._add_result("llm", concrete_class, "SKIP", "Not a production adapter")
+        Phase D5 retired the ILLMProvider port; the production coding-agent
+        is now a ``ClaudeCodeAdapter`` reachable through
+        :meth:`AdapterResolver.resolve_coding_agent`. The credential check
+        below shells out to ``claude --version`` to verify the token —
+        identical to the old behaviour, but without instantiating the
+        adapter directly (which now requires a prompt_builder + workspace
+        wiring that exceeds the scope of a credential check).
+        """
+        try:
+            await self._verify_claude_code_token()
+            self._add_result("llm", "ClaudeCodeAdapter", "PASS")
         except Exception as e:
-            self._add_result(
-                "llm",
-                "unknown",
-                "FAIL",
-                f"Failed to resolve adapter: {str(e)[:100]}",
-            )
+            error_msg = str(e)
+            if "claude" in error_msg.lower() and "not found" in error_msg.lower():
+                self._add_result(
+                    "llm",
+                    "ClaudeCodeAdapter",
+                    "FAIL",
+                    "Claude Code CLI not installed or not in PATH",
+                )
+            else:
+                self._add_result(
+                    "llm",
+                    "ClaudeCodeAdapter",
+                    "FAIL",
+                    f"Claude Code token validation failed: {error_msg[:80]}",
+                )
 
     async def _check_adapter_container(self, resolver: AdapterResolver) -> None:
         """Check container adapter (Docker)."""

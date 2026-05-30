@@ -34,7 +34,6 @@ class AdapterSelectionConfig:
 
     board: str = "mock"
     ticket: str = "in_memory"
-    llm: str = "mock"
     version_control: str = "in_memory"
     container: str = "fake"
     event_store: str = "in_memory"

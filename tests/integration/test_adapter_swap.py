@@ -51,7 +51,6 @@ class TestAdapterBootstrapBasics:
         # Verify defaults are all simulation variants
         assert config.adapters.board == "mock"
         assert config.adapters.ticket == "in_memory"
-        assert config.adapters.llm == "mock"
         assert config.adapters.container == "fake"
 
         # Boot the application
@@ -125,7 +124,6 @@ class TestAdapterCredentialValidation:
                 config.adapters,
                 board="github",  # Requires GITHUB_TOKEN, GITHUB_ORG
                 ticket="github",  # Requires GITHUB_TOKEN, GITHUB_REPO
-                llm="claude_code",  # Requires CLAUDE_CODE_TOKEN
             ),
         )
 

@@ -17,8 +17,6 @@ from typing import Any, TypeVar
 # Import production adapters
 from codetoreum.adapters.secondary import (
     CachedConfigStore,
-    ClaudeCodeAdapter,
-    ClaudeCodeConfig,
     DockerContainerAdapter,
     ElasticsearchConfigStorage,
     GitConfig,
@@ -72,7 +70,6 @@ from codetoreum.adapters.testing import (
     MockContainerRecoveryAdapter,
     MockDiscussionAdapter,
     MockEnvironmentRepairAdapter,
-    MockLLMAdapter,
     MockNotifierAdapter,
     MockProjectManagerAdapter,
     MockRepairCycleAdapter,
@@ -232,7 +229,6 @@ from codetoreum.infrastructure.adapters.registries import (
     EventEmitterRegistry,
     EventStoreRegistry,
     IdentityServiceRegistry,
-    LLMProviderRegistry,
     MessageBrokerRegistry,
     MetricsAdapterRegistry,
     NotifierRegistry,
@@ -258,7 +254,6 @@ from codetoreum.infrastructure.adapters.registry_base import (
 )
 from codetoreum.infrastructure.adapters.resolver import AdapterConfigurationError
 from codetoreum.infrastructure.resilience import (
-    CLAUDE_RESILIENCE_CONFIG,
     CONTAINER_RESILIENCE_CONFIG,
     GITHUB_RESILIENCE_CONFIG,
     REPOSITORY_RESILIENCE_CONFIG,
@@ -281,7 +276,6 @@ from codetoreum.ports.output.environment_repair_service import IEnvironmentRepai
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.event_store import IEventStore
 from codetoreum.ports.output.identity_service import IIdentityService
-from codetoreum.ports.output.llm_provider import ILLMProvider
 from codetoreum.ports.output.message_broker import IMessageBroker
 from codetoreum.ports.output.metrics import IMetrics
 from codetoreum.ports.output.notifier import INotifier
@@ -341,7 +335,6 @@ class AdapterFactory:
 
         # Initialize registries
         self._ticket_system_registry = TicketSystemRegistry()
-        self._llm_provider_registry = LLMProviderRegistry()
         self._container_registry = ContainerRegistry()
         self._repository_registry = RepositoryRegistry()
         self._event_store_registry = EventStoreRegistry()
@@ -400,31 +393,6 @@ class AdapterFactory:
             name="in_memory",
             adapter_type=InMemoryTicketAdapter,
             description="In-memory ticket system for testing",
-            version="1.0.0",
-            tags=["testing", "simulation", "mock"],
-            config_schema=AdapterCredentialRequirement(
-                simulation_only=True,
-                description="Simulation-only adapter, no credentials required",
-            ),
-        )
-
-        # LLM Provider Adapters
-        self._llm_provider_registry.register(
-            name="claude_code",
-            adapter_type=ClaudeCodeAdapter,
-            description="Claude Code CLI integration",
-            version="1.0.0",
-            tags=["production", "claude", "anthropic"],
-            config_schema=AdapterCredentialRequirement(
-                env_vars=("CLAUDE_CODE_OAUTH_TOKEN",),
-                description="Claude Code OAuth token for authentication",
-            ),
-            set_as_default=True,
-        )
-        self._llm_provider_registry.register(
-            name="mock",
-            adapter_type=MockLLMAdapter,
-            description="Mock LLM provider for testing",
             version="1.0.0",
             tags=["testing", "simulation", "mock"],
             config_schema=AdapterCredentialRequirement(
@@ -1234,11 +1202,6 @@ class AdapterFactory:
         return self._ticket_system_registry
 
     @property
-    def llm_provider_registry(self) -> LLMProviderRegistry:
-        """Get the LLM provider registry."""
-        return self._llm_provider_registry
-
-    @property
     def container_registry(self) -> ContainerRegistry:
         """Get the container registry."""
         return self._container_registry
@@ -1409,7 +1372,6 @@ class AdapterFactory:
         registry_map = {
             "board": self._board_service_registry,
             "ticket": self._ticket_system_registry,
-            "llm": self._llm_provider_registry,
             "version_control": self._version_control_registry,
             "container": self._container_registry,
             "event_store": self._event_store_registry,
@@ -1543,59 +1505,6 @@ class AdapterFactory:
             GITHUB_RESILIENCE_CONFIG,
             resilience_config,
             self._resilience_factory.create_resilient_ticket_system,
-        )
-
-    def create_llm_provider(
-        self,
-        adapter_name: str | None = None,
-        adapter_config: Any | None = None,
-        resilience_config: ServiceResilienceConfig | None = None,
-        **kwargs,
-    ) -> ILLMProvider:
-        """
-        Create an LLM provider adapter instance.
-
-        Args:
-            adapter_name: Name of adapter to use (default: registry default)
-            adapter_config: Configuration for the adapter
-            resilience_config: Custom resilience configuration
-            **kwargs: Additional arguments for adapter constructor
-
-        Returns:
-            Configured LLM provider adapter with resilience applied
-
-        Raises:
-            KeyError: If adapter is not registered
-        """
-        # Determine adapter name
-        if adapter_name is None:
-            adapter_name = self._llm_provider_registry.get_default_name()
-            if adapter_name is None:
-                message = "No default LLM provider adapter configured"
-                raise ValueError(message)
-
-        logger.info(f"Creating LLM provider adapter: {adapter_name}")
-
-        # Create base adapter instance
-        if adapter_config is not None:
-            kwargs["config"] = adapter_config
-        elif adapter_name == "claude_code":
-            # Construct Claude Code config from environment variables
-            kwargs["config"] = self._build_claude_code_config()
-
-        # Map 'model' parameter to 'model_name' for backward compatibility with adapters
-        if "model" in kwargs:
-            kwargs["model_name"] = kwargs.pop("model")
-
-        adapter = self._llm_provider_registry.create_instance(adapter_name, **kwargs)
-
-        # Apply resilience if enabled
-        return self._apply_resilience_wrapper(
-            adapter,
-            "llm_provider",
-            CLAUDE_RESILIENCE_CONFIG,
-            resilience_config,
-            self._resilience_factory.create_resilient_llm_provider,
         )
 
     def create_container(
@@ -1916,13 +1825,6 @@ class AdapterFactory:
             organization=org,
         )
 
-    def _build_claude_code_config(self) -> ClaudeCodeConfig:
-        """Build ClaudeCodeConfig from environment variables."""
-        return ClaudeCodeConfig(
-            # Uses default credential_provider which reads from environment
-        )
-
-    def _build_git_config(self) -> GitConfig:
         """Build GitConfig from environment variables."""
         import os
 

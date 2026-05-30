@@ -5,7 +5,7 @@ Provides centralized resilience patterns for all external system integrations:
 - Circuit breaking (CircuitBreaker, MockCircuitBreaker)
 - Retry policies (ExponentialBackoffRetry, MockRetryPolicy)
 - Timeouts (AsyncTimeout, MockTimeout)
-- Resilient decorators (ResilientTicketSystemDecorator, ResilientLLMProviderDecorator)
+- Resilient decorators (ResilientTicketSystemDecorator)
 - Factory for creating resilient adapters (ResilienceFactory)
 """
 
@@ -24,7 +24,6 @@ from .config import (
 )
 from .decorators import (
     ResilientBoardServiceDecorator,
-    ResilientLLMProviderDecorator,
     ResilientTicketSystemDecorator,
 )
 from .exceptions import (
@@ -80,7 +79,6 @@ __all__ = [
     "MockTimeout",
     # Decorators
     "ResilientTicketSystemDecorator",
-    "ResilientLLMProviderDecorator",
     "ResilientBoardServiceDecorator",
     # Factory
     "ResilienceFactory",

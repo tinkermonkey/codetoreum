@@ -5,10 +5,6 @@ plus mock implementations for testing and simulation.
 """
 
 from codetoreum.adapters.secondary.cached_config_store import CachedConfigStore
-from codetoreum.adapters.secondary.claude_code_adapter import (
-    ClaudeCodeAdapter,
-    ClaudeCodeConfig,
-)
 from codetoreum.adapters.secondary.config_storage_factory import (
     create_cached_config_store,
     create_elasticsearch_config_storage,
@@ -65,8 +61,6 @@ __all__ = [
     # GitHub CI Pipeline
     "GitHubCIPipelineAdapter",
     # Claude Code LLM Provider
-    "ClaudeCodeAdapter",
-    "ClaudeCodeConfig",
     # Docker Container Runtime
     "DockerContainerAdapter",
     "DockerConfig",

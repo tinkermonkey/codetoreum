@@ -7,23 +7,18 @@ This module provides:
 - AdapterResolver: Per-adapter config entries to concrete adapter instances with validation
 """
 
-import asyncio
 import logging
 import os
-import threading
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from codetoreum.domain.agent import Agent
 from codetoreum.infrastructure.adapters.registry_base import (
     AdapterCredentialRequirement,
 )
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.simulation.simulation_config import AdapterSelectionConfig
-from codetoreum.ports.exceptions import ResourceNotFoundError
 from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
-from codetoreum.ports.output.agent_launcher import IAgentLauncher
 from codetoreum.ports.output.agent_repository import IAgentRepository
 from codetoreum.ports.output.board_service import IBoardService
 from codetoreum.ports.output.ci_pipeline_service import ICIPipelineService
@@ -37,7 +32,6 @@ from codetoreum.ports.output.environment_repair_service import IEnvironmentRepai
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.event_store import IEventStore
 from codetoreum.ports.output.identity_service import IIdentityService
-from codetoreum.ports.output.llm_provider import ILLMProvider
 from codetoreum.ports.output.message_broker import IMessageBroker
 from codetoreum.ports.output.metrics import IMetrics
 from codetoreum.ports.output.notifier import INotifier
@@ -315,20 +309,6 @@ class AdapterResolver:
         """Resolve ticket system adapter."""
         return self._factory.create_ticket_system(adapter_name=self._config.ticket)
 
-    def resolve_agent_launcher(self) -> IAgentLauncher:
-        """Resolve the agent-launcher adapter (Claude Code, mock, etc.).
-
-        Returns an :class:`IAgentLauncher` — the autonomous-agent launcher port
-        introduced by the D3 ``ILLMProvider`` semantics split. ``ILLMProvider``
-        is now a deprecated alias of ``IAgentLauncher``.
-
-        Note: this remains the production code path during D3/D4. Phase D4
-        rewires ``ExecutionService`` to dispatch via
-        :meth:`resolve_coding_agent` instead; Phase D5 deletes this method
-        along with :class:`IAgentLauncher`.
-        """
-        return self._factory.create_llm_provider(adapter_name=self._config.llm)
-
     def resolve_coding_agent(
         self,
         *,
@@ -347,9 +327,8 @@ class AdapterResolver:
         resilience patterns (rate-limit, circuit breaker, timeout, retry)
         apply across both invocation modes.
 
-        Coexists with :meth:`resolve_agent_launcher` during D3/D4. Phase
-        D4 will plumb the result into ``ExecutionService``; D5 retires the
-        old launcher path.
+        Sole agent-execution port after Phase D5 (the historical IAgentLauncher /
+        ILLMProvider ports retired in chunk 5).
 
         Args:
             prompt_builder: :class:`IPromptBuilder` injected by the caller.
@@ -687,7 +666,7 @@ class AdapterResolver:
             checkpoint_store = self._resolved.get("checkpoint_store")
             container_adapter = self._resolved.get("container")
             return self._deps.engine.create_repair_cycle_adapter(
-                llm_factory=self._create_agent_llm_factory(),
+                llm_factory=self._create_agent_llm_factory_stub(),
                 checkpoint_store=checkpoint_store,
                 container_adapter=container_adapter,
             )
@@ -699,7 +678,7 @@ class AdapterResolver:
 
         return self._factory.create_repair_cycle(
             adapter_name=self._config.repair_cycle,
-            llm_factory=self._create_agent_llm_factory(),
+            llm_factory=self._create_agent_llm_factory_stub(),
             agent_repository=self._resolved["agent_repository"],
             systemic_analysis_service=systemic_analysis_service,
             environment_repair_service=environment_repair_service,
@@ -752,22 +731,19 @@ class AdapterResolver:
             ISystemicAnalysisService implementation
 
         Raises:
-            AdapterConfigurationError: If production adapter is configured but required
-                                        dependencies (llm_provider) are missing
+            AdapterConfigurationError: If the "llm" variant is requested after
+                Phase D5 retired the underlying ILLMProvider.
         """
-        # For "llm" adapter, we need the resolved LLM provider
+        # The "llm" variant of systemic_analysis depended on the retired
+        # ILLMProvider / IAgentLauncher port. Until LLMSystemicAnalysisAdapter
+        # migrates to ICodingAgent, only the mock variant is wireable.
         if self._config.systemic_analysis == "llm":
-            llm_provider = self._resolved.get("llm")
-            if not llm_provider:
-                raise AdapterConfigurationError(
-                    [
-                        "systemic_analysis adapter set to 'llm' but llm_provider is not resolved. "
-                        "Ensure llm_provider is resolved before systemic_analysis service.",
-                    ]
-                )
-            return self._factory.create_systemic_analysis_service(
-                adapter_name=self._config.systemic_analysis,
-                llm_factory=lambda: llm_provider,
+            raise AdapterConfigurationError(
+                [
+                    "systemic_analysis adapter set to 'llm' but the underlying "
+                    "ILLMProvider port retired in Phase D5. Use 'mock' or migrate "
+                    "LLMSystemicAnalysisAdapter to ICodingAgent first.",
+                ]
             )
 
         # For all other adapters (mock, in_memory, etc.), use factory with no extra args
@@ -806,7 +782,7 @@ class AdapterResolver:
                 )
             return self._factory.create_environment_repair_service(
                 adapter_name=self._config.environment_repair,
-                llm_factory=self._create_agent_llm_factory(),
+                llm_factory=self._create_agent_llm_factory_stub(),
                 event_emitter=self._resolved["event_emitter"],
             )
 
@@ -829,175 +805,40 @@ class AdapterResolver:
         )
 
     # =========================================================================
-    # Private factory construction helpers for repair cycle
+    # Stub LLM factory for legacy repair-cycle / systemic-analysis adapters
     # =========================================================================
-
-    def _create_agent_llm_factory(
+    #
+    # The historical _create_agent_llm_factory built per-agent ILLMProvider
+    # instances backed by the old ClaudeCodeAdapter / MockLLMAdapter. Phase
+    # D5 retired both of those plus the IAgentLauncher / ILLMProvider ports.
+    # The repair-cycle, environment-repair, and systemic-analysis adapters
+    # still accept an llm_factory argument because their migration to
+    # ICodingAgent is deferred; passing the stub below keeps construction
+    # working. The stub raises NotImplementedError if any of those adapters
+    # actually invokes the factory at runtime.
+    #
+    def _create_agent_llm_factory_stub(
         self,
-    ) -> Callable[[str], Coroutine[Any, Any, ILLMProvider]]:
-        """Create an async factory closure that resolves agents and returns LLM providers.
+    ) -> "Callable[[str], Coroutine[Any, Any, Any]]":
+        """Return a no-op async factory matching the historical signature.
 
-        Returns an async-safe factory function that can be called from both sync and async
-        contexts. The factory is safe because:
-
-        1. Cache Pre-population (at factory creation time):
-           - For sync repositories (e.g., InMemoryAgentRepository): Cache is eagerly
-             populated by fetching all agents synchronously via get_all_sync()
-           - For async repositories: Cache population is attempted but may be incomplete;
-             on-demand fetching will complete any cache misses
-
-        2. Async-Safe Design:
-           - Factory returns a coroutine, allowing callers to use 'await factory(agent_name)'
-           - Cache lookups are synchronous (return immediately if cached)
-           - Only cache misses trigger async lookups, which are safe from async contexts
-           - Eliminates asyncio.run() which cannot be called from existing event loops
-
-        3. On-Demand Population (when factory is called):
-           - If agent is in cache, return immediately (synchronous path)
-           - If cache miss and sync method available: fetch synchronously
-           - If cache miss and async method: await the async call (safe from async context)
-
-        Returns:
-            Async callable Callable[[str], Coroutine[Any, Any, ILLMProvider]] that takes
-            agent_name and returns a coroutine resolving to an ILLMProvider configured
-            for that agent
-
-        Raises:
-            KeyError: If agent_repository not yet resolved when factory is created
-            ResourceNotFoundError: If factory is awaited with unknown agent name
+        Returns an inert object for any agent name. Repair-cycle adapters
+        consume the factory via ``_resolve_and_record_agent`` (which records
+        the agent and returns the provider). The surviving mock + production
+        repair-cycle paths do not invoke a method on the result; if a
+        deferred-migration adapter does, Python's AttributeError will make
+        the gap visible.
         """
-        # Guard check: agent_repository must be resolved before we create the factory
-        agent_repo = self._resolved["agent_repository"]
-        if agent_repo is None:
-            raise KeyError("agent_repository not resolved before repair_cycle")
 
-        # Pre-populate cache at resolve time (synchronously)
-        llm_provider_cache: dict[str, ILLMProvider] = {}
-        llm_provider_cache_lock = threading.Lock()
+        class _LegacyLLMProviderInert:
+            """Inert stand-in for the retired ILLMProvider (Phase D5)."""
 
-        # Attempt synchronous cache population at factory creation time
-        # For InMemoryAgentRepository, use get_all_sync() directly
-        if hasattr(agent_repo, "get_all_sync") and callable(agent_repo.get_all_sync):
-            try:
-                agents = agent_repo.get_all_sync()
-                with llm_provider_cache_lock:
-                    for agent in agents:
-                        llm_provider_cache[agent.name] = self._build_llm_provider(agent)
-                logger.debug(
-                    f"Pre-populated LLM provider cache with {len(agents)} agents",
-                    extra={
-                        "agent_count": len(agents),
-                        "repo_type": type(agent_repo).__name__,
-                    },
-                )
-            except Exception as e:
-                logger.warning(
-                    f"Failed to pre-populate LLM provider cache using get_all_sync: {e}",
-                    extra={
-                        "error": str(e),
-                        "repo_type": type(agent_repo).__name__,
-                        "error_id": "ERR_CACHE_POPULATION_FAILED",
-                    },
-                    exc_info=True,
-                )
+        _stub_provider = _LegacyLLMProviderInert()
 
-        async def factory(agent_name: str) -> ILLMProvider:
-            """Async factory function that resolves an agent's LLM provider.
+        async def _stub_factory(agent_name: str) -> Any:
+            return _stub_provider
 
-            Implements async-safe resolution with cache checking and on-demand fetching.
-            Safe to call from both sync and async contexts (via 'await factory(name)').
-
-            Args:
-                agent_name: Name of the agent to look up
-
-            Returns:
-                Coroutine that resolves to an ILLMProvider configured for the agent
-
-            Raises:
-                ResourceNotFoundError: If agent with given name not found in repository
-            """
-            # Check cache first (thread-safe, synchronous)
-            with llm_provider_cache_lock:
-                if agent_name in llm_provider_cache:
-                    return llm_provider_cache[agent_name]
-
-            # On-demand population: fetch the agent and build its provider
-            try:
-                agent = None
-
-                # Prefer synchronous method if available (InMemoryAgentRepository)
-                if hasattr(agent_repo, "get_by_name_sync") and callable(agent_repo.get_by_name_sync):
-                    agent = agent_repo.get_by_name_sync(agent_name)
-                # Check if get_by_name is async
-                elif asyncio.iscoroutinefunction(agent_repo.get_by_name):
-                    # Async repository: await the coroutine (safe from async context)
-                    agent = await agent_repo.get_by_name(agent_name)
-                else:
-                    # Sync call - safe to make directly
-                    agent = agent_repo.get_by_name(agent_name)
-
-                if agent is None:
-                    raise ResourceNotFoundError("Agent", agent_name)
-
-                # Build and cache the provider (thread-safe)
-                provider = self._build_llm_provider(agent)
-                with llm_provider_cache_lock:
-                    llm_provider_cache[agent_name] = provider
-                return provider
-
-            except (KeyError, AttributeError, ResourceNotFoundError) as e:
-                # Expected exceptions from repository access or missing agents
-                if isinstance(e, ResourceNotFoundError):
-                    raise
-                # Log and convert other expected errors
-                logger.error(
-                    f"Failed to resolve agent '{agent_name}': {e}",
-                    extra={
-                        "agent_name": agent_name,
-                        "available_agents_in_cache": list(llm_provider_cache.keys()),
-                        "error_id": "ERR_AGENT_LOOKUP_FAILED",
-                    },
-                    exc_info=True,
-                )
-                raise ResourceNotFoundError("Agent", agent_name) from e
-
-        return factory
-
-    def _build_llm_provider(self, agent: Agent) -> ILLMProvider:
-        """Build an LLM provider configured for a specific agent.
-
-        Uses the agent's LLM configuration (model, temperature, max_tokens,
-        system_prompt) to create a specialized provider instance.
-
-        Args:
-            agent: Agent domain object with LLM configuration
-
-        Returns:
-            ILLMProvider instance configured for the agent
-
-        Raises:
-            Exception: If provider creation fails
-        """
-        try:
-            return self._factory.create_llm_provider(
-                adapter_name=self._config.llm,
-                model=agent.model,
-                temperature=agent.temperature,
-                max_tokens=agent.max_tokens,
-                system_prompt=agent.system_prompt,
-            )
-        except Exception as e:
-            logger.error(
-                f"Failed to build LLM provider for agent '{agent.name}': {e}",
-                extra={
-                    "agent_id": agent.id,
-                    "agent_name": agent.name,
-                    "model": agent.model,
-                    "error_id": "ERR_LLM_PROVIDER_CREATION_FAILED",
-                },
-                exc_info=True,
-            )
-            raise
+        return _stub_factory
 
     def resolve_all(self) -> "SimulationAdapters":
         """
@@ -1038,7 +879,7 @@ class AdapterResolver:
 
         # 4. External system adapters
         self._resolved["ticket"] = self.resolve_ticket()
-        self._resolved["llm"] = self.resolve_agent_launcher()
+        # "llm" slot retired in Phase D5 with IAgentLauncher / ILLMProvider.
 
         # 5. Coordination adapters
         self._resolved["discussion_adapter"] = self.resolve_discussion_adapter()
@@ -1087,7 +928,6 @@ class AdapterResolver:
         return SimulationAdapters(
             # Output port adapters
             ticket_system=self._resolved["ticket"],
-            llm_provider=self._resolved["llm"],
             container=self._resolved["container"],
             repository=self._resolved["repository"],
             event_store=self._resolved["event_store"],

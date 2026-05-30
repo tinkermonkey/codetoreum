@@ -20,7 +20,6 @@ from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdap
 from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
 from codetoreum.adapters.testing.in_memory_storage_adapter import InMemoryStorageAdapter
 from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
-from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
 from codetoreum.domain.events import CodetoreumEvent, now_iso
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.simulation import SimulationConfig
@@ -235,19 +234,6 @@ def ticket_system() -> Generator[InMemoryTicketAdapter, None, None]:
     adapter = InMemoryTicketAdapter()
     yield adapter
     adapter.clear()
-
-
-@pytest.fixture
-def llm_provider() -> Generator[MockLLMAdapter, None, None]:
-    """Create mock LLM provider with automatic cleanup.
-
-    Yields:
-        MockLLMAdapter instance
-    """
-    adapter = MockLLMAdapter()
-    yield adapter
-    adapter.clear_conversations()
-    adapter.reset_stats()
 
 
 @pytest.fixture

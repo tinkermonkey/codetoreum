@@ -105,7 +105,6 @@ from codetoreum.adapters.testing import (
     MockBoardAdapter,
     MockBranchResolutionAdapter,
     MockDiscussionAdapter,
-    MockLLMAdapter,
     MockProjectManagerAdapter,
     MockReviewCycleAdapter,
     SimpleEncryptionAdapter,
@@ -232,7 +231,6 @@ from codetoreum.ports.output.event_store import IEventStore
 from codetoreum.ports.output.failed_event_store import IFailedEventStore
 from codetoreum.ports.output.i_tracer import ITracer
 from codetoreum.ports.output.identity_service import IIdentityService
-from codetoreum.ports.output.llm_provider import ILLMProvider
 from codetoreum.ports.output.message_broker import IMessageBroker
 from codetoreum.ports.output.metrics import IMetrics
 from codetoreum.ports.output.notifier import INotifier
@@ -325,7 +323,6 @@ class SimulationAdapters:
     For test code that needs simulation-specific methods (e.g., add_response(),
     movements, executions), use the accessor helpers:
     - ticket_as_mock() -> InMemoryTicketAdapter
-    - llm_as_mock() -> MockLLMAdapter
     - container_as_fake() -> FakeContainerAdapter
     - board_as_mock() -> MockBoardAdapter
     - etc.
@@ -333,7 +330,6 @@ class SimulationAdapters:
 
     # Output port adapters (typed as interfaces)
     ticket_system: ITicketSystem
-    llm_provider: ILLMProvider
     container: IContainer
     repository: IRepository
     event_store: IEventStore
@@ -400,16 +396,6 @@ class SimulationAdapters:
             msg = f"ticket_system is {type(self.ticket_system).__name__}, not InMemoryTicketAdapter"
             raise TypeError(msg)
         return cast("InMemoryTicketAdapter", self.ticket_system)
-
-    def llm_as_mock(self) -> MockLLMAdapter:
-        """Get LLM provider as MockLLMAdapter.
-
-        Raises TypeError if llm_provider is not MockLLMAdapter.
-        """
-        if not isinstance(self.llm_provider, MockLLMAdapter):
-            msg = f"llm_provider is {type(self.llm_provider).__name__}, not MockLLMAdapter"
-            raise TypeError(msg)
-        return cast("MockLLMAdapter", self.llm_provider)
 
     def container_as_fake(self) -> FakeContainerAdapter:
         """Get container as FakeContainerAdapter.
@@ -1561,9 +1547,10 @@ class SimulationApplicationBootstrap:
             metadata={"event_type": "ContainerExecutionCompletedEvent", "purpose": "Drive repair cycle"},
         )
 
-        # LLM adapter → Review cycle adapter (code quality metrics inform review)
+        # Coding-agent adapter → Review cycle adapter (code quality metrics
+        # inform review). The old MockLLMAdapter retired in Phase D5.
         registry.register_dependency(
-            source="MockLLMAdapter",
+            source="MockClaudeCodeAdapter",
             target="MockReviewCycleAdapter",
             link_type=LinkType.CODE_QUALITY,
             metadata={"purpose": "Code quality assessment drives review cycle"},
@@ -1872,13 +1859,11 @@ class SimulationApplicationBootstrap:
         decision_events = SimulationDecisionEvents()
         projects_api = SimulationProjectsAPI()
 
-        # Conversational Loop Orchestrator — manages agent feedback loops in conversational columns
-        conversational_loop_orchestrator = ConversationalLoopOrchestrator(
-            discussion_adapter=self.adapters.discussion_adapter,
-            llm_provider=self.adapters.llm_provider,
-            event_store=self.adapters.event_store,
-            event_emitter=self.adapters.event_emitter,
-        )
+        # Conversational Loop Orchestrator — deferred in Phase D5; same
+        # rationale as the production bootstrap. The orchestrator still
+        # depends on the retired ILLMProvider.continue_conversation surface
+        # and needs an ICodingAgent migration before re-wiring.
+        conversational_loop_orchestrator: ConversationalLoopOrchestrator | None = None
         self.conversational_loop_orchestrator = conversational_loop_orchestrator
 
         workflow_orchestrator = WorkflowOrchestrator(

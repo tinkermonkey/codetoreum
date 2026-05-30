@@ -7,7 +7,6 @@ declarative configuration.
 """
 
 import logging
-import random
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -1705,18 +1704,15 @@ class SimulationDataSeeder:
         Returns:
             Self for chaining
         """
-        from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
-
-        mock_llm: MockLLMAdapter = self.adapters.llm_provider
-
-        if response is None:
-            response = f"Mock response from {agent_name}: Task completed successfully"
-
-        # Set response for this agent
-        mock_llm.set_agent_response(agent_name, response)
-        mock_llm.set_delay(delay_seconds)
-
-        logger.debug(f"Configured agent behavior: {agent_name}, exit_code={exit_code}")
+        # Phase D5: MockLLMAdapter / adapters.llm_provider retired. Configuration
+        # of agent responses now happens through the coding-agent adapter
+        # (MockClaudeCodeAdapter.script). This helper is a no-op for legacy
+        # scenario seeding; new scenarios should drive responses through the
+        # coding-agent adapter directly.
+        del response  # unused after retirement
+        logger.debug(
+            f"Phase D5 no-op: configure_agent_behavior({agent_name}, " f"delay={delay_seconds}, exit_code={exit_code})"
+        )
         return self
 
     def configure_agent_failure(
@@ -1738,22 +1734,12 @@ class SimulationDataSeeder:
         Returns:
             Self for chaining
         """
-        from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
-
-        mock_llm: MockLLMAdapter = self.adapters.llm_provider
-
-        if error_message is None:
-            error_message = f"Mock failure from {agent_name}: {failure_mode}"
-
-        # Configure failure behavior
-        mock_llm.set_agent_failure(
-            agent_name=agent_name,
-            failure_mode=failure_mode,
-            failure_count=failure_count,
-            error_message=error_message,
+        # Phase D5 no-op: MockLLMAdapter retired. Use MockClaudeCodeAdapter.script
+        # to drive failure scenarios in the new architecture.
+        del error_message  # unused after retirement
+        logger.debug(
+            f"Phase D5 no-op: configure_agent_failure({agent_name}, " f"mode={failure_mode}, count={failure_count})"
         )
-
-        logger.debug(f"Configured agent failure: {agent_name}, mode={failure_mode}, count={failure_count}")
         return self
 
     def configure_review_behavior(
@@ -1773,30 +1759,10 @@ class SimulationDataSeeder:
         Returns:
             Self for chaining
         """
-        from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
-
-        mock_llm: MockLLMAdapter = self.adapters.llm_provider
-
-        if feedback_template is None:
-            feedback_template = (
-                "Code review feedback from {reviewer}: "
-                "Please address the following issues:\n"
-                "1. Add more error handling\n"
-                "2. Improve code documentation\n"
-                "3. Add unit tests"
-            )
-
-        # Set review responses based on approval rate
-        random.seed(42)  # Deterministic for testing
-
-        def review_response_fn():
-            if random.random() < approval_rate:
-                return f"APPROVED: Code review passed by {reviewer_name}"
-            return feedback_template.format(reviewer=reviewer_name)
-
-        mock_llm.set_agent_response_fn(reviewer_name, review_response_fn)
-
-        logger.debug(f"Configured review behavior: {reviewer_name}, approval_rate={approval_rate}")
+        # Phase D5 no-op: MockLLMAdapter retired. Use MockClaudeCodeAdapter.script
+        # (or a dedicated mock review-cycle adapter) to drive review behaviour.
+        del feedback_template  # unused after retirement
+        logger.debug(f"Phase D5 no-op: configure_review_behavior({reviewer_name}, " f"approval_rate={approval_rate})")
         return self
 
     def configure_container_output(

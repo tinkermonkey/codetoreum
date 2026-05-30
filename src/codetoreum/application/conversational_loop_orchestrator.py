@@ -20,6 +20,7 @@ Architecture:
 import asyncio
 import logging
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from codetoreum.domain.conversational_session import ConversationalSessionState
 from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
@@ -45,9 +46,30 @@ from codetoreum.ports.output import (
     IDiscussionAdapter,
     IEventEmitter,
     IEventStore,
-    ILLMProvider,
 )
 from codetoreum.ports.output.discussion_adapter import DiscussionMonitoringConfig
+
+if TYPE_CHECKING:
+    from typing import Protocol
+
+    from codetoreum.ports.output.llm_types import ExecutionResult
+
+    class ILLMProvider(Protocol):
+        """Duck-typed surrogate for the retired ``ILLMProvider`` port.
+
+        Phase D5 deleted ``IAgentLauncher``/``ILLMProvider``;
+        ConversationalLoopOrchestrator still uses the prompt-completion
+        ``continue_conversation`` shape, so this Protocol documents the
+        minimum surface until the orchestrator migrates to
+        ``ICodingAgent`` in a follow-on cycle."""
+
+        async def continue_conversation(
+            self,
+            conversation_id: str,
+            message: str,
+            **kwargs: object,
+        ) -> "ExecutionResult": ...
+
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +110,7 @@ class ConversationalLoopOrchestrator(IConversationalLoopService):
     def __init__(
         self,
         discussion_adapter: IDiscussionAdapter,
-        llm_provider: ILLMProvider,
+        llm_provider: "ILLMProvider",
         event_store: IEventStore,
         event_emitter: IEventEmitter | None = None,
     ):

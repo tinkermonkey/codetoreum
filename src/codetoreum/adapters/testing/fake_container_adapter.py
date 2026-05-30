@@ -30,7 +30,6 @@ from codetoreum.ports.output.container import (
 from codetoreum.ports.output.event_emitter import IEventEmitter
 
 if TYPE_CHECKING:
-    from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
     from codetoreum.infrastructure.simulation.proportional_delay_calculator import (
         ProportionalDelayCalculator,
     )
@@ -90,7 +89,7 @@ class FakeContainerAdapter(IContainer):
         event_bus: EventBus | None = None,
         config: "SimulationConfig | None" = None,
         clock: "SimulationClock | None" = None,
-        llm_provider: "MockLLMAdapter | None" = None,
+        llm_provider: "object | None" = None,
     ):
         """
         Initialize the fake container adapter.

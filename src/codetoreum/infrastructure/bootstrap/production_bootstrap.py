@@ -691,10 +691,8 @@ class ProductionApplicationBootstrap:
             self.adapters.ticket_system = resilience_factory.create_resilient_ticket_system(self.adapters.ticket_system)
             logger.debug("Applied resilience to ticket system adapter")
 
-        # LLM provider
-        if self.adapters.llm_provider:
-            self.adapters.llm_provider = resilience_factory.create_resilient_llm_provider(self.adapters.llm_provider)
-            logger.debug("Applied resilience to LLM provider adapter")
+        # LLM provider resilience retired in Phase D5 — the ICodingAgent
+        # adapter is wrapped by ResilientCodingAgentDecorator instead.
 
         # Repository
         if self.adapters.repository:
@@ -855,13 +853,14 @@ class ProductionApplicationBootstrap:
         decision_events = ProductionDecisionEvents()
         projects_api = ProductionProjectsAPI()
 
-        # Conversational Loop Orchestrator
-        conversational_loop_orchestrator = ConversationalLoopOrchestrator(
-            discussion_adapter=self.adapters.discussion_adapter,
-            llm_provider=self.adapters.llm_provider,
-            event_store=self.adapters.event_store,
-            event_emitter=self.adapters.event_emitter,
-        )
+        # Conversational Loop Orchestrator — deferred in Phase D5. The
+        # orchestrator's continue_conversation call site still expects a
+        # retired ILLMProvider; wiring it to ICodingAgent is a separate
+        # migration. Until then, conversational columns are not wired in
+        # the production bootstrap. WorkflowOrchestrator accepts
+        # conversational_loop_orchestrator=None and skips the conversational
+        # initialization path when the column type matches.
+        conversational_loop_orchestrator: ConversationalLoopOrchestrator | None = None
         self.conversational_loop_orchestrator = conversational_loop_orchestrator
 
         workflow_orchestrator = WorkflowOrchestrator(
@@ -1240,7 +1239,8 @@ class ProductionApplicationBootstrap:
 
     def _register_conversational_loop_orchestrator(self) -> None:
         """Register conversational loop orchestrator to handle column changes."""
-        if not self.infrastructure or not hasattr(self, "conversational_loop_orchestrator"):
+        if not self.infrastructure or not getattr(self, "conversational_loop_orchestrator", None):
+            # Deferred in Phase D5 — see the wiring site above for context.
             return
 
         self.infrastructure.event_bus.subscribe(

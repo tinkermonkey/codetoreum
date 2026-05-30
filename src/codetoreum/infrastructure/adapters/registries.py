@@ -28,7 +28,6 @@ from codetoreum.ports.output.environment_repair_service import IEnvironmentRepai
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.event_store import IEventStore
 from codetoreum.ports.output.identity_service import IIdentityService
-from codetoreum.ports.output.llm_provider import ILLMProvider
 from codetoreum.ports.output.message_broker import IMessageBroker
 from codetoreum.ports.output.metrics import IMetrics
 from codetoreum.ports.output.notifier import INotifier
@@ -288,29 +287,6 @@ class TicketSystemRegistry(AdapterRegistry[ITicketSystem]):
 
         Returns:
             True if adapter implements all ITicketSystem methods
-        """
-        return _validate_adapter_implements_interface(adapter_type, self._port_interface)
-
-
-class LLMProviderRegistry(AdapterRegistry[ILLMProvider]):
-    """Registry for ILLMProvider adapter implementations."""
-
-    def __init__(self):
-        """Initialize the LLM provider registry."""
-        super().__init__(ILLMProvider)
-
-    def _is_valid_adapter(self, adapter_type: type[ILLMProvider]) -> bool:
-        """
-        Validate that an adapter implements ILLMProvider.
-
-        Uses dynamic introspection to check that the adapter class implements
-        all required methods from the ILLMProvider interface.
-
-        Args:
-            adapter_type: The adapter class to validate
-
-        Returns:
-            True if adapter implements all ILLMProvider methods
         """
         return _validate_adapter_implements_interface(adapter_type, self._port_interface)
 

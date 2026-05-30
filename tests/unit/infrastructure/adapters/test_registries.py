@@ -10,7 +10,6 @@ from typing import cast
 import pytest
 
 from codetoreum.adapters.secondary import (
-    ClaudeCodeAdapter,
     DockerContainerAdapter,
     GitHubTicketAdapter,
     GitRepositoryAdapter,
@@ -20,13 +19,11 @@ from codetoreum.adapters.testing import (
     InMemoryEventStore,
     InMemoryRepositoryAdapter,
     InMemoryTicketAdapter,
-    MockLLMAdapter,
 )
 from codetoreum.infrastructure.adapters import (
     AdapterMetadata,
     ContainerRegistry,
     EventStoreRegistry,
-    LLMProviderRegistry,
     RepositoryRegistry,
     StorageRegistry,
     TicketSystemRegistry,
@@ -248,32 +245,6 @@ class TestTicketSystemRegistry:
         assert len(registry) == 10
 
 
-class TestLLMProviderRegistry:
-    """Test cases for LLMProviderRegistry."""
-
-    def test_initialization(self):
-        """Test registry initialization."""
-        registry = LLMProviderRegistry()
-        assert len(registry) == 0
-
-    def test_register_valid_adapter(self):
-        """Test registering valid LLM provider adapter."""
-        registry = LLMProviderRegistry()
-
-        registry.register(name="claude_code", adapter_type=ClaudeCodeAdapter, description="Claude Code")
-
-        assert registry.has_adapter("claude_code")
-        assert registry.get("claude_code") == ClaudeCodeAdapter
-
-    def test_register_mock_adapter(self):
-        """Test registering mock adapter."""
-        registry = LLMProviderRegistry()
-
-        registry.register(name="mock", adapter_type=MockLLMAdapter, description="Mock LLM")
-
-        assert registry.has_adapter("mock")
-
-
 class TestContainerRegistry:
     """Test cases for ContainerRegistry."""
 
@@ -376,18 +347,3 @@ class TestAdapterMetadata:
 
 class TestRegistryIntegration:
     """Integration tests across multiple registries."""
-
-    def test_multiple_registries_independent(self):
-        """Test that multiple registries are independent."""
-        ticket_registry = TicketSystemRegistry()
-        llm_registry = LLMProviderRegistry()
-
-        ticket_registry.register(name="test", adapter_type=InMemoryTicketAdapter, description="Test")
-
-        llm_registry.register(name="test", adapter_type=MockLLMAdapter, description="Test")
-
-        # Same name but different registries
-        assert len(ticket_registry) == 1
-        assert len(llm_registry) == 1
-        assert ticket_registry.get("test") == InMemoryTicketAdapter
-        assert llm_registry.get("test") == MockLLMAdapter

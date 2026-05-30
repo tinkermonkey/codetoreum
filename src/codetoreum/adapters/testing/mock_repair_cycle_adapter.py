@@ -20,7 +20,6 @@ from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
-from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
 from codetoreum.application.repair_cycle_ci_integration import (
     convert_ci_run_result_to_repair_test_result,
 )
@@ -167,9 +166,16 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                                 Required when RepairTestType.CI is in test configs.
         """
         super().__init__()
-        # Default factory returns MockLLMAdapter for any agent
+        # Default factory returns an inert stub. MockLLMAdapter retired in
+        # Phase D5; MockRepairCycleAdapter only consults the factory for
+        # behavioural-parity reasons and never invokes a method on the
+        # returned value in the default code path.
         if llm_factory is None:
-            _mock_llm = MockLLMAdapter()
+
+            class _LLMAdapterStub:
+                pass
+
+            _mock_llm = _LLMAdapterStub()
 
             async def llm_factory(agent_name):
                 return _mock_llm

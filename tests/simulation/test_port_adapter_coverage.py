@@ -77,7 +77,8 @@ from codetoreum.adapters.testing.mock_container_recovery_adapter import (
     MockContainerRecoveryAdapter,
 )
 from codetoreum.adapters.testing.mock_discussion_adapter import MockDiscussionAdapter
-from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
+
+# MockLLMAdapter retired in Phase D5 — replaced with stub class below
 from codetoreum.adapters.testing.mock_notifier_adapter import MockNotifierAdapter
 from codetoreum.adapters.testing.mock_project_manager_adapter import (
     MockProjectManagerAdapter,
@@ -106,7 +107,8 @@ from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
 from codetoreum.ports.output.encryption_service import IEncryptionService
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.event_store import IEventStore
-from codetoreum.ports.output.llm_provider import ILLMProvider
+
+# ILLMProvider / llm_provider types retired in Phase D5
 from codetoreum.ports.output.message_broker import IMessageBroker
 from codetoreum.ports.output.metrics import IMetrics
 from codetoreum.ports.output.notifier import INotifier
@@ -190,7 +192,6 @@ PORT_ADAPTER_MAPPING = [
     ("IConfigStore", IConfigStore, InMemoryConfigStore),
     ("IRepository", IRepository, InMemoryRepositoryAdapter),
     ("ITicketSystem", ITicketSystem, InMemoryTicketAdapter),
-    ("ILLMProvider", ILLMProvider, MockLLMAdapter),
     # Board & Work Items
     ("IBoardService", IBoardService, MockBoardAdapter),
     ("IDiscussionAdapter", IDiscussionAdapter, MockDiscussionAdapter),

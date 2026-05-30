@@ -40,7 +40,6 @@ if TYPE_CHECKING:
     from codetoreum.ports.output.board_service import IBoardService
     from codetoreum.ports.output.container import IContainer
     from codetoreum.ports.output.event_emitter import IEventEmitter
-    from codetoreum.ports.output.llm_provider import ILLMProvider
     from codetoreum.ports.output.repair_cycle_checkpoint_store import (
         IRepairCycleCheckpointStore,
     )
@@ -258,7 +257,7 @@ class SimulationEngine:
 
     def create_repair_cycle_adapter(
         self,
-        llm_factory: "Callable[[str], Coroutine[Any, Any, ILLMProvider]] | None" = None,
+        llm_factory: "Callable[[str], Coroutine[Any, Any, Any]] | None" = None,
         checkpoint_store: "IRepairCycleCheckpointStore | None" = None,
         container_adapter: "IContainer | None" = None,
     ) -> "MockRepairCycleAdapter":
@@ -281,7 +280,6 @@ class SimulationEngine:
         Returns:
             MockRepairCycleAdapter instance with clock already configured
         """
-        from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
         from codetoreum.adapters.testing.mock_repair_cycle_adapter import (
             MockRepairCycleAdapter,
         )
@@ -289,8 +287,13 @@ class SimulationEngine:
         # If no llm_factory provided, create a default async one that returns MockLLMAdapter instances
         if llm_factory is None:
 
-            async def default_llm_factory(agent_name: str) -> "ILLMProvider":
-                return MockLLMAdapter()
+            class _LLMAdapterStub:
+                pass
+
+            _stub = _LLMAdapterStub()
+
+            async def default_llm_factory(agent_name: str) -> Any:
+                return _stub
 
             llm_factory = default_llm_factory
 
@@ -305,7 +308,7 @@ class SimulationEngine:
 
     def create_review_cycle_adapter(
         self,
-        llm_adapter: "ILLMProvider | None" = None,
+        llm_adapter: "Any | None" = None,
     ) -> "MockReviewCycleAdapter":
         """
         Create mock review cycle adapter with injected clock.

@@ -868,9 +868,12 @@ class TestAdapterFactoryWithNewRegistries:
         assert isinstance(config_store, IConfigStore)
 
         # Repair cycle (needs llm_factory for mock)
-        from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
+        # MockLLMAdapter retired in Phase D5; mock repair-cycle factory accepts any
+        # callable that returns an object — the repair-cycle mock never invokes it.
+        class _LLMStub:
+            pass
 
-        llm_adapter = MockLLMAdapter()
+        llm_adapter = _LLMStub()
 
         def llm_factory(agent_name: str):
             return llm_adapter

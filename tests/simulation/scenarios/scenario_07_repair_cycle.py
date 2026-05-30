@@ -18,7 +18,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from codetoreum.adapters.testing.mock_llm_adapter import MockLLMAdapter
+# MockLLMAdapter retired in Phase D5 — replaced with stub class below
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
 from codetoreum.domain.repair_cycle_types import (
     RepairTestFailure,
@@ -30,6 +30,17 @@ from codetoreum.domain.repair_cycle_types import (
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 from codetoreum.infrastructure.simulation.simulation_runner import SimulationRunner
+
+
+class MockLLMAdapter:
+    """Inert stub for the retired MockLLMAdapter (Phase D5).
+
+    The repair-cycle scenarios pass an LLM adapter to the factory but never
+    invoke a method on it. This stub keeps construction working until the
+    scenarios migrate to ICodingAgent."""
+
+    def __init__(self, *args, **kwargs) -> None:
+        pass
 
 
 @dataclass

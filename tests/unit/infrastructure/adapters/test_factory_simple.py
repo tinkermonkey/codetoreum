@@ -14,7 +14,8 @@ from codetoreum.infrastructure.adapters import AdapterFactory, AdapterFactoryCon
 from codetoreum.infrastructure.resilience import OperationMode
 from codetoreum.ports.output.container import IContainer
 from codetoreum.ports.output.event_store import IEventStore
-from codetoreum.ports.output.llm_provider import ILLMProvider
+
+# ILLMProvider / llm_provider types retired in Phase D5
 from codetoreum.ports.output.repository import IRepository
 from codetoreum.ports.output.ticket_system import ITicketSystem
 
@@ -59,7 +60,6 @@ class TestAdapterFactory:
         factory = AdapterFactory()
 
         assert factory.ticket_system_registry is not None
-        assert factory.llm_provider_registry is not None
         assert factory.container_registry is not None
         assert factory.repository_registry is not None
         assert factory.event_store_registry is not None
@@ -74,9 +74,6 @@ class TestAdapterFactory:
         assert factory.ticket_system_registry.get_default_name() == "github"
 
         # Check LLM provider adapters
-        assert factory.llm_provider_registry.has_adapter("claude_code")
-        assert factory.llm_provider_registry.has_adapter("mock")
-        assert factory.llm_provider_registry.get_default_name() == "claude_code"
 
         # Check container adapters
         assert factory.container_registry.has_adapter("docker")
@@ -102,13 +99,6 @@ class TestAdapterCreation:
 
         adapter = factory.create_ticket_system(adapter_name="in_memory")
         assert isinstance(adapter, ITicketSystem)
-
-    def test_create_mock_llm_provider(self):
-        """Test creating mock LLM provider."""
-        factory = AdapterFactory()
-
-        adapter = factory.create_llm_provider(adapter_name="mock")
-        assert isinstance(adapter, ILLMProvider)
 
     def test_create_fake_container(self):
         """Test creating fake container adapter."""
@@ -246,14 +236,12 @@ class TestFactoryIntegration:
 
         # Create all adapters
         ticket_system = factory.create_ticket_system(adapter_name="in_memory")
-        llm_provider = factory.create_llm_provider(adapter_name="mock")
         container = factory.create_container(adapter_name="fake")
         repository = factory.create_repository(adapter_name="in_memory")
         event_store = factory.create_event_store(adapter_name="in_memory")
 
         # Verify all created
         assert isinstance(ticket_system, ITicketSystem)
-        assert isinstance(llm_provider, ILLMProvider)
         assert isinstance(container, IContainer)
         assert isinstance(repository, IRepository)
         assert isinstance(event_store, IEventStore)
