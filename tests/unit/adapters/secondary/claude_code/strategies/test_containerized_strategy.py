@@ -258,7 +258,7 @@ async def test_containerized_strategy_mounts_workspace_from_context(tmp_path: Pa
     volumes = container.created["volumes"]
     assert volumes is not None
     assert str(host_workspace) in volumes
-    assert volumes[str(host_workspace)] == {"bind": "/workspace", "mode": "rw"}
+    assert volumes[str(host_workspace)] == "/workspace:rw"  # simple string form per DEF-017
 
 
 @pytest.mark.asyncio
