@@ -147,7 +147,7 @@ class ExecutionService:
                 workflow_id=workflow_id,
                 stage_name=stage_name,
                 prompt=prompt,
-                model=agent.model,
+                model=agent.invocation.model,
                 session_id=previous_session_id,
             )
 

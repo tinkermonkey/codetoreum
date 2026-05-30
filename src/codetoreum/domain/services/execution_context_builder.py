@@ -3,6 +3,7 @@
 from typing import Any
 
 from codetoreum.domain.agent import Agent
+from codetoreum.domain.coding_agent_types import InvocationMode
 from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.project_context import ProjectContext
 from codetoreum.domain.value_objects import ExecutionContext
@@ -80,8 +81,8 @@ class ExecutionContextBuilder:
             workflow_id=workflow_id,
             stage_name=stage_name,
             agent_id=agent.id,
-            model=agent.model,
-            timeout_seconds=agent.timeout_seconds,
+            model=agent.invocation.model,
+            timeout_seconds=agent.invocation.timeout_seconds,
             workspace_type=workspace.workspace_type.value,
             branch_name=workspace.branch_name,
             discussion_id=workspace.discussion_id,
@@ -90,7 +91,7 @@ class ExecutionContextBuilder:
             tech_stack=tuple(project.tech_stack),
             filesystem_write_allowed=filesystem_write_allowed,
             can_make_commits=can_make_commits,
-            requires_docker=agent.requires_docker,
+            requires_docker=agent.invocation.mode == InvocationMode.CONTAINERIZED,
             mcp_servers=tuple(ExecutionContextBuilder._merge_mcp_servers(agent, project)),
             commit_policy=agent.commit_policy,
             repository_path=repository_path,
@@ -131,7 +132,11 @@ class ExecutionContextBuilder:
             raise DomainError(msg)
 
         # Validate agent can execute in project environment
-        if agent.requires_docker and not project.has_dockerfile and not project.requires_dev_container:
+        if (
+            agent.invocation.mode == InvocationMode.CONTAINERIZED
+            and not project.has_dockerfile
+            and not project.requires_dev_container
+        ):
             # Agent requires Docker but project doesn't have Dockerfile or dev container
             # This is a warning condition but not a hard error - we can use a generic container
             pass

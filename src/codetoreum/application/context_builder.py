@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from codetoreum.domain.agent import Agent
+from codetoreum.domain.coding_agent_types import InvocationMode
 from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.project_context import ProjectContext
 from codetoreum.domain.services.execution_context_builder import (
@@ -457,7 +458,7 @@ class ContextBuilder:
             "name": agent.name,
             "display_name": agent.display_name,
             "type": agent.agent_type.value,
-            "model": agent.model,
+            "model": agent.invocation.model,
             "capabilities": [
                 {
                     "skill": cap.skill,
@@ -468,9 +469,9 @@ class ContextBuilder:
             ],
             "makes_code_changes": agent.makes_code_changes,
             "filesystem_write_allowed": agent.filesystem_write_allowed,
-            "requires_docker": agent.requires_docker,
+            "requires_docker": agent.invocation.mode == InvocationMode.CONTAINERIZED,
             "requires_dev_container": agent.requires_dev_container,
-            "timeout_seconds": agent.timeout_seconds,
+            "timeout_seconds": agent.invocation.timeout_seconds,
         }
 
     def _format_workspace_context(self, workspace: WorkspaceContext) -> dict[str, Any]:

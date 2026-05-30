@@ -6,7 +6,7 @@ from enum import Enum
 from typing import Any
 from uuid import uuid4
 
-from codetoreum.domain.coding_agent_types import AgentInvocationConfig
+from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
 from codetoreum.domain.events.adapter_events import CodetoreumEvent, now_iso
 from codetoreum.domain.events.agent_events import (
     AgentCapabilityAddedEvent,
@@ -22,6 +22,15 @@ from codetoreum.domain.events.agent_events import (
 )
 from codetoreum.domain.exceptions import DomainError
 from codetoreum.domain.value_objects import CommitPolicy
+
+# Re-export so consumers can import InvocationMode alongside Agent.
+__all__ = [
+    "Agent",
+    "AgentCapability",
+    "AgentInvocationConfig",
+    "AgentType",
+    "InvocationMode",
+]
 
 
 class AgentType(Enum):
@@ -74,12 +83,9 @@ class Agent:
     role_description: str
 
     # Configuration
-    model: str  # LLM model (e.g., "claude-sonnet-4-5")
-    timeout_seconds: int
     max_retries: int
 
     # Constraints (NO DEFAULTS - Required fields)
-    requires_docker: bool
     requires_dev_container: bool
     makes_code_changes: bool
     filesystem_write_allowed: bool
@@ -94,19 +100,20 @@ class Agent:
     created_at: datetime
     updated_at: datetime
 
+    # D6 (proposal §3h) coding-agent + invocation block.
+    # The invocation block is the sole source of truth for model,
+    # timeout_seconds, and execution mode (containerized / host / api).
+    # ``Agent.requires_docker`` / ``Agent.model`` / ``Agent.timeout_seconds``
+    # were removed in post-D9 cleanup (DEF-020) — read these off
+    # ``agent.invocation`` instead.
+    coding_agent: str
+    invocation: AgentInvocationConfig
+
     # Configuration with defaults (must come after required fields)
     temperature: float = 0.7  # LLM temperature (0.0-2.0)
     max_tokens: int = 4096  # Maximum tokens for LLM responses
     system_prompt: str = ""  # System prompt for the agent
     commit_policy: CommitPolicy = CommitPolicy.ON_SUCCESS  # When to commit file changes
-    # D6 (proposal §3h) coding-agent + invocation block. Optional during
-    # the transition; bootstrap loader populates both from the new
-    # bootstrap JSON shape. Once set, ExecutionServiceAgentExecutor reads
-    # `invocation.mode`, `invocation.model`, `invocation.timeout_seconds`,
-    # and `invocation.mode_config` straight onto
-    # CodingAgentInvocationOptions.
-    coding_agent: str = ""
-    invocation: AgentInvocationConfig | None = None
 
     # Event tracking
     _events: list[CodetoreumEvent] = field(default_factory=list, init=False, repr=False)
@@ -123,11 +130,10 @@ class Agent:
         Invariants:
         - Must have a non-empty name
         - Must have at least one capability
-        - Timeout must be positive
         - Max retries must be non-negative
-        - Model must be specified
         - Temperature must be between 0.0 and 2.0
         - Max tokens must be positive
+        - Must have an invocation block (model / timeout / mode live here)
         """
         if not self.name or not self.name.strip():
             msg = "Agent must have a non-empty name"
@@ -137,16 +143,8 @@ class Agent:
             msg = "Agent must have at least one capability"
             raise DomainError(msg)
 
-        if self.timeout_seconds <= 0:
-            msg = "Timeout must be positive"
-            raise DomainError(msg)
-
         if self.max_retries < 0:
             msg = "Max retries must be non-negative"
-            raise DomainError(msg)
-
-        if not self.model:
-            msg = "Agent must specify a model"
             raise DomainError(msg)
 
         if not 0.0 <= self.temperature <= 2.0:
@@ -157,6 +155,10 @@ class Agent:
             msg = "Max tokens must be positive"
             raise DomainError(msg)
 
+        if not isinstance(self.invocation, AgentInvocationConfig):
+            msg = "Agent.invocation must be an AgentInvocationConfig"
+            raise DomainError(msg)
+
     @classmethod
     def create(
         cls,
@@ -164,14 +166,13 @@ class Agent:
         display_name: str,
         agent_type: AgentType,
         role_description: str,
-        model: str,
         capabilities: dict[str, AgentCapability],
+        invocation: AgentInvocationConfig,
+        coding_agent: str = "",
         temperature: float = 0.7,
         max_tokens: int = 4096,
         system_prompt: str = "",
-        timeout_seconds: int = 300,
         max_retries: int = 3,
-        requires_docker: bool = True,
         requires_dev_container: bool = False,
         makes_code_changes: bool = False,
         filesystem_write_allowed: bool = True,
@@ -186,14 +187,16 @@ class Agent:
             display_name: Human-readable agent name
             agent_type: Type of agent (maker, reviewer, specialized)
             role_description: Description of agent's role
-            model: LLM model to use
             capabilities: Dictionary of agent capabilities
+            invocation: Required per-execution invocation block (mode / model /
+                timeout). The bootstrap loader builds this from the
+                ``invocation`` JSON object on each agent definition.
+            coding_agent: Identifier of the ICodingAgent adapter that runs
+                this agent (default: "" — adapter resolved by config).
             temperature: LLM temperature (0.0-2.0, default: 0.7)
             max_tokens: Maximum tokens for responses (default: 4096)
             system_prompt: System prompt for the agent (default: "")
-            timeout_seconds: Execution timeout (default: 300)
             max_retries: Maximum retry attempts (default: 3)
-            requires_docker: Whether agent requires Docker (default: True)
             requires_dev_container: Whether agent requires dev container (default: False)
             makes_code_changes: Whether agent makes code changes (default: False)
             filesystem_write_allowed: Whether agent can write files (default: True)
@@ -211,19 +214,18 @@ class Agent:
             agent_type=agent_type,
             capabilities=capabilities,
             role_description=role_description,
-            model=model,
-            timeout_seconds=timeout_seconds,
             max_retries=max_retries,
             temperature=temperature,
             max_tokens=max_tokens,
             system_prompt=system_prompt,
-            requires_docker=requires_docker,
             requires_dev_container=requires_dev_container,
             makes_code_changes=makes_code_changes,
             filesystem_write_allowed=filesystem_write_allowed,
             mcp_servers=mcp_servers or [],
             metadata={},
             commit_policy=commit_policy,
+            coding_agent=coding_agent,
+            invocation=invocation,
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),
         )
@@ -236,7 +238,7 @@ class Agent:
             name=name,
             display_name=display_name,
             agent_type=agent_type.value if hasattr(agent_type, "value") else str(agent_type),
-            model=model,
+            model=invocation.model,
         )
         agent._add_event(event)
 
@@ -351,6 +353,9 @@ class Agent:
         """
         Update the LLM model used by this agent.
 
+        Rebuilds ``self.invocation`` with the new model, preserving the
+        existing mode / timeout / mode_config / cost_limit.
+
         Args:
             model: New model name
 
@@ -363,8 +368,14 @@ class Agent:
             msg = "Model cannot be empty"
             raise DomainError(msg)
 
-        old_model = self.model
-        self.model = model
+        old_model = self.invocation.model
+        self.invocation = AgentInvocationConfig(
+            mode=self.invocation.mode,
+            model=model,
+            timeout_seconds=self.invocation.timeout_seconds,
+            mode_config=dict(self.invocation.mode_config),
+            cost_limit_usd=self.invocation.cost_limit_usd,
+        )
         self.updated_at = datetime.now(UTC)
         self._version += 1
 
@@ -382,6 +393,9 @@ class Agent:
         """
         Update agent timeout.
 
+        Rebuilds ``self.invocation`` with the new timeout, preserving the
+        existing mode / model / mode_config / cost_limit.
+
         Args:
             timeout_seconds: New timeout in seconds
 
@@ -394,8 +408,14 @@ class Agent:
             msg = "Timeout must be positive"
             raise DomainError(msg)
 
-        old_timeout = self.timeout_seconds
-        self.timeout_seconds = timeout_seconds
+        old_timeout = self.invocation.timeout_seconds
+        self.invocation = AgentInvocationConfig(
+            mode=self.invocation.mode,
+            model=self.invocation.model,
+            timeout_seconds=timeout_seconds,
+            mode_config=dict(self.invocation.mode_config),
+            cost_limit_usd=self.invocation.cost_limit_usd,
+        )
         self.updated_at = datetime.now(UTC)
         self._version += 1
 
@@ -442,7 +462,6 @@ class Agent:
 
     def update_constraints(
         self,
-        requires_docker: bool | None = None,
         requires_dev_container: bool | None = None,
         makes_code_changes: bool | None = None,
         filesystem_write_allowed: bool | None = None,
@@ -450,8 +469,13 @@ class Agent:
         """
         Update agent constraints.
 
+        ``requires_docker`` is no longer a separate field — it is derived
+        from ``self.invocation.mode == InvocationMode.CONTAINERIZED``. To
+        change the execution mode, build a new ``AgentInvocationConfig``
+        and assign it to ``self.invocation`` directly (see
+        ``update_model`` / ``update_timeout`` for the rebuild pattern).
+
         Args:
-            requires_docker: Whether agent requires Docker
             requires_dev_container: Whether agent requires dev container
             makes_code_changes: Whether agent makes code changes
             filesystem_write_allowed: Whether agent can write files
@@ -462,9 +486,6 @@ class Agent:
         Emits: AgentConstraintsUpdated event
         """
         # Validate types
-        if requires_docker is not None and not isinstance(requires_docker, bool):
-            msg = "requires_docker must be a boolean"
-            raise DomainError(msg)
         if requires_dev_container is not None and not isinstance(requires_dev_container, bool):
             msg = "requires_dev_container must be a boolean"
             raise DomainError(msg)
@@ -476,14 +497,11 @@ class Agent:
             raise DomainError(msg)
 
         old_constraints = {
-            "requires_docker": self.requires_docker,
             "requires_dev_container": self.requires_dev_container,
             "makes_code_changes": self.makes_code_changes,
             "filesystem_write_allowed": self.filesystem_write_allowed,
         }
 
-        if requires_docker is not None:
-            self.requires_docker = requires_docker
         if requires_dev_container is not None:
             self.requires_dev_container = requires_dev_container
         if makes_code_changes is not None:
@@ -495,7 +513,6 @@ class Agent:
         self._version += 1
 
         new_constraints_dict = {
-            "requires_docker": self.requires_docker,
             "requires_dev_container": self.requires_dev_container,
             "makes_code_changes": self.makes_code_changes,
             "filesystem_write_allowed": self.filesystem_write_allowed,
@@ -610,7 +627,7 @@ class Agent:
         Returns:
             True if agent can execute in this environment
         """
-        if self.requires_docker and not has_docker:
+        if self.invocation.mode == InvocationMode.CONTAINERIZED and not has_docker:
             return False
         if self.requires_dev_container and not has_dev_container:
             return False

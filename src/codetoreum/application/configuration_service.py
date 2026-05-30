@@ -15,6 +15,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Optional
 
+from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
 from codetoreum.domain.events.configuration_events import (
     AgentConfigUpdatedEvent,
     CommandMountedEvent,
@@ -233,10 +234,14 @@ class ConfigurationService:
             config = AgentConfig(
                 project_id=project.id,
                 agent_name=command.agent_name,
-                model="claude-sonnet-4-5-20250929",
-                timeout=3600,
-                requires_docker=True,
                 makes_code_changes=True,
+                coding_agent="",
+                invocation=AgentInvocationConfig(
+                    mode=InvocationMode.CONTAINERIZED,
+                    model="claude-sonnet-4-5-20250929",
+                    timeout_seconds=3600,
+                    mode_config={"image": "codetoreum-agent:latest"},
+                ),
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
             )
@@ -246,21 +251,39 @@ class ConfigurationService:
         if not validation.valid:
             raise ValidationError("; ".join(validation.errors or []))
 
-        # Store old values
+        # Store old values (model and timeout now live on invocation)
         old_values = {
-            "model": config.model,
-            "timeout": config.timeout,
+            "model": config.invocation.model,
+            "timeout": config.invocation.timeout_seconds,
             "mcp_servers": list(config.mcp_servers) if config.mcp_servers else [],
         }
 
-        # Apply updates - create new immutable config with updated fields
+        # Apply updates - create new immutable config with updated fields.
+        # Legacy ``model`` / ``timeout`` / ``requires_docker`` updates rebuild
+        # the invocation block; the flat fields were removed in DEF-020.
         updates_dict: dict[str, Any] = {}
+        inv = config.invocation
+        new_inv_mode = inv.mode
+        new_inv_model = inv.model
+        new_inv_timeout = inv.timeout_seconds
+        invocation_changed = False
         if "model" in command.updates:
-            updates_dict["model"] = command.updates["model"]
+            new_inv_model = command.updates["model"]
+            invocation_changed = True
         if "timeout" in command.updates:
-            updates_dict["timeout"] = command.updates["timeout"]
+            new_inv_timeout = command.updates["timeout"]
+            invocation_changed = True
         if "requires_docker" in command.updates:
-            updates_dict["requires_docker"] = command.updates["requires_docker"]
+            new_inv_mode = InvocationMode.CONTAINERIZED if command.updates["requires_docker"] else InvocationMode.HOST
+            invocation_changed = True
+        if invocation_changed:
+            updates_dict["invocation"] = AgentInvocationConfig(
+                mode=new_inv_mode,
+                model=new_inv_model,
+                timeout_seconds=new_inv_timeout,
+                mode_config=dict(inv.mode_config),
+                cost_limit_usd=inv.cost_limit_usd,
+            )
         if "makes_code_changes" in command.updates:
             updates_dict["makes_code_changes"] = command.updates["makes_code_changes"]
         if "mcp_servers" in command.updates:
@@ -291,8 +314,8 @@ class ConfigurationService:
         changes = self._compute_changes(
             old_values,
             {
-                "model": config.model,
-                "timeout": config.timeout,
+                "model": config.invocation.model,
+                "timeout": config.invocation.timeout_seconds,
                 "mcp_servers": config.mcp_servers,
             },
         )

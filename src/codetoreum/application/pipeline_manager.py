@@ -7,6 +7,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, cast
 
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType
+from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
 from codetoreum.domain.events.workflow_events import (
     PipelineCompletedEvent,
     PipelineFailedEvent,
@@ -437,8 +438,12 @@ class PipelineManager:
                 agent_type=AgentType[stage.agent_config.get("agent_type", "SPECIALIZED").upper()],
                 role_description=stage.agent_config.get("agent_description", f"Agent for stage {stage.name}"),
                 capabilities=capabilities,
-                model=stage.agent_config.get("model", "claude-opus"),
-                timeout_seconds=stage.agent_config.get("timeout_seconds", 3600),
+                invocation=AgentInvocationConfig(
+                    mode=InvocationMode.CONTAINERIZED,
+                    model=stage.agent_config.get("model", "claude-opus"),
+                    timeout_seconds=stage.agent_config.get("timeout_seconds", 3600),
+                    mode_config={"image": "codetoreum-agent:latest"},
+                ),
                 max_retries=stage.agent_config.get("max_retries", 3),
             )
 

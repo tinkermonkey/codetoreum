@@ -141,18 +141,17 @@ class AgentConfig:
     All fields validated at construction. Frozen for immutability.
     Lists converted to tuples, dicts to MappingProxyType.
 
-    D6 added ``coding_agent`` and ``invocation``; legacy ``model``,
-    ``timeout``, and ``requires_docker`` remain for the REST API surface
-    but are populated from ``invocation`` by the bootstrap loader so the
-    new fields are the source of truth.
+    Post-D9 cleanup (DEF-020) removed the legacy flat fields ``model``,
+    ``timeout``, and ``requires_docker``. Read these off ``invocation``:
+    ``config.invocation.model``, ``config.invocation.timeout_seconds``,
+    ``config.invocation.mode == InvocationMode.CONTAINERIZED``.
     """
 
     project_id: str
     agent_name: str
-    model: str
-    timeout: int
-    requires_docker: bool
     makes_code_changes: bool
+    coding_agent: str
+    invocation: AgentInvocationConfig
     mcp_servers: tuple[str, ...] = ()
     capabilities: tuple[str, ...] = ()
     constraints: MappingProxyType = field(default_factory=lambda: MappingProxyType({}))
@@ -160,10 +159,6 @@ class AgentConfig:
     created_at: datetime | None = None
     updated_at: datetime | None = None
     metadata: MappingProxyType = field(default_factory=lambda: MappingProxyType({}))
-    # D6 (proposal §3h): coding-agent + invocation block. Optional during
-    # the transition so the legacy ES documents continue to round-trip.
-    coding_agent: str = ""
-    invocation: AgentInvocationConfig | None = None
 
     def __post_init__(self) -> None:
         """Validate all fields at construction time."""
@@ -183,18 +178,22 @@ class AgentConfig:
         if isinstance(self.metadata, dict):
             object.__setattr__(self, "metadata", MappingProxyType(self.metadata))
 
-        for field_name in ("project_id", "agent_name", "model"):
+        for field_name in ("project_id", "agent_name"):
             val = getattr(self, field_name)
             if not isinstance(val, str) or not val:
                 msg = f"{field_name} must be a non-empty string"
                 raise ValueError(msg)
 
-        if isinstance(self.timeout, bool) or not isinstance(self.timeout, int) or self.timeout <= 0:
-            msg = "timeout must be a positive integer"
+        if not isinstance(self.makes_code_changes, bool):
+            msg = "makes_code_changes must be a boolean"
             raise ValueError(msg)
 
-        if not isinstance(self.requires_docker, bool) or not isinstance(self.makes_code_changes, bool):
-            msg = "requires_docker and makes_code_changes must be booleans"
+        if not isinstance(self.invocation, AgentInvocationConfig):
+            msg = "invocation must be an AgentInvocationConfig"
+            raise ValueError(msg)
+
+        if not isinstance(self.coding_agent, str):
+            msg = "coding_agent must be a string"
             raise ValueError(msg)
 
         if not isinstance(self.mcp_servers, tuple) or not all(isinstance(s, str) for s in self.mcp_servers):
