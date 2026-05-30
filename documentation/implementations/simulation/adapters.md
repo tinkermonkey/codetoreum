@@ -1,56 +1,57 @@
 # Simulation Adapters Reference
 
-Complete mapping of all 53 simulation/mock adapters to their port interfaces.
+Complete mapping of all 52 simulation/mock adapters to their port interfaces.
 
 ## Overview
 
 The Simulation Implementation provides:
-- **35 Testing Adapters**: Mock/in-memory implementations of output ports
+- **34 Testing Adapters**: Mock/in-memory implementations of output ports
 - **18 Input Port Adapters**: Mock adapters wrapping application services for HTTP endpoints
 
 All adapters implement the same port contracts as production adapters, ensuring the simulation exercises identical business logic.
 
-## Output Port Adapters (35 Testing Adapters)
+> **DEF-015 (Phase D5) retired three slots**: `ILLMProvider` (with `MockLLMAdapter`), `IAgentLauncher`, and `IStorage` (with `InMemoryStorageAdapter`). The simulation now wires a single `MockClaudeCodeAdapter` implementing the new `ICodingAgent` port — see entry #2 below and the dedicated section [MockClaudeCodeAdapter design](#mockclaudecodeadapter-design).
+
+## Output Port Adapters (34 Testing Adapters)
 
 Complete list of mock implementations for all output ports in `adapters/testing/`.
 
 | # | Port Interface | Adapter Class | File | Purpose |
 |---|---|---|---|---|
 | 1 | `ITicketSystem` | `InMemoryTicketAdapter` | `adapters/testing/in_memory_ticket_adapter.py` | Simulates GitHub Issues — work item CRUD, comments, labels |
-| 2 | `ILLMProvider` | `MockLLMAdapter` | `adapters/testing/mock_llm_adapter.py` | Simulates Claude API — returns configured responses based on patterns |
+| 2 | `ICodingAgent` | `MockClaudeCodeAdapter` | `adapters/testing/mock_claude_code_adapter.py` | Simulates a coding agent — records invocations and emits a deterministic `CodingAgent*` event stream (see [design notes](#mockclaudecodeadapter-design)) |
 | 3 | `IContainer` | `FakeContainerAdapter` | `adapters/testing/fake_container_adapter.py` | Simulates Docker — agent execution without real containers |
 | 4 | `IRepository` | `InMemoryRepositoryAdapter` | `adapters/testing/in_memory_repository_adapter.py` | Simulates Git — branch operations, commits, PRs |
 | 5 | `IEventStore` | `InMemoryEventStore` | `adapters/testing/in_memory_event_store.py` | In-memory event persistence — complete audit trail |
 | 6 | `IMetrics` | `InMemoryMetricsAdapter` | `adapters/testing/in_memory_metrics_adapter.py` | In-memory metrics — timing, operation counts |
-| 7 | `IStorage` | `InMemoryStorageAdapter` | `adapters/testing/in_memory_storage_adapter.py` | In-memory artifact storage — files, logs, artifacts |
-| 8 | `IConfigStore` | `InMemoryConfigStore` | `adapters/testing/in_memory_config_store.py` | In-memory configuration — workflow, agent, project config |
-| 9 | `INotifier` | `MockNotifierAdapter` | `adapters/testing/mock_notifier_adapter.py` | Mock notifications — Slack, email (not sent) |
-| 10 | `IEncryptionService` | `SimpleEncryptionAdapter` | `adapters/testing/simple_encryption_adapter.py` | Simple encryption — base64 encoding for testing |
-| 11 | `IBoardService` | `MockBoardAdapter` | `adapters/testing/mock_board_adapter.py` | Simulates GitHub Projects — columns, cards, automation |
-| 12 | `IRepairCycle` | `MockRepairCycleAdapter` | `adapters/testing/mock_repair_cycle_adapter.py` | Simulates repair/fix cycles — test-fix-validate loops |
-| 13 | `IProjectManagerService` | `MockProjectManagerAdapter` | `adapters/testing/mock_project_manager_adapter.py` | Simulates project management — status, planning |
-| 14 | `IWorkflowConfigService` | `InMemoryWorkflowConfigService` | `adapters/testing/in_memory_workflow_config_service.py` | In-memory workflow configuration — stages, agents |
-| 15 | `IPipelineQueueService` | `InMemoryQueueService` | `adapters/testing/in_memory_queue_service.py` | In-memory task queue — execution ordering |
-| 16 | `IEventEmitter` | `CapturingMockEventEmitter` | `adapters/testing/capturing_mock_event_emitter.py` | Captures events for testing assertions |
-| 17 | `IVersionControlService` | `InMemoryVersionControlService` | `adapters/testing/in_memory_version_control_service.py` | Simulates version control — branches, commits |
-| 18 | `IMessageBroker` | `InMemoryMessageBroker` | `adapters/testing/in_memory_message_broker.py` | In-memory pub/sub — event distribution |
-| 19 | `IDiscussionAdapter` | `MockDiscussionAdapter` | `adapters/testing/mock_discussion_adapter.py` | Simulates discussions — comments, threading |
-| 20 | `IReviewCycle` | `MockReviewCycleAdapter` | `adapters/testing/mock_review_cycle_adapter.py` | Simulates code review — PR review workflows |
-| 21 | `IPRReviewCycle` | `MockPRReviewCycleAdapter` | `adapters/testing/mock_pr_review_cycle_adapter.py` | Simulates PR review — approval, feedback, revisions |
-| 22 | `ICodeReviewService` | `InMemoryCodeReviewAdapter` | `adapters/testing/in_memory_code_review_adapter.py` | In-memory code review tracking |
-| 23 | `IRepairCycleCheckpointStore` | `InMemoryCheckpointStore` | `adapters/testing/in_memory_checkpoint_store.py` | In-memory repair cycle checkpoints |
-| 24 | `ICIPipelineService` | `MockCIPipelineAdapter` | `adapters/testing/mock_ci_pipeline_adapter.py` | Simulates CI/CD — build, test execution |
-| 25 | `IAgentRepository` | `InMemoryAgentRepository` | `adapters/testing/in_memory_agent_repository.py` | In-memory agent catalog — capabilities, models |
-| 26 | `IActiveWorkflowRunRegistry` | `InMemoryActiveWorkflowRunRegistry` | `adapters/testing/in_memory_active_workflow_run_registry.py` | In-memory tracking of active workflow runs |
-| 27 | `IWorkItemBranchTracker` | `InMemoryWorkItemBranchTracker` | `adapters/testing/in_memory_work_item_branch_tracker.py` | In-memory branch tracking — work item to branch mapping |
-| 28 | `IWorkItemService` | `MockWorkItemService` | `adapters/testing/mock_work_item_service.py` | Mock work item service — CRUD operations |
-| 29 | `IAgentContainerRecoveryService` | `MockContainerRecoveryAdapter` | `adapters/testing/mock_container_recovery_adapter.py` | Simulates container recovery — failure handling |
-| 30 | `ISystemicAnalysisService` | `MockSystemicAnalysisAdapter` | `adapters/testing/mock_systemic_analysis_adapter.py` | Simulates systemic failure analysis |
-| 31 | `IEnvironmentRepairService` | `MockEnvironmentRepairAdapter` | `adapters/testing/mock_environment_repair_adapter.py` | Simulates environment repair — dependency fixes |
-| 32 | `IBranchResolutionService` | `MockBranchResolutionAdapter` | `adapters/testing/mock_branch_resolution_adapter.py` | Simulates intelligent branch resolution |
-| 33 | `IAgentExecutor` | `ExecutionServiceAgentExecutor` | `adapters/testing/execution_service_agent_executor.py` | Real agent executor wrapper — integrates with execution service |
-| 34 | `ITracer` | `InMemoryTracer` | `adapters/testing/in_memory_tracer.py` | In-memory distributed tracing — trace propagation |
-| 35 | `IAgentExecutor` | `MockAgentExecutor` | `adapters/testing/mock_agent_executor.py` | Mock agent executor — simulates agent execution without LLM |
+| 7 | `IConfigStore` | `InMemoryConfigStore` | `adapters/testing/in_memory_config_store.py` | In-memory configuration — workflow, agent, project config |
+| 8 | `INotifier` | `MockNotifierAdapter` | `adapters/testing/mock_notifier_adapter.py` | Mock notifications — Slack, email (not sent) |
+| 9 | `IEncryptionService` | `SimpleEncryptionAdapter` | `adapters/testing/simple_encryption_adapter.py` | Simple encryption — base64 encoding for testing |
+| 10 | `IBoardService` | `MockBoardAdapter` | `adapters/testing/mock_board_adapter.py` | Simulates GitHub Projects — columns, cards, automation |
+| 11 | `IRepairCycle` | `MockRepairCycleAdapter` | `adapters/testing/mock_repair_cycle_adapter.py` | Simulates repair/fix cycles — test-fix-validate loops |
+| 12 | `IProjectManagerService` | `MockProjectManagerAdapter` | `adapters/testing/mock_project_manager_adapter.py` | Simulates project management — status, planning |
+| 13 | `IWorkflowConfigService` | `InMemoryWorkflowConfigService` | `adapters/testing/in_memory_workflow_config_service.py` | In-memory workflow configuration — stages, agents |
+| 14 | `IPipelineQueueService` | `InMemoryQueueService` | `adapters/testing/in_memory_queue_service.py` | In-memory task queue — execution ordering |
+| 15 | `IEventEmitter` | `CapturingMockEventEmitter` | `adapters/testing/capturing_mock_event_emitter.py` | Captures events for testing assertions |
+| 16 | `IVersionControlService` | `InMemoryVersionControlService` | `adapters/testing/in_memory_version_control_service.py` | Simulates version control — branches, commits |
+| 17 | `IMessageBroker` | `InMemoryMessageBroker` | `adapters/testing/in_memory_message_broker.py` | In-memory pub/sub — event distribution |
+| 18 | `IDiscussionAdapter` | `MockDiscussionAdapter` | `adapters/testing/mock_discussion_adapter.py` | Simulates discussions — comments, threading |
+| 19 | `IReviewCycle` | `MockReviewCycleAdapter` | `adapters/testing/mock_review_cycle_adapter.py` | Simulates code review — PR review workflows |
+| 20 | `IPRReviewCycle` | `MockPRReviewCycleAdapter` | `adapters/testing/mock_pr_review_cycle_adapter.py` | Simulates PR review — approval, feedback, revisions |
+| 21 | `ICodeReviewService` | `InMemoryCodeReviewAdapter` | `adapters/testing/in_memory_code_review_adapter.py` | In-memory code review tracking |
+| 22 | `IRepairCycleCheckpointStore` | `InMemoryCheckpointStore` | `adapters/testing/in_memory_checkpoint_store.py` | In-memory repair cycle checkpoints |
+| 23 | `ICIPipelineService` | `MockCIPipelineAdapter` | `adapters/testing/mock_ci_pipeline_adapter.py` | Simulates CI/CD — build, test execution |
+| 24 | `IAgentRepository` | `InMemoryAgentRepository` | `adapters/testing/in_memory_agent_repository.py` | In-memory agent catalog — capabilities, models |
+| 25 | `IActiveWorkflowRunRegistry` | `InMemoryActiveWorkflowRunRegistry` | `adapters/testing/in_memory_active_workflow_run_registry.py` | In-memory tracking of active workflow runs |
+| 26 | `IWorkItemBranchTracker` | `InMemoryWorkItemBranchTracker` | `adapters/testing/in_memory_work_item_branch_tracker.py` | In-memory branch tracking — work item to branch mapping |
+| 27 | `IWorkItemService` | `MockWorkItemService` | `adapters/testing/mock_work_item_service.py` | Mock work item service — CRUD operations |
+| 28 | `IAgentContainerRecoveryService` | `MockContainerRecoveryAdapter` | `adapters/testing/mock_container_recovery_adapter.py` | Simulates container recovery — failure handling |
+| 29 | `ISystemicAnalysisService` | `MockSystemicAnalysisAdapter` | `adapters/testing/mock_systemic_analysis_adapter.py` | Simulates systemic failure analysis |
+| 30 | `IEnvironmentRepairService` | `MockEnvironmentRepairAdapter` | `adapters/testing/mock_environment_repair_adapter.py` | Simulates environment repair — dependency fixes |
+| 31 | `IBranchResolutionService` | `MockBranchResolutionAdapter` | `adapters/testing/mock_branch_resolution_adapter.py` | Simulates intelligent branch resolution |
+| 32 | `IAgentExecutor` | `ExecutionServiceAgentExecutor` | `adapters/testing/execution_service_agent_executor.py` | Real agent executor wrapper — integrates with execution service |
+| 33 | `ITracer` | `InMemoryTracer` | `adapters/testing/in_memory_tracer.py` | In-memory distributed tracing — trace propagation |
+| 34 | `IAgentExecutor` | `MockAgentExecutor` | `adapters/testing/mock_agent_executor.py` | Mock agent executor — simulates agent execution without invoking a coding agent |
 
 ## Secondary Adapters (2 Adapters in `adapters/secondary/`)
 
@@ -91,8 +92,8 @@ Mock implementations of input ports that wrap application services for HTTP endp
 ### Testing Adapters Location
 ```
 src/codetoreum/adapters/testing/
-├── in_memory_*.py          (16 files) - In-memory backing stores
-├── mock_*.py               (15 files) - Mock external systems
+├── in_memory_*.py          (15 files) - In-memory backing stores
+├── mock_*.py               (15 files) - Mock external systems (incl. mock_claude_code_adapter.py)
 ├── fake_*.py               (1 file)  - Fake implementations
 ├── simple_*.py             (1 file)  - Simple implementations
 ├── execution_service_agent_executor.py
@@ -111,7 +112,7 @@ src/codetoreum/adapters/primary/input_port_adapters/mock/
 
 ## Key Adapter Characteristics
 
-### In-Memory Adapters (16)
+### In-Memory Adapters (15)
 - **Purpose**: Backing stores without external services
 - **Thread-Safe**: Protected by locks for concurrent test execution
 - **Persisted During Session**: Data survives for event replay
@@ -121,7 +122,7 @@ src/codetoreum/adapters/primary/input_port_adapters/mock/
 - **Purpose**: Simulate external systems with configurable responses
 - **Deterministic**: Same input produces same output
 - **Configurable**: Responses set via YAML or programmatically
-- **Examples**: `MockLLMAdapter`, `MockBoardAdapter`, `MockRepairCycleAdapter`
+- **Examples**: `MockClaudeCodeAdapter`, `MockBoardAdapter`, `MockRepairCycleAdapter`
 
 ### Special Adapters (2)
 - **`ExecutionServiceAgentExecutor`**: Real integration with execution service, not a mock
@@ -136,12 +137,11 @@ src/codetoreum/adapters/primary/input_port_adapters/mock/
 └────────────┬────────────────────┘
              │
              ├─── ITicketSystem ──────────────── InMemoryTicketAdapter
-             ├─── ILLMProvider ──────────────── MockLLMAdapter
+             ├─── ICodingAgent ──────────────── MockClaudeCodeAdapter
              ├─── IContainer ────────────────── FakeContainerAdapter
              ├─── IRepository ───────────────── InMemoryRepositoryAdapter
              ├─── IEventStore ───────────────── InMemoryEventStore
              ├─── IMetrics ──────────────────── InMemoryMetricsAdapter
-             ├─── IStorage ──────────────────── InMemoryStorageAdapter
              ├─── IConfigStore ──────────────── InMemoryConfigStore
              ├─── INotifier ─────────────────── MockNotifierAdapter
              ├─── IEncryptionService ────────── SimpleEncryptionAdapter
@@ -206,10 +206,10 @@ All adapters follow the same integration pattern:
 class InMemoryTicketAdapter(ITicketSystem):
     pass
 
-# 2. Bootstrap wires adapter to application service (34 adapters total)
+# 2. Bootstrap wires adapter to application service (34 output adapters total)
 adapters = SimulationAdapters(
     ticket_system=InMemoryTicketAdapter(),
-    llm_provider=MockLLMAdapter(),
+    coding_agent=MockClaudeCodeAdapter(event_bus=event_bus),
     container=FakeContainerAdapter(),
     # ... all 34 output port adapters
 )
@@ -234,23 +234,26 @@ result = await runner.run(scenario)
 # Access adapters from simulation
 ticket_adapter = result.simulation.adapters.ticket_as_mock()
 board_adapter = result.simulation.adapters.board_as_mock()
-llm_adapter = result.simulation.adapters.llm_as_mock()
+coding_agent = result.simulation.adapters.coding_agent  # MockClaudeCodeAdapter
 
 # Use mock-specific methods
 await ticket_adapter.add_work_item(...)
 movements = board_adapter.get_column_movements()
-responses = llm_adapter.get_all_responses()
+invocations = coding_agent.invocations  # list of _Invocation records
 ```
 
-### Configure Mock Responses
+### Configure Coding-Agent Behaviour
 
 ```python
-# Configure LLM responses
-llm_adapter = adapters.llm_as_mock()
-llm_adapter.add_response(
-    pattern=r"architecture.*design",
-    response="Implemented clean architecture with ports and adapters."
-)
+# Override the default 5-event ledger with a custom script
+async def custom_script(execution, workspace_context, options):
+    events = [
+        # ...build any list of CodingAgent* events...
+    ]
+    result = CodingAgentResult(success=True, summary_text="custom", ...)
+    return events, result
+
+coding_agent = MockClaudeCodeAdapter(event_bus=event_bus, script=custom_script)
 
 # Configure board behavior
 board_adapter = adapters.board_as_mock()
@@ -269,10 +272,9 @@ container = adapters.container_as_fake()
 executions = container.get_executions()
 assert len(executions) == 3
 
-# Check storage
-storage = adapters.storage_as_memory()
-artifacts = storage.list_artifacts()
-assert len(artifacts) == 5
+# Check coding-agent invocations
+assert len(coding_agent.invocations) == 1
+assert coding_agent.invocations[0].invocation_mode == InvocationMode.CONTAINERIZED
 ```
 
 ## Helper Classes and Data Structures
@@ -411,6 +413,58 @@ Mock implementation of IAgentExecutor for testing and port adapter coverage.
 
 ---
 
+## MockClaudeCodeAdapter design
+
+`MockClaudeCodeAdapter` (in `adapters/testing/mock_claude_code_adapter.py`) is the simulation-side `ICodingAgent`. It is the deterministic counterpart to the production `ClaudeCodeAdapter` and ensures scenarios exercise the same port the production bootstrap wires — without spawning containers or subprocesses.
+
+### Minimum shape
+
+- **Explicit port inheritance**: `class MockClaudeCodeAdapter(ICodingAgent)` — no duck typing, no `TYPE_CHECKING`-only imports (mirrors the production-side constraint in `CLAUDE.md`).
+- **`supported_invocation_modes()`**: returns `frozenset({InvocationMode.CONTAINERIZED, InvocationMode.HOST})` by default, matching the modes the production adapter supports. Tests that need to exercise mode validation can override via the `supported_modes` constructor argument.
+- **`execute(execution, workspace_context, options) -> CodingAgentResult`**: records every invocation in `self.invocations` for assertions, then publishes either the default 5-event ledger or a script-supplied custom ledger to the injected `event_bus`, then returns the configured `CodingAgentResult`.
+- **`invocations: list[_Invocation]`**: ordered record of `(execution_id, work_item_id, agent_id, invocation_mode, model)` per call. Test code reads this directly.
+
+### Default event ledger (5 events per `execute()`)
+
+When the mock is constructed without a `script`, every `execute()` publishes the same five-event stream to the bus. This is the minimum sequence that exercises the bootstrap Phase 4d event-persistence bridge and any subscribers (e.g. `BoardColumnEventHandler` via `AgentExecutionCompletedEvent`) without representing a realistic agent run:
+
+1. `CodingAgentInvokedEvent` (lifecycle bookend: invocation begins)
+2. `CodingAgentReadyEvent` (lifecycle bookend: init complete, ready for prompt)
+3. `CodingAgentTextOutputEvent` (a single assistant text response = the configured `summary_text`)
+4. `CodingAgentTokensUsedEvent` (resource accounting from `default_result`)
+5. `CodingAgentCompletedEvent` (lifecycle bookend: outcome)
+
+Each event carries `execution_id`, `correlation_id = work_item_id`, and a `source = "mock_claude_code"` tag so test assertions can filter cleanly.
+
+### Override hooks
+
+```python
+ScriptCallable = Callable[
+    [AgentExecution, WorkspaceContext, CodingAgentInvocationOptions],
+    Awaitable[tuple[list[CodetoreumEvent], CodingAgentResult]],
+]
+
+MockClaudeCodeAdapter(
+    event_bus=event_bus,
+    supported_modes=frozenset({InvocationMode.API}),  # narrow modes for negative tests
+    default_result=CodingAgentResult(success=False, summary_text="planned failure", ...),
+    script=my_async_script,  # full control over events + result per invocation
+)
+```
+
+- **`default_result`**: replace the success/cost/token defaults without writing a script.
+- **`script`**: supply richer ledgers — tool calls, rate limits, API retries, thinking events, OTel spans — when the 5-event default is not enough. The script returns `(events, result)`; the adapter publishes the events and returns the result.
+
+### Why this shape
+
+- **Simulation parity**: tests wire `MockClaudeCodeAdapter` into the same `coding_agent` slot the production bootstrap wires `ClaudeCodeAdapter` into. No simulation-specific application-layer branches.
+- **Event-bus contract validation**: the default ledger exercises Phase 4d's event-store persistence subscriber in scenarios that point at an `InMemoryEventStore`, so the bridge is covered end-to-end in unit tests.
+- **Determinism**: no randomness, no clock dependencies, no subprocesses. The same scenario produces the same event stream across runs.
+
+See `~/.claude/plans/coding-agent-port-redesign.md` §3a–§3c for the production-side `ICodingAgent` contract and the full 11-event `CodingAgent*` taxonomy.
+
+---
+
 ## Cross-References
 
 - **Port Specifications**: See [Architecture: Ports](../../architecture/ports/)
@@ -430,6 +484,6 @@ Mock implementation of IAgentExecutor for testing and port adapter coverage.
 
 ---
 
-**Total Adapter Count**: 35 testing + 18 input port = **53 adapters**
+**Total Adapter Count**: 34 testing + 18 input port = **52 adapters**
 
 All adapters implement port contracts to provide a complete, testable implementation of the Codetoreum architecture.

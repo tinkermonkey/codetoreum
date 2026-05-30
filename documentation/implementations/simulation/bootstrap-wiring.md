@@ -1,6 +1,8 @@
 # Bootstrap Wiring: Simulation System Startup Sequence
 
-Complete documentation of how the Simulation Implementation wires all 34 output adapters, 17 input ports, and 12 application services through a 6-phase bootstrap sequence.
+Complete documentation of how the Simulation Implementation wires all output adapters, 17 input ports, and 12 application services through a 6-phase bootstrap sequence.
+
+> **DEF-015 impact**: The `llm_provider` (`MockLLMAdapter`) and `storage` (`InMemoryStorageAdapter`) slots retired in D5. The new `coding_agent` (`MockClaudeCodeAdapter`) slot is populated in Phase 2 and required by `ExecutionService.execute()` at dispatch. See `adapters.md` for the current 34-row adapter table.
 
 ## Bootstrap Overview
 
@@ -8,7 +10,7 @@ The Simulation Implementation bootstrap is implemented in:
 ```
 src/codetoreum/infrastructure/simulation/bootstrap.py
   - SimulationApplicationBootstrap (main orchestrator)
-  - SimulationAdapters (container for all 34 output adapters + 3 optional fields)
+  - SimulationAdapters (container for 33 required output adapters + 4 optional fields incl. coding_agent)
   - SimulationServices (container for 12 application services)
   - SimulationPorts (container for 17 input port implementations)
 ```
@@ -81,12 +83,11 @@ degraded_mode = BootstrapDegradedModeState()
 
 **Adapters Created** (34 total):
 - **Ticket System**: `InMemoryTicketAdapter`
-- **LLM Provider**: `MockLLMAdapter`
+- **Coding Agent**: `MockClaudeCodeAdapter` (replaced `MockLLMAdapter` in DEF-015 D5)
 - **Container**: `FakeContainerAdapter`
 - **Repository**: `InMemoryRepositoryAdapter`
 - **Event Store**: `InMemoryEventStore`
 - **Metrics**: `InMemoryMetricsAdapter`
-- **Storage**: `InMemoryStorageAdapter`
 - **Config Store**: `InMemoryConfigStore`
 - **Notifier**: `MockNotifierAdapter`
 - **Encryption**: `SimpleEncryptionAdapter`
@@ -129,12 +130,11 @@ adapters = await resolver.create_all_adapters()
 
 **Key Outputs** (all typed as port interfaces):
 - `adapters.ticket_system: ITicketSystem` (InMemoryTicketAdapter)
-- `adapters.llm_provider: ILLMProvider` (MockLLMAdapter)
+- `adapters.coding_agent: ICodingAgent` (MockClaudeCodeAdapter)
 - `adapters.container: IContainer` (FakeContainerAdapter)
 - `adapters.repository: IRepository` (InMemoryRepositoryAdapter)
 - `adapters.event_store: IEventStore` (InMemoryEventStore)
 - `adapters.metrics: IMetrics` (InMemoryMetricsAdapter)
-- `adapters.storage: IStorage` (InMemoryStorageAdapter)
 - `adapters.config_store: IConfigStore` (InMemoryConfigStore)
 - `adapters.notifier: INotifier` (MockNotifierAdapter)
 - `adapters.encryption: IEncryptionService` (SimpleEncryptionAdapter)
@@ -195,11 +195,11 @@ phase but stored separately (`adapters.agent_executor` and `self.conversational_
 **Dependency Injection Pattern**:
 ```python
 # Example: ExecutionService receives adapter dependencies
+# DEF-015 D4 slimmed ExecutionService: container/storage/log dependencies retired;
+# the ICodingAgent slot now owns invocation, telemetry, and output flow.
 execution_service = ExecutionService(
-    llm_provider=adapters.llm_provider,
-    container=adapters.container,
+    coding_agent=adapters.coding_agent,
     event_store=adapters.event_store,
-    storage=adapters.storage,
     vcs=adapters.version_control,
 )
 ```
@@ -222,10 +222,8 @@ workflow_orchestrator = WorkflowOrchestrator(
 )
 
 execution_service = ExecutionService(
-    llm_provider=adapters.llm_provider,
-    container=adapters.container,
+    coding_agent=adapters.coding_agent,
     event_store=adapters.event_store,
-    storage=adapters.storage,
     vcs=adapters.version_control,
 )
 
@@ -409,7 +407,7 @@ flowchart TD
     Phase1 --> Phase2["Phase 2: Output Port Adapters (34)<br/>━━━━━━━━━━━━━━━━━━━<br/>Depends on: Phase 1 (EventBus)"]
 
     Phase2 --> Phase2a["Create Ticket System<br/>InMemoryTicketAdapter"]
-    Phase2a --> Phase2b["Create LLM Provider<br/>MockLLMAdapter"]
+    Phase2a --> Phase2b["Create Coding Agent<br/>MockClaudeCodeAdapter"]
     Phase2b --> Phase2c["Create Container Runtime<br/>FakeContainerAdapter"]
     Phase2c --> Phase2d["Create Repository<br/>InMemoryRepositoryAdapter"]
     Phase2d --> Phase2e["Create Event Store<br/>InMemoryEventStore"]
@@ -513,16 +511,14 @@ class SimulationApplicationBootstrap:
 ```python
 @dataclass
 class SimulationAdapters:
-    """All 34 output port adapters (+ 3 optional fields assigned during bootstrap)."""
+    """All 33 required output port adapters (+ 4 optional fields assigned during bootstrap, including coding_agent)."""
 
     # Core output port adapters (required, no defaults)
     ticket_system: ITicketSystem                     # InMemoryTicketAdapter
-    llm_provider: ILLMProvider                       # MockLLMAdapter
     container: IContainer                            # FakeContainerAdapter
     repository: IRepository                          # InMemoryRepositoryAdapter
     event_store: IEventStore                         # InMemoryEventStore
     metrics: IMetrics                                # InMemoryMetricsAdapter
-    storage: IStorage                                # InMemoryStorageAdapter
     config_store: IConfigStore                       # InMemoryConfigStore
     notifier: INotifier                              # MockNotifierAdapter
     encryption: IEncryptionService                   # SimpleEncryptionAdapter
@@ -555,6 +551,9 @@ class SimulationAdapters:
     branch_resolution_service: IBranchResolutionService | None = None  # MockBranchResolutionAdapter (Phase 2)
     agent_executor: IAgentExecutor | None = None                       # ExecutionServiceAgentExecutor (Phase 3)
     tracer: ITracer | None = None                                      # InMemoryTracer (Phase 2)
+    # DEF-015 D3/D4 — production wires the resilient ClaudeCodeAdapter,
+    # simulation wires MockClaudeCodeAdapter. Required at ExecutionService dispatch.
+    coding_agent: ICodingAgent | None = None                           # MockClaudeCodeAdapter (Phase 2)
 
     # Type-safe accessor methods
     def ticket_as_mock(self) -> InMemoryTicketAdapter:
@@ -642,7 +641,6 @@ CapturingMockEventEmitter
 InMemoryMessageBroker
 
 # Group 3: Depend on event_emitter
-InMemoryStorageAdapter      (event_emitter)
 FakeContainerAdapter        (event_emitter)
 InMemoryVersionControlService (event_emitter)
 MockBoardAdapter            (event_emitter)
@@ -650,7 +648,7 @@ InMemoryQueueService        (event_emitter)
 
 # Group 4: External system interfaces
 InMemoryTicketAdapter       (event_bus)
-MockLLMAdapter              (event_bus)
+MockClaudeCodeAdapter       (event_bus)  # ICodingAgent — replaced MockLLMAdapter in DEF-015 D5
 
 # Group 5: Coordination
 MockDiscussionAdapter
@@ -692,7 +690,7 @@ MockBranchResolutionAdapter (engine/clock)
 ```
 ConfigurationService (config_store, event_bus, encryption)
   ↓
-ExecutionService (llm_provider, container, event_store, storage, version_control)
+ExecutionService (coding_agent, event_store, version_control)  # DEF-015 D4 slimming
   ↓
 WorkspaceRouter (version_control, container, event_store, branch_resolution_service)
   ↓
@@ -763,9 +761,10 @@ speed_multiplier: 10.0
 auto_advance: false
 
 # Optional: Override adapter selections
+# Note: the `llm` / `storage` slots retired in DEF-015 D5; the new coding-agent
+# slot is hard-wired in bootstrap to MockClaudeCodeAdapter for simulation.
 adapters:
   ticket_system: "in_memory"
-  llm_provider: "mock"
   container: "fake"
   event_store: "in_memory"
   board: "mock"
@@ -857,12 +856,11 @@ The simulation bootstrap already includes these adapters (simulation versions), 
 # After bootstrap completes, verify all adapters are wired
 adapters = bootstrap.adapters
 assert isinstance(adapters.ticket_system, ITicketSystem)       # InMemoryTicketAdapter
-assert isinstance(adapters.llm_provider, ILLMProvider)         # MockLLMAdapter
+assert isinstance(adapters.coding_agent, ICodingAgent)         # MockClaudeCodeAdapter (Phase 2 — optional slot, populated in sim bootstrap)
 assert isinstance(adapters.container, IContainer)              # FakeContainerAdapter
 assert isinstance(adapters.repository, IRepository)            # InMemoryRepositoryAdapter
 assert isinstance(adapters.event_store, IEventStore)           # InMemoryEventStore
 assert isinstance(adapters.metrics, IMetrics)                  # InMemoryMetricsAdapter
-assert isinstance(adapters.storage, IStorage)                  # InMemoryStorageAdapter
 assert isinstance(adapters.config_store, IConfigStore)         # InMemoryConfigStore
 assert isinstance(adapters.notifier, INotifier)                # MockNotifierAdapter
 assert isinstance(adapters.encryption, IEncryptionService)     # SimpleEncryptionAdapter

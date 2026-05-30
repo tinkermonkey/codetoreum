@@ -35,13 +35,14 @@ Overview of the Simulation Implementation as a complete port contract implementa
 
 ### [adapters.md](./adapters.md)
 
-Complete reference for all 54 adapters:
+Complete reference for all 52 adapters:
 
-- **36 Testing Adapters**: Mock implementations of output ports (InMemoryTicketAdapter, MockLLMAdapter, FakeContainerAdapter, etc.)
+- **34 Testing Adapters**: Mock implementations of output ports (InMemoryTicketAdapter, MockClaudeCodeAdapter, FakeContainerAdapter, etc.)
 - **18 Input Port Adapters**: HTTP endpoint wrappers (MockOrchestrationCommand, MockWorkItem, etc.)
 - Full mapping table with port interface → adapter class → file path
 - Adapter organization and characteristics
 - Testing patterns and integration
+- `MockClaudeCodeAdapter` design notes (default 5-event ledger, `script` override hook)
 
 ### [bootstrap-wiring.md](./bootstrap-wiring.md)
 
@@ -96,14 +97,14 @@ Everything is real except the adapters — which are mocks. This means:
 
 ## Comparison with Production
 
-| Aspect        | Simulation           | Production             |
-| ------------- | -------------------- | ---------------------- |
-| Ticket System | MockTicketAdapter    | GitHubTicketAdapter    |
-| Container     | FakeContainerAdapter | DockerContainerAdapter |
-| LLM           | MockLLMAdapter       | ClaudeCodeAdapter      |
-| Event Store   | InMemoryEventStore   | RedisEventStore        |
-| Configuration | InMemoryConfigStore  | DatabaseConfigStore    |
-| Speed         | 100x faster          | Real-time              |
+| Aspect        | Simulation             | Production             |
+| ------------- | ---------------------- | ---------------------- |
+| Ticket System | InMemoryTicketAdapter  | GitHubTicketAdapter    |
+| Container     | FakeContainerAdapter   | DockerContainerAdapter |
+| Coding Agent  | MockClaudeCodeAdapter  | ClaudeCodeAdapter      |
+| Event Store   | InMemoryEventStore     | RedisEventStore        |
+| Configuration | InMemoryConfigStore    | DatabaseConfigStore    |
+| Speed         | 100x faster            | Real-time              |
 
 ## Using the Simulation
 

@@ -86,15 +86,17 @@ codetoreum/
 - **CommentNeedsResponseEvent**: Comment requiring agent attention
 - **ReviewStatusChangedEvent**: Code review status updated
 - **LockAcquiredEvent/LockReleasedEvent**: Pipeline lock lifecycle
+- **CodingAgent* family** (11 events under `domain/events/coding_agent_events.py`): per-execution agent telemetry — `CodingAgentInvokedEvent`, `CodingAgentReadyEvent`, `CodingAgentToolCallEvent`, `CodingAgentToolResultEvent`, `CodingAgentTextOutputEvent`, `CodingAgentThinkingEvent`, `CodingAgentRateLimitEvent`, `CodingAgentApiRetryEvent`, `CodingAgentOtlpSpanEvent`, `CodingAgentTokensUsedEvent`, `CodingAgentCompletedEvent`. Aggregate ID is `execution_id`; events stream against `coding-agent-<execution_id>`. Granular events carry 14-day retention.
 - All events frozen (immutable) with serialization support
 
 ### Application Services (Orchestration)
 23 total application services for workflow orchestration, including:
 - **WorkflowOrchestrator**: Coordinates workflow execution
 - **AgentScheduler**: Queues and schedules agent executions
-- **ExecutionService**: Manages agent execution lifecycle
+- **ExecutionService**: Manages agent execution lifecycle — slimmed in DEF-015 to ~5-8 methods. Delegates the actual agent invocation to `ICodingAgent`; no longer owns container config building, log streaming, token parsing, or artifact upload
 - **ReviewService**: Handles review cycles and feedback
-- **WorkspaceRouter**: Manages container workspaces and file mounting
+- **WorkspaceRouter**: Returns a `WorkspaceContext` value object describing the workspace logically (workspace_path, branch_name, git_author, project_env_vars); the coding-agent adapter translates this to runtime-specific concerns (container env dict, host working directory, API request body)
+- **DefaultPromptBuilder** (`application/prompt_building/`): Implements `IPromptBuilder`. Assembles vendor-agnostic `StructuredPrompt` from `AgentExecution` + `WorkspaceContext`. Coding-agent adapters render the structured prompt to their vendor's expected format (e.g. `ClaudeCodeAdapter.prompt_renderer` produces the text passed to `claude --print`)
 - **ConversationalLoopOrchestrator**: Multi-turn agent dialogue management
 - **ContainerRecoveryService**: Handles container failure recovery
 - **MultiProjectOrchestrator**: Top-level polling orchestrator — started in Phase 5e of production bootstrap, polls all enabled projects every 30s, delegates per-project work to WorkflowOrchestrator. This is the sole orchestration entry point; BoardColumnEventHandler is its event-driven complement, not an independent entry point
@@ -111,13 +113,15 @@ See `documentation/architecture/application-services/` for complete service docu
 - Execution management, configuration, system services
 
 **Output Ports** (40 total): Vendor-agnostic interfaces for external system interactions
-- **Core System**: ITicketSystem, ILLMProvider, IContainer, IVersionControlService, IEventStore, IStorage
+- **Core System**: ITicketSystem, ICodingAgent, IContainer, IVersionControlService, IEventStore
 - **Board Management**: IBoardService, board reconciliation services
 - **Code Review**: ICodeReviewService, PR/review lifecycle interfaces
 - **Work Item Management**: IWorkItemService, work item CRUD and tracking
 - **Infrastructure**: IEventEmitter, event bus, monitoring interfaces
 - **Identity & Lock Services**: IIdentityService, IPipelineLockService
-- **Domain Services**: Specialized business logic services
+- **Domain Services**: IPromptBuilder, plus other specialized business logic services
+
+> The `ILLMProvider` + `IAgentLauncher` + `IStorage` ports retired in DEF-015 (Phase D5). Coding work is now driven by `ICodingAgent` (one port covering both "what to invoke" and "how to invoke" via `InvocationMode.{CONTAINERIZED, HOST, API}`). Prompt assembly is `IPromptBuilder`, kept separate so vendor adapters render structured prompts to their own format. Agent output flows through the `CodingAgent*` event family rather than a blob store.
 
 See `documentation/architecture/ports/` for complete port specifications.
 
@@ -147,18 +151,20 @@ See `documentation/architecture/ports/` for complete port specifications.
 
 **Production**:
 - GitHubTicketAdapter, GitHubBoardAdapter, GitHubCodeReviewAdapter
-- ClaudeCodeAdapter (LLM provider — see note below)
+- ClaudeCodeAdapter (`ICodingAgent` — see note below)
 - DockerContainerAdapter
 
-> **ClaudeCodeAdapter is an autonomous agent launcher, not a prompt→text API wrapper.**
-> It invokes `claude --print` (headless/non-interactive mode), which still runs Claude Code's full agentic loop: reading files, editing code, executing bash commands, and making multi-step decisions. `ExecutionContext.working_directory` aims the agent at the target codebase. The subprocess is synchronous from Codetoreum's perspective (we `await` its completion), but *within* that subprocess Claude Code operates autonomously. Do not confuse "bounded duration" with "bounded capability."
+> **ClaudeCodeAdapter implements `ICodingAgent`, not a prompt→text API wrapper.**
+> It lives at `adapters/secondary/claude_code/` and selects an internal strategy (`strategies/containerized.py` or `strategies/host.py`) based on `CodingAgentInvocationOptions.invocation_mode`. The containerized strategy uses `IContainer` to launch `claude --print` inside a Docker container with `--network bridge`; the host strategy runs it as a local subprocess. Either way, Claude Code runs its full agentic loop inside the subprocess: reading files, editing code, executing bash commands, making multi-step decisions. The adapter's stream parser converts `claude --print --output-format stream-json` output into `CodingAgent*` domain events that flow through the event bus. The subprocess is synchronous from Codetoreum's perspective (we `await` its completion), but *within* that subprocess Claude Code operates autonomously. Do not confuse "bounded duration" with "bounded capability."
 
 **Testing/Simulation** (`adapters/testing/` + `adapters/primary/input_port_adapters/mock/`):
-- 54 total mock and in-memory adapters for deterministic testing (35 in testing/, 19 in input port mocks)
-- Examples: MockLLMAdapter, MockBoardAdapter, MockCodeReviewAdapter, MockAgentExecutor
+- 53 total mock and in-memory adapters for deterministic testing (34 in testing/, 19 in input port mocks)
+- Examples: MockClaudeCodeAdapter, MockBoardAdapter, MockCodeReviewAdapter, MockAgentExecutor
 - MockReviewCycleAdapter, MockRepairCycleAdapter, MockContainerRecoveryAdapter
 - InMemoryEventStore, InMemoryConfigStore, InMemoryMetricsAdapter
 - FakeContainerAdapter, MockEventEmitter, CapturingMockEventEmitter
+
+> `MockLLMAdapter` and `InMemoryStorageAdapter` retired in DEF-015 (Phase D5) along with their ports. `MockClaudeCodeAdapter` is the simulation-side `ICodingAgent` — see `documentation/implementations/simulation/adapters.md`.
 
 ## Important Design Changes (Gen 1 → Gen 2)
 
@@ -260,7 +266,7 @@ Database-backed configuration with web UI:
 - All state changes MUST emit domain events
 - Events MUST be immutable (frozen dataclasses)
 - Configuration MUST be database-backed
-- Agents execute in isolated containers with limited privileges — agent configs MUST have `requires_docker: true` in production
+- Agents execute in isolated containers with limited privileges — agent configs MUST set `invocation.mode: containerized` in production (the legacy `requires_docker` flag retired in DEF-015)
 - `MultiProjectOrchestrator` MUST be the sole top-level orchestration entry point — started once at server startup, never bypassed
 - REST API endpoints require `Authorization: Bearer <token>` — token generated by `SimpleTokenAuthManager` on startup, printed to console as `Authentication token: <jwt>`
 - Resilience patterns MUST be centralized in infrastructure layer
@@ -297,9 +303,9 @@ The system includes a comprehensive simulation framework for fast, deterministic
 - `now()` - Get current simulation time
 
 **Mock Adapters** (`src/codetoreum/adapters/testing/` and `src/codetoreum/adapters/primary/input_port_adapters/mock/`)
-- 54 total adapters (mock + in-memory implementations): 35 in testing/, 19 in input port mocks
-- MockLLMAdapter, MockBoardAdapter, MockReviewCycleAdapter, MockRepairCycleAdapter
-- InMemoryEventStore, InMemoryStorageAdapter, InMemoryMetricsAdapter
+- 53 total adapters (mock + in-memory implementations): 34 in testing/, 19 in input port mocks
+- MockClaudeCodeAdapter, MockBoardAdapter, MockReviewCycleAdapter, MockRepairCycleAdapter
+- InMemoryEventStore, InMemoryMetricsAdapter (storage adapters retired in DEF-015)
 - See `documentation/implementations/simulation/adapters.md` for complete reference
 
 ### Simulation Scenarios

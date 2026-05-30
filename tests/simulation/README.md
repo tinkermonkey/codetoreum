@@ -38,13 +38,13 @@ ExecutionServiceAgentExecutor (unconditional default)
     ↓
 ExecutionService (LLM orchestration)
     ↓
-WorkspaceRouter (repository/workspace management)
+WorkspaceRouter (returns WorkspaceContext — host-side workspace_path, branch, git_author)
     ↓
 InMemoryVersionControlService (VCS operations)
     ↓
-MockLLMAdapter → LLM response simulation
+MockClaudeCodeAdapter (ICodingAgent) → records invocations, emits CodingAgent* event ledger
     ↓
-FakeContainerAdapter → Optional Docker simulation
+FakeContainerAdapter → only used when invocation.mode == CONTAINERIZED
     ↓
 Execution completion → Auto-progression to next workflow stage
 ```
@@ -52,18 +52,19 @@ Execution completion → Auto-progression to next workflow stage
 ### What's Active vs. Mocked
 
 **Always Active (Production Code)**:
-- ExecutionService
-- WorkspaceRouter
+- ExecutionService (slimmed in DEF-015 D4 — delegates to ICodingAgent)
+- WorkspaceRouter (returns WorkspaceContext value object)
+- DefaultPromptBuilder (IPromptBuilder implementation)
 - InMemoryVersionControlService
 - ExecutionContextBuilder
 - Agent domain objects and lookups
 
 **Always Mocked (Testing Adapters)**:
-- LLM responses (MockLLMAdapter with configurable patterns)
+- Coding agent (MockClaudeCodeAdapter implementing ICodingAgent; emits a deterministic 5-event default ledger and supports custom `script` callable)
 - Container execution (FakeContainerAdapter without Docker)
 - Git repository (InMemoryRepositoryAdapter)
 - External ticket system (InMemoryTicketAdapter)
-- All other output port adapters (24 total)
+- All other output port adapters
 
 ### No Mock-Only Mode
 
@@ -115,11 +116,11 @@ For simulation bootstrap wiring, **ExecutionServiceAgentExecutor is always used 
 │  │  Speed: 10-100x faster than real time     │  │
 │  └───────────────────────────────────────────┘  │
 │  ┌───────────────────────────────────────────┐  │
-│  │  24 Mock Adapters                         │  │
-│  │  • MockLLMAdapter (LLM responses)         │  │
+│  │  Mock Adapters                            │  │
+│  │  • MockClaudeCodeAdapter (ICodingAgent)   │  │
 │  │  • FakeContainerAdapter (execution)       │  │
 │  │  • InMemoryVersionControlService (VCS)    │  │
-│  │  • 21 other output port mocks             │  │
+│  │  • remaining output port mocks            │  │
 │  └───────────────────────────────────────────┘  │
 │  ┌───────────────────────────────────────────┐  │
 │  │  Full Service Chain                       │  │
@@ -374,23 +375,20 @@ ExecutionServiceAgentExecutor(
 This executor:
 - Looks up active workflow runs from the registry
 - Loads Agent and WorkItem domain objects
-- Routes workspace setup via WorkspaceRouter
+- Routes workspace setup via WorkspaceRouter (returns WorkspaceContext)
 - Tracks VCS branches and file content
-- Executes LLM via MockLLMAdapter (production code path)
-- Executes containers via FakeContainerAdapter (when `requires_docker=True`)
+- Invokes the coding agent via MockClaudeCodeAdapter (production code path delegating to ICodingAgent)
+- Executes containers via FakeContainerAdapter (when `agent.invocation.mode == "containerized"`)
 - Calls completion callbacks for automation (auto-progression to next stage)
 
 **No Mock-Only Alternative**: Every agent execution exercises the full production code path through ExecutionService and WorkspaceRouter.
 
 ### 5. Mock Adapters
 
-#### MockLLMAdapter
-Simulates LLM responses based on pattern matching.
+#### MockClaudeCodeAdapter
+Deterministic ICodingAgent implementation — records every invocation in `self.invocations` and publishes a 5-event default ledger (Invoked → Ready → TextOutput → TokensUsed → Completed) to the event bus on each `execute()` call. For richer event flows, pass a custom `script: ScriptCallable` to the constructor.
 
-```python
-adapter.add_response_pattern(r"code.*", "Here's the code")
-result = await adapter.execute("generate code")
-```
+See `documentation/implementations/simulation/adapters.md` "MockClaudeCodeAdapter design" for the full shape.
 
 #### FakeContainerAdapter
 Simulates container execution without Docker.

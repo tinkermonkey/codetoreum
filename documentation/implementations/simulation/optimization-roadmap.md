@@ -1,8 +1,10 @@
 # Simulation Footprint Optimization Roadmap
 
-**Status**: Decisions codified
+**Status**: Decisions codified (some items superseded — see note)
 **Date**: 2026-05-08
 **Prerequisite**: [`footprint-optimization.md`](./footprint-optimization.md) — analysis and classification of all 37 simulation adapters
+
+> **Note (2026-05-29)**: The §3 entry "LocalDiskStorageAdapter (replaces `InMemoryStorageAdapter`)" was overtaken by **DEF-015** (Phase D5). The `IStorage` port retired entirely along with `InMemoryStorageAdapter` and `MinioStorageAdapter`; agent output now flows through the `CodingAgent*` event family. The `LocalDiskStorageAdapter` replacement is no longer planned. See `bootstrap/ARCHITECTURE.md` §9 DEF-015 and [`adapters.md`](./adapters.md) for the current shape.
 
 ---
 

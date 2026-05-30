@@ -438,9 +438,15 @@ agents:
     capabilities:
       - "system_design"
       - "architecture_review"
-    llm_model: "claude-sonnet-4-5-20250929"
-    temperature: 0.7
-    max_tokens: 4096
+    coding_agent: "claude-code"
+    invocation:
+      mode: "containerized"          # or "host" / "api"; validated against adapter.supported_invocation_modes()
+      model: "claude-sonnet-4-6"
+      timeout_seconds: 3600
+      mode_config:
+        image: "codetoreum-agent:latest"
+        cpu_limit: "2"
+        memory_limit: "4g"
     system_prompt: "You are a software architect..."
     enabled: true
     metadata:
@@ -451,9 +457,11 @@ agents:
 - `agents[].name`: Agent identifier
 - `agents[].agent_type`: Type for matching to stages
 - `agents[].capabilities`: List of capabilities
-- `agents[].llm_model`: Model to use (for real LLM)
-- `agents[].temperature`: Model temperature (0.0-1.0)
-- `agents[].max_tokens`: Response token limit
+- `agents[].coding_agent`: Registered coding-agent adapter (e.g. `"claude-code"`). Replaces the retired `llm_provider` slot (DEF-015 D5).
+- `agents[].invocation.mode`: One of `containerized`, `host`, `api`. Validated against the adapter's `supported_invocation_modes()` at config load — errors at load, not first execution. Replaces the retired `requires_docker` flag.
+- `agents[].invocation.model`: Model identifier passed to the coding agent
+- `agents[].invocation.timeout_seconds`: Per-execution timeout
+- `agents[].invocation.mode_config`: Mode-specific settings (image/cpu/memory for containerized; ignored for host/api)
 - `agents[].system_prompt`: Agent instructions
 - `agents[].enabled`: Whether agent is active
 - `agents[].metadata`: Custom attributes
@@ -509,9 +517,11 @@ auto_advance: false
 auto_advance_interval_seconds: 30
 
 # Optional: override adapter selections
+# Note: the `llm_provider` and `storage` slots retired in DEF-015 D5; the
+# simulation bootstrap hard-wires MockClaudeCodeAdapter into the coding_agent
+# slot, so scenarios do not configure it here.
 adapters:
   ticket_system: "in_memory"
-  llm_provider: "mock"
   container: "fake"
   board: "mock"
   event_store: "in_memory"
@@ -625,17 +635,34 @@ async def test_sdlc_pipeline_workflow():
 ```yaml
 agents:
   - name: "fast-agent"          # For smoke tests
-    max_tokens: 1024
-    temperature: 0.0            # Deterministic
+    coding_agent: "claude-code"
+    invocation:
+      mode: "host"              # No container overhead
+      model: "claude-sonnet-4-6"
+      timeout_seconds: 60
 
   - name: "thorough-agent"      # For feature tests
-    max_tokens: 4096
-    temperature: 0.7            # Realistic variation
+    coding_agent: "claude-code"
+    invocation:
+      mode: "containerized"
+      model: "claude-sonnet-4-6"
+      timeout_seconds: 1800
+      mode_config:
+        image: "codetoreum-agent:latest"
 
   - name: "heavy-agent"         # For stress tests
-    max_tokens: 8192
-    temperature: 0.8            # More complex
+    coding_agent: "claude-code"
+    invocation:
+      mode: "containerized"
+      model: "claude-opus-4-5"
+      timeout_seconds: 3600
+      mode_config:
+        image: "codetoreum-agent:latest"
+        cpu_limit: "4"
+        memory_limit: "8g"
 ```
+
+Note: per-agent temperature / max_tokens tuning is the coding-agent adapter's concern, not the orchestrator's — those parameters are passed via `invocation.mode_config` when the adapter exposes them.
 
 ---
 
@@ -655,8 +682,10 @@ agents:
 **Agents**:
 - `name` is required and must be unique
 - `agent_type` must match workflow stage agent_type
-- `temperature` must be 0.0-1.0
-- `max_tokens` must be positive
+- `coding_agent` must resolve to a registered adapter (e.g. `"claude-code"`)
+- `invocation.mode` must be in the adapter's `supported_invocation_modes()`
+- `invocation.model` must be a model the adapter accepts
+- `invocation.timeout_seconds` must be positive
 
 **Work Items**:
 - `id` is required and must be unique

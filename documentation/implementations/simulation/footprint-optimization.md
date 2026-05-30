@@ -1,8 +1,10 @@
 # Simulation Footprint Optimization
 
-**Status**: Analysis
+**Status**: Analysis (historical — see note below)
 **Date**: 2026-05-08
-**Scope**: All 37 simulation adapters (34 required + 3 optional)
+**Scope**: All 37 simulation adapters (34 required + 3 optional) as of analysis date
+
+> **Note (2026-05-29)**: Several adapter classifications in this analysis were overtaken by **DEF-015** (the coding-agent port redesign, Phase D5). Specifically: row #2 (`llm_provider` / `MockLLMAdapter`) and row #7 (`storage` / `InMemoryStorageAdapter`) refer to ports that were deleted entirely — `ILLMProvider` was replaced by `ICodingAgent` (now implemented in simulation by `MockClaudeCodeAdapter`); `IStorage` retired with no replacement because agent output flows through the `CodingAgent*` event family. The "BORDERLINE" classification for storage and the "KEEP SIMULATED" classification for `MockLLMAdapter` are no longer applicable. See [`adapters.md`](./adapters.md) and `bootstrap/ARCHITECTURE.md` §9 DEF-015 for current shape.
 
 ---
 

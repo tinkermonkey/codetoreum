@@ -49,11 +49,19 @@ To create a new implementation (e.g., production, staging, cloud-hosted):
        # port interfaces used by the simulation (ITicketSystem, IContainer, etc.)
        ticket_adapter = GitHubTicketAdapter(github_token=...)
        container_adapter = DockerContainerAdapter(docker_host=...)
-       llm_adapter = ClaudeCodeAdapter(api_key=...)
+       # Resolve the ICodingAgent slot (DEF-015 D3) — the production
+       # ClaudeCodeAdapter is constructed inside resolve_coding_agent()
+       # along with its containerized + host strategies and is wrapped by
+       # ResilientCodingAgentDecorator.
+       coding_agent = resolver.resolve_coding_agent(
+           prompt_builder=DefaultPromptBuilder(),
+           container=container_adapter,
+           ...,
+       )
        # (plus all remaining output port adapters)
 
        # Wire them to the application
-       return create_app(ticket_adapter, container_adapter, llm_adapter, ...)
+       return create_app(ticket_adapter, container_adapter, coding_agent, ...)
    ```
 
 3. **Document the Implementation**: Create a directory in `implementations/` with:

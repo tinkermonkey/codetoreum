@@ -3,18 +3,122 @@
 ## Summary
 
 This document covers production bootstrap configuration including:
+- **Phase sequence**: Seven primary phases plus inserted sub-phases (4b, 4c, 4d, 5a-5e) for adapter wiring, coding-agent resolution, event persistence, and orchestrator startup
 - **Workspace Router Setup**: Factory functions to wire `BranchResolutionAdapter` into the workspace preparation flow
 - **Agent Workspace Base**: Directory setup and ownership requirements for agent container execution
 
 **WorkspaceRouter and BranchResolutionAdapter are wired in production bootstrap** (Phase 4b and Phase 5 respectively). `BranchResolutionAdapter` is created in Phase 4b with the resilience-wrapped `ticket_system` and `version_control` adapters; `WorkspaceRouter` is instantiated in Phase 5 with all dependencies injected. The factories documented here reflect the production wiring.
 
+## Phase Sequence Overview
+
+`ProductionApplicationBootstrap.setup()` (in `src/codetoreum/infrastructure/bootstrap/production_bootstrap.py`) runs seven primary phases. The numbering preserves architectural history while new sub-phases were inserted during DEF-015 (D6/D7):
+
+| Phase | Purpose |
+|---|---|
+| 1 | Infrastructure creation (event bus, adapter factory, resolver setup) |
+| 2 | Adapter resolution (creates all production output adapters with credential validation) |
+| 3 / 3b | Critical path enforcement (no mocks on critical slots); production `event_emitter` validation |
+| 4 | Resilience decoration (rate limiter → circuit breaker → timeout → retry on critical adapters) |
+| 4b | `BranchResolutionAdapter` constructed against resilience-wrapped `ticket_system` + `version_control` |
+| **4c** | **`ICodingAgent` resolution** — production `ClaudeCodeAdapter` wired via `resolver.resolve_coding_agent(...)`. Constructs the production event-sourced `WorkItemService` first so the adapter, executor, and REST API share one instance (DEF-016 fix). |
+| **4d** | **`CodingAgent*` event persistence bridge** — wildcard event bus subscriber appends each `CodingAgent*` event to `coding-agent-<execution_id>` in the event store. Without this, agent telemetry never reached the audit trail (DEF-018 fix). |
+| 5 | Application service instantiation (11 services with production adapters) |
+| 5a-5e | Agent scheduler startup, codetoreum board init, project bootstrap loading, MultiProjectOrchestrator startup |
+| 6 | Input port creation (17 input port implementations) |
+| 7 | FastAPI app creation |
+
+### Phase 4c — `ICodingAgent` resolution (DEF-015 D3/D4)
+
+The `coding_agent` slot replaces the retired `llm_provider` slot (the `ILLMProvider` port deleted in D5). The slot is resolved *after* Phase 4 resilience decoration so the resilient `IContainer` is passed into the containerized strategy.
+
+```python
+# Phase 4c: Wire the new ICodingAgent slot
+self._production_work_item_service = WorkItemService(
+    event_store=self.adapters.event_store,
+)
+self.adapters.coding_agent = resolver.resolve_coding_agent(
+    prompt_builder=DefaultPromptBuilder(),
+    agent_repository=self.adapters.agent_repository,
+    work_item_service=self._production_work_item_service,
+    container=self.adapters.container,
+)
+```
+
+`AdapterResolver.resolve_coding_agent()` constructs the production `ClaudeCodeAdapter` (from `adapters/secondary/claude_code/`) wrapped by `ResilientCodingAgentDecorator`. The adapter's internal strategies (`strategies/containerized.py`, `strategies/host.py`) consume the resilience-wrapped container.
+
+**DEF-016 footnote**: the production `WorkItemService` is constructed here (not in Phase 5) so the same instance backs the coding-agent adapter, the executor, and the REST API. Passing the mock `work_item_service` slot would cause `WorkItemNotFoundError` at prompt-build time because the API-side store and the adapter-side store would diverge.
+
+### Phase 4d — `CodingAgent*` event persistence bridge (DEF-015 D7 / DEF-018)
+
+The new `ContainerizedClaudeStrategy` (and the other strategies) publish the 11 `CodingAgent*` events directly to the `EventBus` via `event_bus.publish(event)`. The bus dispatches to subscribers but does not itself write to the event store — no application service writes these events either, since the agent owns the telemetry. Phase 4d closes the audit gap with a small wildcard subscriber:
+
+```python
+# Phase 4d: Bridge CodingAgent* events → event store
+_coding_agent_event_types: tuple[type, ...] = (
+    CodingAgentApiRetryEvent, CodingAgentCompletedEvent,
+    CodingAgentInvokedEvent, CodingAgentOtlpSpanEvent,
+    CodingAgentRateLimitEvent, CodingAgentReadyEvent,
+    CodingAgentTextOutputEvent, CodingAgentThinkingEvent,
+    CodingAgentTokensUsedEvent, CodingAgentToolCallEvent,
+    CodingAgentToolResultEvent,
+)
+
+async def _persist_coding_agent_event(event: Any) -> None:
+    if not isinstance(event, _coding_agent_event_types):
+        return
+    stream_id = f"coding-agent-{event.execution_id}"
+    try:
+        await _coding_agent_event_store.append(stream_id, [event])
+    except Exception:
+        logger.exception(
+            "Failed to persist CodingAgent event_type=%s execution_id=%s",
+            event.event_type, event.execution_id,
+        )
+
+self.infrastructure.event_bus.subscribe(None, _persist_coding_agent_event)
+```
+
+Persistence errors are logged (`exc_info=True`) but never crash the publisher — observability must not break the agent execution loop. Per-execution telemetry is namespaced (`coding-agent-<execution_id>`) separately from `WorkItem` and `Execution` streams so audit queries can target either layer cleanly.
+
+**D7 validation**: the second D7 bootstrap run wrote 67+ `CodingAgent*` events to ES across 9 distinct event types under stream `coding-agent-0fbd301f-d1fc-4327-ada8-09f1d3272a79`.
+
+### Agent invocation schema (DEF-015 D6)
+
+Production agent configs (in `bootstrap/rounds.json` and the ES round-trip used by `register_project.py`) now carry an `invocation` block instead of the retired `requires_docker` flag:
+
+```json
+{
+  "agents": [
+    {
+      "name": "senior_software_engineer",
+      "coding_agent": "claude-code",
+      "invocation": {
+        "mode": "containerized",
+        "model": "claude-sonnet-4-6",
+        "timeout_seconds": 3600,
+        "mode_config": {
+          "image": "codetoreum-agent:latest",
+          "cpu_limit": "2",
+          "memory_limit": "4g"
+        }
+      },
+      "capabilities": ["code_generation", "debugging", "refactoring", "testing"],
+      "makes_code_changes": true,
+      "commit_policy": "on_success"
+    }
+  ]
+}
+```
+
+The bootstrap loader validates `coding_agent` resolves to a registered adapter, then validates `invocation.mode` is in that adapter's `supported_invocation_modes()`. Errors at load, not at first execution. `ExecutionServiceAgentExecutor._build_invocation_options` reads `agent.invocation` directly — the `requires_docker` bridge retired in D6.
+
 ## Phase 5e — MultiProjectOrchestrator Startup
 
 `ProductionApplicationBootstrap.setup()` starts the `MultiProjectOrchestrator` poll loop in Phase 5e using `asyncio.ensure_future` rather than `await` — this keeps `setup()` non-blocking while the poll loop runs as a background task. The loop continues until `teardown()` stops it via `await multi_project_orchestrator.stop()`.
 
-Phase 5e is placed after Phase 5d (WorkItemService wiring) to guarantee that all services are fully constructed before the first 30-second poll cycle fires.
+Phase 5e runs after Phases 5a-5d (scheduler start, board init, project loading, executor wiring) so that all services are fully constructed before the first 30-second poll cycle fires.
 
-See `bootstrap/ARCHITECTURE.md` §3 and §6 (INV-13) for the full orchestration model.
+See `bootstrap/ARCHITECTURE.md` §3 and §6 (INV-13) for the full orchestration model. See DEF-015 in §9 for the coding-agent redesign history.
 
 ---
 
