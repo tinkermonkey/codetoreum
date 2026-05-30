@@ -235,6 +235,7 @@ async def test_dispatch_to_file_fix_when_cross_cutting_false(
 
 
 @pytest.mark.asyncio
+@pytest.mark.timeout(120)  # passes standalone in ~62s; needs headroom over suite-default 60s
 async def test_systemic_fix_with_many_failures(
     seeded_simulation_bootstrap,
 ):

@@ -43,9 +43,15 @@ Edit `bootstrap/project.json` for your target repository:
     {
       "name": "senior_software_engineer",
       "description": "Implements features and fixes bugs",
-      "model": "claude-sonnet-4-6",
-      "timeout": 3600,
-      "requires_docker": true,
+      "coding_agent": "claude-code",
+      "invocation": {
+        "mode": "containerized",
+        "model": "claude-sonnet-4-6",
+        "timeout_seconds": 3600,
+        "mode_config": {
+          "image": "codetoreum-agent:latest"
+        }
+      },
       "makes_code_changes": true,
       "capabilities": ["code_generation", "debugging", "refactoring", "testing"],
       "commit_policy": "on_success"
@@ -246,6 +252,14 @@ curl -s -H "Authorization: Bearer $CODETOREUM_TOKEN" \
 ```
 http://localhost:8000/docs
 ```
+
+---
+
+## Known operator-environment quirks
+
+| Quirk | Detail |
+|---|---|
+| `vscode-git-*.sock` ECONNREFUSED on commit push | On hosts where the VSCode git credential helper is configured but the per-session socket isn't reachable (common on headless dev hosts or after IDE restart), the orchestrator's `git push` may fail with `Missing or invalid credentials` even though `GITHUB_TOKEN` is set. Workaround: either unset `credential.helper` for the workspace (`git -C <workspace> config --unset-all credential.helper`) or restart VSCode so the socket is created. This is environmental, not architectural; no code change can fully prevent it. Surfaced during the DEF-015 D7 validation run on 2026-05-29. |
 
 ---
 

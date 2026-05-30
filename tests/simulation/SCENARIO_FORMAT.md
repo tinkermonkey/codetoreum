@@ -91,8 +91,11 @@ current_time = runner.clock.now()
 ### Accessing Adapters
 
 ```python
-# LLM adapter
-runner.llm_adapter.add_response_pattern(pattern, response)
+# Coding-agent adapter (MockClaudeCodeAdapter)
+# Override the default event ledger / result via the script hook, or
+# inspect runner.coding_agent_adapter.invocations after the run for
+# call-by-call telemetry — see documentation/implementations/simulation/adapters.md
+runner.coding_agent_adapter.script = my_scripted_events  # optional override
 
 # Container adapter
 runner.container_adapter.set_command_result(command, exit_code, stdout, stderr)
@@ -103,6 +106,12 @@ metrics = await runner.metrics_adapter.query_metrics(...)
 # Notifier adapter
 notifications = runner.notifier_adapter.get_sent_notifications()
 ```
+
+> The legacy ``runner.llm_adapter.add_response_pattern(...)`` pattern retired
+> in DEF-015 (Phase D5) when ``ILLMProvider`` / ``MockLLMAdapter`` were deleted.
+> Coding agents are now driven by ``ICodingAgent`` + ``MockClaudeCodeAdapter``;
+> scenarios that need to control agent behaviour use the ``script`` override
+> or post-hoc ``invocations`` inspection instead of regex response patterns.
 
 ## YAML Configuration Format (Optional)
 

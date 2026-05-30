@@ -38,7 +38,7 @@ codetoreum/
 ├── documentation/              # Architecture and implementation documentation
 │   ├── architecture/           # Gen 2 design specifications
 │   │   ├── domain/             # Domain model specifications
-│   │   ├── ports/              # Port interface specifications (19 input, 40 output)
+│   │   ├── ports/              # Port interface specifications (21 input, 39 output)
 │   │   ├── application-services/ # Orchestration service designs
 │   │   └── infrastructure/     # Cross-cutting infrastructure
 │   ├── implementations/        # Implementation and testing documentation
@@ -51,8 +51,8 @@ codetoreum/
     │   └── services/           # Domain services
     ├── application/            # 23 application services + event handlers
     ├── ports/                  # Port interfaces
-    │   ├── input/              # 19 inbound ports (commands, queries, services)
-    │   └── output/             # 40 outbound port interfaces
+    │   ├── input/              # 21 inbound ports (commands, queries, services)
+    │   └── output/             # 39 outbound port interfaces
     ├── adapters/               # Adapter implementations (54 total mock/in-memory adapters)
     │   ├── primary/            # FastAPI app, REST routers, webhook adapter
     │   │   └── input_port_adapters/mock/  # Mock implementations of all input ports (19 files)
@@ -106,13 +106,13 @@ See `documentation/architecture/application-services/` for complete service docu
 
 ### Port Interfaces (Contracts)
 
-**59 total ports**: 19 input ports + 40 output ports
+**60 total ports**: 21 input ports + 39 output ports
 
-**Input Ports** (19 total): Command, query, and service interfaces for inbound operations
+**Input Ports** (21 total): Command, query, and service interfaces for inbound operations
 - Agent management, work item management, workflow management
 - Execution management, configuration, system services
 
-**Output Ports** (40 total): Vendor-agnostic interfaces for external system interactions
+**Output Ports** (39 total): Vendor-agnostic interfaces for external system interactions
 - **Core System**: ITicketSystem, ICodingAgent, IContainer, IVersionControlService, IEventStore
 - **Board Management**: IBoardService, board reconciliation services
 - **Code Review**: ICodeReviewService, PR/review lifecycle interfaces
