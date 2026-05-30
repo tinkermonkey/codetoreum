@@ -212,8 +212,16 @@ class ContainerizedClaudeStrategy(ClaudeInvocationStrategy):
     def _build_volumes(
         self,
         workspace_context: WorkspaceContext,
-    ) -> dict[str, dict[str, str]]:
+    ) -> dict[str, str]:
         """Build the volume mount mapping for the container.
+
+        Returns a mapping in the ``IContainer.create`` input format —
+        ``{host_path: "container_path:mode"}``. Do **not** return the
+        Docker SDK output shape (``{host_path: {"bind": ..., "mode":
+        ...}}``); :class:`DockerContainerAdapter._parse_volume_spec`
+        translates the simple form into the SDK shape itself, and
+        receiving the SDK shape directly trips ``AttributeError:
+        \'dict\' object has no attribute \'split\'`` (D7 / DEF-017).
 
         Raises:
             ValueError: If ``workspace_context.workspace_path`` is unset.
@@ -229,7 +237,7 @@ class ContainerizedClaudeStrategy(ClaudeInvocationStrategy):
             )
             raise ValueError(msg)
         return {
-            str(workspace_context.workspace_path): {"bind": _DEFAULT_WORKDIR, "mode": "rw"},
+            str(workspace_context.workspace_path): f"{_DEFAULT_WORKDIR}:rw",
         }
 
     async def _open_log_stream(self, container_id: str) -> AsyncIterator[bytes]:
