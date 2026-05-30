@@ -501,6 +501,59 @@ Running record of architectural gaps found and fixed during bootstrap cycles. Mo
 
 ---
 
+### DEF-018 — `CodingAgent*` events never persisted to event store
+
+**Status**: Fixed in commit `5b860f08` (D7).
+
+**Deficiency**: The redesigned `ContainerizedClaudeStrategy` (Phase D3) publishes the 11 `CodingAgent*` events directly to the `EventBus` via `event_bus.publish(event)`. The bus dispatches to handlers but does not itself write to the event store — application services (e.g. `ExecutionService`) own that. With the legacy `ILLMProvider`-based `ClaudeCodeAdapter` retired in D5, no service writes `CodingAgent` events, so the ES `events-*` index never recorded any agent telemetry. D7 acceptance criterion #5 ("CodingAgent* events appear in the Elasticsearch event store") failed silently — the events were emitted, observers received them, but the audit trail was empty.
+
+**Fix**: Added Phase 4d to `ProductionApplicationBootstrap.setup()` that subscribes a small wildcard callback to the event bus. For any `CodingAgent*` event published on the bus, the callback appends it to the `coding-agent-<execution_id>` stream in the configured event store. Per-execution telemetry is namespaced separately from `WorkItem` and `Execution` event streams so audit queries can target either layer cleanly. Persistence errors are logged with `exc_info=True` (no silent failures) but never crash the publisher — observability must not break the agent execution loop.
+
+**Files changed**: `src/codetoreum/infrastructure/bootstrap/production_bootstrap.py`.
+
+**Validation**: Second D7 bootstrap run (execution `0fbd301f-d1fc-4327-ada8-09f1d3272a79`) wrote `CodingAgentInvokedEvent`, `CodingAgentReadyEvent`, `CodingAgentRateLimitEvent`, `CodingAgentThinkingEvent`, `CodingAgentToolCallEvent`, `CodingAgentToolResultEvent`, `CodingAgentTextOutputEvent`, `CodingAgentTokensUsedEvent`, and `CodingAgentCompletedEvent` to ES under stream `coding-agent-0fbd301f-d1fc-4327-ada8-09f1d3272a79`.
+
+---
+
+### DEF-017 — `ContainerizedClaudeStrategy` passed Docker SDK output volume shape to `IContainer.create`
+
+**Status**: Fixed in commit `225c74d6` (D7).
+
+**Deficiency**: `ContainerizedClaudeStrategy._build_volumes` returned the Docker SDK *output* shape — `{host_path: {"bind": "/workspace", "mode": "rw"}}` — but `IContainer.create(volumes=...)` expects the input shape `{host_path: "container_path:mode"}`, and `DockerContainerAdapter._parse_volume_spec` translates the simple form into the SDK shape itself. Passing the SDK shape directly tripped `AttributeError: 'dict' object has no attribute 'split'` inside `_parse_volume_spec` when it tried `spec.split(":")` on the inner `{"bind": ..., "mode": ...}` dict. Every containerised execution failed at container-create time before `claude --print` ever ran.
+
+**Fix**: Switch `_build_volumes` to return the simple `"container_path:mode"` string form, document the port contract in the docstring, and update the return type annotation from `dict[str, dict[str, str]]` to `dict[str, str]`.
+
+**Files changed**: `src/codetoreum/adapters/secondary/claude_code/strategies/containerized.py`.
+
+---
+
+### DEF-016 — `ICodingAgent` wired with mock `WorkItemService` whose state is not shared with the REST API
+
+**Status**: Fixed in commit `6a50b844` (D7).
+
+**Deficiency**: The new `ClaudeCodeAdapter` (Phase D3) calls `work_item_service.get_work_item(execution.work_item_id)` before building the prompt, so it can include the work item's title/description in the rendered prompt sent to `claude --print`. The production bootstrap was passing the mock `work_item_service` from the `AdapterSelectionConfig` slot — a `MockWorkItemService` whose in-memory dict is **not** shared with the API-side `MockWorkItemCommandAdapter`, the real `WorkItemService` used by the executor, or the event store.
+
+Every execution failed at the prompt-build step with `WorkItemNotFoundError`, because the agent looked up the work item in an empty mock store while the REST API had persisted it elsewhere. The work item lifecycle silently never reached `In Review`; instead the failure cascaded into `BoardColumnEventHandler.handle_agent_completion` (DEF-013 territory).
+
+A related observation: `AdapterSelectionConfig.work_item_service` is `"mock"` by default and `production_bootstrap.py` did not override it. The reason `MockWorkItemService` exists at all is for tests; in production every reader/writer of work items should use the event-sourced `WorkItemService` from `application/work_item_service.py`.
+
+**Fix**: Construct the production event-sourced `WorkItemService` once in Phase 4c (it only needs the event store) and reuse the same instance for:
+- the new `ICodingAgent` adapter chain (Phase 4c — `resolver.resolve_coding_agent(work_item_service=self._production_work_item_service, ...)`);
+- the application services / executor (Phase 5 — was creating its own duplicate instance bound to the same event store, harmless but confusing);
+- the REST API command/query ports (Phase 6 — `_create_ports` already wired `self.services.work_item_service` to both `work_item_command` and `work_item_query`).
+
+All three callers now read and write the same work-item event streams in Elasticsearch.
+
+Also dropped the now-retired `"llm"` slot from `CRITICAL_ADAPTER_SLOTS` — D5 removed the `ILLMProvider` port, so validating it was dead code. The new `coding_agent` slot is constructed in Phase 4c (after Phase 2 `resolve_all()`) and so is not covered by the generic critical-path scan; explicit validation belongs in a follow-up, but no production code path can resolve `coding_agent` to a mock today (the resolver hard-codes the production `ClaudeCodeAdapter`).
+
+**Also fixed in the same commit**: the production bootstrap was still passing the retired `llm="claude_code"` and `storage="minio"` kwargs to `AdapterSelectionConfig(...)`. D5 removed both fields, so server startup failed at `TypeError: AdapterSelectionConfig.__init__() got an unexpected keyword argument 'llm'`. Removed both kwargs and switched `systemic_analysis` from `"llm"` to `"mock"` with a TODO note — `LLMSystemicAnalysisAdapter` still needs migration to `ICodingAgent` (out of D7 scope; the resolver gates this with a clear error).
+
+**Files changed**: `src/codetoreum/infrastructure/bootstrap/production_bootstrap.py`.
+
+**Validation**: First successful D7 bootstrap run (execution `ce78ffb9-868f-45c5-8451-d1da739709ce`, container `0bf3b190a628`, ~3min 25s end-to-end) drove the new code path end-to-end against `tinkermonkey/rounds` and reached the `In Review` terminal column via auto-progression. The agent invoked 31 tool calls and consumed 2624 input / 10404 output tokens — full `claude --print` agentic loop executed inside the container.
+
+---
+
 ### DEF-015 — Coding agent port redesign (D6 complete; D7–D9 pending)
 
 **Status**: Design landed in `~/.claude/plans/coding-agent-port-redesign.md` (user-confirmed 2026-05-29). Phase D0 (architecture docs), D1 (`ICodingAgent` + `IPromptBuilder` ports + `CodingAgent*` events), D2 (`DefaultPromptBuilder`), D3 (`ClaudeCodeAdapter` rewrite under `adapters/secondary/claude_code/` with internal strategy pattern), D4 (`ExecutionService.execute()` + `ExecutionServiceAgentExecutor` rewire), D5 (bulk deletion of `IAgentLauncher` / `ILLMProvider` / `ILLMTextProvider` / `IStorage` / old `ClaudeCodeAdapter` / `MockLLMAdapter` / `MinioStorageAdapter` / `InMemoryStorageAdapter` / retired `ExecutionService` + `WorkspaceRouter` methods / `IContainer.copy_from_container` / `ResilientLLMProviderDecorator` / Minio infra), and D6 (config schema migration: `AgentInvocationConfig` value object in `domain/coding_agent_types.py`; `Agent` + `AgentConfig` carry `coding_agent`/`invocation`; bootstrap loader parses the new schema and rejects the legacy shape; `register_project.py` writes the new shape; ES round-trips both new fields; `ExecutionServiceAgentExecutor._build_invocation_options` reads `agent.invocation` directly — no more `requires_docker` bridge; `WorkspaceContext.workspace_path` retires the strategy `workspace_path_resolver` callable) have all landed. D7–D9 (bootstrap validation, implementation docs update, second-adapter design validation) remain.
