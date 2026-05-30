@@ -281,9 +281,9 @@ async def test_save_and_get_agent_config(config_storage, sample_agent_config, es
 
     assert retrieved.project_id == sample_agent_config.project_id
     assert retrieved.agent_name == sample_agent_config.agent_name
-    assert retrieved.model == sample_agent_config.model
-    assert retrieved.timeout == sample_agent_config.timeout
-    assert retrieved.requires_docker == sample_agent_config.requires_docker
+    assert retrieved.invocation.model == sample_agent_config.invocation.model
+    assert retrieved.invocation.timeout_seconds == sample_agent_config.invocation.timeout_seconds
+    assert retrieved.invocation.mode == sample_agent_config.invocation.mode
     assert retrieved.mcp_servers == sample_agent_config.mcp_servers
     assert retrieved.version == 1
 

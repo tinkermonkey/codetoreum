@@ -237,7 +237,7 @@ class TestAgentConfigUpdate:
         assert result.success
         # Verify agent was created
         agent = await config_store.get_agent_config(sample_project.id, "new-agent")
-        assert agent.model == "claude-sonnet-4"
+        assert agent.invocation.model == "claude-sonnet-4"
 
     @pytest.mark.asyncio
     async def test_update_agent_config_validation_error(self, config_service, sample_project):
@@ -878,4 +878,4 @@ async def test_concurrent_agent_config_updates(config_service, config_store, sam
     # Verify all agents were configured
     for i in range(5):
         agent_config = await config_store.get_agent_config(sample_project.id, f"agent_{i}")
-        assert agent_config.timeout == 3600 + i * 100
+        assert agent_config.invocation.timeout_seconds == 3600 + i * 100
