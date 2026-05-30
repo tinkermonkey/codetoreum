@@ -922,14 +922,24 @@ class ProductionApplicationBootstrap:
         decision_events = ProductionDecisionEvents()
         projects_api = ProductionProjectsAPI()
 
-        # Conversational Loop Orchestrator — deferred in Phase D5. The
-        # orchestrator's continue_conversation call site still expects a
-        # retired ILLMProvider; wiring it to ICodingAgent is a separate
-        # migration. Until then, conversational columns are not wired in
-        # the production bootstrap. WorkflowOrchestrator accepts
-        # conversational_loop_orchestrator=None and skips the conversational
-        # initialization path when the column type matches.
-        conversational_loop_orchestrator: ConversationalLoopOrchestrator | None = None
+        # Conversational Loop Orchestrator — wired in Phase D5 carryover Item #1.
+        # CLO now uses ICodingAgent.execute() per conversational turn; we wire
+        # it with the same coding-agent + prompt-builder the executor uses so
+        # comment responses run through the same vendor invocation path as
+        # workflow stages. Failing fast if any dependency is missing avoids
+        # the prior silent-degradation None pattern.
+        if self.adapters.coding_agent is None:
+            msg = "Conversational Loop Orchestrator requires ICodingAgent; resolve coding_agent first."
+            raise RuntimeError(msg)
+        conversational_loop_orchestrator = ConversationalLoopOrchestrator(
+            discussion_adapter=self.adapters.discussion_adapter,
+            coding_agent=self.adapters.coding_agent,
+            prompt_builder=DefaultPromptBuilder(),
+            agent_repository=self.adapters.agent_repository,
+            work_item_service=self._production_work_item_service,
+            event_store=self.adapters.event_store,
+            event_emitter=self.adapters.event_emitter,
+        )
         self.conversational_loop_orchestrator = conversational_loop_orchestrator
 
         workflow_orchestrator = WorkflowOrchestrator(
@@ -1309,9 +1319,15 @@ class ProductionApplicationBootstrap:
 
     def _register_conversational_loop_orchestrator(self) -> None:
         """Register conversational loop orchestrator to handle column changes."""
-        if not self.infrastructure or not getattr(self, "conversational_loop_orchestrator", None):
-            # Deferred in Phase D5 — see the wiring site above for context.
-            return
+        if not self.infrastructure:
+            msg = "Infrastructure not initialised; cannot register CLO"
+            raise RuntimeError(msg)
+        if not getattr(self, "conversational_loop_orchestrator", None):
+            msg = (
+                "Conversational Loop Orchestrator not wired; "
+                "_create_services must construct it before _register_conversational_loop_orchestrator runs."
+            )
+            raise RuntimeError(msg)
 
         self.infrastructure.event_bus.subscribe(
             "WorkItemColumnChangedEvent",

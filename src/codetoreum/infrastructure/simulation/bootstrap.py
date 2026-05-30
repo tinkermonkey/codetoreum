@@ -1830,11 +1830,30 @@ class SimulationApplicationBootstrap:
         decision_events = SimulationDecisionEvents()
         projects_api = SimulationProjectsAPI()
 
-        # Conversational Loop Orchestrator — deferred in Phase D5; same
-        # rationale as the production bootstrap. The orchestrator still
-        # depends on the retired ILLMProvider.continue_conversation surface
-        # and needs an ICodingAgent migration before re-wiring.
-        conversational_loop_orchestrator: ConversationalLoopOrchestrator | None = None
+        # Work Item Service — instantiated here (was previously below CLO)
+        # so CLO can receive it via constructor. Same event-store-backed
+        # service is reused by other application services downstream.
+        work_item_service = WorkItemService(
+            event_store=self.adapters.event_store,
+        )
+
+        # Conversational Loop Orchestrator — wired in Phase D5 carryover Item #1.
+        # Uses the same coding-agent + prompt-builder the simulation executor
+        # consumes so conversational turns share the per-execution event stream
+        # the rest of the pipeline emits. Failing fast if a dependency is
+        # missing avoids the prior silent-degradation None pattern.
+        if self.adapters.coding_agent is None:
+            msg = "Conversational Loop Orchestrator requires ICodingAgent; resolve coding_agent first."
+            raise RuntimeError(msg)
+        conversational_loop_orchestrator = ConversationalLoopOrchestrator(
+            discussion_adapter=self.adapters.discussion_adapter,
+            coding_agent=self.adapters.coding_agent,
+            prompt_builder=DefaultPromptBuilder(),
+            agent_repository=self.adapters.agent_repository,
+            work_item_service=work_item_service,
+            event_store=self.adapters.event_store,
+            event_emitter=self.adapters.event_emitter,
+        )
         self.conversational_loop_orchestrator = conversational_loop_orchestrator
 
         workflow_orchestrator = WorkflowOrchestrator(
@@ -1849,11 +1868,6 @@ class SimulationApplicationBootstrap:
             board_service=self.adapters.board,
             workflow_config=self.adapters.workflow_config,
             conversational_loop_orchestrator=conversational_loop_orchestrator,
-        )
-
-        # Work Item Service
-        work_item_service = WorkItemService(
-            event_store=self.adapters.event_store,
         )
 
         # Container Recovery Service
@@ -2088,14 +2102,21 @@ class SimulationApplicationBootstrap:
         self._register_board_column_handler()
 
         # Subscribe ConversationalLoopOrchestrator to workitem.column_changed events
-        # so it can terminate sessions when items leave conversational columns
-        if hasattr(self, "conversational_loop_orchestrator") and self.conversational_loop_orchestrator:
-            # NOTE: EventBus routes callbacks by event.event_type (Python class name), not dot notation.
-            self.infrastructure.event_bus.subscribe(
-                "WorkItemColumnChangedEvent",
-                self.conversational_loop_orchestrator.handle_column_change_event,
+        # so it can terminate sessions when items leave conversational columns.
+        # CLO is wired in _create_services (Phase D5 carryover Item #1); fail
+        # loudly if the field is missing rather than silently skipping.
+        if not getattr(self, "conversational_loop_orchestrator", None):
+            msg = (
+                "Conversational Loop Orchestrator not wired; "
+                "_create_services must construct it before _create_fastapi_app runs."
             )
-            logger.info("Subscribed ConversationalLoopOrchestrator to WorkItemColumnChangedEvent events")
+            raise RuntimeError(msg)
+        # NOTE: EventBus routes callbacks by event.event_type (Python class name), not dot notation.
+        self.infrastructure.event_bus.subscribe(
+            "WorkItemColumnChangedEvent",
+            self.conversational_loop_orchestrator.handle_column_change_event,
+        )
+        logger.info("Subscribed ConversationalLoopOrchestrator to WorkItemColumnChangedEvent events")
 
         # Register repair cycle event handler with event bus
         # This allows the handler to listen for WorkItemColumnChanged events
