@@ -1,5 +1,6 @@
 """Elasticsearch event store adapter for production persistence."""
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from datetime import datetime
@@ -24,6 +25,21 @@ from codetoreum.ports.exceptions import (
 from codetoreum.ports.output.event_store import IEventStore
 
 logger = logging.getLogger(__name__)
+
+
+class _PendingAppend:
+    """Single item enqueued for the background-persistence worker.
+
+    Carries the work needed to perform one bulk write. ``attempt`` lets the
+    worker re-enqueue an item once on transient failure before giving up.
+    """
+
+    __slots__ = ("attempt", "events", "stream_id")
+
+    def __init__(self, stream_id: str, events: list, attempt: int = 0):
+        self.stream_id = stream_id
+        self.events = events
+        self.attempt = attempt
 
 
 class ElasticsearchEventStore(IEventStore):
@@ -89,6 +105,10 @@ class ElasticsearchEventStore(IEventStore):
         batch_size_limit: int = 10000,
         shard_count: int = 2,
         replica_count: int = 1,
+        enable_async_persistence: bool = True,
+        async_queue_max_size: int = 10000,
+        shutdown_drain_timeout_seconds: float = 10.0,
+        bulk_refresh: bool | str = False,
     ):
         """
         Initialize Elasticsearch event store.
@@ -100,6 +120,21 @@ class ElasticsearchEventStore(IEventStore):
             batch_size_limit: Maximum events per stream query (configurable)
             shard_count: Number of shards for indices (configurable)
             replica_count: Number of replicas for indices (configurable)
+            enable_async_persistence: When True (default), append() returns immediately
+                after enqueuing events for a background worker that performs the bulk
+                write. This decouples publishers from Elasticsearch latency. Callers
+                that pass `expected_version` (optimistic concurrency) still take the
+                synchronous path so conflict errors propagate to the caller.
+            async_queue_max_size: Maximum pending items in the background queue. When
+                full, callers fall back to synchronous append (preserves durability,
+                provides natural back-pressure) and a warning is logged.
+            shutdown_drain_timeout_seconds: Maximum time to wait when draining the
+                background queue during close(). Anything still pending after this is
+                logged as a loss.
+            bulk_refresh: refresh parameter passed to Elasticsearch bulk(). Default
+                False (do not wait for indexing refresh) which avoids the ~1-5s
+                wait_for stall on the publish hot path. Set to "wait_for" or True to
+                restore the prior synchronous refresh behavior (slower).
         """
         self.client = es_client
         self.index_prefix = index_prefix
@@ -109,9 +144,34 @@ class ElasticsearchEventStore(IEventStore):
         self.shard_count = shard_count
         self.replica_count = replica_count
 
+        # Async persistence configuration
+        self._enable_async_persistence = enable_async_persistence
+        self._async_queue_max_size = async_queue_max_size
+        self._shutdown_drain_timeout_seconds = shutdown_drain_timeout_seconds
+        self._bulk_refresh = bulk_refresh
+
+        # Background worker state. Lazily created on initialize() because
+        # asyncio.Queue must be bound to a running event loop.
+        self._async_queue: asyncio.Queue[_PendingAppend] | None = None
+        self._worker_task: asyncio.Task[None] | None = None
+        self._worker_stop_event: asyncio.Event | None = None
+
+        # Background-path stats (synchronous path still raises like before)
+        self._async_stats = {
+            "events_enqueued": 0,
+            "events_persisted_async": 0,
+            "events_dropped_overflow": 0,
+            "events_dropped_failure": 0,
+            "batches_persisted_async": 0,
+            "retries": 0,
+        }
+
     async def initialize(self) -> None:
         """
         Initialize the event store (create index template).
+
+        Also starts the background-persistence worker when async persistence
+        is enabled.
 
         Raises:
             EventStoreError: If initialization fails
@@ -127,6 +187,25 @@ class ElasticsearchEventStore(IEventStore):
             except Exception as e:
                 msg = f"Failed to initialize event store: {e}"
                 raise EventStoreError(msg) from e
+        else:
+            # Even without template creation, we still need to flip the flag so
+            # the worker is started and append() doesn't re-enter initialize().
+            self._initialized = True
+
+        # Start background-persistence worker (if enabled).
+        if self._enable_async_persistence and self._worker_task is None:
+            self._async_queue = asyncio.Queue(maxsize=self._async_queue_max_size)
+            self._worker_stop_event = asyncio.Event()
+            self._worker_task = asyncio.create_task(
+                self._run_persistence_worker(),
+                name="elasticsearch-event-store-persistence-worker",
+            )
+            logger.info(
+                "Started Elasticsearch event-store background persistence worker "
+                f"(queue_max={self._async_queue_max_size}, "
+                f"drain_timeout={self._shutdown_drain_timeout_seconds}s, "
+                f"refresh={self._bulk_refresh!r})"
+            )
 
     async def append(
         self,
@@ -137,14 +216,27 @@ class ElasticsearchEventStore(IEventStore):
         """
         Append events to a stream.
 
+        Persistence path selection:
+        - When ``expected_version`` is provided, the call is **synchronous**
+          (optimistic-concurrency conflicts must surface to the caller).
+        - When ``expected_version`` is None and async persistence is enabled,
+          the events are enqueued for the background worker and the call
+          returns immediately. This is the common case for fire-and-forget
+          telemetry (CodingAgent* events, board change events, etc.) and is
+          what keeps the event-bus publish hot path from blocking behind a
+          ~1-5s bulk-write per event.
+        - On queue overflow, we fall back to synchronous append: a noisy
+          publisher applies natural back-pressure instead of silently
+          dropping audit-trail entries.
+
         Args:
             stream_id: Event stream identifier (aggregate ID)
             events: Events to append
             expected_version: Expected current version for optimistic concurrency
 
         Raises:
-            ConcurrencyConflictError: Version mismatch
-            EventStoreError: Persistence failure
+            ConcurrencyConflictError: Version mismatch (synchronous path only)
+            EventStoreError: Persistence failure (synchronous path only)
         """
         if not events:
             return
@@ -152,6 +244,55 @@ class ElasticsearchEventStore(IEventStore):
         if not self._initialized:
             await self.initialize()
 
+        # Synchronous path: optimistic-concurrency callers, or when async
+        # persistence is disabled, or when the queue is full. Sync callers
+        # rely on read-after-write consistency (e.g. WorkItemService persists
+        # WorkItemCreatedEvent then the column-change handler immediately
+        # reads the WI back), so request refresh="wait_for" here. The async
+        # worker path keeps the fast default (refresh=False).
+        if expected_version is not None or not self._enable_async_persistence or self._async_queue is None:
+            await self._do_bulk_append(
+                stream_id,
+                events,
+                expected_version=expected_version,
+                refresh="wait_for",
+            )
+            return
+
+        # Async path: enqueue and return immediately. The worker performs the
+        # bulk write off the publish hot path.
+        try:
+            self._async_queue.put_nowait(_PendingAppend(stream_id, list(events)))
+            self._async_stats["events_enqueued"] += len(events)
+        except asyncio.QueueFull:
+            # Back-pressure: do the write synchronously so the audit trail
+            # stays intact and the producer slows down naturally.
+            self._async_stats["events_dropped_overflow"] += 0  # not dropped, just inlined
+            logger.warning(
+                "Elasticsearch event-store async queue is full "
+                f"(max={self._async_queue_max_size}); falling back to synchronous append "
+                f"for stream {stream_id} ({len(events)} events). "
+                "Publishers will see back-pressure until the worker catches up.",
+                extra={"error_id": "ERR_EVENT_STORE_ASYNC_QUEUE_FULL"},
+            )
+            await self._do_bulk_append(stream_id, events, expected_version=None)
+
+    async def _do_bulk_append(
+        self,
+        stream_id: str,
+        events: list[CodetoreumEvent],
+        expected_version: int | None = None,
+        refresh: bool | str | None = None,
+    ) -> None:
+        """Synchronous bulk-append implementation.
+
+        Shared by the synchronous path of :meth:`append` and the background
+        worker. ``expected_version`` is ignored by the worker (it only ever
+        runs with ``None``). ``refresh`` controls Elasticsearch refresh
+        behaviour for the bulk write — None falls back to ``self._bulk_refresh``
+        (default False, fast). Sync callers that need read-after-write
+        consistency should pass ``"wait_for"``.
+        """
         try:
             # Check current version if expected version provided
             if expected_version is not None:
@@ -182,8 +323,13 @@ class ElasticsearchEventStore(IEventStore):
                 doc["aggregate_type"] = "unknown"  # Will be set from event data if available
                 bulk_body.append(doc)
 
-            # Execute bulk insert
-            response = await self.client.bulk(operations=bulk_body, refresh="wait_for")
+            # Execute bulk insert. refresh defaults to False (no wait_for) to
+            # avoid the ~1-5s refresh stall on the publish hot path; the index
+            # refresh_interval (5s) still applies for read-after-write.
+            response = await self.client.bulk(
+                operations=bulk_body,
+                refresh=(refresh if refresh is not None else self._bulk_refresh),
+            )
 
             # Check for errors
             if response.get("errors"):
@@ -201,6 +347,100 @@ class ElasticsearchEventStore(IEventStore):
         except Exception as e:
             msg = f"Failed to append events: {e}"
             raise EventStoreError(msg) from e
+
+    async def _run_persistence_worker(self) -> None:
+        """Background loop draining the async-persistence queue.
+
+        Coalesces multiple pending appends that share a ``stream_id`` into a
+        single bulk write when they happen in quick succession (small
+        time-window batching). On transient failure we re-enqueue the item
+        once before logging it as a permanent drop. asyncio.CancelledError
+        is always propagated to allow clean shutdown.
+        """
+        assert self._async_queue is not None
+        assert self._worker_stop_event is not None
+        logger.info("Elasticsearch event-store persistence worker started")
+        try:
+            while not self._worker_stop_event.is_set():
+                try:
+                    item = await asyncio.wait_for(self._async_queue.get(), timeout=0.5)
+                except TimeoutError:
+                    continue
+                except asyncio.CancelledError:
+                    raise
+
+                # Coalesce same-stream items already queued, up to a small cap.
+                batch: list[_PendingAppend] = [item]
+                while len(batch) < 32:
+                    try:
+                        nxt = self._async_queue.get_nowait()
+                    except asyncio.QueueEmpty:
+                        break
+                    batch.append(nxt)
+
+                # Group by stream_id, preserving per-stream order.
+                by_stream: dict[str, list[CodetoreumEvent]] = {}
+                attempts_by_stream: dict[str, int] = {}
+                for pending in batch:
+                    by_stream.setdefault(pending.stream_id, []).extend(pending.events)
+                    attempts_by_stream[pending.stream_id] = max(
+                        attempts_by_stream.get(pending.stream_id, 0), pending.attempt
+                    )
+
+                for stream_id, events in by_stream.items():
+                    attempt = attempts_by_stream[stream_id]
+                    try:
+                        await self._do_bulk_append(stream_id, events, expected_version=None)
+                        self._async_stats["events_persisted_async"] += len(events)
+                        self._async_stats["batches_persisted_async"] += 1
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as e:
+                        # Re-enqueue once before giving up — never swallow silently.
+                        logger.error(
+                            f"Background event-store append failed for stream {stream_id} "
+                            f"(attempt {attempt + 1}, {len(events)} events): {e}",
+                            exc_info=True,
+                            extra={"error_id": "ERR_EVENT_STORE_ASYNC_APPEND_FAILURE"},
+                        )
+                        if attempt == 0:
+                            self._async_stats["retries"] += 1
+                            try:
+                                self._async_queue.put_nowait(_PendingAppend(stream_id, events, attempt=attempt + 1))
+                            except asyncio.QueueFull:
+                                self._async_stats["events_dropped_failure"] += len(events)
+                                logger.critical(
+                                    f"Dropping {len(events)} events for stream {stream_id}: "
+                                    "queue full on retry re-enqueue",
+                                    extra={"error_id": "ERR_EVENT_STORE_ASYNC_RETRY_DROP"},
+                                )
+                        else:
+                            self._async_stats["events_dropped_failure"] += len(events)
+                            logger.critical(
+                                f"Dropping {len(events)} events for stream {stream_id} "
+                                f"after {attempt + 1} attempts",
+                                extra={"error_id": "ERR_EVENT_STORE_ASYNC_RETRY_EXHAUSTED"},
+                            )
+                    finally:
+                        # task_done() once per get() — we got one per pending item.
+                        pass
+
+                # Mark every queue.get() as done (we called get() once and
+                # get_nowait() len(batch)-1 times).
+                for _ in batch:
+                    self._async_queue.task_done()
+        except asyncio.CancelledError:
+            logger.info("Elasticsearch event-store persistence worker cancelled")
+            raise
+        except Exception as e:
+            logger.critical(
+                f"Elasticsearch event-store persistence worker crashed: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_EVENT_STORE_ASYNC_WORKER_CRASH"},
+            )
+            raise
+        finally:
+            logger.info("Elasticsearch event-store persistence worker stopped " f"(stats={self._async_stats})")
 
     async def get_events(
         self,
@@ -988,7 +1228,53 @@ class ElasticsearchEventStore(IEventStore):
         logger.info(f"Created index template '{template_name}'")
 
     async def close(self) -> None:
-        """Close the event store (cleanup resources)."""
+        """Close the event store (cleanup resources).
+
+        Performs a bounded drain of the background-persistence queue before
+        shutting down the worker. Anything still pending after the timeout is
+        logged as lost (loud failure, never silent).
+        """
+        # Drain & stop the background worker first so its in-flight bulk
+        # writes can complete using the still-open ES client.
+        if self._worker_task is not None and self._async_queue is not None and self._worker_stop_event is not None:
+            pending_at_close = self._async_queue.qsize()
+            if pending_at_close:
+                logger.info(
+                    f"Draining {pending_at_close} pending event-store batches "
+                    f"(timeout={self._shutdown_drain_timeout_seconds}s)"
+                )
+            try:
+                await asyncio.wait_for(
+                    self._async_queue.join(),
+                    timeout=self._shutdown_drain_timeout_seconds,
+                )
+                logger.info("Event-store persistence queue drained cleanly")
+            except TimeoutError:
+                remaining = self._async_queue.qsize()
+                logger.error(
+                    f"Event-store persistence queue did not drain within "
+                    f"{self._shutdown_drain_timeout_seconds}s "
+                    f"({remaining} batches still pending — these events will be LOST)",
+                    extra={"error_id": "ERR_EVENT_STORE_DRAIN_TIMEOUT"},
+                )
+
+            # Signal the worker to exit and wait for it.
+            self._worker_stop_event.set()
+            self._worker_task.cancel()
+            try:
+                await self._worker_task
+            except (asyncio.CancelledError, Exception) as e:
+                if not isinstance(e, asyncio.CancelledError):
+                    logger.error(
+                        f"Event-store persistence worker errored during shutdown: {e}",
+                        exc_info=True,
+                    )
+            finally:
+                self._worker_task = None
+                self._async_queue = None
+                self._worker_stop_event = None
+                logger.info(f"Event-store persistence worker stopped (final stats={self._async_stats})")
+
         try:
             if self.client:
                 logger.info("Closing Elasticsearch client")

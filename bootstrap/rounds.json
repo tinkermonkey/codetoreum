@@ -33,8 +33,8 @@
     }
   ],
   "board": {
-    "id": "rounds-board-1",
-    "name": "Rounds Development Pipeline",
+    "id": "PVT_kwHOABgBzM4BZT2D",
+    "name": "Rounds - Codetoreum SDLC",
     "columns": [
       {
         "name": "Backlog",
@@ -45,25 +45,17 @@
         "auto_progress_on_completion": false
       },
       {
-        "name": "Ready",
-        "type": "manual",
-        "agent_id": null,
-        "is_pipeline_trigger": true,
-        "is_exit_column": false,
-        "auto_progress_on_completion": false
-      },
-      {
-        "name": "In Progress",
+        "name": "Development",
         "type": "automated",
         "agent_id": "senior_software_engineer",
-        "is_pipeline_trigger": false,
+        "is_pipeline_trigger": true,
         "is_exit_column": false,
         "auto_progress_on_completion": true,
         "sla_seconds": 3600,
         "on_failure_column": "Backlog"
       },
       {
-        "name": "In Review",
+        "name": "Testing",
         "type": "manual",
         "agent_id": null,
         "is_pipeline_trigger": false,

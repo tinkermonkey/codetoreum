@@ -255,3 +255,38 @@ class IVersionControlService(ABC):
             ResourceNotFoundError: Repository not found
             ExternalServiceError: Service communication failure
         """
+
+    @abstractmethod
+    async def create_pull_request(
+        self,
+        repo_path: str,
+        head: str,
+        base: str,
+        title: str,
+        body: str = "",
+    ) -> str:
+        """Open a pull request from ``head`` into ``base`` on the remote.
+
+        Used after a successful agent push to surface the work for human
+        review. Idempotent on the head branch: if a PR already exists for
+        ``head`` -> ``base``, the existing PR URL is returned instead of
+        raising.
+
+        Args:
+            repo_path: Local repository path (used to look up the remote
+                URL, e.g. via ``git remote get-url origin``).
+            head: Source branch name (must already be pushed).
+            base: Target branch name (typically the project default branch).
+            title: PR title.
+            body: PR body. May be empty.
+
+        Returns:
+            PR URL on the hosting provider. The exact format is
+            implementation-specific (e.g. ``https://github.com/owner/repo/pull/123``).
+
+        Raises:
+            ResourceNotFoundError: Repository or branch not found on remote.
+            AuthenticationError: Credentials are missing or invalid.
+            ExternalServiceError: Provider rejected the request for any
+                other reason.
+        """

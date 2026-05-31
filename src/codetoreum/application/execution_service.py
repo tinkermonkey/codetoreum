@@ -44,7 +44,30 @@ class ExecutionFailureReason(Enum):
     TIMEOUT = "timeout"
     RATE_LIMIT = "rate_limit"
     VALIDATION_ERROR = "validation_error"
+    # D-J: agent produced output, but the post-execution VCS commit/push step
+    # failed (e.g. branch refspec mismatch, remote rejected push). The agent
+    # work is on the local workspace and may already be in a local commit; the
+    # branch did NOT make it to the remote. Surfacing this as a distinct
+    # failure_reason lets downstream handlers route to the on_failure_column
+    # and avoid auto-progressing as if the work shipped successfully.
+    WORKSPACE_COMMIT_ERROR = "workspace_commit_error"
     UNKNOWN = "unknown"
+
+
+class WorkspaceCommitError(Exception):
+    """Raised by :meth:`ExecutionService._commit_workspace` when commit/push fails.
+
+    Carries the partial-progress signals (``commit_sha`` may be set when the
+    local commit succeeded but the subsequent push to the remote failed) so
+    the caller can include them on the failed ``ExecutionServiceResult`` —
+    a human investigating the failure can find the local commit even though
+    the branch never reached the remote. D-J.
+    """
+
+    def __init__(self, message: str, commit_sha: str | None = None, branch: str | None = None) -> None:
+        super().__init__(message)
+        self.commit_sha = commit_sha
+        self.branch = branch
 
 
 @dataclass
@@ -310,16 +333,57 @@ class ExecutionService:
                 # creation) rely on this ordering.
                 commit_sha: str | None = None
                 commit_branch: str | None = None
+                commit_error: WorkspaceCommitError | None = None
                 try:
                     commit_sha, commit_branch = await self._commit_workspace(context, execution)
-                except Exception:
+                except WorkspaceCommitError as wce:
+                    # D-J: agent ran successfully but commit/push failed. The
+                    # agent's work didn't reach the remote, so we MUST mark
+                    # the execution failed — otherwise downstream handlers
+                    # (BoardColumnEventHandler.handle_agent_completion) would
+                    # auto-progress the work item to "In Review" even though
+                    # nothing was published. Capture partial-progress info
+                    # so the failed result still reports any local commit.
+                    commit_sha = wce.commit_sha
+                    commit_branch = wce.branch
+                    commit_error = wce
+
+                if commit_error is not None:
+                    # Failure path: record execution.fail(), emit
+                    # ExecutionFailedEvent, return success=False.
+                    error_message = (
+                        f"Workspace commit/push failed: {commit_error}"
+                        if str(commit_error)
+                        else "Workspace commit/push failed"
+                    )
+                    execution.fail(error_message=error_message)
+
+                    events = execution.get_pending_events()
+                    for event in events:
+                        await self.event_store.append(execution.id, [event])
+                    execution.clear_events()
+
+                    self._active_executions.pop(execution.id, None)
+
                     logger.error(
-                        f"Commit failed for execution {execution.id}, " "completing without commit SHA",
-                        exc_info=True,
+                        f"ExecutionService.execute: execution {execution.id} marked failed "
+                        f"after workspace commit/push failure "
+                        f"(commit_sha={commit_sha}, branch={commit_branch})",
                         extra={
-                            "error_id": "ERR_EXECUTION_COMMIT_FAILURE",
+                            "error_id": "ERR_EXECUTION_WORKSPACE_COMMIT_FAILURE",
                             "work_item_id": context.work_item_id,
+                            "commit_sha": commit_sha,
+                            "branch": commit_branch,
                         },
+                    )
+
+                    return ExecutionServiceResult(
+                        success=False,
+                        execution=execution,
+                        error=error_message,
+                        failure_reason=ExecutionFailureReason.WORKSPACE_COMMIT_ERROR,
+                        commit_sha=commit_sha,
+                        branch=commit_branch,
                     )
 
                 execution.complete(
@@ -358,10 +422,15 @@ class ExecutionService:
             if context.commit_policy == CommitPolicy.ALWAYS:
                 try:
                     failure_commit_sha, failure_branch = await self._commit_workspace(context, execution)
-                except Exception:
+                except WorkspaceCommitError as wce:
+                    # Preserve whatever partial progress made it through (local
+                    # commit may have succeeded even if push failed).
+                    failure_commit_sha = wce.commit_sha
+                    failure_branch = wce.branch
                     logger.warning(
                         f"Partial commit failed for execution {execution.id} (ALWAYS policy), "
-                        "proceeding with failure result",
+                        f"proceeding with failure result (commit_sha={failure_commit_sha}, "
+                        f"branch={failure_branch})",
                         exc_info=True,
                         extra={
                             "error_id": "ERR_EXECUTION_COMMIT_PARTIAL_FAILURE",
@@ -528,19 +597,116 @@ class ExecutionService:
                 )
 
             # Always push: picks up commits the agent made inside the Docker container.
-            await self.vcs.push(context.repository_path, branch)
+            try:
+                await self.vcs.push(context.repository_path, branch)
+            except Exception as push_exc:
+                # D-J: the commit may have succeeded locally but the push to
+                # the remote failed. Wrap in WorkspaceCommitError so the
+                # caller in execute() can preserve commit_sha/branch on the
+                # failed ExecutionServiceResult (a human can find the local
+                # commit; the remote branch was NOT updated).
+                logger.error(
+                    f"Failed to push branch {branch} for execution {execution.id}: {push_exc}",
+                    exc_info=True,
+                    extra={
+                        "error_id": "ERR_EXECUTION_PUSH_FAILURE",
+                        "work_item_id": context.work_item_id,
+                        "branch": branch,
+                        "commit_sha": commit_sha,
+                    },
+                )
+                raise WorkspaceCommitError(
+                    f"Push of branch {branch} failed for execution {execution.id}: {push_exc}",
+                    commit_sha=commit_sha,
+                    branch=branch,
+                ) from push_exc
             logger.info(
                 f"Pushed branch {branch} for execution {execution.id}",
                 extra={"work_item_id": context.work_item_id, "branch": branch},
             )
+
+            # Open a PR for the pushed branch when the project allows it.
+            # Failures are logged but do not abort the execution — the
+            # branch is already on the remote, so the work isn't lost; a
+            # PR can be opened by hand or by re-running.
+            if context.auto_create_pull_requests:
+                await self._open_pull_request(context, branch, commit_sha, execution)
+
             return commit_sha, branch
-        except Exception:
+        except WorkspaceCommitError:
+            # Already logged at the push site; rethrow as-is so the caller in
+            # execute() can read commit_sha/branch off the exception.
+            raise
+        except Exception as exc:
             logger.error(
                 f"Failed to commit workspace for execution {execution.id}",
                 exc_info=True,
                 extra={"error_id": "ERR_EXECUTION_COMMIT_FAILURE", "work_item_id": context.work_item_id},
             )
-            raise
+            # Wrap so the caller has a single exception type to dispatch on.
+            raise WorkspaceCommitError(
+                f"Commit failed for execution {execution.id}: {exc}",
+                commit_sha=commit_sha,
+                branch=branch,
+            ) from exc
+
+    async def _open_pull_request(
+        self,
+        context: ExecutionContext,
+        branch: str,
+        commit_sha: str | None,
+        execution: AgentExecution,
+    ) -> None:
+        """Open a PR for the pushed branch. Best-effort: logs and swallows."""
+        if self.vcs is None or not context.repository_path:
+            return
+        repo_path: str = context.repository_path
+        # Default base is "main" — the project default branch is not on
+        # ExecutionContext today (would require plumbing through builder
+        # + executor). "main" is correct for the GitHub-based projects
+        # we target and matches the existing pull-from-main behaviour
+        # in WorkspaceRouter.
+        base = "main"
+        title = f"[{context.work_item_id}] {context.stage_name}: {context.agent_id}"
+        body_lines = [
+            f"Automated PR opened by Codetoreum for work item `{context.work_item_id}`.",
+            "",
+            f"- Stage: `{context.stage_name}`",
+            f"- Agent: `{context.agent_id}`",
+            f"- Branch: `{branch}`",
+        ]
+        if commit_sha:
+            body_lines.append(f"- Commit: `{commit_sha}`")
+        body = "\n".join(body_lines)
+
+        try:
+            pr_url = await self.vcs.create_pull_request(
+                repo_path=repo_path,
+                head=branch,
+                base=base,
+                title=title,
+                body=body,
+            )
+            logger.info(
+                f"Opened pull request for execution {execution.id}: {pr_url}",
+                extra={
+                    "work_item_id": context.work_item_id,
+                    "branch": branch,
+                    "pr_url": pr_url,
+                },
+            )
+        except Exception:
+            logger.error(
+                f"Failed to open pull request for execution {execution.id} "
+                f"(branch={branch}); the push succeeded so the work is on "
+                "the remote — open the PR manually or re-run the stage",
+                exc_info=True,
+                extra={
+                    "error_id": "ERR_EXECUTION_PR_CREATE_FAILURE",
+                    "work_item_id": context.work_item_id,
+                    "branch": branch,
+                },
+            )
 
     @instrument_async_function(
         name="execution.cancel_execution",

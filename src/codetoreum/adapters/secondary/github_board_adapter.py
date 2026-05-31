@@ -311,9 +311,11 @@ class GitHubBoardAdapter(IBoardService):
             ResourceNotFoundError: Board doesn't exist
             ExternalServiceError: GraphQL API error
         """
-        # Query the board to get columns
-        # Note: project_id is not directly available, use empty string
-        board = await self.get_board("", board_id)
+        # Query the board to get columns. Use the cached project_id from
+        # the most recent get_board() call so the resulting ProjectBoard
+        # dataclass passes validation (project_id must be non-empty).
+        project_id = self._current_project_id or board_id  # fall back to board_id
+        board = await self.get_board(project_id, board_id)
         return board.columns
 
     async def get_items_in_column(self, board_id: str, column_name: str) -> list[WorkItemPosition]:
@@ -330,7 +332,8 @@ class GitHubBoardAdapter(IBoardService):
             ResourceNotFoundError: Board or column doesn't exist
             ExternalServiceError: GraphQL API error
         """
-        board = await self.get_board("", board_id)
+        project_id = self._current_project_id or board_id  # fall back to board_id
+        board = await self.get_board(project_id, board_id)
 
         for column in board.columns:
             if column.name == column_name:

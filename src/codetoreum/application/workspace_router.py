@@ -338,9 +338,22 @@ class WorkspaceRouter:
                 # Add resolved branch name to metadata for explicit passing to consumers
                 metadata["resolved_branch_name"] = resolved_branch_name
 
+                # D-I: the inbound context still carries the placeholder branch
+                # name produced by route_workspace (title-derived). The branch
+                # we actually checked out is `resolved_branch_name`. Publish
+                # that resolved name back into the workspace_context on the
+                # result so downstream consumers (ExecutionContextBuilder, the
+                # commit/push in ExecutionService._commit_workspace) see the
+                # branch git is currently on — instead of a stale placeholder.
+                resolved_context = (
+                    context.with_branch_name(resolved_branch_name)
+                    if resolved_branch_name and resolved_branch_name != context.branch_name
+                    else context
+                )
+
                 return WorkspacePreparationResult(
                     success=True,
-                    workspace_context=context,
+                    workspace_context=resolved_context,
                     workspace_dir=repo_path,
                     reason="Workspace prepared successfully",
                     metadata=metadata,

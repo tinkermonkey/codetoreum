@@ -71,6 +71,13 @@ class ProjectContext:
     created_at: datetime
     updated_at: datetime
 
+    # Workflow integrations
+    # When True (default), the executor calls
+    # ``IVersionControlService.create_pull_request`` after a successful
+    # agent push. Disable per-project to keep the head branch unreviewed
+    # (e.g. a project that ships through a different review surface).
+    auto_create_pull_requests: bool = True
+
     # Event tracking
     _events: list = field(default_factory=list, init=False, repr=False)
     _version: int = field(default=0, init=False, repr=False)

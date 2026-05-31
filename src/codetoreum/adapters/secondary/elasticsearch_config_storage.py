@@ -210,6 +210,7 @@ class ElasticsearchConfigStorage(IConfigStore):
                 },
                 "testing": {"type": "object", "enabled": True, "dynamic": False},
                 "environment_variables": {"type": "object", "enabled": True, "dynamic": False},
+                "auto_create_pull_requests": {"type": "boolean"},
                 "mounted_commands": {"type": "object", "enabled": True, "dynamic": False},
                 "mounted_subagents": {"type": "object", "enabled": True, "dynamic": False},
                 "created_at": {"type": "date"},
@@ -1422,6 +1423,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             "updated_at": (config.updated_at.isoformat() if config.updated_at else None),
             "version": config.version,
             "metadata": dict(config.metadata),
+            "auto_create_pull_requests": config.auto_create_pull_requests,
         }
 
     def _deserialize_project(self, doc: dict[str, Any]) -> ProjectConfig:
@@ -1441,6 +1443,7 @@ class ElasticsearchConfigStorage(IConfigStore):
             updated_at=(datetime.fromisoformat(doc["updated_at"]) if doc.get("updated_at") else None),
             version=doc.get("version", 1),
             metadata=doc.get("metadata", {}),
+            auto_create_pull_requests=bool(doc.get("auto_create_pull_requests", True)),
         )
 
     def _serialize_agent(self, config: AgentConfig) -> dict[str, Any]:

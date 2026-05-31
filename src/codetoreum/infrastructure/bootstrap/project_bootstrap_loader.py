@@ -147,10 +147,6 @@ def _build_agent(agent_def: dict, project_id: str) -> Agent:
         msg = f"Agent '{agent_def['name']}' coding_agent must be a non-empty string"
         raise ValueError(msg)
 
-    # Derive legacy fields from invocation so the wider REST API surface
-    # and ES round-trip continue to see the same values they used to.
-    requires_docker = invocation.mode == InvocationMode.CONTAINERIZED
-
     return Agent(
         id=agent_def["name"],
         name=agent_def["name"],
@@ -158,10 +154,7 @@ def _build_agent(agent_def: dict, project_id: str) -> Agent:
         agent_type=AgentType.MAKER,
         capabilities={c: AgentCapability(skill=c, proficiency=1.0, description=c) for c in caps},
         role_description=agent_def.get("description", ""),
-        model=invocation.model,
-        timeout_seconds=invocation.timeout_seconds,
         max_retries=3,
-        requires_docker=requires_docker,
         requires_dev_container=False,
         makes_code_changes=agent_def.get("makes_code_changes", True),
         filesystem_write_allowed=True,
@@ -258,6 +251,7 @@ async def load_bootstrap_dir(
                     name=project_def.get("name", project_id),
                     github_org=project_def.get("github_org", ""),
                     github_repo=project_def.get("github_repo", ""),
+                    auto_create_pull_requests=bool(project_def.get("auto_create_pull_requests", True)),
                     created_at=datetime.now(UTC),
                     updated_at=datetime.now(UTC),
                 )

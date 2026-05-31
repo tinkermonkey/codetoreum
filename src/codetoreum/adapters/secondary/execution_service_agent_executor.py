@@ -374,6 +374,7 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 metadata={},
                 created_at=project_config.created_at or datetime.now(UTC),
                 updated_at=project_config.updated_at or datetime.now(UTC),
+                auto_create_pull_requests=project_config.auto_create_pull_requests,
             )
 
             # Step 3: Clone repository
@@ -425,6 +426,14 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
                 )
                 await self._call_completion(work_item_id, resolved_board_id, False)
                 return
+
+            # D-I: prepare_workspace may have resolved the branch name to a
+            # different value than route_workspace produced (e.g. parent
+            # issue's existing branch). Adopt the resolved context so the
+            # ExecutionContext built below — and consequently the push in
+            # ExecutionService._commit_workspace — uses the branch git is
+            # actually on.
+            workspace = prep_result.workspace_context
 
             # Step 7: Build execution context — pass repo_path so ExecutionService
             # can commit the workspace without re-querying WorkspaceRouter.

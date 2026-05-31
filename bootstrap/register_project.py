@@ -60,6 +60,7 @@ async def _register(config: dict, es_url: str) -> None:
             name=project["name"],
             github_org=project["github_org"],
             github_repo=project["github_repo"],
+            auto_create_pull_requests=bool(project.get("auto_create_pull_requests", True)),
             version=1,
             created_at=now,
             updated_at=now,
@@ -92,9 +93,6 @@ async def _register(config: dict, es_url: str) -> None:
             agent_config = AgentConfig(
                 project_id=project["id"],
                 agent_name=agent_def["name"],
-                model=invocation.model,
-                timeout=invocation.timeout_seconds,
-                requires_docker=invocation.mode == InvocationMode.CONTAINERIZED,
                 makes_code_changes=agent_def.get("makes_code_changes", True),
                 capabilities=agent_def.get("capabilities", ["code_generation"]),
                 version=1,

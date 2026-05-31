@@ -111,9 +111,13 @@ class WorkItemService(IWorkItemCommandPort, IWorkItemQueryPort):
         stream_id = self._get_stream_id(work_item.id)
 
         # Append events to stream
-        # Use version for optimistic concurrency control
-        expected_version = work_item._version - len(pending_events)
-        await self.event_store.append(stream_id, pending_events, expected_version if expected_version > 0 else None)
+        # Use version for optimistic concurrency control. Always pass an int —
+        # 0 on first-save means "stream is currently empty" and forces the
+        # event store onto the synchronous append path. Passing None would
+        # route to async persistence (D-F) which breaks read-after-write
+        # consistency for the column-change handler that fires right after.
+        expected_version = max(work_item._version - len(pending_events), 0)
+        await self.event_store.append(stream_id, pending_events, expected_version)
 
         # Clear pending events
         work_item.clear_events()

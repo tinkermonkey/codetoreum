@@ -97,6 +97,7 @@ class ExecutionContextBuilder:
             repository_path=repository_path,
             previous_session_id=previous_session_id,
             environment_variables=project.environment_variables or {},
+            auto_create_pull_requests=project.auto_create_pull_requests,
             metadata=metadata,
         )
 

@@ -583,6 +583,71 @@ async def test_prepare_workspace_with_branch_resolution_reuse(
 
 
 @pytest.mark.asyncio
+async def test_prepare_workspace_publishes_resolved_branch_on_workspace_context(
+    workspace_router_with_resolution,
+    sample_work_item,
+    sample_agent,
+    sample_project,
+    mock_repository,
+    mock_branch_resolution_service,
+    repository_path,
+):
+    """D-I: prepare_workspace returns a WorkspacePreparationResult whose
+    workspace_context.branch_name is the *resolved* branch (i.e. what git
+    actually checked out), not the title-derived placeholder produced by
+    route_workspace.
+
+    Regression test for the production bug where ExecutionContextBuilder
+    built the ExecutionContext from the inbound (placeholder-bearing)
+    workspace context, causing ExecutionService._commit_workspace's push
+    to target a branch that did not exist on the remote.
+    """
+    from codetoreum.domain.value_objects import BranchResolution
+
+    parent_branch = "feature/issue-100-test-cli-reads-and-executes-commands-han"
+    resolution = BranchResolution(
+        action="reuse",
+        branch_name=parent_branch,
+        confidence=1.0,
+        reason="Parent issue has existing branch",
+        resolution_strategy="exact_match",
+        parent_issue_id="100",
+    )
+    mock_branch_resolution_service.configure_resolution(
+        sample_project.id, sample_work_item.external_id or sample_work_item.id, resolution
+    )
+
+    # route_workspace will set a placeholder branch derived from the work
+    # item title (NOT parent_branch — these must differ for the test to
+    # exercise the bug surface).
+    context = await workspace_router_with_resolution.route_workspace(
+        work_item=sample_work_item,
+        agent=sample_agent,
+        project=sample_project,
+    )
+    placeholder_branch = context.branch_name
+    assert placeholder_branch != parent_branch, "fixture precondition: branches must differ"
+
+    # Act
+    prep_result = await workspace_router_with_resolution.prepare_workspace(
+        context=context,
+        project=sample_project,
+        work_item=sample_work_item,
+        repository_path=repository_path,
+    )
+
+    # Assert: the returned workspace_context now carries the resolved branch
+    # so consumers (ExecutionContextBuilder, ExecutionService._commit_workspace)
+    # push to the branch that was actually checked out.
+    assert prep_result.success is True
+    assert prep_result.workspace_context.branch_name == parent_branch
+    # The original inbound context must not have been mutated (frozen dataclass).
+    assert context.branch_name == placeholder_branch
+    # Metadata still carries the resolved branch (existing contract preserved).
+    assert prep_result.metadata["resolved_branch_name"] == parent_branch
+
+
+@pytest.mark.asyncio
 async def test_route_workspace_without_resolution_service_is_backward_compatible(
     workspace_router,
     sample_work_item,

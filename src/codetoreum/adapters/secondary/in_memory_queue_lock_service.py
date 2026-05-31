@@ -77,7 +77,12 @@ class InMemoryLockService(MockEventEmitter, IPipelineLockService, IQueuedPipelin
         self._clock = clock
 
     async def try_acquire_lock(
-        self, project_id: str, board_id: str, work_item_id: str, board_position: int
+        self,
+        project_id: str,
+        board_id: str,
+        work_item_id: str,
+        board_position: int,
+        stage_name: str = "",
     ) -> LockAcquisitionResult:
         """Attempt to acquire pipeline lock.
 
@@ -262,6 +267,7 @@ class InMemoryLockService(MockEventEmitter, IPipelineLockService, IQueuedPipelin
                 work_item_id=work_item_id,
                 board_position=board_position,
                 enqueued_at=now,
+                stage_name=stage_name,
             )
             state.queue.append(queue_entry)
 
@@ -349,9 +355,11 @@ class InMemoryLockService(MockEventEmitter, IPipelineLockService, IQueuedPipelin
             state.lock_acquired_at = None
 
             next_item_id = None
+            next_stage_name: str | None = None
             if state.queue:
                 next_entry = state.queue.pop(0)
                 next_item_id = next_entry.work_item_id
+                next_stage_name = next_entry.stage_name or None
                 state.lock_holder = next_item_id
                 state.lock_acquired_at = now
 
@@ -414,6 +422,7 @@ class InMemoryLockService(MockEventEmitter, IPipelineLockService, IQueuedPipelin
                 released_work_item_id=work_item_id,
                 next_work_item_id=next_item_id,
                 queue_length_after_release=len(state.queue),
+                next_stage_name=next_stage_name,
             )
 
     async def get_queue_state(self, project_id: str, board_id: str) -> PipelineQueueState:

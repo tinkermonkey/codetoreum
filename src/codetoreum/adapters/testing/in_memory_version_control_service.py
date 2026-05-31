@@ -325,6 +325,42 @@ class InMemoryVersionControlService(IVersionControlService):
                 )
             )
 
+    async def create_pull_request(
+        self,
+        repo_path: str,
+        head: str,
+        base: str,
+        title: str,
+        body: str = "",
+    ) -> str:
+        """In-memory PR creation: records the request and returns a synthetic URL.
+
+        Mocks the simulation/test path. Production runs use
+        ``GitHubVersionControlAdapter.create_pull_request``.
+        """
+        if not repo_path:
+            msg = "Repository path cannot be empty"
+            raise ValidationError(msg)
+        if not head or not base:
+            msg = "head and base must be non-empty"
+            raise ValidationError(msg)
+        with self._lock:
+            self._pull_requests = getattr(self, "_pull_requests", [])
+            pr_number = len(self._pull_requests) + 1
+            pr_url = f"https://in-memory.local/{repo_path}/pull/{pr_number}"
+            self._pull_requests.append(
+                {
+                    "number": pr_number,
+                    "url": pr_url,
+                    "repo_path": repo_path,
+                    "head": head,
+                    "base": base,
+                    "title": title,
+                    "body": body,
+                }
+            )
+            return pr_url
+
     async def list_branches(self, repo_path: str, remote: bool = False) -> list[str]:
         """List all branches in the in-memory repository."""
         # Validate inputs before acquiring lock

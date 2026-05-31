@@ -434,3 +434,81 @@ class ColumnSLAExceededEvent(CodetoreumEvent):
             sla_threshold_seconds=data["sla_threshold_seconds"],
             entered_at=data["entered_at"],
         )
+
+
+@dataclass(frozen=True)
+class BoardSyncFailedEvent(CodetoreumEvent):
+    """Emitted when codetoreum updated its internal workflow state but the
+    subsequent push to the external board (GitHub Projects, etc.) failed.
+
+    **Why this event exists**: prior to D-E the executor logged a WARNING when
+    the external board adapter rejected a move (e.g. "Could not resolve to a
+    node with the global id of 'rounds-board-1'") and silently continued.
+    Internal state advanced; external dashboards stayed stale. This event
+    surfaces that drift as a first-class fact so audit consumers, alerting,
+    and reconciliation jobs can detect and act on it.
+
+    Attributes:
+        type: Fixed to ``"board.sync_failed"``.
+        work_item_id: ID of the work item whose move failed to sync.
+        project_id: Project containing the board.
+        board_id: Board the move was targeting.
+        intended_column: Column codetoreum tried to place the work item in
+            (the internal authoritative state).
+        error_message: Truncated error reported by the board adapter; used
+            for triage. Implementations should keep this under ~500 chars.
+        failed_at: ISO 8601 timestamp of the failure.
+    """
+
+    work_item_id: str = ""
+    project_id: str = ""
+    board_id: str = ""
+    intended_column: str = ""
+    error_message: str = ""
+    failed_at: str = ""
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if not self.work_item_id:
+            msg = "work_item_id is required"
+            raise ValueError(msg)
+        if not self.board_id:
+            msg = "board_id is required"
+            raise ValueError(msg)
+        if not self.intended_column:
+            msg = "intended_column is required"
+            raise ValueError(msg)
+        if not self.failed_at:
+            msg = "failed_at is required"
+            raise ValueError(msg)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update(
+            {
+                "work_item_id": self.work_item_id,
+                "project_id": self.project_id,
+                "board_id": self.board_id,
+                "intended_column": self.intended_column,
+                "error_message": self.error_message,
+                "failed_at": self.failed_at,
+            }
+        )
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "BoardSyncFailedEvent":
+        return cls(
+            type=data.get("type", "board.sync_failed"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", ""),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            work_item_id=data.get("work_item_id", ""),
+            project_id=data.get("project_id", ""),
+            board_id=data.get("board_id", ""),
+            intended_column=data.get("intended_column", ""),
+            error_message=data.get("error_message", ""),
+            failed_at=data.get("failed_at", ""),
+        )

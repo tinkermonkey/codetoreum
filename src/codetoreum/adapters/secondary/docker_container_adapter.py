@@ -134,16 +134,33 @@ class DockerContainerAdapter(IContainer):
         )
         return fallback
 
+    # Placeholder values that ship in .env.example and should be treated as
+    # "unset" rather than honoured. Otherwise a fresh bootstrap mounts an
+    # empty placeholder dir into the agent container.
+    _HOST_HOME_PLACEHOLDERS = frozenset({"/home/youruser", "/home/your-user", "<changeme>", ""})
+
     @staticmethod
     def _detect_host_home_path() -> str:
-        """Read HOST_HOME env var. Warns if unset — Snap Docker breaks $HOME."""
-        host_home = os.environ.get("HOST_HOME")
-        if host_home:
+        """Read HOST_HOME env var. Warns if unset — Snap Docker breaks $HOME.
+
+        Rejects known placeholder values so the auto-appended template from
+        ``.env.example`` doesn't silently mount the wrong host directory.
+        """
+        host_home = os.environ.get("HOST_HOME", "").strip()
+        if host_home and host_home not in DockerContainerAdapter._HOST_HOME_PLACEHOLDERS:
             return host_home
-        logger.warning(
-            "HOST_HOME is not set. SSH/git mounts may fail if Docker is installed via Snap. "
-            "Set HOST_HOME=/home/<username> in .env."
-        )
+
+        if host_home:
+            logger.warning(
+                "HOST_HOME=%s looks like a placeholder; ignoring and falling back to $HOME. "
+                "Set HOST_HOME=/home/<username> in .env to silence this.",
+                host_home,
+            )
+        else:
+            logger.warning(
+                "HOST_HOME is not set. SSH/git mounts may fail if Docker is installed via Snap. "
+                "Set HOST_HOME=/home/<username> in .env."
+            )
         return os.environ.get("HOME", "/root")
 
     @staticmethod

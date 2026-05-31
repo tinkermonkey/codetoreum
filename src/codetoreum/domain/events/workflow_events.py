@@ -773,3 +773,72 @@ class PipelineFailedEvent(CodetoreumEvent):
             error=data.get("error", ""),
             completed_stages=tuple(data.get("completed_stages", [])),
         )
+
+
+@dataclass(frozen=True)
+class WorkflowOrphanedEvent(CodetoreumEvent):
+    """Emitted when bootstrap detects a workflow run that survived a restart
+    without a terminal (Completed/Failed/Cancelled) event recorded in the
+    event store.
+
+    The orphan detector inspects ``IActiveWorkflowRunRegistry.get_all_runs()``
+    on startup; for any persisted ActiveRunInfo whose stream lacks a
+    terminal workflow event in ES, a WorkflowOrphanedEvent is published so
+    downstream handlers (and audit consumers) can reconcile state.
+
+    Fields:
+        workflow_id: Workflow run identifier that was orphaned.
+        work_item_id: Work item the run was processing.
+        project_id: Project the run belonged to.
+        board_id: Board the run belonged to.
+        stage_name: Stage the run was last known to be in.
+        detected_at: ISO timestamp of detection.
+        reason: Human-readable description of why the run is considered orphaned.
+    """
+
+    workflow_id: str = ""
+    work_item_id: str = ""
+    project_id: str = ""
+    board_id: str = ""
+    stage_name: str = ""
+    detected_at: str = ""
+    reason: str = ""
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if not self.workflow_id:
+            raise ValueError("workflow_id is required")
+        if not self.work_item_id:
+            raise ValueError("work_item_id is required")
+
+    def to_dict(self) -> dict[str, Any]:
+        data = super().to_dict()
+        data.update(
+            {
+                "workflow_id": self.workflow_id,
+                "work_item_id": self.work_item_id,
+                "project_id": self.project_id,
+                "board_id": self.board_id,
+                "stage_name": self.stage_name,
+                "detected_at": self.detected_at,
+                "reason": self.reason,
+            }
+        )
+        return data
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> WorkflowOrphanedEvent:
+        return cls(
+            type=data.get("type", "workflow.orphaned"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", ""),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            workflow_id=data["workflow_id"],
+            work_item_id=data["work_item_id"],
+            project_id=data.get("project_id", ""),
+            board_id=data.get("board_id", ""),
+            stage_name=data.get("stage_name", ""),
+            detected_at=data.get("detected_at", ""),
+            reason=data.get("reason", ""),
+        )

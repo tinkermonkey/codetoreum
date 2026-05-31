@@ -56,6 +56,10 @@ class QueueEntry:
     work_item_id: str
     board_position: int
     enqueued_at: datetime
+    # D-M: trigger column the WI was queued from, used by release_lock to
+    # auto-trigger the next agent without re-resolving external board state.
+    # Default empty for backward compat with existing serialised entries.
+    stage_name: str = ""
 
 
 @dataclass
@@ -86,6 +90,12 @@ class LockReleaseResult:
     released_work_item_id: str
     next_work_item_id: str | None
     queue_length_after_release: int
+    # D-M: stage_name the next WI was queued from. Callers use this to
+    # auto-trigger its agent without re-resolving the WI's external board
+    # position (which is stale because the queued WI never made it past
+    # the trigger column externally). None when no next item or when the
+    # queue entry pre-dates D-M.
+    next_stage_name: str | None = None
 
 
 @dataclass
@@ -147,7 +157,12 @@ class IQueuedPipelineLockService(ABC):
 
     @abstractmethod
     async def try_acquire_lock(
-        self, project_id: str, board_id: str, work_item_id: str, board_position: int
+        self,
+        project_id: str,
+        board_id: str,
+        work_item_id: str,
+        board_position: int,
+        stage_name: str = "",
     ) -> LockAcquisitionResult:
         """Attempt to acquire pipeline lock.
 

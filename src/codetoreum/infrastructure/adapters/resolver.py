@@ -474,7 +474,22 @@ class AdapterResolver:
         return self._factory.create_active_workflow_run_registry(adapter_name=self._config.run_registry)
 
     def resolve_branch_tracker(self) -> IWorkItemBranchTracker:
-        """Resolve work item branch tracker adapter."""
+        """Resolve work item branch tracker adapter.
+
+        For "redis", constructs an aioredis client from REDIS_URL so the
+        work_item -> branch mapping survives restart.
+        """
+        if self._config.branch_tracker == "redis":
+            import os
+
+            import redis.asyncio as aioredis
+
+            redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+            redis_client = aioredis.from_url(redis_url)
+            return self._factory.create_work_item_branch_tracker(
+                adapter_name=self._config.branch_tracker,
+                redis_client=redis_client,
+            )
         return self._factory.create_work_item_branch_tracker(adapter_name=self._config.branch_tracker)
 
     def resolve_work_item_service(self) -> IWorkItemService:

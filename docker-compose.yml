@@ -160,9 +160,11 @@ services:
     networks:
       - default
 
-    # Expose redis only internally (not on host)
-    expose:
-      - "6379"
+    # Publish on host port 6380 to avoid the well-known 6379 collision
+    # (a parallel Switchyard stack often binds 6379 on the same host).
+    # Inside the docker network the container still listens on 6379.
+    ports:
+      - "6380:6379"
 
   # ========================================================================
   # Elasticsearch — Event Store and Search

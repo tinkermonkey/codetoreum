@@ -179,6 +179,38 @@ class WorkspaceContext:
             workspace_path=workspace_path,
         )
 
+    def with_branch_name(self, branch_name: str) -> "WorkspaceContext":
+        """Return a copy of this context with the branch_name replaced.
+
+        ``WorkspaceRouter.route_workspace`` produces a placeholder branch
+        name derived from the work item title; the real branch is decided
+        inside ``prepare_workspace`` once the resolution service / git
+        state is available. This helper lets the router publish the
+        resolved name back into the immutable context so downstream
+        consumers (``ExecutionContextBuilder``, the post-execution push
+        in ``ExecutionService._commit_workspace``) see the branch that
+        was actually checked out — instead of the original placeholder.
+
+        Args:
+            branch_name: The resolved branch name that the workspace was
+                checked out onto.
+
+        Returns:
+            A new WorkspaceContext instance with ``branch_name`` set.
+        """
+        return WorkspaceContext(
+            workspace_type=self.workspace_type,
+            project_id=self.project_id,
+            work_item_id=self.work_item_id,
+            branch_name=branch_name,
+            create_pr=self.create_pr,
+            discussion_id=self.discussion_id,
+            allow_code_changes=self.allow_code_changes,
+            create_commits=self.create_commits,
+            post_comments=self.post_comments,
+            workspace_path=self.workspace_path,
+        )
+
     # Query methods
     def is_issue_workspace(self) -> bool:
         """

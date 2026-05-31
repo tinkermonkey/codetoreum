@@ -125,11 +125,37 @@ class GitRepositoryAdapter(IRepository):
         sanitized_args = self._sanitize_git_args(args)
         cmd = [self.config.git_path] + sanitized_args
 
-        # Set up clean git environment
-        git_env = os.environ.copy()
+        # Set up clean git environment.
+        # Strip parent-process credential helpers that hijack HTTPS auth
+        # — VS Code injects GIT_ASKPASS pointing at a UNIX socket helper
+        # that refuses connections when git runs outside the editor.
+        git_env = {
+            k: v
+            for k, v in os.environ.items()
+            if k not in {"GIT_ASKPASS", "SSH_ASKPASS"} and not k.startswith("VSCODE_GIT_")
+        }
         # Disable global and system git config to avoid issues
         git_env["GIT_CONFIG_GLOBAL"] = "/dev/null"
         git_env["GIT_CONFIG_SYSTEM"] = "/dev/null"
+        # Refuse interactive prompts so missing credentials fail fast.
+        git_env["GIT_TERMINAL_PROMPT"] = "0"
+
+        # If a GitHub token is present, inject an HTTPS extraheader scoped
+        # to github.com so authenticated push/pull/fetch/clone "just work"
+        # for HTTPS remotes. Scoping the key to https://github.com/ keeps
+        # the header off any other remote.
+        github_token = os.environ.get("GITHUB_TOKEN")
+        if github_token:
+            # GitHub HTTPS auth accepts HTTP Basic where the username is
+            # `x-access-token` and the password is the token. Bearer works
+            # for OAuth app tokens but not classic PATs (ghp_...) — Basic
+            # is the lowest-common-denominator scheme that works for both.
+            import base64 as _b64
+
+            _basic = _b64.b64encode(f"x-access-token:{github_token}".encode()).decode()
+            extra_param = f"'http.https://github.com/.extraheader=AUTHORIZATION: " f"basic {_basic}'"
+            existing = git_env.get("GIT_CONFIG_PARAMETERS", "").strip()
+            git_env["GIT_CONFIG_PARAMETERS"] = f"{existing} {extra_param}".strip() if existing else extra_param
 
         # Merge with provided environment variables
         if env:
@@ -181,7 +207,15 @@ class GitRepositoryAdapter(IRepository):
         destination: Path,
         branch: BranchName | None = None,
     ) -> RepositoryId:
-        """Clone a repository."""
+        """Clone a repository, or refresh an existing clone in place.
+
+        If ``destination`` already exists and contains a git repository
+        with the same ``origin`` URL, the directory is reused: we fetch
+        from origin so subsequent operations see the latest refs. This
+        keeps retries idempotent — the prior bootstrap behaviour raised
+        ``destination path already exists and is not an empty directory``
+        on any rerun.
+        """
         if not url:
             msg = "Repository URL is required"
             raise ValidationError(msg)
@@ -189,6 +223,42 @@ class GitRepositoryAdapter(IRepository):
         if not destination:
             msg = "Destination path is required"
             raise ValidationError(msg)
+
+        if destination.exists():
+            git_dir = destination / ".git"
+            if git_dir.exists():
+                try:
+                    existing_url_proc = await self._run_git_command(
+                        ["remote", "get-url", "origin"],
+                        cwd=destination,
+                    )
+                    existing_url = existing_url_proc.stdout.strip()
+                except RepositoryError:
+                    existing_url = ""
+
+                if existing_url == url:
+                    logger.info(
+                        "Reusing existing clone at %s (origin matches %s); fetching",
+                        destination,
+                        url,
+                    )
+                    await self._run_git_command(["fetch", "origin"], cwd=destination)
+                    if branch:
+                        await self._run_git_command(["checkout", branch], cwd=destination)
+                    return RepositoryId(str(destination.absolute()))
+
+                msg = (
+                    f"Destination {destination} already exists with a different "
+                    f"origin ({existing_url or 'no origin'} vs {url})"
+                )
+                raise RepositoryError(msg)
+
+            if any(destination.iterdir()):
+                msg = (
+                    f"Destination {destination} exists, is non-empty, and is not a git "
+                    "repository; refusing to clone over it"
+                )
+                raise RepositoryError(msg)
 
         # Build clone command
         args = ["clone"]

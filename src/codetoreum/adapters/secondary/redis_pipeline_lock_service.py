@@ -162,6 +162,12 @@ class RedisPipelineLockService(IPipelineLockService, IQueuedPipelineLockService)
     def _queue_key(self, project_id: str, board_id: str) -> str:
         return f"{self._key_prefix}:queue:{project_id}:{board_id}"
 
+    def _queue_meta_key(self, project_id: str, board_id: str) -> str:
+        # Sibling hash to _queue_key. Maps work_item_id -> stage_name so
+        # release_lock can grant + auto-trigger the next agent without
+        # re-resolving external board position (D-M).
+        return f"{self._key_prefix}:queue:meta:{project_id}:{board_id}"
+
     def _scoped_key(self, project_id: str, board_id: str) -> str:
         """Stable identifier used by ``get_all_lock_states()`` callers."""
         return f"{project_id}:{board_id}"
@@ -173,6 +179,7 @@ class RedisPipelineLockService(IPipelineLockService, IQueuedPipelineLockService)
         board_id: str,
         work_item_id: str,
         board_position: int,
+        stage_name: str = "",
     ) -> LockAcquisitionResult:
         lock_key = self._lock_key(project_id, board_id)
         queue_key = self._queue_key(project_id, board_id)
@@ -216,8 +223,16 @@ class RedisPipelineLockService(IPipelineLockService, IQueuedPipelineLockService)
             )
 
         # Lock is held by another; enqueue.
-        # ZADD NX: only add if not already in queue.
+        # ZADD NX: only add if not already in queue. Also stash the trigger
+        # stage_name in a sibling hash so release_lock can auto-trigger the
+        # right agent (D-M).
         await self._redis.zadd(queue_key, {work_item_id: float(board_position)}, nx=True)
+        if stage_name:
+            await self._redis.hset(
+                self._queue_meta_key(project_id, board_id),
+                work_item_id,
+                stage_name,
+            )
         # Compute the position by rank.
         rank = await self._redis.zrank(queue_key, work_item_id)
         queue_length = await self._redis.zcard(queue_key)
@@ -244,13 +259,23 @@ class RedisPipelineLockService(IPipelineLockService, IQueuedPipelineLockService)
         await self._publish_lock_released(project_id, board_id, work_item_id)
 
         # Pop the queue head (atomic).
+        meta_key = self._queue_meta_key(project_id, board_id)
         popped = await self._redis.zpopmin(queue_key, count=1)
         next_work_item_id: str | None = None
+        next_stage_name: str | None = None
         if popped:
             member, _score = popped[0]
             if isinstance(member, bytes):
                 member = member.decode("utf-8")
             next_work_item_id = member
+            # Pull the queued-from stage out of the sibling hash and
+            # delete it; release_lock returns it so the caller knows
+            # which column config to use when auto-triggering the
+            # next agent (D-M).
+            raw_stage = await self._redis.hget(meta_key, next_work_item_id)
+            if raw_stage is not None:
+                next_stage_name = raw_stage.decode("utf-8") if isinstance(raw_stage, bytes) else raw_stage
+                await self._redis.hdel(meta_key, next_work_item_id)
             # Grant the lock to the popped work item.
             now = datetime.now(UTC)
             new_holder = LockHolder(work_item_id=next_work_item_id, acquired_at=now.isoformat())
@@ -266,6 +291,7 @@ class RedisPipelineLockService(IPipelineLockService, IQueuedPipelineLockService)
             released_work_item_id=work_item_id,
             next_work_item_id=next_work_item_id,
             queue_length_after_release=await self._redis.zcard(queue_key),
+            next_stage_name=next_stage_name,
         )
 
     async def get_queue_state(self, project_id: str, board_id: str) -> PipelineQueueState:
@@ -395,6 +421,9 @@ class RedisPipelineLockService(IPipelineLockService, IQueuedPipelineLockService)
             return
         try:
             event = LockAcquiredEvent(
+                type="pipeline.lock_acquired",
+                timestamp=datetime.now(UTC).isoformat(),
+                source="redis_pipeline_lock_service",
                 project_id=project_id,
                 board_id=board_id,
                 work_item_id=work_item_id,
@@ -412,6 +441,9 @@ class RedisPipelineLockService(IPipelineLockService, IQueuedPipelineLockService)
             return
         try:
             event = LockReleasedEvent(
+                type="pipeline.lock_released",
+                timestamp=datetime.now(UTC).isoformat(),
+                source="redis_pipeline_lock_service",
                 project_id=project_id,
                 board_id=board_id,
                 work_item_id=work_item_id,

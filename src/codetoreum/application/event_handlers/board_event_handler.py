@@ -28,7 +28,7 @@ from codetoreum.domain.events import (
     CodetoreumEvent,
     LockStuckEvent,
 )
-from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
+from codetoreum.domain.events.board_events import BoardSyncFailedEvent, WorkItemColumnChangedEvent
 from codetoreum.domain.events.workflow_events import (
     WorkflowCompletedEvent,
     WorkflowCreatedEvent,
@@ -302,7 +302,7 @@ class BoardColumnEventHandler(EventHandler):
         """
         # Get item position for queue ordering with error handling
         try:
-            position = await self._find_item_position(board_id, work_item_id, workflow_config)
+            position = await self._find_item_position(board_id, work_item_id, workflow_config, project_id=project_id)
             if position is None:
                 raise ResourceNotFoundError("work_item", work_item_id)
         except ResourceNotFoundError:
@@ -337,6 +337,11 @@ class BoardColumnEventHandler(EventHandler):
                 board_id=board_id,
                 work_item_id=work_item_id,
                 board_position=position.position,
+                # D-M: carry the trigger-column name in the queue entry so
+                # release_lock can grant + auto-trigger the next agent
+                # without re-resolving the queued WI's external board
+                # position (which is stale until lock release).
+                stage_name=column_config.name,
             )
         except ValueError as e:
             # Invalid parameters (negative position, empty IDs)
@@ -491,18 +496,47 @@ class BoardColumnEventHandler(EventHandler):
         # Complete workflow run lifecycle tracking
         await self._complete_workflow_run(work_item_id, column_config.name)
 
-        # Trigger agent for next queued item if one exists
+        # Trigger agent for next queued item if one exists. D-M: prefer
+        # release_result.next_stage_name (the trigger column captured at
+        # queue time); fall back to the legacy external-position lookup
+        # only if the queue entry pre-dates D-M and the stage wasn't
+        # stashed. This avoids the stale-board-state bug where the queued
+        # WI sits in Backlog externally and the auto-trigger silently
+        # skips the agent.
         if release_result.next_work_item_id:
             try:
-                next_position = await self._find_item_position(
-                    board_id, release_result.next_work_item_id, workflow_config
-                )
-                next_column_config = (
-                    workflow_config.get_column_config(next_position.column_name) if next_position else None
-                )
+                next_column_config = None
+                if release_result.next_stage_name:
+                    next_column_config = workflow_config.get_column_config(release_result.next_stage_name)
+                if next_column_config is None:
+                    next_position = await self._find_item_position(
+                        board_id,
+                        release_result.next_work_item_id,
+                        workflow_config,
+                        project_id=project_id,
+                    )
+                    next_column_config = (
+                        workflow_config.get_column_config(next_position.column_name) if next_position else None
+                    )
 
                 if next_column_config and next_column_config.agent_id:
-                    logger.info(f"Triggering agent for next queued item: {release_result.next_work_item_id}")
+                    logger.info(
+                        f"Triggering agent for next queued item: "
+                        f"{release_result.next_work_item_id} "
+                        f"(stage={next_column_config.name})"
+                    )
+                    # The queued WI never had its workflow run registered
+                    # (that only happens when the lock acquires on first
+                    # entry). Register it now so the executor can find an
+                    # active run when _trigger_agent dispatches the agent.
+                    if release_result.next_work_item_id not in self._active_runs:
+                        await self._start_workflow_run(
+                            release_result.next_work_item_id,
+                            project_id,
+                            board_id,
+                            next_column_config,
+                            workflow_config,
+                        )
                     await self._trigger_agent(release_result.next_work_item_id, next_column_config, board_id)
             except ResourceNotFoundError as e:
                 logger.warning(
@@ -940,6 +974,12 @@ class BoardColumnEventHandler(EventHandler):
                             )
                     column_config = config.get_column_config(current_position.column_name) if current_position else None
                     if column_config and column_config.on_failure_column:
+                        # Set board context so GitHubBoardAdapter._move_item_to_column_locked
+                        # doesn't raise "Project and board context required" -- mirrors the
+                        # success-path pattern below.
+                        if work_item_id in self._active_runs:
+                            run_meta = self._active_runs[work_item_id]
+                            await self.board_service.get_board(run_meta.project_id, board_id)
                         await self.board_service.move_item_to_column(
                             work_item_id, column_config.on_failure_column, MovedByType.ORCHESTRATOR
                         )
@@ -1030,6 +1070,39 @@ class BoardColumnEventHandler(EventHandler):
                     f"(internal state already updated to '{next_column_name}'): {board_err}",
                     extra={"error_id": "ERR_BOARD_EVENT_SYNC_FAILURE", "work_item_id": work_item_id},
                 )
+                # D-E: surface the silent drift as a first-class domain event so
+                # audit consumers / dashboards / reconciliation jobs can detect
+                # work items whose external board column does not match the
+                # internal authoritative state. Keep the warning above for
+                # log readers, but make the failure addressable in the event
+                # stream too.
+                if self.event_emitter:
+                    project_id_for_event = ""
+                    if work_item_id in self._active_runs:
+                        project_id_for_event = self._active_runs[work_item_id].project_id
+                    try:
+                        self.event_emitter.emit(
+                            BoardSyncFailedEvent(
+                                type="board.sync_failed",
+                                timestamp=datetime.now(UTC).isoformat(),
+                                source="board_event_handler",
+                                work_item_id=work_item_id,
+                                project_id=project_id_for_event,
+                                board_id=board_id,
+                                intended_column=next_column_name,
+                                error_message=str(board_err)[:500],
+                                failed_at=datetime.now(UTC).isoformat(),
+                            )
+                        )
+                    except Exception as emit_err:
+                        logger.error(
+                            f"Failed to emit BoardSyncFailedEvent for {work_item_id}: {emit_err}",
+                            exc_info=True,
+                            extra={
+                                "error_id": "ERR_BOARD_EVENT_SYNC_FAILURE_EMIT",
+                                "work_item_id": work_item_id,
+                            },
+                        )
 
         except Exception as e:
             logger.error(
@@ -1047,12 +1120,25 @@ class BoardColumnEventHandler(EventHandler):
         board_id: str,
         work_item_id: str,
         config: BoardWorkflowTemplate,
+        project_id: str | None = None,
     ) -> WorkItemPosition | None:
         """Find a work item's current board position.
 
         Tries get_item_position() first (O(1) for most adapters). Falls back to
         scanning all columns via get_items_in_column() for adapters that require
         explicit board context (e.g. GitHubBoardAdapter with GitHub Projects v2).
+
+        D-L: Codetoreum identifies work items by an internal UUID
+        (``work_item.id``), while board adapters like GitHubBoardAdapter
+        populate column entries with the external system's identity
+        (issue number for GitHub Projects v2). To bridge the two we also
+        compare against the work item's ``external_id`` — typically the
+        GitHub issue number — when scanning columns.
+
+        ``project_id`` is used to establish board context before the
+        column scan (GitHubBoardAdapter requires this; in-memory adapters
+        ignore it). When omitted, the scan path will still try, but
+        adapters needing context will fail at get_items_in_column.
         """
         try:
             return await self.board_service.get_item_position(work_item_id)
@@ -1065,11 +1151,34 @@ class BoardColumnEventHandler(EventHandler):
         except NotImplementedError:
             pass
 
+        # Establish board context so adapters like GitHubBoardAdapter can
+        # serve get_items_in_column without raising "project_id must be a
+        # non-empty string". Mirrors the success-path pattern in
+        # handle_agent_completion.
+        if project_id:
+            try:
+                await self.board_service.get_board(project_id, board_id)
+            except Exception as e:
+                logger.debug(f"Could not set board context for {board_id}: {e}")
+
+        # Resolve the work item's external_id (if any) so we can match
+        # against board adapters that key by the external system's id.
+        # The handler holds IWorkItemCommandPort (command-side) which has
+        # no get_work_item; if a richer service was injected, use it.
+        external_id: str | None = None
+        get_wi = getattr(self.work_item_service, "get_work_item", None)
+        if get_wi is not None:
+            try:
+                wi = await get_wi(work_item_id)
+                external_id = getattr(wi, "external_id", None)
+            except Exception as e:
+                logger.debug(f"Could not load external_id for {work_item_id}: {e}")
+
         for column in config.columns:
             try:
                 items = await self.board_service.get_items_in_column(board_id, column.name)
                 for item in items:
-                    if item.work_item_id == work_item_id:
+                    if item.work_item_id == work_item_id or (external_id and item.work_item_id == external_id):
                         return item
             except Exception as e:
                 logger.debug(f"Error scanning column '{column.name}' for {work_item_id}: {e}")

@@ -35,6 +35,7 @@ from .agent_events import (
 # Board events
 from .board_events import (
     BoardReconciledEvent,
+    BoardSyncFailedEvent,
     ColumnSLAExceededEvent,
     WorkItemColumnChangedEvent,
     WorkItemPositionChangedEvent,
@@ -268,6 +269,7 @@ from .workflow_events import (
     WorkflowCompletedEvent,
     WorkflowCreatedEvent,
     WorkflowFailedEvent,
+    WorkflowOrphanedEvent,
     WorkflowPausedEvent,
     WorkflowResumedEvent,
     WorkflowStageAdvancedEvent,
@@ -285,6 +287,7 @@ __all__ = [
     "WorkItemColumnChangedEvent",
     "WorkItemPositionChangedEvent",
     "BoardReconciledEvent",
+    "BoardSyncFailedEvent",
     "ColumnSLAExceededEvent",
     # Branch resolution events
     "BranchResolvedEvent",
@@ -413,6 +416,7 @@ __all__ = [
     "WorkflowCompletedEvent",
     "WorkflowCreatedEvent",
     "WorkflowFailedEvent",
+    "WorkflowOrphanedEvent",
     "WorkflowPausedEvent",
     "WorkflowResumedEvent",
     "WorkflowStageAdvancedEvent",

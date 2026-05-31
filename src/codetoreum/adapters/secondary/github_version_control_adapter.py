@@ -87,6 +87,112 @@ class GitHubVersionControlAdapter(IVersionControlService):
             logger.error(f"Failed to push: {e}", exc_info=True)
             raise
 
+    async def create_pull_request(
+        self,
+        repo_path: str,
+        head: str,
+        base: str,
+        title: str,
+        body: str = "",
+    ) -> str:
+        """Open a GitHub PR from ``head`` into ``base``.
+
+        Looks up the remote origin to derive owner/repo, then calls
+        ``POST /repos/{owner}/{repo}/pulls`` with the server's
+        ``GITHUB_TOKEN``. Idempotent: if a PR already exists for the same
+        head→base pair, returns its URL instead of raising.
+        """
+        import os
+
+        import httpx
+
+        path = Path(repo_path)
+        # Resolve origin URL via the underlying git CLI (uses the env-scrub +
+        # token extraheader path from GitRepositoryAdapter._run_git_command).
+        result = await self._repository_adapter._run_git_command(
+            ["remote", "get-url", "origin"],
+            cwd=path,
+        )
+        origin_url = result.stdout.strip()
+
+        owner, repo = _parse_github_owner_repo(origin_url)
+        if not owner or not repo:
+            from codetoreum.ports.exceptions import RepositoryError
+
+            msg = f"Could not parse GitHub owner/repo from origin URL: {origin_url}"
+            raise RepositoryError(msg)
+
+        token = os.environ.get("GITHUB_TOKEN", "")
+        if not token:
+            from codetoreum.ports.exceptions import AuthenticationError
+
+            msg = "GITHUB_TOKEN not set; cannot create pull request"
+            raise AuthenticationError(msg)
+
+        url = f"https://api.github.com/repos/{owner}/{repo}/pulls"
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        payload = {"head": head, "base": base, "title": title, "body": body}
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=headers, json=payload)
+
+        if response.status_code == 201:
+            pr_url = response.json().get("html_url", "")
+            logger.info(f"Opened pull request {pr_url} ({head} -> {base}) for {owner}/{repo}")
+            return pr_url
+
+        # GitHub returns 422 with a specific error when a PR already
+        # exists for this head/base. Resolve to the existing PR URL.
+        if response.status_code == 422:
+            existing = await self._find_open_pull_request(
+                client_factory=lambda: httpx.AsyncClient(timeout=30.0),
+                owner=owner,
+                repo=repo,
+                head=head,
+                base=base,
+                headers=headers,
+            )
+            if existing:
+                logger.info(f"Pull request already exists for {head} -> {base}: {existing}")
+                return existing
+
+        # Any other error is fatal.
+        from codetoreum.ports.exceptions import ExternalServiceError
+
+        msg = (
+            f"GitHub PR creation failed ({response.status_code}) for "
+            f"{owner}/{repo} {head}->{base}: {response.text[:300]}"
+        )
+        logger.error(msg)
+        raise ExternalServiceError(msg)
+
+    async def _find_open_pull_request(
+        self,
+        *,
+        client_factory,
+        owner: str,
+        repo: str,
+        head: str,
+        base: str,
+        headers: dict,
+    ) -> str | None:
+        """Look up an existing PR for head→base, or None."""
+        import httpx as _httpx  # noqa: F401  (caller already has it)
+
+        url = f"https://api.github.com/repos/{owner}/{repo}/pulls?" f"head={owner}:{head}&base={base}&state=open"
+        async with client_factory() as c:
+            resp = await c.get(url, headers=headers)
+        if resp.status_code != 200:
+            return None
+        items = resp.json()
+        if isinstance(items, list) and items:
+            return items[0].get("html_url")
+        return None
+
     async def list_branches(self, repo_path: str, remote: bool = False) -> list[str]:
         try:
             path = Path(repo_path)
@@ -177,3 +283,29 @@ def _parse_remote_url(git_config_text: str) -> str | None:
                 if len(parts) == 2:
                     return parts[1].strip()
     return None
+
+
+def _parse_github_owner_repo(url: str) -> tuple[str | None, str | None]:
+    """Extract (owner, repo) from a GitHub HTTPS or SSH remote URL.
+
+    Accepts:
+        https://github.com/owner/repo.git
+        https://github.com/owner/repo
+        git@github.com:owner/repo.git
+    Returns (None, None) when the URL is not a github.com remote.
+    """
+    s = url.strip()
+    if s.endswith(".git"):
+        s = s[:-4]
+    if s.startswith("git@github.com:"):
+        path = s[len("git@github.com:") :]
+    elif s.startswith("https://github.com/"):
+        path = s[len("https://github.com/") :]
+    elif s.startswith("http://github.com/"):
+        path = s[len("http://github.com/") :]
+    else:
+        return None, None
+    parts = path.split("/", 1)
+    if len(parts) != 2:
+        return None, None
+    return parts[0], parts[1]

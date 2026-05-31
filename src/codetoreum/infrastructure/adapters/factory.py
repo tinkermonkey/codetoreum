@@ -1027,6 +1027,23 @@ class AdapterFactory:
             ),
             set_as_default=True,
         )
+        # Redis-backed branch tracker: work_item -> branch mapping survives
+        # restart, closing the gap where a mid-execution restart loses the
+        # branch the orchestrator was working on.
+        from codetoreum.adapters.secondary.redis_work_item_branch_tracker import (
+            RedisWorkItemBranchTracker,
+        )
+
+        self._work_item_branch_tracker_registry.register(
+            name="redis",
+            adapter_type=RedisWorkItemBranchTracker,
+            description="Redis-backed work item branch tracker; 2h TTL on each entry",
+            version="1.0.0",
+            tags=["production", "persistent", "multi_instance"],
+            config_schema=AdapterCredentialRequirement(
+                description=("Requires an aioredis client (injected by AdapterResolver from REDIS_URL)."),
+            ),
+        )
 
         # Work Item Service Adapters
         self._work_item_service_registry.register(

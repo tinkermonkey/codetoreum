@@ -158,6 +158,10 @@ class ProductionPathFixture:
         # Step 6: Prepare workspace
         self.prep_result = MagicMock()
         self.prep_result.success = True
+        # D-I: prepare_workspace publishes the resolved branch back via
+        # workspace_context. Reuse the routed workspace mock so the
+        # executor's ExecutionContextBuilder call sees consistent IDs.
+        self.prep_result.workspace_context = self.workspace
         self.workspace_router.prepare_workspace.return_value = self.prep_result
 
         # Step 8: Create execution

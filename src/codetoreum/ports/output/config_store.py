@@ -38,6 +38,11 @@ class ProjectConfig:
     updated_at: datetime | None = None
     version: int = 1
     metadata: MappingProxyType = field(default_factory=lambda: MappingProxyType({}))
+    # When True (default), a successful agent run on this project triggers
+    # ``IVersionControlService.create_pull_request`` after the push. Set to
+    # False to keep the agent's branch unreviewed (e.g. for projects that
+    # ship branches via a different surface).
+    auto_create_pull_requests: bool = True
 
     def __post_init__(self) -> None:
         """Validate all fields at construction time."""
@@ -105,6 +110,10 @@ class ProjectConfig:
 
         if not isinstance(self.environment_variables, MappingProxyType):
             msg = "environment_variables must be a dict or MappingProxyType"
+            raise ValueError(msg)
+
+        if not isinstance(self.auto_create_pull_requests, bool):
+            msg = "auto_create_pull_requests must be a boolean"
             raise ValueError(msg)
 
         if not isinstance(self.mounted_commands, MappingProxyType):

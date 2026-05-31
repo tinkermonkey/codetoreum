@@ -139,6 +139,11 @@ class ExecutorFixture:
 
         prep_result = MagicMock()
         prep_result.success = True
+        # D-I: prepare_workspace now publishes the resolved branch back on
+        # workspace_context. Reuse the routed workspace so downstream
+        # ExecutionContextBuilder sees consistent IDs and the branch_name
+        # that was actually checked out.
+        prep_result.workspace_context = workspace
         self.workspace_router.prepare_workspace.return_value = prep_result
 
         execution = MagicMock()

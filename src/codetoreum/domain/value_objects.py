@@ -509,6 +509,9 @@ class ExecutionContext:
     # Environment variables (from project config)
     environment_variables: Mapping[str, str] | None = None
 
+    # Workflow integrations (mirrored from ProjectContext.auto_create_pull_requests)
+    auto_create_pull_requests: bool = True
+
     # Metadata
     metadata: dict[str, Any] = field(default_factory=dict)
 
