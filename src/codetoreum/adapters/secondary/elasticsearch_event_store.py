@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import datetime
 from typing import Any
 
@@ -109,6 +109,7 @@ class ElasticsearchEventStore(IEventStore):
         async_queue_max_size: int = 10000,
         shutdown_drain_timeout_seconds: float = 10.0,
         bulk_refresh: bool | str = False,
+        on_drop_callback: "Callable[[str, list[CodetoreumEvent], Exception], Awaitable[None]] | None" = None,
     ):
         """
         Initialize Elasticsearch event store.
@@ -135,6 +136,12 @@ class ElasticsearchEventStore(IEventStore):
                 False (do not wait for indexing refresh) which avoids the ~1-5s
                 wait_for stall on the publish hot path. Set to "wait_for" or True to
                 restore the prior synchronous refresh behavior (slower).
+            on_drop_callback: Optional async callback invoked when a batch is
+                permanently dropped (queue-full retry or retry-exhausted). Called as
+                `await on_drop_callback(stream_id, events, error)`. Bootstrap wires
+                this to the dead letter queue so failed coding-agent telemetry isn't
+                silently lost under Elasticsearch pressure. Exceptions from the
+                callback are caught and logged but do not propagate.
         """
         self.client = es_client
         self.index_prefix = index_prefix
@@ -149,6 +156,7 @@ class ElasticsearchEventStore(IEventStore):
         self._async_queue_max_size = async_queue_max_size
         self._shutdown_drain_timeout_seconds = shutdown_drain_timeout_seconds
         self._bulk_refresh = bulk_refresh
+        self._on_drop_callback = on_drop_callback
 
         # Background worker state. Lazily created on initialize() because
         # asyncio.Queue must be bound to a running event loop.
@@ -414,6 +422,7 @@ class ElasticsearchEventStore(IEventStore):
                                     "queue full on retry re-enqueue",
                                     extra={"error_id": "ERR_EVENT_STORE_ASYNC_RETRY_DROP"},
                                 )
+                                await self._invoke_drop_callback(stream_id, events, e)
                         else:
                             self._async_stats["events_dropped_failure"] += len(events)
                             logger.critical(
@@ -421,6 +430,7 @@ class ElasticsearchEventStore(IEventStore):
                                 f"after {attempt + 1} attempts",
                                 extra={"error_id": "ERR_EVENT_STORE_ASYNC_RETRY_EXHAUSTED"},
                             )
+                            await self._invoke_drop_callback(stream_id, events, e)
                     finally:
                         # task_done() once per get() — we got one per pending item.
                         pass
@@ -441,6 +451,38 @@ class ElasticsearchEventStore(IEventStore):
             raise
         finally:
             logger.info("Elasticsearch event-store persistence worker stopped " f"(stats={self._async_stats})")
+
+    def set_on_drop_callback(
+        self,
+        callback: "Callable[[str, list[CodetoreumEvent], Exception], Awaitable[None]] | None",
+    ) -> None:
+        """Set or clear the on-drop callback after construction.
+
+        Bootstrap creates the event store through the adapter factory (kwargs
+        don't carry the DLQ wiring), then calls this setter once the failed
+        event store is available so dropped batches stop being silently lost.
+        """
+        self._on_drop_callback = callback
+
+    async def _invoke_drop_callback(
+        self,
+        stream_id: str,
+        events: list,
+        error: Exception,
+    ) -> None:
+        """Best-effort call to the on_drop_callback. Never propagates."""
+        if self._on_drop_callback is None:
+            return
+        try:
+            await self._on_drop_callback(stream_id, events, error)
+        except Exception:
+            logger.error(
+                "on_drop_callback failed while spooling %d dropped events for stream %s",
+                len(events),
+                stream_id,
+                exc_info=True,
+                extra={"error_id": "ERR_EVENT_STORE_DROP_CALLBACK_FAILED"},
+            )
 
     async def get_events(
         self,

@@ -234,6 +234,7 @@ class TestHandleColumnChangeWithPipelineTrigger:
             board_id="board-1",
             work_item_id="item-1",
             board_position=0,
+            stage_name="In Development",
         )
 
     @pytest.mark.asyncio

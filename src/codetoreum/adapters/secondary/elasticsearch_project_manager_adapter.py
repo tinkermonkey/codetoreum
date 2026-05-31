@@ -55,7 +55,7 @@ class ElasticsearchProjectManagerAdapter(IProjectManagerService):
             return sorted(p.id for p in projects)
         except Exception as e:
             msg = f"Failed to list projects from config store: {e}"
-            raise ExternalServiceError(msg) from e
+            raise ExternalServiceError("project_manager", msg) from e
 
     async def get_project_config(self, project_name: str) -> DomainProjectConfig:
         """Fetch project config from ES and convert to the domain ProjectConfig."""
@@ -65,7 +65,7 @@ class ElasticsearchProjectManagerAdapter(IProjectManagerService):
             raise ResourceNotFoundError("project", project_name) from e
         except Exception as e:
             msg = f"Failed to get project config '{project_name}': {e}"
-            raise ExternalServiceError(msg) from e
+            raise ExternalServiceError("project_manager", msg) from e
 
         metadata = dict(store_cfg.metadata)
         repo_url = (
@@ -137,7 +137,7 @@ class ElasticsearchProjectManagerAdapter(IProjectManagerService):
                     will_retry=True,
                 )
             )
-            raise ExternalServiceError(msg) from e
+            raise ExternalServiceError("project_manager", msg) from e
 
     # -------------------------------------------------------------------------
     # Internal helpers
@@ -184,10 +184,10 @@ class ElasticsearchProjectManagerAdapter(IProjectManagerService):
             return await loop.run_in_executor(None, _run)
         except subprocess.CalledProcessError as e:
             msg = f"git {args[0]} failed: {e.stderr.strip()}"
-            raise ExternalServiceError(msg) from e
+            raise ExternalServiceError("git", msg) from e
         except subprocess.TimeoutExpired as e:
             msg = f"git {args[0]} timed out"
-            raise ExternalServiceError(msg) from e
+            raise ExternalServiceError("git", msg) from e
 
     async def _emit(self, event: object) -> None:
         if self._event_emitter:

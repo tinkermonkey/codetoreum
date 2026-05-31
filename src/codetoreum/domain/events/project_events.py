@@ -388,6 +388,10 @@ class OrchestrationCycleCompletedEvent(CodetoreumEvent):
     boards_processed: int = 0
     total_actions: int = 0
     cycle_duration_ms: int = 0
+    # D-Q: number of work items with active workflow runs at the moment the
+    # cycle finished. 0 (and the default) means either no in-flight work or
+    # the orchestrator had no registry to query. Optional/backward-compatible.
+    active_workflow_runs: int = 0
 
     def __post_init__(self) -> None:
         """Validate event after initialization."""
@@ -404,6 +408,9 @@ class OrchestrationCycleCompletedEvent(CodetoreumEvent):
         if self.cycle_duration_ms < 0:
             msg = "cycle_duration_ms must be >= 0"
             raise ValueError(msg)
+        if self.active_workflow_runs < 0:
+            msg = "active_workflow_runs must be >= 0"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
@@ -414,6 +421,7 @@ class OrchestrationCycleCompletedEvent(CodetoreumEvent):
                 "boards_processed": self.boards_processed,
                 "total_actions": self.total_actions,
                 "cycle_duration_ms": self.cycle_duration_ms,
+                "active_workflow_runs": self.active_workflow_runs,
             }
         )
         return d
@@ -431,4 +439,5 @@ class OrchestrationCycleCompletedEvent(CodetoreumEvent):
             boards_processed=data.get("boards_processed", 0),
             total_actions=data.get("total_actions", 0),
             cycle_duration_ms=data.get("cycle_duration_ms", 0),
+            active_workflow_runs=data.get("active_workflow_runs", 0),
         )

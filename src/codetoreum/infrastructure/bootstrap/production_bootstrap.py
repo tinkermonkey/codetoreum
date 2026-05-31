@@ -635,6 +635,52 @@ class ProductionApplicationBootstrap:
 
             logger.debug(f"Initializing event store: {type(self.adapters.event_store).__name__}")
             await initialize_event_store(self.adapters.event_store)
+
+            # D-P: wire the ES event store's on_drop callback to the failed
+            # event store so coding-agent telemetry batches that exhaust
+            # retries land in the DLQ instead of being silently logged
+            # CRITICAL and discarded. Only fires if both halves exist and
+            # the adapter exposes the setter (Elasticsearch-backed stores do).
+            try:
+                set_cb = getattr(self.adapters.event_store, "set_on_drop_callback", None)
+                failed_event_store = self.infrastructure.failed_event_store if self.infrastructure else None
+                if set_cb is not None and failed_event_store is not None:
+                    from codetoreum.ports.output.failed_event_store import FailureReason
+
+                    async def _on_drop(stream_id, events, error) -> None:
+                        for ev in events:
+                            try:
+                                event_data = ev.to_dict() if hasattr(ev, "to_dict") else {"repr": repr(ev)}
+                                event_type = getattr(ev, "event_type", None) or getattr(ev, "type", "unknown")
+                                await failed_event_store.add_failed_event(
+                                    event_type=str(event_type),
+                                    event_data=event_data,
+                                    failure_reason=FailureReason.PROCESSING_ERROR,
+                                    error_message=f"ES append exhausted: {error}",
+                                    metadata={"stream_id": stream_id},
+                                )
+                            except Exception:
+                                logger.error(
+                                    "Failed to record dropped event in DLQ " "(stream=%s, event_type=%s)",
+                                    stream_id,
+                                    getattr(ev, "event_type", "?"),
+                                    exc_info=True,
+                                    extra={
+                                        "error_id": "ERR_EVENT_STORE_DLQ_WRITE_FAILED",
+                                    },
+                                )
+
+                    set_cb(_on_drop)
+                    logger.info("Wired ES event-store on_drop_callback to failed_event_store (DLQ)")
+            except Exception:
+                # Wiring is best effort — the event store still works without it,
+                # we just lose the DLQ safety net.
+                logger.warning(
+                    "Failed to wire ES event-store on_drop_callback to DLQ",
+                    exc_info=True,
+                    extra={"error_id": "ERR_EVENT_STORE_DLQ_WIRING_FAILED"},
+                )
+
             logger.info(
                 "Event store initialized successfully",
                 extra={
@@ -825,6 +871,37 @@ class ProductionApplicationBootstrap:
                     "Phase 4e: failed to clear orphaned-run registry entry " "for work_item_id=%s",
                     work_item_id,
                 )
+
+            # Release the pipeline lock held by the orphaned work item.
+            # Without this, the lock stays pinned to a dead run until its TTL
+            # expires (>1h), blocking every subsequent work item on that board
+            # behind a phantom holder. The lock service handles the queue
+            # hand-off (pops the next queued WI and grants it the lock).
+            if self.adapters.lock_service is not None:
+                try:
+                    release_result = await self.adapters.lock_service.release_lock(
+                        project_id=run_info.project_id,
+                        board_id=run_info.board_id,
+                        work_item_id=work_item_id,
+                    )
+                    logger.info(
+                        "Phase 4e: released orphaned pipeline lock for work_item_id=%s " "(next_queued=%s)",
+                        work_item_id,
+                        release_result.next_work_item_id,
+                    )
+                except ValueError:
+                    # Lock not held, or held by a different work item — both
+                    # benign for orphan recovery; nothing to release.
+                    logger.info(
+                        "Phase 4e: no orphan lock to release for work_item_id=%s "
+                        "(lock not held or held by another work item)",
+                        work_item_id,
+                    )
+                except Exception:
+                    logger.exception(
+                        "Phase 4e: failed to release orphan pipeline lock " "for work_item_id=%s",
+                        work_item_id,
+                    )
 
         logger.info(
             "Phase 4e: orphan detection complete " "(scanned=%d emitted=%d cleared_completed=%d skipped_fresh=%d)",
@@ -1179,6 +1256,8 @@ class ProductionApplicationBootstrap:
             board_service=self.adapters.board,
             event_emitter=self.adapters.event_emitter,
             poll_interval_seconds=30,
+            # D-Q: surface in-flight workflow runs in each poll cycle log/event.
+            run_registry=self.adapters.run_registry,
         )
 
         logger.info("Created all 11 application services with production adapters")

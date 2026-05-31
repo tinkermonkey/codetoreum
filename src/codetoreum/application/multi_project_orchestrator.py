@@ -17,6 +17,9 @@ from codetoreum.ports.exceptions import (
     ExternalServiceError,
     ResourceNotFoundError,
 )
+from codetoreum.ports.output.active_workflow_run_registry import (
+    IActiveWorkflowRunRegistry,
+)
 from codetoreum.ports.output.board_service import BoardConfig, IBoardService
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.multi_project_orchestrator import (
@@ -67,6 +70,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
         board_service: IBoardService,
         event_emitter: IEventEmitter | None = None,
         poll_interval_seconds: int = POLL_INTERVAL_SECONDS,
+        run_registry: IActiveWorkflowRunRegistry | None = None,
     ) -> None:
         """Initialize the multi-project orchestrator.
 
@@ -76,12 +80,18 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
             board_service: Service for reconciling project boards
             event_emitter: Optional event emitter for orchestration events
             poll_interval_seconds: Seconds to wait between orchestration cycles (default: 30)
+            run_registry: Optional active workflow run registry. When provided, each
+                cycle queries it for in-flight workflows so the cycle log / event
+                surfaces active-run counts. Without it, the poll loop reports
+                "0 actions, 0 errors" even while agents execute through the
+                event-driven path (D-Q).
         """
         self._project_manager = project_manager
         self._workflow_orchestrator = workflow_orchestrator
         self._board_service = board_service
         self._event_emitter = event_emitter
         self._poll_interval_seconds = poll_interval_seconds
+        self._run_registry = run_registry
         self._last_cycle_time: datetime | None = None
         self._cycle_count = 0
         self._stop_event = asyncio.Event()
@@ -292,6 +302,23 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                         )
                     )
 
+            # D-Q: query the active workflow run registry so the cycle log + event
+            # surface in-flight work driven by the event path. Best effort: failure
+            # to read the registry does not fail the cycle.
+            active_runs_count = 0
+            active_run_sample: list[str] = []
+            if self._run_registry is not None:
+                try:
+                    runs = await self._run_registry.get_all_runs()
+                    active_runs_count = len(runs)
+                    active_run_sample = [wi for wi, _ in runs[:5]]
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to read active workflow runs during orchestration cycle: {e}",
+                        exc_info=True,
+                        extra={"error_id": "ERR_ORCHESTRATION_CYCLE_RUN_REGISTRY_READ"},
+                    )
+
             # Step 4: Emit cycle completion event
             cycle_duration_ms = int((time.time() - cycle_start) * 1000)
             cycle_result = OrchestrationCycleResult(
@@ -314,6 +341,7 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                         boards_processed=0,  # Not tracked at orchestrator level
                         total_actions=total_actions,
                         cycle_duration_ms=cycle_duration_ms,
+                        active_workflow_runs=active_runs_count,
                     )
                     self._event_emitter.emit(event)
                 except Exception as e:
@@ -329,7 +357,17 @@ class MultiProjectOrchestrator(IMultiProjectOrchestrator):
                 f"{len(project_results)} projects, "
                 f"{total_actions} actions, "
                 f"{total_errors} errors, "
-                f"{cycle_duration_ms:.0f}ms"
+                f"active_runs={active_runs_count}"
+                + (f" (sample={active_run_sample})" if active_run_sample else "")
+                + f", {cycle_duration_ms:.0f}ms",
+                extra={
+                    "cycle_number": self._cycle_count,
+                    "projects_processed": len(project_results),
+                    "total_actions": total_actions,
+                    "total_errors": total_errors,
+                    "active_workflow_runs": active_runs_count,
+                    "cycle_duration_ms": cycle_duration_ms,
+                },
             )
 
             self._last_cycle_time = cycle_timestamp

@@ -373,6 +373,51 @@ class BoardColumnEventHandler(EventHandler):
         if result.status == LockStatus.ACQUIRED:
             logger.info(f"Lock acquired for {work_item_id}")
 
+            # D-S: sync the external (GitHub Project v2) board column to the
+            # triggered column. The trigger endpoint emits an internal
+            # WorkItemColumnChangedEvent but does NOT move the GitHub Project
+            # item, so handle_agent_completion's later position lookup would
+            # see the stale external column (e.g. Backlog) and silently disable
+            # auto-progression even on a successful agent run. Best-effort:
+            # mirrors the pattern in handle_agent_completion's success path.
+            try:
+                await self.board_service.get_board(project_id, board_id)
+                await self.board_service.move_item_to_column(work_item_id, column_config.name, MovedByType.ORCHESTRATOR)
+            except Exception as board_err:
+                logger.warning(
+                    f"External board sync failed on pipeline trigger for {work_item_id} "
+                    f"(internal trigger already accepted, agent will still run): {board_err}",
+                    extra={
+                        "error_id": "ERR_BOARD_EVENT_SYNC_FAILURE",
+                        "work_item_id": work_item_id,
+                        "intended_column": column_config.name,
+                    },
+                )
+                if self.event_emitter:
+                    try:
+                        self.event_emitter.emit(
+                            BoardSyncFailedEvent(
+                                type="board.sync_failed",
+                                timestamp=datetime.now(UTC).isoformat(),
+                                source="board_event_handler",
+                                work_item_id=work_item_id,
+                                project_id=project_id,
+                                board_id=board_id,
+                                intended_column=column_config.name,
+                                error_message=str(board_err)[:500],
+                                failed_at=datetime.now(UTC).isoformat(),
+                            )
+                        )
+                    except Exception as emit_err:
+                        logger.error(
+                            f"Failed to emit BoardSyncFailedEvent for {work_item_id}: {emit_err}",
+                            exc_info=True,
+                            extra={
+                                "error_id": "ERR_BOARD_EVENT_SYNC_FAILURE_EMIT",
+                                "work_item_id": work_item_id,
+                            },
+                        )
+
             # Start workflow run lifecycle tracking
             await self._start_workflow_run(work_item_id, project_id, board_id, column_config, workflow_config)
 
@@ -408,6 +453,20 @@ class BoardColumnEventHandler(EventHandler):
                 and getattr(column_config, "execution_type", "task_queue") != "conversational"
                 and not column_config.pr_review_cycle_config
             ):
+                # D-O: if the lock was granted via queue handoff (e.g. Phase 4e
+                # orphan recovery popped this WI off the queue and the lock
+                # service granted it the lock), no workflow run was registered.
+                # The executor needs an active run to dispatch — start one now
+                # if missing. Re-entry from maker-checker still skips this
+                # since the active run from the original entry is still tracked.
+                if work_item_id not in self._active_runs:
+                    await self._start_workflow_run(
+                        work_item_id,
+                        project_id,
+                        board_id,
+                        column_config,
+                        workflow_config,
+                    )
                 await self._trigger_agent(work_item_id, column_config, board_id)
 
     async def _handle_exit_column(

@@ -168,7 +168,7 @@ class GitHubVersionControlAdapter(IVersionControlService):
             f"{owner}/{repo} {head}->{base}: {response.text[:300]}"
         )
         logger.error(msg)
-        raise ExternalServiceError(msg)
+        raise ExternalServiceError("github", msg)
 
     async def _find_open_pull_request(
         self,
