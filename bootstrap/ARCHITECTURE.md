@@ -454,9 +454,41 @@ The following constraints MUST hold for bootstrap to work correctly. Violating a
 - The Docker daemon's running container count + headroom does not accommodate `agent_count × max_parallel_work_items`.
 - `GITHUB_TOKEN` rate-limit headroom is below 1000 requests, or the configured `github_org/github_repo` is inaccessible.
 
-There is no "opt out and run anyway" flag.
+Four checks run in Phase 1c of `ProductionApplicationBootstrap.setup()` and at the start of `bootstrap/register_project.py`.
 - Violation: the 2026-05-31 run shared ES with switchyard, producing 51-second cycles, 9.7-second work-item GETs, dropped telemetry, and masked errors. Running bootstrap on shared infra is worse than not running it.
 - Tracking: GitHub issue #904 Work item 7.
+
+**Bypassing checks for local development**:
+
+The `CODETOREUM_INFRA_EXCLUSIVITY=skip` flag skips all four checks **only** when both conditions hold:
+1. `CODETOREUM_INFRA_EXCLUSIVITY=skip` is set
+2. Not in a CI environment (no `CI`, `GITHUB_ACTIONS`, or `CI_ENVIRONMENT` vars)
+
+If the skip flag is set but CI detection fires (CI env vars present), checks will **still run** — the flag is ignored.
+
+Allowed scopes:
+- ✅ Local unit tests: `export CODETOREUM_INFRA_EXCLUSIVITY=skip && pytest tests/unit/bootstrap/`
+- ✅ Local development without exclusive infra: set the flag, but re-run checks before pushing
+- ❌ CI/GitHub Actions: flag has no effect, checks always run
+- ❌ Production: flag has no effect, checks always run
+
+**Development workflow**:
+
+Use `bootstrap/dev-infra/docker-compose.yml` to bring up exclusive Elasticsearch + Redis locally:
+
+```bash
+# Start exclusive infrastructure
+docker-compose -f bootstrap/dev-infra/docker-compose.yml up -d
+
+# Export URLs
+export ELASTICSEARCH_URL=http://localhost:9200
+export REDIS_URL=redis://localhost:6379/0
+
+# All four checks pass; no need for skip flag
+.venv/bin/python bootstrap/register_project.py bootstrap/rounds.json
+```
+
+See [`bootstrap/dev-infra/README.md`](./dev-infra/README.md) for full setup instructions.
 
 ---
 
@@ -468,6 +500,7 @@ Use these log patterns to confirm correct operation at each stage. All patterns 
 |-----------|---------------------|--------------------------------|
 | Event types registered | `Phase 0: Registered all domain event types with EventSerializer` | `EventSerializer` ready for ES deserialization |
 | Infrastructure ready | `Phase 1a: Creating infrastructure...` + `Phase 1b: Initializing adapter factory and resolver...` | EventBus and AdapterFactory created |
+| Infra exclusivity verified | `Phase 1c: Verifying infrastructure exclusivity...` + `Phase 1c: Infrastructure exclusivity verified.` | All four exclusivity checks passed (ES, Redis, Docker, GitHub) |
 | Adapters resolved | `Phase 2: Creating 33 adapters (credential validation + resolution)...` | All 33 adapter slots populated |
 | Event store initialized | `Event store initialized successfully` with `event_store_type: ElasticsearchEventStore` | ES indices created/verified |
 | No mocks on critical path | `Critical path validation passed (6 adapters)` | Phase 3 guard passed |

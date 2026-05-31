@@ -364,6 +364,17 @@ class ProductionApplicationBootstrap:
             )
             self._credentials = credentials
             logger.info("Phase 1b: Credentials loaded from environment.")
+
+            # Phase 1c: Verify infrastructure exclusivity (INV-21)
+            logger.info("Phase 1c: Verifying infrastructure exclusivity...")
+            from codetoreum.infrastructure.bootstrap.infra_exclusivity import verify_infra_exclusivity
+
+            es_url = _cred_os.environ.get("ELASTICSEARCH_URL", "http://localhost:9200")
+            redis_url = _cred_os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+
+            await verify_infra_exclusivity(es_url, redis_url, credentials.github_token)
+            logger.info("Phase 1c: Infrastructure exclusivity verified.")
+
             # AdapterFactoryConfig defaults to PRODUCTION mode, which is what we need
             self._adapter_factory = AdapterFactory()
 
