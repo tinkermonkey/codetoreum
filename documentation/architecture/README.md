@@ -4,6 +4,9 @@ The architecture tier contains the implementation-agnostic specification of the 
 
 ## Contents
 
+### [invariants.md](./invariants.md)
+Cross-cutting architectural invariants that hold across the platform. Layer purity, port discipline, adapter design rules, production isolation. Bootstrap-phase-specific invariants live in `bootstrap/ARCHITECTURE.md`.
+
 ### [domain/](./domain/)
 Pure domain logic layer. Contains definitions for entity models, value objects, domain events, and domain services. This is the system's core — independent of any external technology choices.
 

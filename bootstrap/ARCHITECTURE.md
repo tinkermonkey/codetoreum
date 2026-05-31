@@ -373,6 +373,8 @@ Every port exercised in a bootstrap run, with its production adapter and role.
 
 The following constraints MUST hold for bootstrap to work correctly. Violating any of them produces a failure mode that may not be immediately obvious.
 
+**Cross-reference**: invariants that apply globally (not bootstrap-specific) have been promoted to [`documentation/architecture/invariants.md`](../documentation/architecture/invariants.md). The numbering is preserved across both files for traceability. Bootstrap-specific invariants (INV-01 through INV-06, INV-13) remain authoritative in this file; platform-wide invariants (INV-07 through INV-12, INV-14 through INV-21) are authoritative in `invariants.md` and referenced here for completeness.
+
 ### Ordering constraints
 
 **INV-01**: `bootstrap/register_project.py` MUST complete successfully before the server process starts.
@@ -431,6 +433,30 @@ The following constraints MUST hold for bootstrap to work correctly. Violating a
 ### Authentication constraints
 
 **INV-14**: All production REST API calls MUST include `Authorization: Bearer <token>`. The token is printed to the console on startup under the line `Authentication token: <jwt>`. The `/health` endpoint is exempt (unauthenticated). GitHub webhook endpoints use HMAC-SHA256 signature verification instead of Bearer tokens.
+
+### Authority and projection constraints
+
+**INV-19 — Board adapter is authoritative for current column state**: `IBoardService` (and via it, GitHub Projects v2 / Jira / etc.) is the single source of truth for which column a given work item is currently in. Reads of current column state go through `IBoardService.get_item_position()`. Writes go through `IBoardService.move_item_to_column()`, which projects the change to the external system and emits `WorkItemColumnChangedEvent`. Project config remains authoritative for workflow *structure* (which columns exist). `WorkItem.current_column` is being deleted (GitHub issue #904 Work item 3).
+- Violation: silent column drift between internal state and the external board (D-S from the 2026-05-31 bootstrap retrospective).
+- Full discussion: [`documentation/architecture/invariants.md`](../documentation/architecture/invariants.md#inv-19--board-adapter-is-authoritative-for-current-column-state).
+
+### Failure-routing constraints
+
+**INV-20 — Critical adapters must declare a failure route**: Adapters in `CRITICAL_ADAPTER_SLOTS` (INV-08), plus the event store, MUST take an `IFailedEventStore` parameter and route final failures to it. `ProductionApplicationBootstrap.setup()` fails to start if a critical-path adapter has no failure route configured.
+- Violation: dropped data has no recovery surface. The 2026-05-31 bootstrap run lost 8 coding-agent telemetry events because the ES event store dropped after 2 retries with no DLQ wiring (D-P).
+- Tracking: GitHub issue #904 Work item 5.
+
+### Production isolation constraints
+
+**INV-21 — Production bootstrap requires exclusive infrastructure**: The bootstrap harness MUST refuse to start if any of the following are shared with another service:
+- The Elasticsearch cluster at `ELASTICSEARCH_URL` (or its index prefix is contended).
+- The Redis instance at `REDIS_URL` (or its key prefix is contended).
+- The Docker daemon's running container count + headroom does not accommodate `agent_count × max_parallel_work_items`.
+- `GITHUB_TOKEN` rate-limit headroom is below 1000 requests, or the configured `github_org/github_repo` is inaccessible.
+
+There is no "opt out and run anyway" flag.
+- Violation: the 2026-05-31 run shared ES with switchyard, producing 51-second cycles, 9.7-second work-item GETs, dropped telemetry, and masked errors. Running bootstrap on shared infra is worse than not running it.
+- Tracking: GitHub issue #904 Work item 7.
 
 ---
 

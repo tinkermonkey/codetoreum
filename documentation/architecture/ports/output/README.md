@@ -14,10 +14,11 @@ Output ports are organized by functional domain and responsibility:
    - Coding agents (Claude Code, GitHub Copilot, Codex, etc.) — replaces the historical `ILLMProvider`
    - Generic repository operations
 
-2. **board-management.md** — IBoardService, IPipelineLockService, IPipelineQueueService
-   - Project board column operations
-   - Distributed pipeline locking
-   - Work queue management
+2. **board-management.md** — IBoardService, IDistributedLock, IPipelineQueue
+   - Project board column operations (IBoardService is the single source of truth for current column state — see INV-19)
+   - Distributed lock primitive (replaces retired IPipelineLockService)
+   - FIFO work queue (replaces retired IPipelineQueueService)
+   - The lock and queue are deliberately independent; the application-layer `PipelineOrchestrator` wires them together via lock-acquired/released events (GitHub issue #904 Work item 2)
 
 3. **code-review.md** — ICodeReviewService, IDiscussionAdapter, IPRReviewCycle, IReviewCycle
    - Pull request lifecycle (open, review, approve, merge)
