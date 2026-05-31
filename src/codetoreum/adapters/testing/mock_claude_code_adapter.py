@@ -89,8 +89,7 @@ class MockClaudeCodeAdapter(ICodingAgent):
         self._supported_modes = supported_modes
         self._default_result = default_result or _default_success_result()
         self._script = script
-        self.invocations: list[_Invocation] = field(default_factory=list)  # type: ignore[assignment]
-        # field(default_factory=...) doesn't work outside a dataclass; do it
+        self.invocations: list[_Invocation] = field(default_factory=list)
         # explicitly:
         self.invocations = []
 

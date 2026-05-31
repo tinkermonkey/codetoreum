@@ -62,12 +62,7 @@ def coding_agent():
 
 @pytest.fixture
 def execution_service(coding_agent, event_store):
-    """Create execution service.
-
-    D5 slimmed ExecutionService to coding_agent + event_store; the legacy
-    llm_provider / container / storage / system_credentials slots all
-    retired with execute_with_llm / execute_with_container.
-    """
+    """Create execution service."""
     return ExecutionService(
         coding_agent=coding_agent,
         event_store=event_store,

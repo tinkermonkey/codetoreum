@@ -36,7 +36,7 @@ class MockWorkflowCommandAdapter(IWorkflowCommandPort):
 
             self._workflows[workflow_run_id] = {
                 "work_item_id": command.work_item_id,
-                "workflow_id": command.workflow_id,
+                "pipeline_name": command.pipeline_name,
                 "state": "STARTED",
                 "started_at": datetime.now(UTC),
             }

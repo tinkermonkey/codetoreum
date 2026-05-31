@@ -13,7 +13,6 @@ simulation-agnostic - they never receive or use a clock directly.
 """
 
 import logging
-from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -257,7 +256,6 @@ class SimulationEngine:
 
     def create_repair_cycle_adapter(
         self,
-        llm_factory: "Callable[[str], Coroutine[Any, Any, Any]] | None" = None,
         checkpoint_store: "IRepairCycleCheckpointStore | None" = None,
         container_adapter: "IContainer | None" = None,
     ) -> "MockRepairCycleAdapter":
@@ -265,10 +263,6 @@ class SimulationEngine:
         Create mock repair cycle adapter with injected clock.
 
         Args:
-            llm_factory: Optional async factory callable that takes agent name and returns a coroutine
-                        yielding an ILLMProvider. If not provided, a default async MockLLMAdapter
-                        factory is created. Used for behavioral parity with production adapter's
-                        agent selection and LLM instantiation for contract validation.
             checkpoint_store: Optional checkpoint store for recovery testing.
                             Stores recovery snapshots for repair cycle resumption.
             container_adapter: Optional container adapter for causal linking (FR-2/US-2.4).
@@ -284,21 +278,7 @@ class SimulationEngine:
             MockRepairCycleAdapter,
         )
 
-        # If no llm_factory provided, create a default async one that returns MockLLMAdapter instances
-        if llm_factory is None:
-
-            class _LLMAdapterStub:
-                pass
-
-            _stub = _LLMAdapterStub()
-
-            async def default_llm_factory(agent_name: str) -> Any:
-                return _stub
-
-            llm_factory = default_llm_factory
-
         adapter = MockRepairCycleAdapter(
-            llm_factory=llm_factory,
             clock=self._clock,
             checkpoint_store=checkpoint_store,
             container_adapter=container_adapter,

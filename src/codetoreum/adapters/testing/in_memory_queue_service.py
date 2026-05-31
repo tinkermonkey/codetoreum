@@ -21,8 +21,10 @@ import logging
 import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
+from typing import Any, cast
 
 from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.domain.events.queue_events import (
     QueueItemAddedEvent,
@@ -95,9 +97,16 @@ class InMemoryQueueService(IPipelineQueueService):
         self._event_emitter = event_emitter or MockEventEmitter()
         self._event_bus = event_bus
 
-        # Subscribe to board position changes if event bus provided
+        # Subscribe to board position changes if event bus provided. The
+        # EventBus dispatches by event-type string, so the handler only
+        # ever sees ``WorkItemColumnChangedEvent`` even though the bus's
+        # contravariant ``Callable[[CodetoreumEvent], Any]`` parameter
+        # is wider.
         if self._event_bus:
-            self._event_bus.subscribe("WorkItemColumnChangedEvent", self._handle_board_position_change)
+            self._event_bus.subscribe(
+                "WorkItemColumnChangedEvent",
+                cast("Callable[[CodetoreumEvent], Any]", self._handle_board_position_change),
+            )
 
     async def is_item_in_queue(self, work_item_id: str) -> bool:
         """Check if a work item is currently in any queue.

@@ -907,8 +907,8 @@ class InMemoryRepositoryAdapter(IRepository):
                 raise ResourceNotFoundError(msg, target_branch)
 
             # Get commits starting from branch HEAD
-            commits = []
-            current_commit = self._branches[(repo_id, target_branch)]
+            commits: list[CommitInfo] = []
+            current_commit: str | None = self._branches[(repo_id, target_branch)]
 
             while current_commit and len(commits) < limit:
                 commit_key = (repo_id, current_commit)
@@ -918,7 +918,8 @@ class InMemoryRepositoryAdapter(IRepository):
                     if since and commit["timestamp"] < since:
                         break
 
-                    parent_shas = (commit.get("parent"),) if commit.get("parent") else ()
+                    parent_sha = commit.get("parent")
+                    parent_shas: tuple[str, ...] = (str(parent_sha),) if parent_sha else ()
                     author = CommitAuthor(
                         name=commit["author_name"],
                         email=commit["author_email"],
@@ -1058,8 +1059,8 @@ class InMemoryRepositoryAdapter(IRepository):
         seen_files = set()
 
         # Walk backwards from the given commit
-        current_commit = commit_sha
-        visited = set()
+        current_commit: str | None = commit_sha
+        visited: set[str] = set()
 
         while current_commit and current_commit not in visited:
             visited.add(current_commit)
@@ -1103,9 +1104,9 @@ class InMemoryRepositoryAdapter(IRepository):
             Common ancestor SHA or None if not found
         """
         # Get ancestry chain for commit1
-        ancestors1 = set()
-        current = commit1
-        visited = set()
+        ancestors1: set[str] = set()
+        current: str | None = commit1
+        visited: set[str] = set()
 
         while current and current not in visited:
             visited.add(current)

@@ -672,7 +672,7 @@ class TestAdapterOverrides:
         # Verify override was applied
         assert result.adapters.board == "mock"
         # Other adapters should remain unchanged
-        assert result.adapters.llm == "mock"
+        assert result.adapters.systemic_analysis == "mock"
         assert result.adapters.ticket == "in_memory"
 
     def test_apply_adapter_overrides_multiple(self):
@@ -692,14 +692,14 @@ class TestAdapterOverrides:
         # Apply multiple overrides
         overrides = (
             "board=mock",
-            "llm=mock",
+            "systemic_analysis=mock",
             "container=fake",
         )
         result = apply_adapter_overrides(config, overrides, factory)
 
         # Verify all overrides were applied
         assert result.adapters.board == "mock"
-        assert result.adapters.llm == "mock"
+        assert result.adapters.systemic_analysis == "mock"
         assert result.adapters.container == "fake"
         # Others unchanged
         assert result.adapters.ticket == "in_memory"
@@ -809,7 +809,7 @@ class TestAdapterOverrides:
     async def test_bootstrap_with_adapter_overrides(self):
         """Test bootstrap applies adapter overrides correctly."""
         # Test that bootstrap_application accepts and applies adapter overrides
-        overrides = ("llm=mock",)
+        overrides = ("board=mock",)
         bootstrap, _ = await bootstrap_application(
             scenario="default",
             scenario_file=None,
@@ -823,7 +823,7 @@ class TestAdapterOverrides:
             assert bootstrap is not None
             assert bootstrap._is_setup is True
             # Verify the override was applied in config
-            assert bootstrap.config.adapters.llm == "mock"
+            assert bootstrap.config.adapters.board == "mock"
         finally:
             await bootstrap.teardown()
 
@@ -868,7 +868,7 @@ class TestAdapterDisplaySummary:
         assert "Type" in output
         # Spot check for some adapters
         assert "board" in output
-        assert "llm" in output
+        assert "systemic_analysis" in output
         assert "container" in output
 
     def test_display_adapter_summary_shows_simulation_tags(self, capsys):

@@ -79,7 +79,7 @@ async def exec_chain_env(
 async def test_execution_chain_llm_path_reaches_done(exec_chain_env):
     """When ExecutionServiceAgentExecutor is active, an item triggered by a
     human move should cascade through all stages and reach Done, with the
-    MockLLMAdapter receiving at least one call per stage.
+    MockCodingAgent receiving at least one call per stage.
     """
     bootstrap, seeder, adapters = exec_chain_env
     board = adapters.board
@@ -96,19 +96,25 @@ async def test_execution_chain_llm_path_reaches_done(exec_chain_env):
         f"Current position: {(await board_mock.get_item_position(work_item_id)).column_name}"
     )
 
-    # Wait for background cleanup tasks and LLM calls to complete
-    llm_mock = adapters.llm_as_mock()
+    # Wait for background cleanup tasks and coding-agent calls to complete.
+    # Post-DEF-015 the execution chain dispatches via ``ICodingAgent``; the
+    # simulation wires a ``MockClaudeCodeAdapter`` that records each call in
+    # its ``invocations`` list.
+    coding_agent_mock = adapters.coding_agent
+    assert coding_agent_mock is not None, "coding_agent must be wired for this test"
 
-    async def llm_has_been_called():
-        return llm_mock.get_request_count() >= 1
+    async def coding_agent_has_been_called():
+        return len(getattr(coding_agent_mock, "invocations", [])) >= 1
 
     await assert_condition(
-        llm_has_been_called, timeout=5.0, poll_interval=0.05, message="LLM should have been called via ExecutionService"
+        coding_agent_has_been_called,
+        timeout=5.0,
+        poll_interval=0.05,
+        message="Coding agent should have been called via ExecutionService",
     )
 
-    # The LLM should have been called at least once (one call per stage: architect, coder, tester)
-    llm_call_count = llm_mock.get_request_count()
-    assert llm_call_count >= 1, f"Expected at least 1 LLM call via ExecutionService, got {llm_call_count}"
+    invocation_count = len(getattr(coding_agent_mock, "invocations", []))
+    assert invocation_count >= 1, f"Expected at least 1 coding-agent call via ExecutionService, got {invocation_count}"
 
     # Verify movement history: Backlog → Ready → In Progress → Review → Done
     history = board_mock.get_movement_history(work_item_id)
@@ -196,10 +202,11 @@ async def test_execution_chain_emits_vcs_events(exec_chain_env):
     # Note: In a container path with file modifications, we would assert >= 1.
     # The absence here is correct for this LLM-only path.
 
-    # Verify LLM execution occurred (chain reaches completion)
-    llm_mock = adapters.llm_as_mock()
-    llm_call_count = llm_mock.get_request_count()
-    assert llm_call_count >= 1, f"Expected at least 1 LLM execution, got {llm_call_count}"
+    # Verify coding-agent execution occurred (chain reaches completion).
+    coding_agent_mock = adapters.coding_agent
+    assert coding_agent_mock is not None, "coding_agent must be wired for this test"
+    invocation_count = len(getattr(coding_agent_mock, "invocations", []))
+    assert invocation_count >= 1, f"Expected at least 1 coding-agent execution, got {invocation_count}"
 
 
 @pytest.mark.asyncio

@@ -221,7 +221,7 @@ class MockProjectManagerAdapter(IProjectManagerService):
             # Simulate clone failure if project in clone_failures set
             if project_name in self._clone_failures:
                 state.clone_failures += 1
-                event = ProjectCloneFailedEvent(
+                failed_event = ProjectCloneFailedEvent(
                     type="project.clone_failed",
                     timestamp=self._get_iso_timestamp(),
                     source="mock_project_manager",
@@ -231,7 +231,7 @@ class MockProjectManagerAdapter(IProjectManagerService):
                     will_retry=True,
                 )
                 if self._event_emitter:
-                    self._event_emitter.emit(event)
+                    self._event_emitter.emit(failed_event)
                 msg = "mock_project_manager"
                 raise ExternalServiceError(msg, f"Failed to clone project '{project_name}': simulated network timeout")
 
@@ -242,7 +242,7 @@ class MockProjectManagerAdapter(IProjectManagerService):
             state.clone_failures = 0
 
             # Emit success event
-            event = ProjectClonedEvent(
+            cloned_event = ProjectClonedEvent(
                 type="project.cloned",
                 timestamp=self._get_iso_timestamp(),
                 source="mock_project_manager",
@@ -252,7 +252,7 @@ class MockProjectManagerAdapter(IProjectManagerService):
                 branch=config.branch,
             )
             if self._event_emitter:
-                self._event_emitter.emit(event)
+                self._event_emitter.emit(cloned_event)
 
             return workspace_path
 

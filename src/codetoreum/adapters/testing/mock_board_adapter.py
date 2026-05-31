@@ -9,7 +9,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from codetoreum.domain.events.board_events import (
     BoardReconciledEvent,
@@ -32,6 +32,10 @@ from codetoreum.ports.output.monitoring import (
     MonitoringState,
     MonitoringStatus,
 )
+
+if TYPE_CHECKING:
+    from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
+    from codetoreum.ports.output.board_service import ColumnMovementResult
 
 logger = logging.getLogger(__name__)
 
@@ -451,7 +455,7 @@ class MockBoardAdapter(IBoardService):
                         board_id=board_id,
                         from_column=from_column,
                         to_column=target_column,
-                        moved_by=moved_by.value,  # Use enum value
+                        moved_by=cast("Literal['human', 'orchestrator', 'unknown']", moved_by.value),
                         timestamp=self._get_iso_timestamp(),
                         source="mock",
                     )
@@ -563,7 +567,7 @@ class MockBoardAdapter(IBoardService):
                 board_id=board_id,
                 from_column=None,
                 to_column=target_column,
-                moved_by=moved_by.value,  # Use enum value
+                moved_by=cast("Literal['human', 'orchestrator', 'unknown']", moved_by.value),
                 timestamp=self._get_iso_timestamp(),
                 source="mock",
             )
@@ -597,10 +601,10 @@ class MockBoardAdapter(IBoardService):
         board = await self.get_board(self.current_project, board_id)
 
         async with self._lock:
-            columns_added = []
-            columns_removed = []
-            columns_renamed = []
-            orphaned_items = []
+            columns_added: list[str] = []
+            columns_removed: list[str] = []
+            columns_renamed: list[tuple[str, str]] = []
+            orphaned_items: list[str] = []
 
             # Check for missing columns
             existing_names = {col.name for col in board.columns}
@@ -612,7 +616,7 @@ class MockBoardAdapter(IBoardService):
                             id=f"col-{len(board.columns)}",
                             name=expected_col,
                             position=len(board.columns),
-                            work_item_ids=[],
+                            work_item_ids=(),
                         )
                         new_columns = list(board.columns)
                         new_columns.append(new_col)
@@ -626,10 +630,10 @@ class MockBoardAdapter(IBoardService):
 
             result = ReconciliationResult(
                 board_id=board_id,
-                columns_added=columns_added,
-                columns_removed=columns_removed,
-                columns_renamed=columns_renamed,
-                orphaned_items=orphaned_items,
+                columns_added=tuple(columns_added),
+                columns_removed=tuple(columns_removed),
+                columns_renamed=tuple(columns_renamed),
+                orphaned_items=tuple(orphaned_items),
             )
 
         # Emit outside the lock to prevent deadlock (event bus handlers re-acquire board lock)
@@ -724,15 +728,15 @@ class MockBoardAdapter(IBoardService):
             id=board_id,
             name=board_name,
             project_id=project_id,
-            columns=[
+            columns=tuple(
                 BoardColumn(
                     id=f"col-{i}",
                     name=col,
                     position=i,
-                    work_item_ids=[],
+                    work_item_ids=(),
                 )
                 for i, col in enumerate(column_names)
-            ],
+            ),
         )
         # Register board -> project mapping for multi-project support
         self._board_project_map[board_id] = project_id
@@ -801,8 +805,8 @@ class MockBoardAdapter(IBoardService):
         for i in range(position + 1, len(target_column.work_item_ids)):
             item_id = target_column.work_item_ids[i]
             if item_id in self._item_positions:
-                board_id_stored, col, old_pos = self._item_positions[item_id]
-                self._item_positions[item_id] = (board_id_stored, col, i)
+                board_id_stored, current_col_name, old_pos = self._item_positions[item_id]
+                self._item_positions[item_id] = (board_id_stored, current_col_name, i)
                 # Emit position change event for shifted items
                 self.emit(
                     WorkItemPositionChangedEvent(
@@ -810,7 +814,7 @@ class MockBoardAdapter(IBoardService):
                         work_item_id=item_id,
                         project_id=self.current_project,
                         board_id=board_id,
-                        column_name=col,
+                        column_name=current_col_name,
                         old_position=old_pos,
                         new_position=i,
                         timestamp=self._get_iso_timestamp(),

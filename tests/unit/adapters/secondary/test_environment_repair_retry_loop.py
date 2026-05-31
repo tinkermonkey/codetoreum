@@ -647,11 +647,11 @@ async def test_emit_event_safely_catches_emitter_failures_in_rebuild(caplog):
     llm = AsyncMock()
     llm.execute.return_value = _coding_agent_result('{"success": true}')
 
-    def llm_factory(prompt_builder):
+    def coding_agent_factory(prompt_builder):
         return llm
 
     adapter = ProductionEnvironmentRepairAdapter(
-        coding_agent_factory=llm_factory,
+        coding_agent_factory=coding_agent_factory,
         event_emitter=FailingEventEmitter(),
     )
 
@@ -702,11 +702,11 @@ async def test_emit_event_safely_catches_emitter_failures_in_verify(caplog):
     llm = AsyncMock()
     llm.execute.return_value = _coding_agent_result('{"healthy": true, "checks_passed": ["test"]}')
 
-    def llm_factory(prompt_builder):
+    def coding_agent_factory(prompt_builder):
         return llm
 
     adapter = ProductionEnvironmentRepairAdapter(
-        coding_agent_factory=llm_factory,
+        coding_agent_factory=coding_agent_factory,
         event_emitter=FailingEventEmitter(),
     )
 

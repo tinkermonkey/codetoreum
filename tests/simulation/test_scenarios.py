@@ -357,17 +357,16 @@ async def test_simulation_clock_manipulation(simulation_clock):
 @pytest.mark.simulation
 @pytest.mark.asyncio
 async def test_mock_adapters_integration(
-    mock_llm,
     fake_container,
     in_memory_metrics,
     mock_notifier,
 ):
-    """Test that all mock adapters work correctly."""
-    # Test LLM adapter
-    mock_llm.add_response_pattern(r"test", "Test response")
-    result = await mock_llm.execute("test prompt")
-    assert result.content == "Test response"
+    """Test that the in-memory mock adapters wire up and operate end-to-end.
 
+    The coding-agent surface has its own dedicated tests against
+    ``MockClaudeCodeAdapter``; this scenario covers the container, metrics,
+    and notifier mocks together.
+    """
     # Test container adapter
     fake_container.set_command_result("test-cmd", 0, "Success")
     container_result = await fake_container.run(

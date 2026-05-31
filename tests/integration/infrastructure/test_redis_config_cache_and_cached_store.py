@@ -263,7 +263,7 @@ async def test_redis_cache_agent_config(redis_cache, sample_agent_config):
     assert retrieved is not None
     assert retrieved.project_id == sample_agent_config.project_id
     assert retrieved.agent_name == sample_agent_config.agent_name
-    assert retrieved.model == sample_agent_config.model
+    assert retrieved.invocation.model == sample_agent_config.invocation.model
 
 
 @pytest.mark.integration

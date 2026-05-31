@@ -15,7 +15,6 @@ The mock adapter:
 
 import logging
 import threading
-from collections.abc import Callable, Coroutine
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -25,24 +24,11 @@ from codetoreum.application.repair_cycle_ci_integration import (
 )
 
 if TYPE_CHECKING:
-    from typing import Protocol
-
     from codetoreum.ports.output.ci_pipeline_service import ICIPipelineService
     from codetoreum.ports.output.container import IContainer
     from codetoreum.ports.output.environment_repair_service import (
         IEnvironmentRepairService,
     )
-
-    class ILLMProvider(Protocol):
-        """Duck-typed surrogate for the retired ``ILLMProvider`` port (Phase D5).
-
-        ``MockRepairCycleAdapter`` keeps the optional ``llm_factory`` slot for
-        scenarios that exercise the production-path repair logic. The protocol
-        documents the minimum surface; ``MockRepairCycleAdapter`` does not
-        invoke any method on the factory result itself."""
-
-        async def execute(self, prompt: str, context: object = ...) -> object: ...
-
     from codetoreum.ports.output.systemic_analysis_service import (
         ISystemicAnalysisService,
     )
@@ -133,7 +119,6 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
     def __init__(
         self,
-        llm_factory: "Callable[[str], Coroutine[Any, Any, ILLMProvider]] | None" = None,
         clock: SimulationClock | None = None,
         checkpoint_store: IRepairCycleCheckpointStore | None = None,
         container_adapter: "IContainer | None" = None,
@@ -144,11 +129,6 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         """Initialize the repair cycle adapter with SimulationClock.
 
         Args:
-            llm_factory: Async factory for creating LLM providers for agents. Takes agent name
-                        and returns a coroutine that yields an ILLMProvider instance. Enables
-                        behavioral parity with production adapter's agent selection and LLM
-                        instantiation. Defaults to an async factory that returns MockLLMAdapter
-                        for any agent.
             clock: SimulationClock instance for deterministic time advancement
             checkpoint_store: Optional checkpoint store for recovery testing
             container_adapter: Optional container adapter for causal linking (FR-2/US-2.4).
@@ -166,21 +146,6 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                                 Required when RepairTestType.CI is in test configs.
         """
         super().__init__()
-        # Default factory returns an inert stub. MockLLMAdapter retired in
-        # Phase D5; MockRepairCycleAdapter only consults the factory for
-        # behavioural-parity reasons and never invokes a method on the
-        # returned value in the default code path.
-        if llm_factory is None:
-
-            class _LLMAdapterStub:
-                pass
-
-            _mock_llm = _LLMAdapterStub()
-
-            async def llm_factory(agent_name):
-                return _mock_llm
-
-        self._llm_factory = llm_factory
         # Use a very fast clock by default (100,000x speed) to prevent test timeouts
         # This ensures that await self.clock.advance() calls don't cause real delays
         # Tests can override with their own clock if they need different behavior
@@ -836,7 +801,13 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         """
         with self._lock:
             if project_id in self._monitoring:
-                self._monitoring[project_id].state = MonitoringState.STOPPED
+                existing = self._monitoring[project_id]
+                self._monitoring[project_id] = MonitoringStatus(
+                    state=MonitoringState.STOPPED,
+                    project_id=existing.project_id,
+                    started_at=existing.started_at,
+                    error_message=existing.error_message,
+                )
 
     async def get_monitoring_status(self, project_id: str) -> MonitoringStatus:
         """Query current monitoring state.
@@ -896,7 +867,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             )
 
             # Record which agent was going to execute (for consistency)
-            _, agent_name = await self._resolve_and_record_agent("test_execution", context)
+            agent_name = self._resolve_and_record_agent("test_execution", context)
 
             self.agent_call_count += 1
             self.total_agent_calls += 1
@@ -956,7 +927,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             return result
 
         # Resolve and record which agent is executing this sub-task
-        _, agent_name = await self._resolve_and_record_agent("test_execution", context)
+        agent_name = self._resolve_and_record_agent("test_execution", context)
 
         self.agent_call_count += 1
         self.total_agent_calls += 1
@@ -1056,7 +1027,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
         for file_path, failures in grouped_failures.items():
             # Resolve and record which agent is executing this sub-task
-            _, agent_name = await self._resolve_and_record_agent("code_fix", context)
+            agent_name = self._resolve_and_record_agent("code_fix", context)
 
             self.agent_call_count += 1
             self.total_agent_calls += 1
@@ -1125,7 +1096,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
         for warning in test_result.warning_list:
             # Resolve and record which agent is executing this sub-task
-            _, agent_name = await self._resolve_and_record_agent("code_fix", context)
+            agent_name = self._resolve_and_record_agent("code_fix", context)
 
             self.agent_call_count += 1
             self.total_agent_calls += 1
@@ -1219,7 +1190,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             return False
 
         # Resolve and record which agent is executing this sub-task
-        _, agent_name = await self._resolve_and_record_agent("systemic_fix", context)
+        agent_name = self._resolve_and_record_agent("systemic_fix", context)
 
         # Track agent call
         self.agent_call_count += 1
@@ -1289,7 +1260,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             )
 
         # Resolve and record which agent is executing this sub-task
-        _, agent_name = await self._resolve_and_record_agent("systemic_fix", context)
+        agent_name = self._resolve_and_record_agent("systemic_fix", context)
         self._systemic_fix_call_count += 1
 
         # Track agent call
@@ -1381,7 +1352,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         # Delegate to environment repair service if provided
         if self._environment_repair_service is not None:
             # Resolve and record which agent is executing this sub-task
-            _, agent_name = await self._resolve_and_record_agent("env_rebuild", context)
+            agent_name = self._resolve_and_record_agent("env_rebuild", context)
             try:
                 result = await self._environment_repair_service.rebuild_environment(
                     project=context.work_item_id,
@@ -1410,7 +1381,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
         # Mock implementation: simulate successful rebuild
         # Resolve and record which agent is executing this sub-task
-        _, agent_name = await self._resolve_and_record_agent("env_rebuild", context)
+        agent_name = self._resolve_and_record_agent("env_rebuild", context)
 
         # Track agent call
         self.agent_call_count += 1
@@ -1448,7 +1419,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         # Delegate to environment repair service if provided
         if self._environment_repair_service is not None:
             # Resolve and record which agent is executing this sub-task
-            _, agent_name = await self._resolve_and_record_agent("env_verification", context)
+            agent_name = self._resolve_and_record_agent("env_verification", context)
             try:
                 result = await self._environment_repair_service.verify_environment(
                     project=context.work_item_id,
@@ -1477,7 +1448,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
 
         # Mock implementation: simulate successful verification
         # Resolve and record which agent is executing this sub-task
-        _, agent_name = await self._resolve_and_record_agent("env_verification", context)
+        agent_name = self._resolve_and_record_agent("env_verification", context)
 
         # Track agent call
         self.agent_call_count += 1
@@ -1977,8 +1948,8 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                     FailureClassification,
                 )
 
-                # Resolve and record which agent is executing systemic analysis (even if not used)
-                _, agent_name = await self._resolve_and_record_agent("systemic_analysis", context)
+                # Resolve and record which agent is executing systemic analysis
+                agent_name = self._resolve_and_record_agent("systemic_analysis", context)
 
                 # Try systemic analysis and dispatch if available
                 if self._systemic_analysis_service and test_result.failures:
@@ -1987,6 +1958,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                             work_item_id=context.work_item_id,
                             iteration=iteration,
                             workflow_run_id=context.workflow_run_id,
+                            agent_name=agent_name,
                         )
                         classification = await self._systemic_analysis_service.analyze(
                             list(test_result.failures), analysis_context
@@ -2314,7 +2286,8 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                 return None
 
             # Search for container executions matching the requested test_type
-            for container_id, executions in self._container_adapter._command_history.items():
+            container_history: dict[str, list[Any]] = self._container_adapter._command_history
+            for container_id, executions in container_history.items():
                 if not executions:
                     continue
 
@@ -2389,26 +2362,17 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
         event["timestamp"] = self.clock.now().isoformat()
         self.event_log.append(event)
 
-    async def _resolve_and_record_agent(
+    def _resolve_and_record_agent(
         self,
         sub_task: str,
         context: RepairCycleContext,
-    ) -> tuple["ILLMProvider", str]:
-        """Resolve agent for a sub-task and return its LLM provider.
+    ) -> str:
+        """Resolve and record the agent name for a sub-task.
 
-        Resolves the agent name based on agent_config if available, otherwise
-        uses the default context agent name. Awaits the llm_factory with the resolved
-        agent name to obtain the configured ILLMProvider, ensuring behavioral parity
-        with the production adapter's agent selection and LLM instantiation.
-        Records the selection in the subtask agent calls log for later assertion.
-
-        Args:
-            sub_task: The sub-task name (e.g., "test_execution", "code_fix")
-            context: Repair cycle context with optional agent_config
-
-        Returns:
-            Coroutine that resolves to a tuple of (ILLMProvider instance for the
-            resolved agent, resolved agent name)
+        Resolves via ``context.agent_config.resolve_agent(sub_task, default)``
+        when an agent_config is wired; otherwise falls back to the step's
+        default ``context.agent_name``. Records the resolution in the
+        subtask-agent log for later test assertion.
         """
         agent_name = (
             context.agent_config.resolve_agent(sub_task, context.agent_name)
@@ -2416,19 +2380,13 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
             else context.agent_name
         )
 
-        # Await factory to obtain ILLMProvider for the resolved agent.
-        # This enforces the contract that llm_factory returns ILLMProvider
-        # and validates production wiring correctness.
-        llm_provider = await self._llm_factory(agent_name)
-
         with self._lock:
             self._subtask_agent_calls.append(
                 {
                     "sub_task": sub_task,
                     "agent_name": agent_name,
-                    "llm_provider": llm_provider,
                     "timestamp": self.clock.now().isoformat(),
                 }
             )
 
-        return llm_provider, agent_name
+        return agent_name

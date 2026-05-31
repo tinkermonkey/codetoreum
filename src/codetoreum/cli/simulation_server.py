@@ -808,7 +808,7 @@ def main(
         python -m codetoreum.cli.simulation_server --no-seed
 
         # Override adapters (repeatable)
-        python -m codetoreum.cli.simulation_server --adapter board=github --adapter llm=mock
+        python -m codetoreum.cli.simulation_server --adapter board=github --adapter systemic_analysis=mock
 
         # Override ticket system to use in_memory instead of mock
         python -m codetoreum.cli.simulation_server --adapter ticket=in_memory

@@ -437,6 +437,7 @@ def create_app(
         workflow_command_port=workflow_command_port,
         task_query_port=task_query_port,
         config_command_port=config_command_port,
+        config_query_port=config_query_port,
         auth_dependencies=auth_deps,
     )
 
@@ -816,6 +817,7 @@ def create_app(
                     )
                 ],
                 checked_at=datetime.now(UTC),
+                uptime_seconds=None,
                 version="2.0.0",
             )
 
@@ -915,6 +917,9 @@ def create_development_app() -> FastAPI:
         IConfigurationService,
         IEventBus,
     )
+    from codetoreum.adapters.primary.input_port_adapters.mock import (
+        MockAgentCommandAdapter,
+    )
     from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
     from codetoreum.ports.input.config_command import (
         ConfigurationCommandResult,
@@ -1002,7 +1007,7 @@ def create_development_app() -> FastAPI:
                 name="test-project",
                 github_org="test-org",
                 github_repo="test-repo",
-                pipelines=[],
+                pipelines=(),
             )
 
         async def get_project_config_by_name(self, project_name: str):
@@ -1013,22 +1018,29 @@ def create_development_app() -> FastAPI:
                 name=project_name,
                 github_org="test-org",
                 github_repo="test-repo",
-                pipelines=[],
+                pipelines=(),
             )
 
         async def save_project_config(self, config) -> None:
             pass
 
         async def get_agent_config(self, project_id: str, agent_name: str):
+            from codetoreum.domain.coding_agent_types import (
+                AgentInvocationConfig,
+                InvocationMode,
+            )
             from codetoreum.ports.output.config_store import AgentConfig
 
             return AgentConfig(
                 project_id=project_id,
                 agent_name=agent_name,
-                model="claude-3-5-sonnet-20241022",
-                timeout=300,
-                requires_docker=False,
                 makes_code_changes=False,
+                coding_agent="claude_code",
+                invocation=AgentInvocationConfig(
+                    mode=InvocationMode.CONTAINERIZED,
+                    model="claude-3-5-sonnet-20241022",
+                    timeout_seconds=300,
+                ),
             )
 
         async def save_agent_config(self, config) -> None:
@@ -1041,7 +1053,7 @@ def create_development_app() -> FastAPI:
                 id=f"{project_id}-{pipeline_name}",
                 project_id=project_id,
                 name=pipeline_name,
-                stages=[],
+                stages=(),
             )
 
         async def save_pipeline_config(self, config) -> None:
@@ -1054,7 +1066,7 @@ def create_development_app() -> FastAPI:
                 id=template_name,
                 name=template_name,
                 description="Mock workflow template",
-                stages=[],
+                stages=(),
             )
 
         async def save_workflow_template(self, template) -> None:
@@ -1896,110 +1908,6 @@ def create_development_app() -> FastAPI:
                 condition_details=[],
             )
 
-    class MockAgentCommandPort(IAgentCommandPort):
-        """Mock agent command port for development."""
-
-        async def create_agent(self, command):
-            from codetoreum.domain.agent import Agent
-
-            return Agent(
-                agent_id="agent-mock-123",
-                name=command.name,
-                display_name=command.display_name,
-                agent_type=command.agent_type,
-                role_description=command.role_description,
-                model=command.model,
-                capabilities=command.capabilities,
-            )
-
-        async def update_agent(self, command):
-            from codetoreum.domain.agent import Agent, AgentType
-
-            return Agent(
-                agent_id=command.agent_id,
-                name="mock_agent",
-                display_name="Mock Agent",
-                agent_type=AgentType.CODE_REVIEWER,
-                role_description="Mock agent",
-                model="claude-3-sonnet",
-                capabilities={},
-            )
-
-        async def add_capability(self, command):
-            from codetoreum.domain.agent import Agent, AgentType
-
-            return Agent(
-                agent_id=command.agent_id,
-                name="mock_agent",
-                display_name="Mock Agent",
-                agent_type=AgentType.CODE_REVIEWER,
-                role_description="Mock agent",
-                model="claude-3-sonnet",
-                capabilities={},
-            )
-
-        async def remove_capability(self, command):
-            from codetoreum.domain.agent import Agent, AgentType
-
-            return Agent(
-                agent_id=command.agent_id,
-                name="mock_agent",
-                display_name="Mock Agent",
-                agent_type=AgentType.CODE_REVIEWER,
-                role_description="Mock agent",
-                model="claude-3-sonnet",
-                capabilities={},
-            )
-
-        async def update_capability(self, command):
-            from codetoreum.domain.agent import Agent, AgentType
-
-            return Agent(
-                agent_id=command.agent_id,
-                name="mock_agent",
-                display_name="Mock Agent",
-                agent_type=AgentType.CODE_REVIEWER,
-                role_description="Mock agent",
-                model="claude-3-sonnet",
-                capabilities={},
-            )
-
-        async def add_mcp_server(self, command):
-            from codetoreum.domain.agent import Agent, AgentType
-
-            return Agent(
-                agent_id=command.agent_id,
-                name="mock_agent",
-                display_name="Mock Agent",
-                agent_type=AgentType.CODE_REVIEWER,
-                role_description="Mock agent",
-                model="claude-3-sonnet",
-                capabilities={},
-            )
-
-        async def remove_mcp_server(self, command):
-            from codetoreum.domain.agent import Agent, AgentType
-
-            return Agent(
-                agent_id=command.agent_id,
-                name="mock_agent",
-                display_name="Mock Agent",
-                agent_type=AgentType.CODE_REVIEWER,
-                role_description="Mock agent",
-                model="claude-3-sonnet",
-                capabilities={},
-            )
-
-        async def delete_agent(self, agent_id: str):
-            from codetoreum.ports.input.agent_command import AgentCommandResult
-
-            return AgentCommandResult(
-                success=True,
-                agent_id=agent_id,
-                message="Agent deleted (mock)",
-                version=1,
-            )
-
     class MockAgentQueryPort(IAgentQueryPort):
         """Mock agent query port for development."""
 
@@ -2608,14 +2516,14 @@ def create_development_app() -> FastAPI:
         workflow_run_query_port=MockWorkflowRunQueryPort(),
         workflow_definition_command_port=MockWorkflowDefinitionCommandPort(),
         orchestration_command_port=MockOrchestrationCommandPort(),
-        agent_command_port=MockAgentCommandPort(),
+        agent_command_port=MockAgentCommandAdapter(),
         agent_query_port=MockAgentQueryPort(),
         execution_command_port=MockExecutionCommandPort(),
         execution_query_port=MockExecutionQueryPort(),
         event_store=InMemoryEventStore(),
         event_bus=MockEventBus(),
         config_service=MockConfigService(),
-        logger=MockLogger(),
+        logger=MockLogger(),  # type: ignore[arg-type]  # dev-only stub satisfies the duck-typed methods we actually call
         auth_secret_key=os.getenv("CODETOREUM_AUTH_SECRET", "development-secret-key-change-in-production"),
         disable_auth=os.getenv("CODETOREUM_DISABLE_AUTH", "false").lower() == "true",
         cors_origins=["*"],

@@ -1102,11 +1102,11 @@ class AdapterFactory:
         )
         if LLMSystemicAnalysisAdapter:
             self._systemic_analysis_registry.register(
-                name="llm",
+                name="production",
                 adapter_type=LLMSystemicAnalysisAdapter,
-                description="LLM-based systemic analysis for production",
+                description="Coding-agent-backed systemic analysis for production",
                 version="1.0.0",
-                tags=["production", "llm"],
+                tags=["production", "coding_agent"],
             )
 
         # Environment Repair Adapters
@@ -1126,9 +1126,9 @@ class AdapterFactory:
             self._environment_repair_registry.register(
                 name="production",
                 adapter_type=ProductionEnvironmentRepairAdapter,
-                description="Production environment repair with LLM integration",
+                description="Production environment repair backed by a coding agent",
                 version="1.0.0",
-                tags=["production", "llm"],
+                tags=["production", "coding_agent"],
             )
 
         # CI Pipeline Adapters
@@ -1318,7 +1318,7 @@ class AdapterFactory:
         Get the registry for a given adapter slot name.
 
         Args:
-            slot_name: Name of the adapter slot (e.g., "board", "ticket", "llm")
+            slot_name: Name of the adapter slot (e.g., "board", "ticket", "coding_agent")
 
         Returns:
             The AdapterRegistry for the specified slot

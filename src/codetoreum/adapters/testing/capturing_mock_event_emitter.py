@@ -90,7 +90,7 @@ class CapturingMockEventEmitter(IEventEmitter):
                 raise ValueError(msg)
             self._handlers[event_type].remove(handler)
 
-    def emit(self, event) -> None:  # type: ignore
+    def emit(self, event) -> None:
         """Emit an event to all subscribers.
 
         Args:

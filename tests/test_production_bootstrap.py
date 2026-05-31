@@ -9,14 +9,14 @@ from codetoreum.infrastructure.simulation.simulation_config import AdapterSelect
 @pytest.mark.asyncio
 async def test_critical_path_mock_detection_raises_error() -> None:
     """Verify that critical path validation detects and rejects mock adapters."""
-    # Create a config with a mock on a critical path (intentionally violates production requirements)
+    # Critical-path slots seeded with mock variants — board / container / etc.
+    # all live in CRITICAL_ADAPTER_SLOTS, so Phase 3 validation must reject this.
     bad_config = AdapterSelectionConfig(
-        board="mock",  # Use available adapter
-        ticket="in_memory",  # Use available adapter
-        llm="mock",  # Critical path slot with mock - should fail validation
-        version_control="in_memory",  # Use available adapter
-        container="fake",  # Use available adapter
-        code_review="mock",  # Use available adapter
+        board="mock",
+        ticket="in_memory",
+        version_control="in_memory",
+        container="fake",
+        code_review="mock",
         event_store="in_memory",
     )
 
@@ -49,12 +49,12 @@ def test_get_adapter_slot_info_before_setup_raises() -> None:
 
 
 @pytest.mark.asyncio
-async def test_adapter_selection_config_has_33_slots() -> None:
-    """Verify that AdapterSelectionConfig has exactly 33 slots."""
+async def test_adapter_selection_config_has_31_slots() -> None:
+    """Verify that AdapterSelectionConfig has exactly 31 slots."""
     config = AdapterSelectionConfig()
     slots = list(AdapterSelectionConfig.__dataclass_fields__.keys())
 
-    assert len(slots) == 33, f"Expected 33 slots, got {len(slots)}: {slots}"
+    assert len(slots) == 31, f"Expected 31 slots, got {len(slots)}: {slots}"
 
 
 def test_critical_adapter_slots_defined() -> None:
@@ -64,7 +64,6 @@ def test_critical_adapter_slots_defined() -> None:
     expected_critical = {
         "board",
         "ticket",
-        "llm",
         "version_control",
         "container",
         "code_review",

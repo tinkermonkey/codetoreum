@@ -18,8 +18,6 @@ from codetoreum.infrastructure.resilience import (
     OperationMode,
     ResilienceFactory,
 )
-
-# ILLMProvider / llm_provider types retired in Phase D5
 from codetoreum.ports.output.ticket_system import ITicketSystem
 
 # ============================================================================

@@ -3,9 +3,11 @@
 import threading
 from collections import defaultdict
 from datetime import UTC, datetime
+from types import MappingProxyType
 from typing import Any
 from uuid import uuid4
 
+from codetoreum.domain.types import MetricName
 from codetoreum.ports.exceptions import (
     ResourceNotFoundError,
     ValidationError,
@@ -119,9 +121,9 @@ class InMemoryMetricsAdapter(IMetrics):
         labels = labels or {}
         data_point = MetricData(
             timestamp=datetime.now(UTC),
-            name=name,
+            name=MetricName(name),
             value=value,
-            labels=labels,
+            labels=MappingProxyType(dict(labels)),
             metric_type=metric_type,
         )
 
@@ -409,9 +411,9 @@ class InMemoryMetricsAdapter(IMetrics):
                 return [
                     MetricData(
                         timestamp=results[-1].timestamp,
-                        name=name,
+                        name=MetricName(name),
                         value=agg_value,
-                        labels=labels or {},
+                        labels=MappingProxyType(dict(labels or {})),
                         metric_type=results[0].metric_type,
                     )
                 ]

@@ -12,7 +12,7 @@ from codetoreum.adapters.testing.in_memory_metrics_adapter import (
     InMemoryMetricsAdapter,
 )
 
-# MockLLMAdapter retired in Phase D5 — replaced with stub class below
+# MockCodingAgent retired in Phase D5 — replaced with stub class below
 from codetoreum.adapters.testing.mock_notifier_adapter import MockNotifierAdapter
 from codetoreum.domain.events import WorkItemColumnChangedEvent, now_iso
 from codetoreum.infrastructure.simulation import (

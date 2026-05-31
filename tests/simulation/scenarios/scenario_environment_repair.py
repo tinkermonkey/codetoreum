@@ -30,12 +30,12 @@ from codetoreum.infrastructure.simulation.simulation_clock import SimulationCloc
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
 
 
-class MockLLMAdapter:
-    """Inert stub for the retired MockLLMAdapter (Phase D5).
+class MockCodingAgent:
+    """Inert coding-agent surrogate for repair-cycle scenarios.
 
-    The repair-cycle scenarios pass an LLM adapter to the factory but never
-    invoke a method on it. This stub keeps construction working until the
-    scenarios migrate to ICodingAgent."""
+    Scenarios pass an instance to ``coding_agent_factory``; the mock
+    repair adapter records the surrogate for assertion but never calls
+    a method on it."""
 
     def __init__(self, *args, **kwargs) -> None:
         pass
@@ -142,13 +142,12 @@ async def test_environment_repair_with_mock_repair_cycle(
     """
 
     # Setup repair cycle with environment repair service
-    async def llm_factory(agent_name: str):
+    async def coding_agent_factory(agent_name: str):
 
-        return MockLLMAdapter()
+        return MockCodingAgent()
 
     clock = SimulationClock(speed_multiplier=100.0)
     adapter = MockRepairCycleAdapter(
-        llm_factory,
         clock,
         environment_repair_service=mock_environment_repair,
     )

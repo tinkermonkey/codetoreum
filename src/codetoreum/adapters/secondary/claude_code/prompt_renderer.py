@@ -98,12 +98,13 @@ def render_structured_prompt_to_text(prompt: StructuredPrompt) -> str:
 def _render_work_item(prompt: StructuredPrompt) -> str:
     work_item = prompt.work_item
     lines: list[str] = ["# Work Item"]
-    if work_item.id:
-        lines.append(f"ID: {work_item.id}")
-    if work_item.title:
-        lines.append(f"Title: {work_item.title}")
-    if work_item.external_url:
-        lines.append(f"Reference: {work_item.external_url}")
+    if work_item is not None:
+        if work_item.id:
+            lines.append(f"ID: {work_item.id}")
+        if work_item.title:
+            lines.append(f"Title: {work_item.title}")
+        if work_item.external_url:
+            lines.append(f"Reference: {work_item.external_url}")
 
     task = (prompt.task_description or "").strip()
     if task:

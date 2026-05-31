@@ -76,8 +76,8 @@ class MockNotifierAdapter(INotifier):
         # Channel configuration
         self._channel_config: dict[NotificationChannel, dict[str, Any]] = {}
 
-        # Statistics
-        self._stats = {
+        # Statistics — counter / per-channel breakdown
+        self._stats: dict[str, Any] = {
             "total_sent": 0,
             "total_failed": 0,
             "by_channel": {},
@@ -322,7 +322,7 @@ class MockNotifierAdapter(INotifier):
                 subject=notification.subject,
                 message=notification.message,
                 priority=notification.priority,
-                metadata=notification.metadata,
+                metadata=dict(notification.metadata) if notification.metadata else None,
             )
             results.append(result)
 

@@ -36,7 +36,7 @@ from codetoreum.adapters.secondary.free_form_coding_agent import (
     synthetic_agent_execution,
     synthetic_workspace_context,
 )
-from codetoreum.domain.coding_agent_types import InvocationMode
+from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
 from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.domain.events.repair_cycle_events import (
     EnvironmentRebuildExhaustedEvent,
@@ -75,7 +75,10 @@ from codetoreum.infrastructure.resilience.exceptions import CircuitBreakerOpenEr
 from codetoreum.ports.output.coding_agent import CodingAgentInvocationOptions
 from codetoreum.ports.output.environment_repair_service import IEnvironmentRepairService
 from codetoreum.ports.output.event_emitter import IEventEmitter, NullEventEmitter
-from codetoreum.ports.output.prompt_builder import IPromptBuilder, StructuredPrompt
+from codetoreum.ports.output.prompt_builder import (
+    IFreeFormPromptBuilder,
+    StructuredPrompt,
+)
 from codetoreum.ports.output.repair_cycle_checkpoint_store import (
     IRepairCycleCheckpointStore,
 )
@@ -86,28 +89,25 @@ from codetoreum.ports.output.repair_cycle_service import (
 from codetoreum.ports.output.systemic_analysis_service import ISystemicAnalysisService
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Awaitable, Callable
     from pathlib import Path
 
-    from codetoreum.domain.agent import Agent
-    from codetoreum.domain.work_item import WorkItem
     from codetoreum.domain.workspace_context import WorkspaceContext
     from codetoreum.infrastructure.resilience.interfaces import ICircuitBreaker
     from codetoreum.ports.output.coding_agent import (
         CodingAgentResult,
         ICodingAgent,
     )
-    from codetoreum.ports.output.prompt_builder import ExecutionOutput
 
 logger = logging.getLogger(__name__)
 
 
-class _RepairCyclePromptBuilder(IPromptBuilder):
-    """Per-call :class:`IPromptBuilder` for repair-cycle free-form prompts.
+class _RepairCyclePromptBuilder(IFreeFormPromptBuilder):
+    """Per-call :class:`IFreeFormPromptBuilder` for repair-cycle prompts.
 
-    Closure-captures the rendered task text. Ignores the standard
-    ``agent`` / ``work_item`` / ``prior_outputs`` arguments — only the
-    supplied ``workspace_context`` is forwarded.
+    Closure-captures the rendered task text. :meth:`build` assembles a
+    :class:`StructuredPrompt` with ``work_item=None`` and forwards the
+    supplied ``workspace_context``.
 
     Use this for prompts that don't fit one of the more specialised
     builders. The task text is whatever the call site has assembled
@@ -129,15 +129,12 @@ class _RepairCyclePromptBuilder(IPromptBuilder):
 
     async def build(
         self,
-        agent: Agent,
-        work_item: WorkItem,
         workspace_context: WorkspaceContext,
-        prior_outputs: tuple[ExecutionOutput, ...] = (),
     ) -> StructuredPrompt:
         return StructuredPrompt(
             role_description=self._role_description,
             task_description=self._task_text,
-            work_item=work_item,
+            work_item=None,
             workspace_context=workspace_context,
             instructions=self._instructions,
             constraints=self._constraints,
@@ -193,7 +190,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
 
     def __init__(
         self,
-        coding_agent_factory: Callable[[IPromptBuilder], ICodingAgent],
+        coding_agent_factory: Callable[[IFreeFormPromptBuilder], ICodingAgent],
         config: RepairCycleConfig | None = None,
         event_emitter: IEventEmitter | None = None,
         checkpoint_store: IRepairCycleCheckpointStore | None = None,
@@ -205,14 +202,17 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         model: str = "claude-sonnet-4-6",
         container_image: str = "codetoreum-agent:latest",
         workspace_path: Path | None = None,
+        invocation_defaults_resolver: (
+            Callable[[str, str | None], Awaitable[AgentInvocationConfig | None]] | None
+        ) = None,
     ) -> None:
         """Initialize production repair cycle adapter.
 
         Args:
             coding_agent_factory: Per-call factory returning a fresh
                 :class:`ICodingAgent` bound to the supplied
-                :class:`IPromptBuilder`. The bootstrap wires this to a
-                resilience-decorated
+                :class:`IFreeFormPromptBuilder`. The bootstrap wires
+                this to a resilience-decorated
                 :class:`~codetoreum.adapters.secondary.free_form_coding_agent.FreeFormCodingAgent`.
             config: Optional RepairCycleConfig (uses defaults if not provided).
             event_emitter: Optional event emitter (uses null-object if not provided).
@@ -221,10 +221,17 @@ class ProductionRepairCycleAdapter(IRepairCycle):
                 call protection.
             systemic_analysis_service: Optional systemic analysis service.
             environment_repair_service: Optional environment repair service.
-            invocation_mode: Where the coding agent runs.
-            model: Model name to request.
-            container_image: Docker image when running containerised.
+            invocation_mode: Server-wide fallback mode.
+            model: Server-wide fallback model name.
+            container_image: Server-wide fallback Docker image.
             workspace_path: Optional workspace path the agent runs in.
+            invocation_defaults_resolver: Optional per-call hook that
+                returns the per-workflow-step
+                :class:`AgentInvocationConfig` given a
+                ``(work_item_id, agent_name)`` pair. Bootstrap wires
+                this so each repair sub-task (test_execution, code_fix,
+                systemic_fix, env_rebuild, env_verification) honours
+                the agent config for the agent assigned to that step.
         """
         if coding_agent_factory is None:
             msg = "coding_agent_factory cannot be None"
@@ -240,6 +247,7 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         self._model = model
         self._container_image = container_image
         self._workspace_path = workspace_path
+        self._invocation_defaults_resolver = invocation_defaults_resolver
 
         # Test type descriptions for prompt generation
         self._test_type_descriptions = {
@@ -253,6 +261,52 @@ class ProductionRepairCycleAdapter(IRepairCycle):
         self._warnings_reviewed = 0  # Number of warnings reviewed in current cycle
         self._elapsed_time = 0.0  # Total time spent in current cycle (seconds)
         self._cycle_results: list[CycleResult] = []  # Accumulated test results
+
+    async def _resolve_invocation_options(
+        self,
+        *,
+        work_item_id: str,
+        agent_name: str | None,
+        timeout_seconds: int,
+    ) -> CodingAgentInvocationOptions:
+        """Build :class:`CodingAgentInvocationOptions` for a single call.
+
+        Mirrors the systemic-analysis adapter: when an
+        ``invocation_defaults_resolver`` is wired, await it with
+        ``(work_item_id, agent_name)`` and use the per-workflow-step
+        mode / model / image instead of the constructor fallbacks.
+        ``None`` (or no resolver) falls back to the constructor defaults.
+        """
+        resolved: AgentInvocationConfig | None = None
+        if self._invocation_defaults_resolver is not None:
+            try:
+                resolved = await self._invocation_defaults_resolver(work_item_id, agent_name)
+            except Exception:
+                logger.warning(
+                    "Workflow-step invocation_defaults_resolver raised; "
+                    "falling back to adapter constructor defaults",
+                    exc_info=True,
+                    extra={"work_item_id": work_item_id, "agent_name": agent_name},
+                )
+                resolved = None
+
+        mode = resolved.mode if resolved is not None else self._invocation_mode
+        model = resolved.model if resolved is not None else self._model
+        container_image = self._container_image
+        if resolved is not None:
+            container_image = resolved.mode_config.get("image", self._container_image)
+
+        mode_config: dict[str, object] = {}
+        if mode == InvocationMode.CONTAINERIZED:
+            mode_config = {"image": container_image}
+
+        return CodingAgentInvocationOptions(
+            invocation_mode=mode,
+            model=model,
+            timeout_seconds=timeout_seconds,
+            cost_limit_usd=None,
+            mode_config=mode_config,
+        )
 
     @property
     def systemic_analysis_service(self) -> ISystemicAnalysisService | None:
@@ -350,16 +404,11 @@ class ProductionRepairCycleAdapter(IRepairCycle):
             workspace_path=self._workspace_path,
         )
 
-        mode_config: dict[str, object] = {}
-        if self._invocation_mode == InvocationMode.CONTAINERIZED:
-            mode_config = {"image": self._container_image}
-
-        options = CodingAgentInvocationOptions(
-            invocation_mode=self._invocation_mode,
-            model=self._model,
+        agent_name = self._resolve_agent_name(operation, context)
+        options = await self._resolve_invocation_options(
+            work_item_id=context.work_item_id,
+            agent_name=agent_name,
             timeout_seconds=config.timeout,
-            cost_limit_usd=None,
-            mode_config=mode_config,
         )
 
         try:
@@ -2106,11 +2155,16 @@ Return a JSON response with the status of dependency fixes applied."""
             msg = "Cannot analyze systemic issues: ISystemicAnalysisService is not configured"
             raise ValueError(msg)
 
-        # Create analysis context from repair cycle context
+        # Create analysis context from repair cycle context. The
+        # systemic-analysis adapter resolves invocation defaults per
+        # ``(work_item_id, agent_name)``; passing the resolved
+        # systemic_analysis agent here drives that lookup against the
+        # right per-workflow-step config.
         analysis_context = AnalysisContext(
             work_item_id=context.work_item_id,
             iteration=context.iteration,
             workflow_run_id=context.workflow_run_id,
+            agent_name=self._resolve_agent_name("systemic_analysis", context),
             prior_fix_attempts=context.prior_fix_attempts,
             prior_classifications=context.prior_classifications,
         )
@@ -2210,6 +2264,7 @@ Return a JSON response with the status of dependency fixes applied."""
                             work_item_id=context.work_item_id,
                             iteration=iteration,
                             workflow_run_id=context.workflow_run_id,
+                            agent_name=self._resolve_agent_name("systemic_analysis", context),
                             prior_fix_attempts=tuple(prior_fix_attempts),
                             prior_classifications=tuple(prior_classifications),
                         )

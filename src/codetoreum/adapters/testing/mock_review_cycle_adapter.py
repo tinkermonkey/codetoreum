@@ -17,7 +17,7 @@ import logging
 import threading
 from dataclasses import dataclass, field
 from datetime import timedelta
-from typing import Any
+from typing import Any, Literal, cast
 
 from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.domain.events.review_cycle_events import (
@@ -79,8 +79,8 @@ class ReviewSequenceItem:
         }
 
         return ReviewResult(
-            status=status_map[self.decision],
-            findings=self.findings,
+            status=cast("Literal['APPROVED', 'CHANGES_REQUESTED', 'BLOCKED']", status_map[self.decision]),
+            findings=tuple(self.findings),
             blocking_count=blocking_count,
             summary=self.summary,
         )
@@ -370,7 +370,9 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
 
                     decision_item = self._evaluate_llm_output(maker_output)
                 else:
-                    # Use pre-configured sequence (backward compatibility)
+                    # Use pre-configured sequence (backward compatibility).
+                    # The outer branch guard guarantees ``sequence`` is non-None.
+                    assert sequence is not None
                     idx = self._sequence_indices.get(work_item_id, 0)
                     if idx >= len(sequence):
                         # Sequence exhausted, use last decision
@@ -580,22 +582,22 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
             max_iterations=request.max_iterations,
             workflow_run_id=request.workflow_run_id,
             current_iteration=iteration,
-            maker_outputs=[
+            maker_outputs=tuple(
                 IterationOutput(
                     iteration=i,
                     output=f"Maker output iteration {i}",
                     timestamp=self.clock.now().isoformat(),
                 )
                 for i in range(1, iteration + 1)
-            ],
-            review_outputs=[
+            ),
+            review_outputs=tuple(
                 IterationOutput(
                     iteration=i,
                     output=f"Review iteration {i}",
                     timestamp=self.clock.now().isoformat(),
                 )
                 for i in range(1, iteration + 1)
-            ],
+            ),
             status="completed",
             created_at=self.clock.now().isoformat(),
             updated_at=self.clock.now().isoformat(),
@@ -619,7 +621,7 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
         return ReviewCycleResult(
             next_column="Testing" if final_status == "APPROVED" else "Code Review",
             cycle_complete=True,
-            final_status=final_status,
+            final_status=cast("Literal['APPROVED', 'CHANGES_REQUESTED', 'BLOCKED']", final_status),
             total_iterations=iteration,
             human_escalation_occurred=human_escalation,
         )
@@ -735,8 +737,8 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
             findings.append(ReviewFinding(severity="blocking", description="Blocking issue found in review output"))
 
         return ReviewResult(
-            status=status,
-            findings=findings,
+            status=cast("Literal['APPROVED', 'CHANGES_REQUESTED', 'BLOCKED']", status),
+            findings=tuple(findings),
             blocking_count=len([f for f in findings if f.severity == "blocking"]),
             summary=review_output[:100] if review_output else None,
         )
@@ -817,7 +819,13 @@ class MockReviewCycleAdapter(MockEventEmitter, IReviewCycle):
         """
         with self._lock:
             if project_id in self._monitoring:
-                self._monitoring[project_id].state = MonitoringState.STOPPED
+                existing = self._monitoring[project_id]
+                self._monitoring[project_id] = MonitoringStatus(
+                    state=MonitoringState.STOPPED,
+                    project_id=existing.project_id,
+                    started_at=existing.started_at,
+                    error_message=existing.error_message,
+                )
 
     async def get_monitoring_status(self, project_id: str) -> MonitoringStatus:
         """Query current monitoring state.

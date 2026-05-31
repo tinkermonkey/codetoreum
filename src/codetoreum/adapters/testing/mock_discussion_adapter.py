@@ -140,7 +140,7 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
         return DiscussionThread(
             id=f"thread-{work_item_id}",
             work_item_id=work_item_id,
-            comments=self._threads[work_item_id].copy(),
+            comments=tuple(self._threads[work_item_id]),
             thread_type="flat",
         )
 

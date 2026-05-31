@@ -4,7 +4,7 @@ import asyncio
 import logging
 import re
 import threading
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -14,6 +14,7 @@ from codetoreum.domain.events import (
     ContainerExecutionCompletedEvent,
     now_iso,
 )
+from codetoreum.domain.types import ContainerId
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.ports.exceptions import (
     ContainerError,
@@ -89,7 +90,7 @@ class FakeContainerAdapter(IContainer):
         event_bus: EventBus | None = None,
         config: "SimulationConfig | None" = None,
         clock: "SimulationClock | None" = None,
-        llm_provider: "object | None" = None,
+        llm_provider: "Any | None" = None,
     ):
         """
         Initialize the fake container adapter.
@@ -187,7 +188,7 @@ class FakeContainerAdapter(IContainer):
                 stdout=stdout,
                 stderr=stderr,
                 duration_ms=int(self._execution_delay * 1000),
-                container_id=container_id,
+                container_id=ContainerId(container_id),
             )
 
     def _calculate_delay_seconds(self, command: str) -> float:
@@ -243,7 +244,7 @@ class FakeContainerAdapter(IContainer):
 
     async def _get_result_for_command_from_llm(
         self,
-        command: list[str],
+        command: Sequence[str],
         container_id: str,
     ) -> ContainerResult:
         """
@@ -268,7 +269,9 @@ class FakeContainerAdapter(IContainer):
                 f"Provide just the stdout output, no explanation."
             )
 
-            # Execute via LLM provider
+            # Execute via LLM provider. The public path guards this method
+            # behind ``if self._llm_provider:`` — assert narrows the Optional.
+            assert self._llm_provider is not None
             result = await self._llm_provider.execute(prompt)
 
             # Use the LLM response as stdout
@@ -279,7 +282,7 @@ class FakeContainerAdapter(IContainer):
                 stdout=stdout,
                 stderr="",
                 duration_ms=result.duration_ms,
-                container_id=container_id,
+                container_id=ContainerId(container_id),
             )
         except Exception:
             # If LLM delegation fails, fall back to predefined results
@@ -292,7 +295,7 @@ class FakeContainerAdapter(IContainer):
 
     def _get_result_for_command_predefined(
         self,
-        command: list[str],
+        command: Sequence[str],
         container_id: str,
     ) -> ContainerResult:
         """
@@ -319,7 +322,7 @@ class FakeContainerAdapter(IContainer):
                         stdout=result.stdout,
                         stderr=result.stderr,
                         duration_ms=result.duration_ms,
-                        container_id=container_id,
+                        container_id=ContainerId(container_id),
                     )
 
                 # Check for first word match
@@ -331,7 +334,7 @@ class FakeContainerAdapter(IContainer):
                         stdout=result.stdout,
                         stderr=result.stderr,
                         duration_ms=result.duration_ms,
-                        container_id=container_id,
+                        container_id=ContainerId(container_id),
                     )
 
             # Apply probabilistic failures for HIGH fidelity
@@ -341,7 +344,7 @@ class FakeContainerAdapter(IContainer):
                     stdout="",
                     stderr="Container execution failed (HIGH fidelity probabilistic failure)",
                     duration_ms=int(self._execution_delay * 1000),
-                    container_id=container_id,
+                    container_id=ContainerId(container_id),
                 )
 
             # Return default
@@ -350,7 +353,7 @@ class FakeContainerAdapter(IContainer):
                 stdout=self._default_stdout,
                 stderr=self._default_stderr,
                 duration_ms=int(self._execution_delay * 1000),
-                container_id=container_id,
+                container_id=ContainerId(container_id),
             )
 
     async def run(
@@ -460,7 +463,7 @@ class FakeContainerAdapter(IContainer):
                 type="container.execution_completed",
                 timestamp=now_iso(),
                 source="fake_container",
-                container_id=container_id,
+                container_id=ContainerId(container_id),
                 command=" ".join(command),
                 exit_code=result.exit_code,
                 output_files=tuple(output_files),
@@ -797,7 +800,7 @@ class FakeContainerAdapter(IContainer):
             container = self._containers[container_id]
 
             return ContainerStatus(
-                id=container_id,
+                id=ContainerId(container_id),
                 status=container["status"],
                 created_at=container["created_at"],
                 started_at=container.get("started_at"),

@@ -182,7 +182,7 @@ class ITicketSystem(ABC):
         """
 
     @abstractmethod
-    async def get_work_item_stream(
+    def get_work_item_stream(
         self,
         project_id: ProjectId | None = None,
         since: datetime | None = None,

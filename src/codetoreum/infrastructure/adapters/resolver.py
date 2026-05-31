@@ -9,7 +9,7 @@ This module provides:
 
 import logging
 import os
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -568,9 +568,9 @@ class AdapterResolver:
         - If real variant: create directly without engine
         """
         if self._config.review_cycle == "mock":
-            # Engine creates time-aware mock with optional LLM adapter
-            llm_adapter = self._resolved.get("llm")
-            return self._deps.engine.create_review_cycle_adapter(llm_adapter=llm_adapter)
+            # Engine creates a time-aware mock. Causal linking against
+            # ``ICodingAgent`` can be added back if a scenario needs it.
+            return self._deps.engine.create_review_cycle_adapter()
         if self._config.review_cycle == "basic":
             from codetoreum.adapters.secondary.basic_review_cycle_adapter import BasicReviewCycleAdapter
 
@@ -614,34 +614,26 @@ class AdapterResolver:
         Resolve repair cycle adapter.
 
         Special handling for SimulationEngine-coupled adapters:
-        - If mock variant selected: use engine to create time-aware mock with llm_factory
-        - If real variant: create directly without engine, wiring the new
-          coding_agent_factory (post-D9).
+        - If mock variant selected: use engine to create time-aware mock.
+        - If real variant: create directly without engine, wiring the
+          ``coding_agent_factory``.
 
         The systemic_analysis_service and environment_repair_service are resolved separately
         in resolve_all() before repair_cycle creation to ensure centralized adapter resolution
         and proper dependency injection at construction time.
         """
         if self._config.repair_cycle == "mock":
-            # Engine creates time-aware mock with llm_factory for contract enforcement.
-            # The mock keeps the historical ``llm_factory`` slot (an inert stub is
-            # plenty — the mock never invokes the factory). The production path
-            # below uses the new ``coding_agent_factory`` instead.
+            # Engine creates a time-aware mock. The mock's coding_agent_factory
+            # parameter is left unset so it falls back to its own inert default
+            # — the mock never invokes the factory result.
             checkpoint_store = self._resolved.get("checkpoint_store")
             container_adapter = self._resolved.get("container")
 
-            async def _legacy_mock_llm_factory(_agent_name: str) -> Any:
-                class _Inert:
-                    pass
-
-                return _Inert()
-
             return self._deps.engine.create_repair_cycle_adapter(
-                llm_factory=_legacy_mock_llm_factory,
                 checkpoint_store=checkpoint_store,
                 container_adapter=container_adapter,
             )
-        # Real adapter: inject the post-D9 coding_agent_factory.
+
         systemic_analysis_service = self._resolved.get("systemic_analysis_service")
         environment_repair_service = self._resolved.get("environment_repair_service")
 
@@ -650,6 +642,7 @@ class AdapterResolver:
             coding_agent_factory=self._create_coding_agent_factory(),
             systemic_analysis_service=systemic_analysis_service,
             environment_repair_service=environment_repair_service,
+            invocation_defaults_resolver=self._create_invocation_defaults_resolver(),
         )
 
     def resolve_code_review(self) -> ICodeReviewService:
@@ -687,17 +680,20 @@ class AdapterResolver:
     def resolve_systemic_analysis_service(self) -> ISystemicAnalysisService:
         """Resolve systemic analysis service adapter.
 
-        Post-D9: the ``"llm"`` variant uses the new
-        :class:`ICodingAgent`-based factory injected via
-        ``coding_agent_factory``.
+        The ``"production"`` variant uses the :class:`ICodingAgent`-based
+        factory injected via ``coding_agent_factory``. The bootstrap also
+        wires ``invocation_defaults_resolver`` so each call honours the
+        per-project coding-agent configuration instead of the adapter's
+        server-wide hardcoded fallbacks.
 
         Returns:
             ISystemicAnalysisService implementation.
         """
-        if self._config.systemic_analysis == "llm":
+        if self._config.systemic_analysis == "production":
             return self._factory.create_systemic_analysis_service(
                 adapter_name=self._config.systemic_analysis,
                 coding_agent_factory=self._create_coding_agent_factory(),
+                invocation_defaults_resolver=self._create_invocation_defaults_resolver(),
             )
 
         return self._factory.create_systemic_analysis_service(
@@ -707,9 +703,10 @@ class AdapterResolver:
     def resolve_environment_repair_service(self) -> IEnvironmentRepairService:
         """Resolve environment repair service adapter.
 
-        Post-D9: the ``"production"`` variant uses the new
-        :class:`ICodingAgent`-based factory injected via
-        ``coding_agent_factory``.
+        The ``"production"`` variant uses the :class:`ICodingAgent`-based
+        factory injected via ``coding_agent_factory``. The bootstrap also
+        wires ``invocation_defaults_resolver`` so each call honours the
+        per-project coding-agent configuration.
 
         Returns:
             IEnvironmentRepairService implementation.
@@ -719,6 +716,7 @@ class AdapterResolver:
                 adapter_name=self._config.environment_repair,
                 coding_agent_factory=self._create_coding_agent_factory(),
                 event_emitter=self._resolved["event_emitter"],
+                invocation_defaults_resolver=self._create_invocation_defaults_resolver(),
             )
 
         return self._factory.create_environment_repair_service(
@@ -742,8 +740,8 @@ class AdapterResolver:
     # Coding-agent factory for repair-cycle / systemic-analysis / env-repair
     # =========================================================================
     #
-    # Post-D9: the three repair adapters take a
-    # ``coding_agent_factory: Callable[[IPromptBuilder], ICodingAgent]``
+    # The three repair adapters take a
+    # ``coding_agent_factory: Callable[[IFreeFormPromptBuilder], ICodingAgent]``
     # construction dep. The factory is invoked once per free-form call
     # (analyze failures, rebuild env, fix file, etc.) and returns a fresh
     # ``FreeFormCodingAgent`` wrapped in the resilience decorator, bound
@@ -755,8 +753,8 @@ class AdapterResolver:
         """Build a coding-agent factory for the repair / analysis adapters.
 
         The returned callable matches the
-        ``Callable[[IPromptBuilder], ICodingAgent]`` shape the repair
-        adapters expect. Each call constructs a fresh
+        ``Callable[[IFreeFormPromptBuilder], ICodingAgent]`` shape the
+        repair adapters expect. Each call constructs a fresh
         :class:`~codetoreum.adapters.secondary.free_form_coding_agent.FreeFormCodingAgent`
         bound to the supplied prompt builder, wrapped in
         :class:`ResilientCodingAgentDecorator` so the standard resilience
@@ -796,6 +794,74 @@ class AdapterResolver:
 
         return factory
 
+    # =========================================================================
+    # Workflow-step invocation-defaults resolver
+    # =========================================================================
+    #
+    # Each repair adapter consults this resolver per call so each
+    # sub-task (test_execution, code_fix, systemic_fix, systemic_analysis,
+    # env_rebuild, env_verification, ...) honours the model / container /
+    # mode configured for the agent assigned to *that* workflow step.
+    # The adapter awaits ``resolve(work_item_id, agent_name)`` with the
+    # resolved sub-task agent name; the closure below loads the work
+    # item to derive its project, then looks up
+    # ``IConfigStore.get_agent_config(project_id, agent_name)`` and
+    # returns that agent's :class:`AgentInvocationConfig`.
+    #
+    # ``agent_name=None`` (caller has no agent context — e.g. a
+    # systemic-analysis call from a context that wasn't populated)
+    # short-circuits to ``None`` so the adapter falls back to its
+    # constructor defaults. Any failure in the lookup chain (no work
+    # item service / config store, missing project, agent config not
+    # found) also returns ``None``.
+    def _create_invocation_defaults_resolver(
+        self,
+    ) -> "Callable[[str, str | None], Awaitable[Any]]":
+        """Build a per-call workflow-step resolver.
+
+        Returns a coroutine ``async def resolve(work_item_id, agent_name)
+        -> AgentInvocationConfig | None``. The closure captures the
+        resolved ``work_item_service`` and ``config_store``; both are
+        looked up at call time so they can be ``None`` during early
+        bootstrap phases without crashing the adapter wiring.
+        """
+        work_item_service = self._resolved.get("work_item_service")
+        config_store = self._resolved.get("config_store")
+
+        async def resolve(work_item_id: str, agent_name: str | None) -> Any:
+            if work_item_service is None or config_store is None:
+                return None
+            if not agent_name:
+                # No agent context for this call — fall through to the
+                # adapter's constructor defaults rather than guessing.
+                return None
+            try:
+                work_item = await work_item_service.get_work_item(work_item_id)
+            except Exception:
+                logger.debug(
+                    "Workflow-step invocation lookup: could not load work item %s; " "falling back to adapter defaults",
+                    work_item_id,
+                    exc_info=True,
+                )
+                return None
+            project_id = getattr(work_item, "project_id", None)
+            if not project_id:
+                return None
+            try:
+                agent_config = await config_store.get_agent_config(project_id, agent_name)
+            except Exception:
+                logger.debug(
+                    "Workflow-step invocation lookup: no agent config for "
+                    "project=%s agent=%s; falling back to adapter defaults",
+                    project_id,
+                    agent_name,
+                    exc_info=True,
+                )
+                return None
+            return agent_config.invocation
+
+        return resolve
+
     def resolve_all(self) -> "SimulationAdapters":
         """
         Resolve all adapters in dependency order.
@@ -834,7 +900,8 @@ class AdapterResolver:
 
         # 4. External system adapters
         self._resolved["ticket"] = self.resolve_ticket()
-        # "llm" slot retired in Phase D5 with IAgentLauncher / ILLMProvider.
+        # The ``ICodingAgent`` adapter is constructed in Phase 4c by
+        # ``ProductionApplicationBootstrap``, not via this resolver.
 
         # 5. Coordination adapters
         self._resolved["discussion_adapter"] = self.resolve_discussion_adapter()
@@ -855,14 +922,14 @@ class AdapterResolver:
         # 8. Repository adapter (depends on event_emitter)
         self._resolved["repository"] = self.resolve_repository()
 
-        # 9. Systemic analysis service (depends on llm, used by repair_cycle)
+        # 9. Systemic analysis service (uses a coding agent in production, used by repair_cycle)
         self._resolved["systemic_analysis_service"] = self.resolve_systemic_analysis_service()
 
-        # 9b. Environment repair service (depends on llm, used by repair_cycle)
+        # 9b. Environment repair service (uses a coding agent in production, used by repair_cycle)
         self._resolved["environment_repair_service"] = self.resolve_environment_repair_service()
 
         # 10. Review and repair cycles depend on previously resolved adapters
-        # (review_cycle depends on llm, repair_cycle depends on checkpoint_store, container, and systemic_analysis_service)
+        # (repair_cycle depends on checkpoint_store, container, and systemic_analysis_service)
         self._resolved["review_cycle"] = self.resolve_review_cycle()
         self._resolved["repair_cycle"] = self.resolve_repair_cycle()
         self._resolved["pr_review_cycle"] = self.resolve_pr_review_cycle()

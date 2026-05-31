@@ -7,7 +7,7 @@ that enables testing branch resolution logic without external dependencies.
 import asyncio
 from collections.abc import Mapping
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.domain.events.branch_events import (
@@ -179,9 +179,11 @@ class MockBranchResolutionAdapter(MockEventEmitter, IBranchResolutionService):
         )
         self.emit(resolved_event)
 
-        # Emit outcome-specific event
+        # Emit outcome-specific event with the narrower strategy literal
+        # each event accepts. The domain BranchResolution carries the wider
+        # union; the events constrain it.
         if resolution.action == "reuse":
-            outcome_event = BranchReusedEvent(
+            reused_event = BranchReusedEvent(
                 type="branch.reused",
                 timestamp=timestamp,
                 source="mock_branch_resolution",
@@ -191,11 +193,15 @@ class MockBranchResolutionAdapter(MockEventEmitter, IBranchResolutionService):
                 confidence=resolution.confidence,
                 reason=resolution.reason,
                 parent_issue_id=resolution.parent_issue_id,
-                resolution_strategy=resolution.resolution_strategy,
+                resolution_strategy=cast(
+                    "Literal['exact_match', 'parent_issue', 'sibling', 'fuzzy']",
+                    resolution.resolution_strategy,
+                ),
             )
+            self.emit(reused_event)
         else:
-            # action == "create"
-            outcome_event = BranchResolutionCreatedEvent(
+            # action == "create" — resolution_strategy must be "new"
+            created_event = BranchResolutionCreatedEvent(
                 type="branch.created",
                 timestamp=timestamp,
                 source="mock_branch_resolution",
@@ -205,10 +211,9 @@ class MockBranchResolutionAdapter(MockEventEmitter, IBranchResolutionService):
                 confidence=resolution.confidence,
                 reason=resolution.reason,
                 parent_issue_id=resolution.parent_issue_id,
-                resolution_strategy=resolution.resolution_strategy,
+                resolution_strategy=cast("Literal['new']", resolution.resolution_strategy),
             )
-
-        self.emit(outcome_event)
+            self.emit(created_event)
 
         return resolution
 

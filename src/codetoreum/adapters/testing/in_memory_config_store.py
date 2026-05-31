@@ -201,42 +201,42 @@ class InMemoryConfigStore(IConfigStore):
 
         # Search projects
         if not config_type or config_type == "project":
-            for config in self.projects.values():
-                if config_matches(config):
+            for project_config in self.projects.values():
+                if config_matches(project_config):
                     results.append(
                         {
                             "type": "project",
-                            "id": config.id,
-                            "name": config.name,
-                            "config": config,
+                            "id": project_config.id,
+                            "name": project_config.name,
+                            "config": project_config,
                         }
                     )
 
         # Search agents
         if not config_type or config_type == "agent":
             for project_agents in self.agents.values():
-                for config in project_agents.values():
-                    if config_matches(config):
+                for agent_config in project_agents.values():
+                    if config_matches(agent_config):
                         results.append(
                             {
                                 "type": "agent",
-                                "id": f"{config.project_id}:{config.agent_name}",
-                                "name": config.agent_name,
-                                "config": config,
+                                "id": f"{agent_config.project_id}:{agent_config.agent_name}",
+                                "name": agent_config.agent_name,
+                                "config": agent_config,
                             }
                         )
 
         # Search pipelines
         if not config_type or config_type == "pipeline":
             for project_pipelines in self.pipelines.values():
-                for config in project_pipelines.values():
-                    if config_matches(config):
+                for pipeline_config in project_pipelines.values():
+                    if config_matches(pipeline_config):
                         results.append(
                             {
                                 "type": "pipeline",
-                                "id": config.id,
-                                "name": config.name,
-                                "config": config,
+                                "id": pipeline_config.id,
+                                "name": pipeline_config.name,
+                                "config": pipeline_config,
                             }
                         )
 

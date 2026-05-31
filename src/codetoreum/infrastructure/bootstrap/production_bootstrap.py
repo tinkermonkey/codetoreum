@@ -131,9 +131,9 @@ logger = logging.getLogger(__name__)
 CRITICAL_ADAPTER_SLOTS = {
     "board",
     "ticket",
-    # The "llm" slot retired in D5; the ICodingAgent slot ("coding_agent") is
-    # validated separately because it is constructed in Phase 4c, after Phase 2
-    # resolve_all() runs, so the generic critical-path scan would not see it.
+    # The ICodingAgent slot ("coding_agent") is validated separately because
+    # it is constructed in Phase 4c, after Phase 2 resolve_all() runs, so the
+    # generic critical-path scan would not see it.
     "version_control",
     "container",
     "code_review",
@@ -275,7 +275,7 @@ class ProductionApplicationBootstrap:
                 # to the new ICodingAgent contract; the production variants
                 # are wireable again via the resolver's
                 # _create_coding_agent_factory helper.
-                systemic_analysis="llm",
+                systemic_analysis="production",
                 environment_repair="production",
             )
 

@@ -118,14 +118,25 @@ class MockAuditQueryAdapter(IAuditQueryPort):
                     f"Audit data integrity error: event {event_dict.get('id')} missing required fields: {missing_fields}"
                 )
 
+            # required_fields values are guaranteed non-None by the
+            # missing-fields guard above; the asserts narrow Any|None for
+            # the typed AuditEventInfo constructor below.
+            assert required_fields["id"] is not None
+            assert required_fields["timestamp"] is not None
+            assert required_fields["event_type"] is not None
+            assert required_fields["resource_type"] is not None
+            assert required_fields["resource_id"] is not None
+            assert required_fields["action"] is not None
+            assert required_fields["user_id"] is not None
+
             event_info = AuditEventInfo(
-                id=required_fields["id"],
+                id=str(required_fields["id"]),
                 timestamp=required_fields["timestamp"],
-                event_type=required_fields["event_type"],
-                resource_type=required_fields["resource_type"],
-                resource_id=required_fields["resource_id"],
-                action=required_fields["action"],
-                user_id=required_fields["user_id"],
+                event_type=str(required_fields["event_type"]),
+                resource_type=str(required_fields["resource_type"]),
+                resource_id=str(required_fields["resource_id"]),
+                action=str(required_fields["action"]),
+                user_id=str(required_fields["user_id"]),
                 correlation_id=event_dict.get("correlation_id"),
                 metadata=MappingProxyType(event_dict.get("metadata", {})),
                 success=event_dict.get("success", False),

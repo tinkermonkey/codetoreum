@@ -8,6 +8,7 @@ import logging
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from types import MappingProxyType
+from typing import Literal
 
 from codetoreum.domain.types import CONTAINER_TYPE_AGENT, CONTAINER_TYPE_REPAIR_CYCLE
 from codetoreum.ports.output.container_recovery import (
@@ -183,7 +184,7 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
     def set_assessment(
         self,
         container_id: str,
-        action: str,
+        action: Literal["reconnect", "kill"],
         reason: str,
         with_monitoring: bool = False,
         execution_id: str | None = None,
@@ -266,7 +267,7 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
             from codetoreum.ports.exceptions import ContainerError
 
             msg = f"Docker daemon unavailable (simulated failure after {self.docker_failure_after_count} containers)"
-            raise ContainerError(msg, error_code="ERR_DOCKER_CONNECTION_FAILED")
+            raise ContainerError(f"[ERR_DOCKER_CONNECTION_FAILED] {msg}")
 
         self.docker_failure_counter += 1
 
@@ -311,7 +312,7 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
             from codetoreum.ports.exceptions import StorageError
 
             msg = f"Checkpoint store unavailable for {metadata.container_id}"
-            raise StorageError(msg, error_code="ERR_CHECKPOINT_STORE_UNAVAILABLE")
+            raise StorageError(f"[ERR_CHECKPOINT_STORE_UNAVAILABLE] {msg}")
 
         if metadata.container_id in self.assessments:
             assessment = self.assessments[metadata.container_id]
@@ -357,7 +358,7 @@ class MockContainerRecoveryAdapter(IAgentContainerRecoveryService):
             from codetoreum.ports.exceptions import ContainerError
 
             msg = "Docker daemon unavailable (simulated failure)"
-            raise ContainerError(msg, error_code="ERR_DOCKER_CONNECTION_FAILED")
+            raise ContainerError(f"[ERR_DOCKER_CONNECTION_FAILED] {msg}")
 
         self.executed_actions.append(assessment)
 

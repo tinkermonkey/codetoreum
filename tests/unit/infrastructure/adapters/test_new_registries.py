@@ -866,19 +866,8 @@ class TestAdapterFactoryWithNewRegistries:
         config_store = factory.create_config_store()
         assert isinstance(config_store, IConfigStore)
 
-        # Repair cycle (needs llm_factory for mock)
-        # MockLLMAdapter retired in Phase D5; mock repair-cycle factory accepts any
-        # callable that returns an object — the repair-cycle mock never invokes it.
-        class _LLMStub:
-            pass
-
-        llm_adapter = _LLMStub()
-
-        def llm_factory(agent_name: str):
-            return llm_adapter
-
-        # Mock repair cycle should succeed with factory provided
-        repair_cycle = factory.create_repair_cycle(adapter_name="mock", llm_factory=llm_factory)
+        # Repair cycle — the mock takes no factory arguments.
+        repair_cycle = factory.create_repair_cycle(adapter_name="mock")
         assert repair_cycle is not None
 
         # Review cycle

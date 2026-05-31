@@ -656,6 +656,14 @@ class AnalysisContext:
         work_item_id: Identifier of the work item being repaired
         iteration: Current iteration number in the repair cycle
         workflow_run_id: Identifier of the workflow run
+        agent_name: Name of the agent assigned to this analysis call. Drives
+                    per-workflow-step ``AgentInvocationConfig`` resolution in
+                    the systemic-analysis adapter so the call uses the model /
+                    container / mode configured for *this* sub-task. The caller
+                    (typically a repair cycle) sets it to the resolved agent for
+                    the ``systemic_analysis`` sub-task. ``None`` when the caller
+                    has no agent context — the adapter then falls back to its
+                    constructor defaults.
         prior_fix_attempts: Immutable tuple of descriptions of prior fix attempts
         prior_classifications: Immutable tuple of prior classification results
                               (for escalation and re-classification)
@@ -664,6 +672,7 @@ class AnalysisContext:
     work_item_id: str
     iteration: int
     workflow_run_id: str
+    agent_name: str | None = None
     prior_fix_attempts: tuple[str, ...] = ()  # Immutable tuple
     prior_classifications: tuple[SystemicAnalysisResult, ...] = ()  # Immutable tuple
 

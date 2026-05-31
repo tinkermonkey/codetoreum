@@ -12,6 +12,7 @@ from threading import RLock
 from typing import TYPE_CHECKING, Optional
 
 from codetoreum.domain.exceptions import WorkItemNotFoundError
+from codetoreum.domain.types import WorkItemId
 from codetoreum.domain.work_item import WorkItem
 from codetoreum.ports.input.work_item_query import (
     IWorkItemQueryPort,
@@ -68,7 +69,7 @@ class MockWorkItemQueryAdapter(IWorkItemQueryPort):
     async def get_work_item(self, work_item_id: str) -> WorkItem:
         """Retrieves a single work item by ID."""
         if self._ticket_adapter:
-            return await self._ticket_adapter.get_work_item(work_item_id)
+            return await self._ticket_adapter.get_work_item(WorkItemId(work_item_id))
         with self._lock:
             if work_item_id not in self._work_items:
                 msg = f"Work item with ID {work_item_id} not found"
@@ -191,7 +192,7 @@ class MockWorkItemQueryAdapter(IWorkItemQueryPort):
             result = [wi for wi in result if wi.status == filters.status]
 
         if filters.assignee is not None:
-            result = [wi for wi in result if wi.assignee == filters.assignee]
+            result = [wi for wi in result if wi.assigned_agent_id == filters.assignee]
 
         if filters.labels is not None:
             # AND logic for multiple labels
@@ -199,7 +200,7 @@ class MockWorkItemQueryAdapter(IWorkItemQueryPort):
                 result = [wi for wi in result if label in wi.labels]
 
         if filters.workflow_stage is not None:
-            result = [wi for wi in result if wi.workflow_stage == filters.workflow_stage]
+            result = [wi for wi in result if wi.current_stage == filters.workflow_stage]
 
         if filters.priority is not None:
             result = [wi for wi in result if wi.priority == filters.priority]
@@ -231,9 +232,9 @@ class MockWorkItemQueryAdapter(IWorkItemQueryPort):
             work_items.sort(key=lambda wi: wi.updated_at, reverse=reverse)
         elif pagination.sort_by == SortField.PRIORITY:
             # Priority order: CRITICAL > HIGH > MEDIUM > LOW
-            priority_order = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
+            # WorkItemPriority.value is the integer ordinal (1=LOW..4=CRITICAL).
             work_items.sort(
-                key=lambda wi: priority_order.get(wi.priority.value, 0),
+                key=lambda wi: wi.priority.value,
                 reverse=reverse,
             )
         elif pagination.sort_by == SortField.TITLE:

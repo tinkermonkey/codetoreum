@@ -237,7 +237,7 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
                     MetricTimeSeriesPoint(
                         timestamp=metric.timestamp,
                         value=metric.value,
-                        labels=metric.labels or {},
+                        labels=dict(metric.labels) if metric.labels else {},
                     )
                 )
 

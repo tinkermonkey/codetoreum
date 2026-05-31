@@ -9,7 +9,6 @@ Comprehensive test scenarios validating the full SDLC pipeline workflow includin
 
 import pytest
 
-# MockLLMAdapter retired in Phase D5 — replaced with stub class below
 from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
 from codetoreum.adapters.testing.mock_review_cycle_adapter import MockReviewCycleAdapter
 from codetoreum.application.event_handlers.repair_cycle_event_handler import (
@@ -27,24 +26,24 @@ from codetoreum.ports.output.review_cycle_service import ReviewCycleRequest
 from tests.simulation.test_event_helpers import WorkItemColumnChanged
 
 
-class MockLLMAdapter:
-    """Inert stub for the retired MockLLMAdapter (Phase D5).
+class MockCodingAgent:
+    """Inert coding-agent surrogate for repair-cycle scenarios.
 
-    The repair-cycle scenarios pass an LLM adapter to the factory but never
-    invoke a method on it. This stub keeps construction working until the
-    scenarios migrate to ICodingAgent."""
+    Scenarios pass an instance to ``coding_agent_factory``; the mock
+    repair adapter records the surrogate for assertion but never calls
+    a method on it."""
 
     def __init__(self, *args, **kwargs) -> None:
         pass
 
 
 @pytest.fixture
-def llm_factory():
-    """Factory that returns a MockLLMAdapter regardless of agent name."""
-    llm_adapter = MockLLMAdapter()
+def coding_agent_factory():
+    """Factory that returns a MockCodingAgent regardless of agent name."""
+    coding_agent = MockCodingAgent()
 
     async def factory(agent_name: str):
-        return llm_adapter
+        return coding_agent
 
     return factory
 
@@ -53,7 +52,7 @@ class TestScenario06SDLCPipelineWithRepair:
     """Test scenarios for full SDLC pipeline with repair cycle integration."""
 
     @pytest.mark.asyncio
-    async def test_scenario_01_happy_path_first_approval_with_testing(self, llm_factory):
+    async def test_scenario_01_happy_path_first_approval_with_testing(self, coding_agent_factory):
         """
         Test full workflow: Review approval → Testing column → Repair cycle.
 
@@ -79,7 +78,7 @@ class TestScenario06SDLCPipelineWithRepair:
         review_adapter.current_project = "test-project"
         review_adapter.set_approve_immediately("work-item-1")
 
-        repair_adapter = MockRepairCycleAdapter(llm_factory, clock)
+        repair_adapter = MockRepairCycleAdapter(clock)
         repair_adapter.current_project = "test-project"
         # Configure all test types to pass on first iteration
         repair_adapter.set_iterations_until_success(RepairTestType.UNIT, 1)
@@ -145,7 +144,7 @@ class TestScenario06SDLCPipelineWithRepair:
         repair_adapter.assert_overall_success()
 
     @pytest.mark.asyncio
-    async def test_scenario_02_review_to_repair_with_failures(self, llm_factory):
+    async def test_scenario_02_review_to_repair_with_failures(self, coding_agent_factory):
         """
         Test workflow with repair cycle handling test failures.
 
@@ -170,7 +169,7 @@ class TestScenario06SDLCPipelineWithRepair:
         review_adapter.current_project = "test-project"
         review_adapter.set_approve_immediately("work-item-2")
 
-        repair_adapter = MockRepairCycleAdapter(llm_factory, clock)
+        repair_adapter = MockRepairCycleAdapter(clock)
         repair_adapter.current_project = "test-project"
         # Configure UNIT tests to fail once, then pass
         repair_adapter.set_iterations_until_success(RepairTestType.UNIT, 2)
@@ -218,7 +217,7 @@ class TestScenario06SDLCPipelineWithRepair:
         repair_adapter.assert_test_type_passed(RepairTestType.UNIT)
 
     @pytest.mark.asyncio
-    async def test_scenario_testing_failure_remains_in_column(self, llm_factory):
+    async def test_scenario_testing_failure_remains_in_column(self, coding_agent_factory):
         """
         Test failure scenario: Review approved, but tests fail beyond max iterations.
 
@@ -248,7 +247,7 @@ class TestScenario06SDLCPipelineWithRepair:
         review_adapter.current_project = "test-project"
         review_adapter.set_approve_immediately("work-item-10")
 
-        repair_adapter = MockRepairCycleAdapter(llm_factory, clock)
+        repair_adapter = MockRepairCycleAdapter(clock)
         repair_adapter.current_project = "test-project"
         # Configure UNIT tests to never pass (requires 999 iterations)
         repair_adapter.set_iterations_until_success(RepairTestType.UNIT, 999)
@@ -296,7 +295,7 @@ class TestScenario06SDLCPipelineWithRepair:
         assert unit_results[0].passed is False
 
     @pytest.mark.asyncio
-    async def test_scenario_04_bootstrap_integration(self, llm_factory):
+    async def test_scenario_04_bootstrap_integration(self, coding_agent_factory):
         """
         Test full bootstrap integration with event handlers wired.
 
@@ -343,7 +342,7 @@ class TestScenario06SDLCPipelineWithRepair:
             await bootstrap.teardown()
 
     @pytest.mark.asyncio
-    async def test_scenario_05_performance_validation(self, llm_factory):
+    async def test_scenario_05_performance_validation(self, coding_agent_factory):
         """
         Performance validation: Full SDLC pipeline (review + repair) in <10s real-time.
 
@@ -362,7 +361,7 @@ class TestScenario06SDLCPipelineWithRepair:
         review_adapter.current_project = "test-project"
         review_adapter.set_approve_immediately("perf-test")
 
-        repair_adapter = MockRepairCycleAdapter(llm_factory, clock)
+        repair_adapter = MockRepairCycleAdapter(clock)
         repair_adapter.current_project = "test-project"
         repair_adapter.set_iterations_until_success(RepairTestType.UNIT, 1)
         repair_adapter.set_iterations_until_success(RepairTestType.INTEGRATION, 1)

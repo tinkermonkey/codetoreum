@@ -61,14 +61,13 @@ class TestSimulationApplicationBootstrap:
         adapters = bootstrap.adapters
         assert adapters is not None
 
-        # Verify all 9 adapters exist
+        # Core adapters required by every simulation bootstrap.
         assert adapters.ticket_system is not None
-        assert adapters.llm_provider is not None
+        assert adapters.coding_agent is not None
         assert adapters.container is not None
         assert adapters.repository is not None
         assert adapters.event_store is not None
         assert adapters.metrics is not None
-        assert adapters.storage is not None
         assert adapters.config_store is not None
         assert adapters.notifier is not None
 
@@ -274,7 +273,7 @@ class TestBootstrapWithFixtures:
         """Test that simulation_adapters fixture provides adapters."""
         assert simulation_adapters is not None
         assert simulation_adapters.event_store is not None
-        assert simulation_adapters.llm_provider is not None
+        assert simulation_adapters.coding_agent is not None
 
     async def test_simulation_services_fixture(self, simulation_services: SimulationServices) -> None:
         """Test that simulation_services fixture provides services."""

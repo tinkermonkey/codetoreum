@@ -15,8 +15,6 @@ from codetoreum.infrastructure.adapters import AdapterFactory, AdapterFactoryCon
 from codetoreum.infrastructure.resilience import OperationMode
 from codetoreum.ports.output.container import IContainer
 from codetoreum.ports.output.event_store import IEventStore
-
-# ILLMProvider / llm_provider types retired in Phase D5
 from codetoreum.ports.output.repository import IRepository
 from codetoreum.ports.output.ticket_system import ITicketSystem
 

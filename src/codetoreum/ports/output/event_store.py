@@ -71,7 +71,7 @@ class IEventStore(ABC):
         """
 
     @abstractmethod
-    async def stream_events(
+    def stream_events(
         self,
         stream_id: str | None = None,
         from_version: int = 0,
@@ -204,7 +204,7 @@ class IEventStore(ABC):
         """
 
     @abstractmethod
-    async def replay_events(
+    def replay_events(
         self,
         stream_id: str,
         from_version: int = 0,

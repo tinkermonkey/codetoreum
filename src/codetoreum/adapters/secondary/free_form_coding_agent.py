@@ -26,21 +26,17 @@ This module provides:
 - :class:`FreeFormCodingAgent` — a thin :class:`ICodingAgent` that drives
   the same Claude strategies (:mod:`codetoreum.adapters.secondary.claude_code.strategies`)
   used by :class:`ClaudeCodeAdapter`, but **bypasses the agent / work-item
-  lookup**. The adapter passes the per-call
-  :class:`~codetoreum.ports.output.prompt_builder.IPromptBuilder` it
-  was constructed with synthetic agent / work-item arguments which the
-  builder is free to ignore.
+  lookup**. It takes a sibling
+  :class:`~codetoreum.ports.output.prompt_builder.IFreeFormPromptBuilder`
+  whose :meth:`build` signature reflects the actual contract: only the
+  runtime workspace context is supplied, and the resulting
+  :class:`StructuredPrompt` carries ``work_item=None``.
 - :func:`synthetic_agent_execution`,
-  :func:`synthetic_work_item`,
   :func:`synthetic_workspace_context` — helpers that build the minimal
   domain stand-ins needed so the strategies can run.
 
-The "synthetic" objects are an intentional smell: the repair adapters
-*could* be migrated more invasively (e.g. teach the strategies to accept
-a :class:`StructuredPrompt` directly), but the cost would be churning
-production paths that have already been migrated. The synthetics are
-*local* to free-form invocations and never escape into the
-work-item / workflow path.
+The "synthetic" objects (execution / workspace context) are local to
+free-form invocations and never escape into the work-item / workflow path.
 """
 
 from __future__ import annotations
@@ -65,17 +61,8 @@ from codetoreum.adapters.secondary.claude_code.strategies.host import (
 from codetoreum.adapters.secondary.claude_code.stream_parser import (
     ClaudeStreamJsonParser,
 )
-from codetoreum.domain.agent import Agent, AgentCapability, AgentType
 from codetoreum.domain.agent_execution import AgentExecution, ExecutionStatus
-from codetoreum.domain.coding_agent_types import (
-    AgentInvocationConfig,
-    InvocationMode,
-)
-from codetoreum.domain.work_item import (
-    WorkItem,
-    WorkItemPriority,
-    WorkItemStatus,
-)
+from codetoreum.domain.coding_agent_types import InvocationMode
 from codetoreum.domain.workspace_context import WorkspaceContext, WorkspaceType
 from codetoreum.ports.output.coding_agent import (
     CodingAgentInvocationOptions,
@@ -92,7 +79,7 @@ if TYPE_CHECKING:
     )
     from codetoreum.infrastructure.event_bus import EventBus
     from codetoreum.ports.output.container import IContainer
-    from codetoreum.ports.output.prompt_builder import IPromptBuilder
+    from codetoreum.ports.output.prompt_builder import IFreeFormPromptBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -103,83 +90,6 @@ _FREE_FORM_CODING_AGENT_ID = "claude-code-free-form"
 # ---------------------------------------------------------------------------
 # Synthetic domain stand-ins
 # ---------------------------------------------------------------------------
-
-
-def synthetic_work_item(purpose: str) -> WorkItem:
-    """Build a minimal :class:`WorkItem` for a free-form prompt.
-
-    The prompt renderer reads ``id``, ``title``, and ``external_url`` from
-    the WorkItem on the rendered :class:`StructuredPrompt`. For free-form
-    prompts we set ``id=""`` (so the renderer skips the ID line), supply
-    ``purpose`` as the title (descriptive), and leave ``external_url``
-    blank.
-
-    Args:
-        purpose: Short label describing the free-form call (e.g.
-            ``"systemic_analysis"``, ``"repair_cycle.file_fix"``). Surfaces
-            as the rendered work-item title only.
-
-    Returns:
-        A :class:`WorkItem` satisfying the domain invariants with no
-        cross-references into the real persistence layer.
-    """
-    now = datetime.now(UTC)
-    return WorkItem(
-        id="",
-        project_id="free-form",
-        title=purpose,
-        description="",
-        status=WorkItemStatus.IN_PROGRESS,
-        priority=WorkItemPriority.MEDIUM,
-        labels=[],
-        external_id=None,
-        external_url=None,
-        assigned_agent_id=None,
-        assigned_at=None,
-        current_workflow_id=None,
-        current_stage=None,
-        current_column=None,
-        entered_column_at=None,
-        created_at=now,
-        updated_at=now,
-    )
-
-
-def synthetic_agent(purpose: str) -> Agent:
-    """Build a minimal :class:`Agent` for a free-form prompt.
-
-    The :class:`Agent` is passed to the adapter-local
-    :class:`IPromptBuilder.build`; adapter-local builders for free-form
-    prompts ignore the agent entirely. The synthetic instance therefore
-    only has to satisfy the :class:`Agent` constructor invariants.
-
-    Args:
-        purpose: Short label describing the free-form call. Surfaces as
-            the agent's display name / role description so any logs that
-            leak through point back to the correct call site.
-
-    Returns:
-        An :class:`Agent` satisfying the domain invariants.
-    """
-    return Agent.create(
-        name=f"free-form-{purpose}",
-        display_name=f"Free-form ({purpose})",
-        agent_type=AgentType.SPECIALIZED,
-        role_description=f"Synthetic agent for free-form prompt: {purpose}",
-        capabilities={
-            "free_form": AgentCapability(
-                skill="free_form",
-                proficiency=1.0,
-                description="Synthetic capability for free-form prompts.",
-            ),
-        },
-        invocation=AgentInvocationConfig(
-            mode=InvocationMode.HOST,
-            model="claude-sonnet-4-6",
-            timeout_seconds=300,
-        ),
-        filesystem_write_allowed=True,
-    )
 
 
 def synthetic_workspace_context(
@@ -326,7 +236,7 @@ class FreeFormCodingAgent(ICodingAgent):
     def __init__(
         self,
         *,
-        prompt_builder: IPromptBuilder,
+        prompt_builder: IFreeFormPromptBuilder,
         event_bus: EventBus,
         credential_provider: CredentialProviderProtocol,
         container: IContainer | None = None,
@@ -336,14 +246,12 @@ class FreeFormCodingAgent(ICodingAgent):
 
         Args:
             prompt_builder: Adapter-local
-                :class:`~codetoreum.ports.output.prompt_builder.IPromptBuilder`
+                :class:`~codetoreum.ports.output.prompt_builder.IFreeFormPromptBuilder`
                 supplied by the per-call factory. The builder closure-
                 captures the call-specific data (failure list, repair
                 context, etc.) and produces the
                 :class:`~codetoreum.ports.output.prompt_builder.StructuredPrompt`
-                the call needs. The builder is invoked with synthetic
-                :class:`Agent` and :class:`WorkItem` arguments which the
-                builder is free to ignore.
+                the call needs (with ``work_item=None``).
             event_bus: Event bus the underlying strategies publish
                 ``CodingAgent*`` events to.
             credential_provider: Resolves ``ANTHROPIC_API_KEY`` /
@@ -401,10 +309,9 @@ class FreeFormCodingAgent(ICodingAgent):
     ) -> CodingAgentResult:
         """Render the prompt and dispatch to the chosen strategy.
 
-        Calls the injected :class:`IPromptBuilder` with synthetic
-        :class:`Agent` and :class:`WorkItem` arguments. The free-form
-        adapter-local builder is expected to ignore both and build the
-        :class:`StructuredPrompt` from its closure-captured state.
+        Calls the injected :class:`IFreeFormPromptBuilder` with the
+        runtime workspace context. The builder closure-captured its
+        call-specific state at construction time.
 
         Raises:
             UnsupportedInvocationModeError: When ``options.invocation_mode``
@@ -423,18 +330,9 @@ class FreeFormCodingAgent(ICodingAgent):
             )
             raise UnsupportedInvocationModeError(msg)
 
-        # Pass synthetic Agent / WorkItem to the builder; the free-form
-        # builder is expected to ignore them and use its closure-
-        # captured state instead.
         purpose = execution.metadata.get("free_form_purpose", "free-form")
-        syn_agent = synthetic_agent(purpose)
-        syn_work_item = synthetic_work_item(purpose)
-
         structured = await self._prompt_builder.build(
-            agent=syn_agent,
-            work_item=syn_work_item,
             workspace_context=workspace_context,
-            prior_outputs=(),
         )
         prompt_text = render_structured_prompt_to_text(structured)
 
@@ -464,8 +362,6 @@ class FreeFormCodingAgent(ICodingAgent):
 __all__ = [
     "FreeFormCodingAgent",
     "FreeFormCodingAgentConfig",
-    "synthetic_agent",
     "synthetic_agent_execution",
-    "synthetic_work_item",
     "synthetic_workspace_context",
 ]

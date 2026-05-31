@@ -430,17 +430,39 @@ ignore_missing_imports = true
 module = "tests.*"
 disallow_untyped_defs = false
 
-# Adapter and infrastructure modules use dynamic patterns (FastAPI dependency
-# injection, external SDKs, async generics, mock implementations) that are
-# inherently difficult to type strictly. These modules are excluded from the
-# domain/application/ports strict typing requirements.
-#
-# ignore_errors = true is used where disallow_untyped_defs alone is insufficient
-# because the remaining errors are structural (async Callable generics, SDK type
-# mismatches, dynamic dispatch patterns) rather than missing annotations.
+# Secondary adapters integrate with external SDKs (Docker, PyGithub,
+# Elasticsearch, Redis, Claude Code subprocess) whose dynamic-typing patterns
+# don't survive strict checking.
 [[tool.mypy.overrides]]
-module = "codetoreum.adapters.*"
+module = "codetoreum.adapters.secondary.*"
 ignore_errors = true
+
+# Primary REST routers + mappers use FastAPI dependency injection and DTO
+# projections whose strict typing surfaces routine pydantic v1↔v2 gaps. The
+# routers/* and *_mappers modules are dynamic-shape; everything else in
+# primary/ (input port adapters, the FastAPI bootstrap, websocket adapter) is
+# strictly checked.
+[[tool.mypy.overrides]]
+module = [
+    "codetoreum.adapters.primary.routers.*",
+    "codetoreum.adapters.primary.execution_mappers",
+    "codetoreum.adapters.primary.workflow_run_mappers",
+    "codetoreum.adapters.primary.error_middleware",
+    "codetoreum.adapters.primary.github_webhook_adapter",
+]
+ignore_errors = true
+
+# Relax untyped-def reporting on the remaining primary adapters and the
+# in-memory / mock testing adapters. Untyped route handlers and untyped mock
+# helpers aren't useful signal; structural ``call-arg`` / ``arg-type`` /
+# ``attr-defined`` checks still fire and catch real bugs.
+[[tool.mypy.overrides]]
+module = [
+    "codetoreum.adapters.primary.*",
+    "codetoreum.adapters.testing.*",
+]
+disallow_untyped_defs = false
+warn_return_any = false
 
 # Infrastructure: cross-cutting concerns use dynamic async patterns, external SDK
 # integrations, and resilience decorators with Callable[[], T] vs Coroutine

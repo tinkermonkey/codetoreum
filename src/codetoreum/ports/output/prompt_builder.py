@@ -83,7 +83,11 @@ class StructuredPrompt:
             (e.g. ``"senior software engineer"``).
         task_description: Short description of the task to perform.
         work_item: The :class:`~codetoreum.domain.work_item.WorkItem`
-            being processed.
+            being processed. ``None`` for free-form prompts produced by
+            :class:`IFreeFormPromptBuilder` (systemic-analysis,
+            environment-repair, file-fix), where there is no backing
+            work item. Renderers must skip the work-item section when
+            this is ``None``.
         workspace_context: Logical workspace description (path, branch,
             git identity, project env vars).
         instructions: Ordered tuple of free-form instructions for the
@@ -96,7 +100,7 @@ class StructuredPrompt:
 
     role_description: str
     task_description: str
-    work_item: WorkItem
+    work_item: WorkItem | None
     workspace_context: WorkspaceContext
     instructions: tuple[str, ...]
     constraints: tuple[str, ...]
@@ -143,8 +147,46 @@ class IPromptBuilder(ABC):
         """
 
 
+class IFreeFormPromptBuilder(ABC):
+    """Assembles a :class:`StructuredPrompt` for a free-form coding-agent call.
+
+    Sibling port to :class:`IPromptBuilder`. Used by callers that have
+    *no* backing :class:`Agent` / :class:`WorkItem` to build a prompt
+    around — systemic-failure analysis, environment-repair rebuild /
+    verify, repair-cycle file-fix, etc. The builder closure-captures
+    the call-specific data (failure list, rebuild context, file diff)
+    at construction time; :meth:`build` only needs the runtime
+    workspace context to fold in.
+
+    The resulting :class:`StructuredPrompt` carries ``work_item=None``;
+    renderers must handle this by skipping the work-item section.
+    """
+
+    @abstractmethod
+    async def build(
+        self,
+        workspace_context: WorkspaceContext,
+    ) -> StructuredPrompt:
+        """Assemble a structured prompt for a free-form coding-agent call.
+
+        Args:
+            workspace_context: Logical workspace description (path,
+                branch, git identity, project env vars). Free-form
+                calls typically have a synthetic
+                :class:`WorkspaceContext` whose ``workspace_path``
+                points at a temp dir or the orchestrator's working
+                directory.
+
+        Returns:
+            A :class:`StructuredPrompt` with ``work_item=None``, ready
+            for the coding agent adapter to render to its vendor's
+            expected format.
+        """
+
+
 __all__ = [
     "ExecutionOutput",
+    "IFreeFormPromptBuilder",
     "IPromptBuilder",
     "StructuredPrompt",
 ]

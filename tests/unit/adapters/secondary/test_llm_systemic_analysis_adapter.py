@@ -111,14 +111,12 @@ def _make_failures(count: int = 1) -> list[RepairTestFailure]:
 async def _rendered_task_text(builder: _SystemicAnalysisPromptBuilder) -> str:
     """Helper: run the captured prompt builder and return its task text.
 
-    The builder ignores the agent / work_item / workspace arguments, so
-    we pass dummy ``MagicMock()`` instances. The returned
-    ``StructuredPrompt.task_description`` is the same string the renderer
-    would feed to Claude Code.
+    The :class:`IFreeFormPromptBuilder.build` signature takes only
+    ``workspace_context``; we pass a dummy ``MagicMock()`` and read the
+    ``StructuredPrompt.task_description`` the renderer would feed to
+    Claude Code.
     """
     structured = await builder.build(
-        agent=MagicMock(),
-        work_item=MagicMock(),
         workspace_context=MagicMock(),
     )
     return structured.task_description

@@ -43,6 +43,7 @@ from codetoreum.domain.pr_review_cycle_types import (
     PRReviewPhaseOutput,
     PRReviewStatus,
 )
+from codetoreum.domain.types import ProjectId
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.ports.output.board_service import IBoardService, MovedByType
 from codetoreum.ports.output.event_emitter import IEventEmitter
@@ -160,8 +161,15 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
         self._lock = threading.RLock()
 
     @property
-    def clock(self) -> SimulationClock:
-        """Get simulation clock for time advancement."""
+    def clock(self) -> SimulationClock | None:
+        """Get simulation clock; ``None`` if not yet injected.
+
+        The adapter is constructed before all dependencies are resolved and
+        the resolver injects the clock via :meth:`clock.setter` in a later
+        phase. External callers that only need to inspect injection state
+        receive ``None`` when the clock is unset; internal callers reach
+        for the clock via :meth:`_require_clock` instead.
+        """
         return self._clock
 
     @clock.setter
@@ -172,6 +180,21 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             clock: SimulationClock instance for deterministic time advancement
         """
         self._clock = clock
+
+    def _require_clock(self) -> SimulationClock:
+        """Internal accessor that narrows ``_clock`` to non-None.
+
+        Internal call sites assume the resolver has already injected a
+        ``SimulationClock`` before any cycle method runs. Reaching this
+        method with ``_clock is None`` is a wiring bug — raise loudly.
+        """
+        if self._clock is None:
+            msg = (
+                "MockPRReviewCycleAdapter.clock not set; the resolver must inject "
+                "a SimulationClock before any cycle method runs."
+            )
+            raise RuntimeError(msg)
+        return self._clock
 
     @property
     def ticket_system(self) -> ITicketSystem | None:
@@ -422,7 +445,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
 
         # Create cycle state
         cycle_id = f"cycle-{work_item_id}-{cycle_number}"
-        started_at_dt = self._clock.now()
+        started_at_dt = self._require_clock().now()
         started_at_str = started_at_dt.isoformat()
 
         # Calculate phases_planned dynamically based on config
@@ -452,7 +475,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             escalation_cycle_number = request.config.max_outer_cycles + 1
             max_cycles_event = PRReviewCycleMaxCyclesReachedEvent(
                 type="pr_review_cycle.max_cycles_reached",
-                timestamp=self._clock.now().isoformat(),
+                timestamp=self._require_clock().now().isoformat(),
                 source="mock_pr_review_cycle",
                 pr_id=request.pr_id or f"pr-{work_item_id}",
                 work_item_id=work_item_id,
@@ -468,7 +491,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
 
             escalated_event = PRReviewCycleEscalatedEvent(
                 type="pr_review_cycle.escalated",
-                timestamp=self._clock.now().isoformat(),
+                timestamp=self._require_clock().now().isoformat(),
                 source="mock_pr_review_cycle",
                 pr_id=request.pr_id or f"pr-{work_item_id}",
                 reason="max_cycles_reached",
@@ -521,7 +544,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 phase_outputs=[],
                 config=request.config,
                 started_at=started_at_dt,
-                updated_at=self._clock.now(),
+                updated_at=self._require_clock().now(),
             )
             state_data = PRReviewCycleStateData(
                 work_item_id=work_item_id,
@@ -530,7 +553,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 cycle_number=cycle_number,
                 cycle_state=cycle_state,
                 created_at=started_at_str,
-                updated_at=self._clock.now().isoformat(),
+                updated_at=self._require_clock().now().isoformat(),
             )
             with self._lock:
                 self._cycles[work_item_id] = state_data
@@ -544,7 +567,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             return result
 
         # ===== PHASE 1: Code Review =====
-        phase1_start = self._clock.now()
+        phase1_start = self._require_clock().now()
         code_review_event = PRReviewCycleCodeReviewStartedEvent(
             type="pr_review_cycle.code_review_started",
             timestamp=phase1_start.isoformat(),
@@ -557,12 +580,12 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
         self._log_event({"type": "pr_review_cycle.code_review_started", "cycle_id": cycle_id})
 
         # Advance clock for Phase 1 (~10 minutes)
-        await self._clock.advance(timedelta(minutes=10))
+        await self._require_clock().advance(timedelta(minutes=10))
 
         # Emit phase completed event for Phase 1
         phase1_completed = PRReviewCyclePhaseCompletedEvent(
             type="pr_review_cycle.phase_completed",
-            timestamp=self._clock.now().isoformat(),
+            timestamp=self._require_clock().now().isoformat(),
             source="mock_pr_review_cycle",
             pr_id=request.pr_id or f"pr-{work_item_id}",
             phase_name="code_review",
@@ -578,7 +601,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
         for idx, source in enumerate(request.config.verifier_context_sources):
             verification_event = PRReviewCycleVerificationStartedEvent(
                 type="pr_review_cycle.verification_started",
-                timestamp=self._clock.now().isoformat(),
+                timestamp=self._require_clock().now().isoformat(),
                 source="mock_pr_review_cycle",
                 pr_id=request.pr_id or f"pr-{work_item_id}",
                 context_source=source,
@@ -596,12 +619,12 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             )
 
             # Advance clock for each verification (~5 minutes)
-            await self._clock.advance(timedelta(minutes=5))
+            await self._require_clock().advance(timedelta(minutes=5))
 
         # Emit phase completed event for Phase 2 (all verifications)
         phase2_completed = PRReviewCyclePhaseCompletedEvent(
             type="pr_review_cycle.phase_completed",
-            timestamp=self._clock.now().isoformat(),
+            timestamp=self._require_clock().now().isoformat(),
             source="mock_pr_review_cycle",
             pr_id=request.pr_id or f"pr-{work_item_id}",
             phase_name="verification",
@@ -619,7 +642,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             ci_passed = not config.ci_failing
             ci_event = PRReviewCycleCICheckCompletedEvent(
                 type="pr_review_cycle.ci_check_completed",
-                timestamp=self._clock.now().isoformat(),
+                timestamp=self._require_clock().now().isoformat(),
                 source="mock_pr_review_cycle",
                 pr_id=request.pr_id or f"pr-{work_item_id}",
                 passed=ci_passed,
@@ -641,12 +664,12 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 self._ci_checked.add(work_item_id)
 
             # Advance clock for Phase 3 (~0.5 seconds)
-            await self._clock.advance(timedelta(milliseconds=500))
+            await self._require_clock().advance(timedelta(milliseconds=500))
 
             # Emit phase completed event for Phase 3 when CI is enabled
             phase3_completed = PRReviewCyclePhaseCompletedEvent(
                 type="pr_review_cycle.phase_completed",
-                timestamp=self._clock.now().isoformat(),
+                timestamp=self._require_clock().now().isoformat(),
                 source="mock_pr_review_cycle",
                 pr_id=request.pr_id or f"pr-{work_item_id}",
                 phase_name="ci_check",
@@ -670,12 +693,12 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 self._ci_not_checked.add(work_item_id)
 
             # Advance clock for Phase 3 (~0.5 seconds - already advanced above)
-            await self._clock.advance(timedelta(milliseconds=500))
+            await self._require_clock().advance(timedelta(milliseconds=500))
 
             # Emit phase completed event for Phase 3 even when CI is disabled
             phase3_completed = PRReviewCyclePhaseCompletedEvent(
                 type="pr_review_cycle.phase_completed",
-                timestamp=self._clock.now().isoformat(),
+                timestamp=self._require_clock().now().isoformat(),
                 source="mock_pr_review_cycle",
                 pr_id=request.pr_id or f"pr-{work_item_id}",
                 phase_name="ci_check",
@@ -765,7 +788,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 high_count=sum(1 for f in config.findings if f.severity == "high"),
                 medium_count=sum(1 for f in config.findings if f.severity == "medium"),
                 low_count=sum(1 for f in config.findings if f.severity == "low"),
-                total_duration_seconds=(self._clock.now() - phase1_start).total_seconds(),
+                total_duration_seconds=(self._require_clock().now() - phase1_start).total_seconds(),
                 timestamp=started_at_str,
                 next_column=next_column,
             )
@@ -784,7 +807,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 phase_outputs=phase_outputs,
                 config=request.config,
                 started_at=started_at_dt,
-                updated_at=self._clock.now(),
+                updated_at=self._require_clock().now(),
             )
             state_data = PRReviewCycleStateData(
                 work_item_id=work_item_id,
@@ -793,7 +816,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 cycle_number=cycle_number,
                 cycle_state=cycle_state,
                 created_at=started_at_str,
-                updated_at=self._clock.now().isoformat(),
+                updated_at=self._require_clock().now().isoformat(),
             )
 
             with self._lock:
@@ -810,7 +833,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
         # ===== PHASE 4: Consolidation =====
         consolidation_event = PRReviewCycleConsolidationStartedEvent(
             type="pr_review_cycle.consolidation_started",
-            timestamp=self._clock.now().isoformat(),
+            timestamp=self._require_clock().now().isoformat(),
             source="mock_pr_review_cycle",
             pr_id=request.pr_id or f"pr-{work_item_id}",
             finding_count=len(config.findings),
@@ -826,22 +849,23 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
         )
 
         # Advance clock for Phase 4 (~10 minutes)
-        await self._clock.advance(timedelta(minutes=10))
+        await self._require_clock().advance(timedelta(minutes=10))
 
-        # Emit outcome event and create sub-issues if needed
+        # Emit outcome event and create sub-issues if needed (the CI-failure
+        # branch above also populates sub_issue_ids; this branch resets it).
         outcome = config.outcome
         next_column = request.config.on_approved_column or "Done"  # Use config or default to Done
-        sub_issue_ids: list[str] = []
+        sub_issue_ids = []
 
         if config.approved_immediately or outcome == PRReviewOutcome.APPROVED:
             outcome_event = PRReviewCycleApprovedEvent(
                 type="pr_review_cycle.approved",
-                timestamp=self._clock.now().isoformat(),
+                timestamp=self._require_clock().now().isoformat(),
                 source="mock_pr_review_cycle",
                 pr_id=request.pr_id or f"pr-{work_item_id}",
                 work_item_id=work_item_id,
                 cycle_number=cycle_number,
-                cycle_duration_seconds=(self._clock.now() - phase1_start).total_seconds(),
+                cycle_duration_seconds=(self._require_clock().now() - phase1_start).total_seconds(),
                 next_column=next_column,
                 workflow_run_id=request.workflow_run_id,
             )
@@ -852,10 +876,11 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             # Create sub-issues for each finding
             for finding in config.findings:
                 try:
+                    assert self._ticket_system is not None, "ticket_system must be injected before sub-issue creation"
                     work_item = await self._ticket_system.create_work_item(
                         title=finding.title,
                         description=f"Finding: {finding.title}\nPhase: {finding.phase}\nSeverity: {finding.severity}\nContext Source: {finding.context_source or 'N/A'}\n\nDescription:\n{finding.description}",
-                        project_id=project_id,
+                        project_id=ProjectId(project_id),
                         labels=["pr-review-finding", finding.phase, finding.severity],
                         parent_issue_id=work_item_id,
                     )
@@ -863,6 +888,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
 
                     # Add to the appropriate column on the board
                     target_column = request.config.sub_issue_initial_column or "Backlog"
+                    assert self._board_service is not None, "board_service must be injected before sub-issue creation"
                     await self._board_service.add_item_to_column(
                         work_item.id,
                         target_column,
@@ -882,7 +908,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             if sub_issue_ids:
                 sub_issues_event = PRReviewCycleSubIssuesCreatedEvent(
                     type="pr_review_cycle.sub_issues_created",
-                    timestamp=self._clock.now().isoformat(),
+                    timestamp=self._require_clock().now().isoformat(),
                     source="mock_pr_review_cycle",
                     pr_id=request.pr_id or f"pr-{work_item_id}",
                     cycle_number=cycle_number,
@@ -906,9 +932,9 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             medium_count = sum(1 for f in config.findings if f.severity == "medium")
             low_count = sum(1 for f in config.findings if f.severity == "low")
 
-            outcome_event = PRReviewCycleIssuesFoundEvent(
+            issues_found_event = PRReviewCycleIssuesFoundEvent(
                 type="pr_review_cycle.issues_found",
-                timestamp=self._clock.now().isoformat(),
+                timestamp=self._require_clock().now().isoformat(),
                 source="mock_pr_review_cycle",
                 pr_id=request.pr_id or f"pr-{work_item_id}",
                 work_item_id=work_item_id,
@@ -919,11 +945,11 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
                 medium=medium_count,
                 low=low_count,
                 sub_issue_count=len(sub_issue_ids),
-                cycle_duration_seconds=(self._clock.now() - phase1_start).total_seconds(),
+                cycle_duration_seconds=(self._require_clock().now() - phase1_start).total_seconds(),
                 next_column=request.config.on_issues_found_column or "In Development",
                 workflow_run_id=request.workflow_run_id,
             )
-            await self._emit_and_publish_event(outcome_event)
+            await self._emit_and_publish_event(issues_found_event)
             self._log_event(
                 {
                     "type": "pr_review_cycle.issues_found",
@@ -941,11 +967,11 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
         consolidation_high = sum(1 for f in config.findings if f.severity == "high")
         consolidation_medium = sum(1 for f in config.findings if f.severity == "medium")
         consolidation_low = sum(1 for f in config.findings if f.severity == "low")
-        consolidation_duration = (self._clock.now() - phase1_start).total_seconds()
+        consolidation_duration = (self._require_clock().now() - phase1_start).total_seconds()
 
         consolidation_completed = PRReviewCycleConsolidationCompletedEvent(
             type="pr_review_cycle.consolidation_completed",
-            timestamp=self._clock.now().isoformat(),
+            timestamp=self._require_clock().now().isoformat(),
             source="mock_pr_review_cycle",
             pr_id=request.pr_id or f"pr-{work_item_id}",
             total_findings=len(config.findings),
@@ -1032,7 +1058,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             high_count=sum(1 for f in config.findings if f.severity == "high"),
             medium_count=sum(1 for f in config.findings if f.severity == "medium"),
             low_count=sum(1 for f in config.findings if f.severity == "low"),
-            total_duration_seconds=(self._clock.now() - phase1_start).total_seconds(),
+            total_duration_seconds=(self._require_clock().now() - phase1_start).total_seconds(),
             timestamp=started_at_str,
             next_column=next_column,
         )
@@ -1051,7 +1077,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             phase_outputs=phase_outputs,
             config=request.config,
             started_at=started_at_dt,
-            updated_at=self._clock.now(),
+            updated_at=self._require_clock().now(),
         )
         state_data = PRReviewCycleStateData(
             work_item_id=work_item_id,
@@ -1060,7 +1086,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
             cycle_number=cycle_number,
             cycle_state=cycle_state,
             created_at=started_at_str,
-            updated_at=self._clock.now().isoformat(),
+            updated_at=self._require_clock().now().isoformat(),
         )
 
         with self._lock:
@@ -1265,7 +1291,7 @@ class MockPRReviewCycleAdapter(MockEventEmitter, IPRReviewCycle):
         Args:
             event: Event data to log
         """
-        event["timestamp"] = self._clock.now().isoformat()
+        event["timestamp"] = self._require_clock().now().isoformat()
         with self._lock:
             self._events.append(event)
 

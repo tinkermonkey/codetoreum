@@ -60,7 +60,7 @@ class CredentialValidator:
     CRITICAL_ADAPTERS = {
         "ticket",
         "board",
-        "llm",
+        "coding_agent",
         "container",
         "version_control",
         "code_review",
@@ -137,7 +137,7 @@ class CredentialValidator:
         # Health check each critical adapter
         await self._check_adapter_ticket(resolver)
         await self._check_adapter_board(resolver)
-        await self._check_adapter_llm(resolver)
+        await self._check_adapter_coding_agent(resolver)
         await self._check_adapter_container(resolver)
         await self._check_adapter_version_control(resolver)
         await self._check_adapter_code_review(resolver)
@@ -153,11 +153,13 @@ class CredentialValidator:
         return AdapterSelectionConfig(
             ticket="github",
             board="github",
-            llm="claude_code",
             version_control="github",
             container="docker",
             code_review="github",
-            # Use defaults for non-critical adapters
+            # The coding-agent slot is constructed in Phase 4c of the production
+            # bootstrap (not via AdapterSelectionConfig); the credential check
+            # for it goes through _check_adapter_coding_agent below.
+            # Use defaults for the remaining non-critical adapters.
         )
 
     async def _check_adapter_ticket(self, resolver: AdapterResolver) -> None:
@@ -235,7 +237,7 @@ class CredentialValidator:
                 f"Failed to resolve adapter: {str(e)[:100]}",
             )
 
-    async def _check_adapter_llm(self, resolver: AdapterResolver) -> None:
+    async def _check_adapter_coding_agent(self, resolver: AdapterResolver) -> None:
         """Check coding-agent adapter (Claude Code).
 
         Phase D5 retired the ILLMProvider port; the production coding-agent
@@ -248,19 +250,19 @@ class CredentialValidator:
         """
         try:
             await self._verify_claude_code_token()
-            self._add_result("llm", "ClaudeCodeAdapter", "PASS")
+            self._add_result("coding_agent", "ClaudeCodeAdapter", "PASS")
         except Exception as e:
             error_msg = str(e)
             if "claude" in error_msg.lower() and "not found" in error_msg.lower():
                 self._add_result(
-                    "llm",
+                    "coding_agent",
                     "ClaudeCodeAdapter",
                     "FAIL",
                     "Claude Code CLI not installed or not in PATH",
                 )
             else:
                 self._add_result(
-                    "llm",
+                    "coding_agent",
                     "ClaudeCodeAdapter",
                     "FAIL",
                     f"Claude Code token validation failed: {error_msg[:80]}",

@@ -12,7 +12,7 @@ Tests cover:
 
 import pytest
 
-# MockLLMAdapter retired in Phase D5; tests of MockReviewCycleAdapter use a
+# MockCodingAgent retired in Phase D5; tests of MockReviewCycleAdapter use a
 # minimal stand-in that records call counts via _request_count attribute.
 
 

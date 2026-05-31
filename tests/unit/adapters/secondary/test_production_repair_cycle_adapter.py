@@ -269,7 +269,7 @@ class TestIsOpenUsedNotGetState:
 class TestNoCBDirectLLMCall:
     @pytest.mark.asyncio
     async def test_no_cb_run_tests_calls_llm_directly(self):
-        """Without a CB, run_tests() calls llm_provider.execute directly."""
+        """Without a CB, run_tests() calls the coding agent directly."""
         adapter, llm = _make_adapter(circuit_breaker=None)
         ctx = _RepairCycleContext()
 
@@ -1572,7 +1572,7 @@ class TestEnvironmentRebuildAndVerifyReturnValueHandling:
     """
 
     @staticmethod
-    def _make_llm_factory_with_mock(mock_coding_agent: AsyncMock) -> callable:
+    def _make_coding_agent_factory_with_mock(mock_coding_agent: AsyncMock) -> callable:
         """Create a coding-agent factory that returns the given mock coding agent."""
 
         def factory(prompt_builder) -> AsyncMock:
@@ -1588,7 +1588,7 @@ class TestEnvironmentRebuildAndVerifyReturnValueHandling:
         mock_llm.execute = AsyncMock(return_value=_coding_agent_result(_VALID_JSON_RESPONSE))
 
         adapter = ProductionRepairCycleAdapter(
-            coding_agent_factory=self._make_llm_factory_with_mock(mock_llm),
+            coding_agent_factory=self._make_coding_agent_factory_with_mock(mock_llm),
             config=RepairCycleConfig(),
         )
 
@@ -1636,7 +1636,7 @@ class TestEnvironmentRebuildAndVerifyReturnValueHandling:
         mock_llm.execute = AsyncMock(return_value=_coding_agent_result(_VALID_JSON_RESPONSE))
 
         adapter = ProductionRepairCycleAdapter(
-            coding_agent_factory=self._make_llm_factory_with_mock(mock_llm),
+            coding_agent_factory=self._make_coding_agent_factory_with_mock(mock_llm),
             config=RepairCycleConfig(),
         )
 
@@ -1686,7 +1686,7 @@ class TestEnvironmentRebuildAndVerifyReturnValueHandling:
         mock_llm.execute = AsyncMock(return_value=_coding_agent_result(success_response))
 
         adapter = ProductionRepairCycleAdapter(
-            coding_agent_factory=self._make_llm_factory_with_mock(mock_llm),
+            coding_agent_factory=self._make_coding_agent_factory_with_mock(mock_llm),
             config=RepairCycleConfig(),
         )
 

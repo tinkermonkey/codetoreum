@@ -25,6 +25,7 @@ class PauseExecutionCommand:
     """Command to pause a running execution."""
 
     execution_id: str
+    reason: str | None = None
 
 
 @dataclass

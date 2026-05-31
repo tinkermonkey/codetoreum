@@ -6,6 +6,7 @@ In-memory implementation of IWorkflowRunQueryPort for development and testing.
 
 from datetime import UTC, datetime
 from threading import RLock
+from typing import Any
 
 from codetoreum.ports.input.workflow_run_query import (
     IWorkflowRunQueryPort,
@@ -160,7 +161,7 @@ class MockWorkflowRunQueryAdapter(IWorkflowRunQueryPort):
         )
 
         # Mock events
-        mock_events = [
+        mock_events: list[dict[str, Any]] = [
             {
                 "id": "evt-1",
                 "event_type": "WorkflowCreated",

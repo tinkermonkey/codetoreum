@@ -278,8 +278,8 @@ class InMemoryCodeReviewAdapter(MockEventEmitter, ICodeReviewService):
             source_branch="feature-branch",
             target_branch="main",
             status=status,
-            reviewers=["reviewer-1"],
-            approvals=[],
+            reviewers=("reviewer-1",),
+            approvals=(),
         )
         self._work_item_reviews[work_item_id] = review_id
 

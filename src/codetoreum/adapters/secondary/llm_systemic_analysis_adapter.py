@@ -12,17 +12,17 @@ environment rebuild, dependency fix, or transient retry).
 Architecture
 ------------
 
-- A bootstrap-wired ``coding_agent_factory: Callable[[IPromptBuilder], ICodingAgent]``
+- A bootstrap-wired
+  ``coding_agent_factory: Callable[[IFreeFormPromptBuilder], ICodingAgent]``
   is injected at construction. For each call, the adapter builds a
   call-local :class:`_SystemicAnalysisPromptBuilder` that closure-captures
   the failures + analysis context, then asks the factory for a fresh
   ``ICodingAgent`` bound to that builder.
 - The adapter then drives the coding agent with a minimal synthetic
   :class:`AgentExecution` / :class:`WorkspaceContext` and a
-  :class:`CodingAgentInvocationOptions`. The adapter-local prompt
-  builder ignores the synthetic ``agent`` / ``work_item`` arguments
-  and assembles the :class:`StructuredPrompt` from its closure-captured
-  state.
+  :class:`CodingAgentInvocationOptions`. The free-form builder takes
+  only the workspace context and assembles the :class:`StructuredPrompt`
+  from its closure-captured state (``work_item=None``).
 - JSON parsing falls back to ``CODE_DEFECT`` on parse errors so a
   malformed agent response does not blow up the repair cycle.
 - No event emission (caller's responsibility).
@@ -40,7 +40,7 @@ from codetoreum.adapters.secondary.free_form_coding_agent import (
     synthetic_agent_execution,
     synthetic_workspace_context,
 )
-from codetoreum.domain.coding_agent_types import InvocationMode
+from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
 from codetoreum.domain.repair_cycle_types import (
     AnalysisContext,
     FailureClassification,
@@ -49,18 +49,18 @@ from codetoreum.domain.repair_cycle_types import (
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.output.coding_agent import CodingAgentInvocationOptions
-from codetoreum.ports.output.prompt_builder import IPromptBuilder, StructuredPrompt
+from codetoreum.ports.output.prompt_builder import (
+    IFreeFormPromptBuilder,
+    StructuredPrompt,
+)
 from codetoreum.ports.output.systemic_analysis_service import ISystemicAnalysisService
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Awaitable, Callable
     from pathlib import Path
 
-    from codetoreum.domain.agent import Agent
-    from codetoreum.domain.work_item import WorkItem
     from codetoreum.domain.workspace_context import WorkspaceContext
     from codetoreum.ports.output.coding_agent import ICodingAgent
-    from codetoreum.ports.output.prompt_builder import ExecutionOutput
 
 logger = logging.getLogger(__name__)
 
@@ -70,18 +70,17 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-class _SystemicAnalysisPromptBuilder(IPromptBuilder):
-    """Per-call :class:`IPromptBuilder` for systemic failure analysis.
+class _SystemicAnalysisPromptBuilder(IFreeFormPromptBuilder):
+    """Per-call :class:`IFreeFormPromptBuilder` for systemic failure analysis.
 
     Closure-captures the test failures and analysis context. The
-    :meth:`build` method ignores the standard ``agent`` / ``work_item``
-    / ``prior_outputs`` arguments — only the synthetic ``workspace_context``
-    is used.
+    :meth:`build` method assembles the :class:`StructuredPrompt` from
+    that captured state plus the runtime workspace context.
 
     The resulting :class:`StructuredPrompt` carries the full failure-
-    analysis prompt in its ``task_description`` field. The rendered text
-    (via :func:`render_structured_prompt_to_text`) becomes the prompt
-    Claude Code receives.
+    analysis prompt in its ``task_description`` field and ``work_item=None``.
+    The rendered text (via :func:`render_structured_prompt_to_text`)
+    becomes the prompt Claude Code receives.
     """
 
     def __init__(
@@ -95,10 +94,7 @@ class _SystemicAnalysisPromptBuilder(IPromptBuilder):
 
     async def build(
         self,
-        agent: Agent,
-        work_item: WorkItem,
         workspace_context: WorkspaceContext,
-        prior_outputs: tuple[ExecutionOutput, ...] = (),
     ) -> StructuredPrompt:
         """Assemble the structured prompt for systemic failure analysis."""
         task_description = _build_systemic_analysis_task_text(
@@ -108,7 +104,7 @@ class _SystemicAnalysisPromptBuilder(IPromptBuilder):
         return StructuredPrompt(
             role_description="Systemic analysis specialist",
             task_description=task_description,
-            work_item=work_item,
+            work_item=None,
             workspace_context=workspace_context,
             instructions=(
                 "Respond with JSON only — no markdown, no commentary.",
@@ -190,34 +186,49 @@ class LLMSystemicAnalysisAdapter(ISystemicAnalysisService):
 
     def __init__(
         self,
-        coding_agent_factory: Callable[[IPromptBuilder], ICodingAgent],
+        coding_agent_factory: Callable[[IFreeFormPromptBuilder], ICodingAgent],
         *,
         timeout_seconds: int = 300,
         invocation_mode: InvocationMode = InvocationMode.CONTAINERIZED,
         model: str = "claude-sonnet-4-6",
         container_image: str = "codetoreum-agent:latest",
         workspace_path: Path | None = None,
+        invocation_defaults_resolver: (
+            Callable[[str, str | None], Awaitable[AgentInvocationConfig | None]] | None
+        ) = None,
     ) -> None:
         """Initialize the systemic-analysis adapter.
 
         Args:
             coding_agent_factory: Per-call factory returning a fresh
                 :class:`ICodingAgent` bound to the supplied
-                :class:`IPromptBuilder`. The bootstrap wires this to a
-                resilience-decorated
+                :class:`IFreeFormPromptBuilder`. The bootstrap wires
+                this to a resilience-decorated
                 :class:`~codetoreum.adapters.secondary.free_form_coding_agent.FreeFormCodingAgent`.
             timeout_seconds: Hard timeout for each coding-agent
                 invocation (default 300s).
-            invocation_mode: Where the coding agent runs. Defaults to
+            invocation_mode: Server-wide fallback mode. Used when
+                ``invocation_defaults_resolver`` is ``None`` or returns
+                ``None`` for the current call. Defaults to
                 :class:`InvocationMode.CONTAINERIZED` for production
                 isolation; tests may pass :class:`InvocationMode.HOST`.
-            model: Model name to request from the coding agent.
-            container_image: Docker image for containerised mode. Only
-                consumed when ``invocation_mode == CONTAINERIZED``.
+            model: Server-wide fallback model name.
+            container_image: Server-wide fallback Docker image for
+                containerised mode. Only consumed when the resolved
+                mode is ``CONTAINERIZED``.
             workspace_path: Optional workspace path the coding agent
                 runs in. Systemic analysis has no workspace of its own;
                 callers typically pass the orchestrator's working
                 directory (or a temp dir for tests).
+            invocation_defaults_resolver: Optional per-call hook that
+                returns the per-workflow-step
+                :class:`AgentInvocationConfig` given a
+                ``(work_item_id, agent_name)`` pair. The bootstrap wires
+                this so each systemic-analysis call uses the model /
+                container / mode configured for the agent assigned to
+                this step. When the resolver returns ``None`` (no agent
+                registered for that name, lookup failure, etc.) the
+                adapter falls back to the constructor defaults above.
 
         Raises:
             ValueError: If ``coding_agent_factory`` is None or
@@ -235,7 +246,55 @@ class LLMSystemicAnalysisAdapter(ISystemicAnalysisService):
         self._model = model
         self._container_image = container_image
         self._workspace_path = workspace_path
+        self._invocation_defaults_resolver = invocation_defaults_resolver
         self._logger = logging.getLogger(__name__)
+
+    async def _resolve_invocation_options(
+        self,
+        *,
+        work_item_id: str,
+        agent_name: str | None,
+        timeout_seconds: int,
+    ) -> CodingAgentInvocationOptions:
+        """Build :class:`CodingAgentInvocationOptions` for a single call.
+
+        If ``invocation_defaults_resolver`` was wired, await it with
+        ``(work_item_id, agent_name)``; when it returns an
+        :class:`AgentInvocationConfig` use the per-workflow-step mode /
+        model / container image instead of the adapter's constructor
+        fallbacks. ``None`` (or no resolver) means fall back to the
+        constructor defaults.
+        """
+        resolved: AgentInvocationConfig | None = None
+        if self._invocation_defaults_resolver is not None:
+            try:
+                resolved = await self._invocation_defaults_resolver(work_item_id, agent_name)
+            except Exception:
+                self._logger.warning(
+                    "Workflow-step invocation_defaults_resolver raised; "
+                    "falling back to adapter constructor defaults",
+                    exc_info=True,
+                    extra={"work_item_id": work_item_id, "agent_name": agent_name},
+                )
+                resolved = None
+
+        mode = resolved.mode if resolved is not None else self._invocation_mode
+        model = resolved.model if resolved is not None else self._model
+        container_image = self._container_image
+        if resolved is not None:
+            container_image = resolved.mode_config.get("image", self._container_image)
+
+        mode_config: dict[str, object] = {}
+        if mode == InvocationMode.CONTAINERIZED:
+            mode_config = {"image": container_image}
+
+        return CodingAgentInvocationOptions(
+            invocation_mode=mode,
+            model=model,
+            timeout_seconds=timeout_seconds,
+            cost_limit_usd=None,
+            mode_config=mode_config,
+        )
 
     async def analyze(
         self,
@@ -286,16 +345,10 @@ class LLMSystemicAnalysisAdapter(ISystemicAnalysisService):
             workspace_path=self._workspace_path,
         )
 
-        mode_config: dict[str, object] = {}
-        if self._invocation_mode == InvocationMode.CONTAINERIZED:
-            mode_config = {"image": self._container_image}
-
-        options = CodingAgentInvocationOptions(
-            invocation_mode=self._invocation_mode,
-            model=self._model,
+        options = await self._resolve_invocation_options(
+            work_item_id=context.work_item_id,
+            agent_name=context.agent_name,
             timeout_seconds=self._timeout_seconds,
-            cost_limit_usd=None,
-            mode_config=mode_config,
         )
 
         try:

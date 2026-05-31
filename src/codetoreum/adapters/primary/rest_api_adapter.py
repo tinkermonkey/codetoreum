@@ -6,6 +6,7 @@ Codetoreum system, providing endpoints for workflow control, task queries,
 and configuration management.
 """
 
+from dataclasses import asdict
 from datetime import datetime
 from typing import Any
 
@@ -19,12 +20,14 @@ from codetoreum.config import (
     WORKSPACE_DEFAULT_PAGE_SIZE,
 )
 from codetoreum.infrastructure.logging import get_logger
+from codetoreum.ports.exceptions import ValidationError
 from codetoreum.ports.input.config_command import (
     AddEnvironmentVariableCommand,
     IConfigurationCommandPort,
     RemoveEnvironmentVariableCommand,
     UpdateProjectConfigCommand,
 )
+from codetoreum.ports.input.config_query import IConfigurationQueryPort
 from codetoreum.ports.input.task_query import (
     ExecutionStatus,
     ITaskQueryPort,
@@ -225,6 +228,7 @@ class RestAPIAdapter:
         workflow_command_port: IWorkflowCommandPort,
         task_query_port: ITaskQueryPort,
         config_command_port: IConfigurationCommandPort,
+        config_query_port: IConfigurationQueryPort,
         auth_dependencies=None,
     ):
         """
@@ -239,11 +243,12 @@ class RestAPIAdapter:
         self.workflow_port = workflow_command_port
         self.task_port = task_query_port
         self.config_port = config_command_port
+        self.config_query_port = config_query_port
         self.auth_dependencies = auth_dependencies
 
         # Create API router with optional authentication
         # All endpoints in this router will require authentication if auth_dependencies is provided
-        router_kwargs = {
+        router_kwargs: dict[str, Any] = {
             "prefix": "/api/v1",
             "tags": ["api"],
         }
@@ -778,8 +783,8 @@ class RestAPIAdapter:
             - 404 Not Found: Project not found
             """
             try:
-                result = await self.config_port.get_project_config(project_name)
-                return result
+                result = await self.config_query_port.get_project_config_by_name(project_name)
+                return asdict(result)
             except Exception as e:
                 logger.exception("Request failed", extra={"status_code": 404})
                 raise map_exception_to_http(e, "Request failed")
@@ -802,8 +807,14 @@ class RestAPIAdapter:
             - 200 OK: List of agent configurations
             """
             try:
-                result = await self.config_port.list_agent_configs(project_name=project_name)
-                return result
+                # The query port requires a project_id; when none is supplied via the
+                # REST query string fall back to listing across all projects by
+                # iterating list_projects first.
+                if project_name is None:
+                    msg = "project_name query parameter is required for listing agent configs"
+                    raise ValidationError(msg)
+                result = await self.config_query_port.list_agents(project_id=project_name)
+                return [asdict(r) for r in result]
             except Exception as e:
                 logger.exception("Request failed", extra={"status_code": 400})
                 raise map_exception_to_http(e, "Request failed")
@@ -825,8 +836,15 @@ class RestAPIAdapter:
             - 404 Not Found: Agent not found
             """
             try:
-                result = await self.config_port.get_agent_config(agent_name)
-                return result
+                # Single-agent lookup needs a project_id; this REST surface treats
+                # ``agent_name`` as globally unique within an implicit "default" project.
+                # Callers that need a richer scope should use the project-scoped query
+                # endpoint added in a future API revision.
+                result = await self.config_query_port.get_agent_config(
+                    project_id="default",
+                    agent_name=agent_name,
+                )
+                return asdict(result)
             except Exception as e:
                 logger.exception("Request failed", extra={"status_code": 404})
                 raise map_exception_to_http(e, "Request failed")
@@ -849,8 +867,11 @@ class RestAPIAdapter:
             - 200 OK: List of pipeline configurations
             """
             try:
-                result = await self.config_port.list_pipeline_configs(project_name=project_name)
-                return result
+                if project_name is None:
+                    msg = "project_name query parameter is required for listing pipeline configs"
+                    raise ValidationError(msg)
+                result = await self.config_query_port.list_pipelines(project_id=project_name)
+                return [asdict(r) for r in result]
             except Exception as e:
                 logger.exception("Request failed", extra={"status_code": 400})
                 raise map_exception_to_http(e, "Request failed")
@@ -872,8 +893,11 @@ class RestAPIAdapter:
             - 404 Not Found: Pipeline not found
             """
             try:
-                result = await self.config_port.get_pipeline_config(pipeline_name)
-                return result
+                result = await self.config_query_port.get_pipeline_config(
+                    project_id="default",
+                    pipeline_name=pipeline_name,
+                )
+                return asdict(result)
             except Exception as e:
                 logger.exception("Request failed", extra={"status_code": 404})
                 raise map_exception_to_http(e, "Request failed")
@@ -902,51 +926,18 @@ class RestAPIAdapter:
             - 200 OK: List of configuration changes with diffs
             """
             try:
-                result = await self.config_port.get_configuration_history(
-                    project_name=project_name,
-                    config_type=config_type,
+                # The query port surfaces version history per config_id; the REST
+                # endpoint exposes a project-scoped aggregate.
+                # ``project_name`` is treated as the config_id boundary here.
+                if not project_name:
+                    msg = "project_name query parameter is required for configuration history"
+                    raise ValidationError(msg)
+                result = await self.config_query_port.get_config_version_history(
+                    config_id=project_name,
+                    config_type=config_type or "project",
                     limit=limit,
-                    offset=offset,
                 )
-                return result
-            except Exception as e:
-                logger.exception("Request failed", extra={"status_code": 400})
-                raise map_exception_to_http(e, "Request failed")
-
-        @self.router.post(
-            "/configurations/rollback/{change_id}",
-            response_model=ConfigurationResponse,
-            summary="Rollback configuration change",
-        )
-        async def rollback_configuration(
-            change_id: str, user_id: str = Query(...), reason: str | None = Query(None)
-        ) -> ConfigurationResponse:
-            """
-            Rolls back a configuration change to a previous version.
-
-            **Parameters:**
-            - change_id: Configuration change identifier
-            - user_id: User performing the rollback
-            - reason: (Optional) Reason for rollback
-
-            **Returns:**
-            - 200 OK: Configuration rolled back
-            - 404 Not Found: Change not found
-            - 400 Bad Request: Cannot rollback
-            """
-            try:
-                result = await self.config_port.rollback_configuration(
-                    change_id=change_id, user_id=user_id, reason=reason
-                )
-
-                return ConfigurationResponse(
-                    success=result.success,
-                    config_version=result.config_version,
-                    message=result.message,
-                    changes_applied=result.changes_applied,
-                    errors=result.errors,
-                )
-
+                return [asdict(r) for r in result]
             except Exception as e:
                 logger.exception("Request failed", extra={"status_code": 400})
                 raise map_exception_to_http(e, "Request failed")

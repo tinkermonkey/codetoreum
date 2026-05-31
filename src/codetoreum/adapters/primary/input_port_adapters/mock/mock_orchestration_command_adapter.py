@@ -53,12 +53,12 @@ class MockOrchestrationCommandAdapter(IOrchestrationCommandPort):
     async def cancel_execution(self, command: CancelExecutionCommand) -> OrchestrationCommandResult:
         """Cancel an execution."""
         with self._lock:
-            if command.execution_id in self._executions:
-                self._executions[command.execution_id]["status"] = "CANCELLED"
+            if command.workflow_run_id in self._executions:
+                self._executions[command.workflow_run_id]["status"] = "CANCELLED"
 
             return OrchestrationCommandResult(
                 success=True,
-                execution_id=command.execution_id,
+                execution_id=command.workflow_run_id,
                 workflow_run_id=command.workflow_run_id,
                 status="CANCELLED",
                 message="Execution cancelled",
@@ -67,12 +67,12 @@ class MockOrchestrationCommandAdapter(IOrchestrationCommandPort):
     async def pause_execution(self, command: PauseExecutionCommand) -> OrchestrationCommandResult:
         """Pause an execution."""
         with self._lock:
-            if command.execution_id in self._executions:
-                self._executions[command.execution_id]["status"] = "PAUSED"
+            if command.workflow_run_id in self._executions:
+                self._executions[command.workflow_run_id]["status"] = "PAUSED"
 
             return OrchestrationCommandResult(
                 success=True,
-                execution_id=command.execution_id,
+                execution_id=command.workflow_run_id,
                 workflow_run_id=command.workflow_run_id,
                 status="PAUSED",
                 message="Execution paused",
@@ -81,12 +81,12 @@ class MockOrchestrationCommandAdapter(IOrchestrationCommandPort):
     async def resume_execution(self, command: ResumeExecutionCommand) -> OrchestrationCommandResult:
         """Resume an execution."""
         with self._lock:
-            if command.execution_id in self._executions:
-                self._executions[command.execution_id]["status"] = "RESUMED"
+            if command.workflow_run_id in self._executions:
+                self._executions[command.workflow_run_id]["status"] = "RESUMED"
 
             return OrchestrationCommandResult(
                 success=True,
-                execution_id=command.execution_id,
+                execution_id=command.workflow_run_id,
                 workflow_run_id=command.workflow_run_id,
                 status="RESUMED",
                 message="Execution resumed",

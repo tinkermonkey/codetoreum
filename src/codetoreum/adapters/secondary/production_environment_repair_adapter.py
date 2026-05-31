@@ -25,7 +25,7 @@ from codetoreum.adapters.secondary.free_form_coding_agent import (
     synthetic_agent_execution,
     synthetic_workspace_context,
 )
-from codetoreum.domain.coding_agent_types import InvocationMode
+from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
 from codetoreum.domain.events.repair_cycle_events import (
     EnvironmentRebuildCompletedEvent,
     EnvironmentRebuildStartedEvent,
@@ -43,22 +43,22 @@ from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.output.coding_agent import CodingAgentInvocationOptions
 from codetoreum.ports.output.environment_repair_service import IEnvironmentRepairService
 from codetoreum.ports.output.event_emitter import IEventEmitter, NullEventEmitter
-from codetoreum.ports.output.prompt_builder import IPromptBuilder, StructuredPrompt
+from codetoreum.ports.output.prompt_builder import (
+    IFreeFormPromptBuilder,
+    StructuredPrompt,
+)
 from codetoreum.ports.output.repair_cycle_service import RepairCycleContext
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Awaitable, Callable
     from pathlib import Path
 
-    from codetoreum.domain.agent import Agent
-    from codetoreum.domain.work_item import WorkItem
     from codetoreum.domain.workspace_context import WorkspaceContext
     from codetoreum.infrastructure.resilience.interfaces import ICircuitBreaker
     from codetoreum.ports.output.coding_agent import (
         CodingAgentResult,
         ICodingAgent,
     )
-    from codetoreum.ports.output.prompt_builder import ExecutionOutput
 
 logger = logging.getLogger(__name__)
 
@@ -85,12 +85,12 @@ class EnvironmentRepairAdapterConfig:
             raise ValueError(msg)
 
 
-class _EnvironmentRebuildPromptBuilder(IPromptBuilder):
-    """Per-call :class:`IPromptBuilder` for environment rebuild prompts.
+class _EnvironmentRebuildPromptBuilder(IFreeFormPromptBuilder):
+    """Per-call :class:`IFreeFormPromptBuilder` for environment rebuild prompts.
 
-    Closure-captures the rebuild task description text. Ignores the
-    standard ``agent`` / ``work_item`` / ``prior_outputs`` arguments —
-    only the supplied ``workspace_context`` is forwarded.
+    Closure-captures the rebuild task description text. The
+    :meth:`build` method assembles a :class:`StructuredPrompt` with
+    ``work_item=None``.
     """
 
     def __init__(self, *, task_text: str) -> None:
@@ -98,15 +98,12 @@ class _EnvironmentRebuildPromptBuilder(IPromptBuilder):
 
     async def build(
         self,
-        agent: Agent,
-        work_item: WorkItem,
         workspace_context: WorkspaceContext,
-        prior_outputs: tuple[ExecutionOutput, ...] = (),
     ) -> StructuredPrompt:
         return StructuredPrompt(
             role_description="Environment repair specialist",
             task_description=self._task_text,
-            work_item=work_item,
+            work_item=None,
             workspace_context=workspace_context,
             instructions=(
                 "Return a JSON object describing what you did.",
@@ -120,23 +117,20 @@ class _EnvironmentRebuildPromptBuilder(IPromptBuilder):
         )
 
 
-class _EnvironmentVerifyPromptBuilder(IPromptBuilder):
-    """Per-call :class:`IPromptBuilder` for environment verification prompts."""
+class _EnvironmentVerifyPromptBuilder(IFreeFormPromptBuilder):
+    """Per-call :class:`IFreeFormPromptBuilder` for environment verification prompts."""
 
     def __init__(self, *, task_text: str) -> None:
         self._task_text = task_text
 
     async def build(
         self,
-        agent: Agent,
-        work_item: WorkItem,
         workspace_context: WorkspaceContext,
-        prior_outputs: tuple[ExecutionOutput, ...] = (),
     ) -> StructuredPrompt:
         return StructuredPrompt(
             role_description="Environment verification specialist",
             task_description=self._task_text,
-            work_item=work_item,
+            work_item=None,
             workspace_context=workspace_context,
             instructions=(
                 "Return a JSON object describing the verification result.",
@@ -176,7 +170,7 @@ class ProductionEnvironmentRepairAdapter(IEnvironmentRepairService):
 
     def __init__(
         self,
-        coding_agent_factory: Callable[[IPromptBuilder], ICodingAgent],
+        coding_agent_factory: Callable[[IFreeFormPromptBuilder], ICodingAgent],
         repair_config: EnvironmentRepairConfig | None = None,
         event_emitter: IEventEmitter | None = None,
         config: EnvironmentRepairAdapterConfig | None = None,
@@ -186,13 +180,17 @@ class ProductionEnvironmentRepairAdapter(IEnvironmentRepairService):
         model: str = "claude-sonnet-4-6",
         container_image: str = "codetoreum-agent:latest",
         workspace_path: Path | None = None,
+        invocation_defaults_resolver: (
+            Callable[[str, str | None], Awaitable[AgentInvocationConfig | None]] | None
+        ) = None,
     ) -> None:
         """Initialize production environment repair adapter.
 
         Args:
             coding_agent_factory: Per-call factory returning a fresh
                 :class:`ICodingAgent` bound to the supplied
-                :class:`IPromptBuilder`. The bootstrap wires this to a
+                :class:`IFreeFormPromptBuilder`. The bootstrap wires
+                this to a
                 resilience-decorated
                 :class:`~codetoreum.adapters.secondary.free_form_coding_agent.FreeFormCodingAgent`.
             repair_config: Optional EnvironmentRepairConfig (uses
@@ -203,10 +201,16 @@ class ProductionEnvironmentRepairAdapter(IEnvironmentRepairService):
                 defaults if not provided).
             circuit_breaker: Optional circuit breaker for coding-agent
                 call protection.
-            invocation_mode: Where the coding agent runs.
-            model: Model name to request.
-            container_image: Docker image when running containerised.
+            invocation_mode: Server-wide fallback mode.
+            model: Server-wide fallback model name.
+            container_image: Server-wide fallback Docker image.
             workspace_path: Optional workspace path the agent runs in.
+            invocation_defaults_resolver: Optional per-call hook that
+                returns the per-workflow-step
+                :class:`AgentInvocationConfig` given a
+                ``(work_item_id, agent_name)`` pair. Bootstrap wires
+                this so each environment-repair sub-task honours the
+                agent config for the agent assigned to that step.
         """
         if coding_agent_factory is None:
             msg = "coding_agent_factory cannot be None"
@@ -220,11 +224,70 @@ class ProductionEnvironmentRepairAdapter(IEnvironmentRepairService):
         self._model = model
         self._container_image = container_image
         self._workspace_path = workspace_path
+        self._invocation_defaults_resolver = invocation_defaults_resolver
         self._test_type_descriptions = {
             RepairTestType.UNIT: "unit tests",
             RepairTestType.INTEGRATION: "integration tests",
             RepairTestType.E2E: "end-to-end tests",
         }
+
+    async def _resolve_invocation_options(
+        self,
+        *,
+        work_item_id: str,
+        agent_name: str | None,
+        timeout_seconds: int,
+    ) -> CodingAgentInvocationOptions:
+        """Build :class:`CodingAgentInvocationOptions` for a single call.
+
+        Mirrors the systemic-analysis adapter: when an
+        ``invocation_defaults_resolver`` is wired, await it with
+        ``(work_item_id, agent_name)`` and use the per-workflow-step
+        mode / model / image instead of the constructor fallbacks.
+        ``None`` (or no resolver) falls back to the constructor defaults.
+        """
+        resolved: AgentInvocationConfig | None = None
+        if self._invocation_defaults_resolver is not None:
+            try:
+                resolved = await self._invocation_defaults_resolver(work_item_id, agent_name)
+            except Exception:
+                logger.warning(
+                    "Workflow-step invocation_defaults_resolver raised; "
+                    "falling back to adapter constructor defaults",
+                    exc_info=True,
+                    extra={"work_item_id": work_item_id, "agent_name": agent_name},
+                )
+                resolved = None
+
+        mode = resolved.mode if resolved is not None else self._invocation_mode
+        model = resolved.model if resolved is not None else self._model
+        container_image = self._container_image
+        if resolved is not None:
+            container_image = resolved.mode_config.get("image", self._container_image)
+
+        mode_config: dict[str, object] = {}
+        if mode == InvocationMode.CONTAINERIZED:
+            mode_config = {"image": container_image}
+
+        return CodingAgentInvocationOptions(
+            invocation_mode=mode,
+            model=model,
+            timeout_seconds=timeout_seconds,
+            cost_limit_usd=None,
+            mode_config=mode_config,
+        )
+
+    def _resolve_agent_name(self, sub_task: str, context: RepairCycleContext) -> str | None:
+        """Resolve the agent name for a sub-task within the workflow step.
+
+        Reads ``context.agent_config.resolve_agent(sub_task, default)`` when
+        a per-sub-task agent_config is wired; otherwise falls back to the
+        step's default ``context.agent_name``. Returns ``None`` only when
+        neither is available — the adapter then uses its constructor defaults.
+        """
+        if context.agent_config is not None:
+            return context.agent_config.resolve_agent(sub_task, context.agent_name)
+        return context.agent_name
 
     def _get_test_type_description(self, test_type: RepairTestType) -> str:
         """Get human-readable description for a test type, logging if unknown.
@@ -299,7 +362,7 @@ Return a JSON response with the verification status and any issues found."""
         self,
         *,
         purpose: str,
-        prompt_builder: IPromptBuilder,
+        prompt_builder: IFreeFormPromptBuilder,
         timeout_seconds: int,
         operation: str,
         context: RepairCycleContext,
@@ -344,16 +407,11 @@ Return a JSON response with the verification status and any issues found."""
             workspace_path=self._workspace_path,
         )
 
-        mode_config: dict[str, object] = {}
-        if self._invocation_mode == InvocationMode.CONTAINERIZED:
-            mode_config = {"image": self._container_image}
-
-        options = CodingAgentInvocationOptions(
-            invocation_mode=self._invocation_mode,
-            model=self._model,
+        agent_name = self._resolve_agent_name(operation, context)
+        options = await self._resolve_invocation_options(
+            work_item_id=context.work_item_id,
+            agent_name=agent_name,
             timeout_seconds=timeout_seconds,
-            cost_limit_usd=None,
-            mode_config=mode_config,
         )
 
         try:

@@ -120,11 +120,14 @@ class InMemoryTracer(ITracer):
         Args:
             span: Span to end
         """
-        span.end_time = self._time_source()  # type: ignore[attr-defined]
+        span.end_time = self._time_source()
 
         with self._lock:
             self._active_spans.pop(span.span_id, None)
-            self._completed_spans.append(span)  # type: ignore[arg-type]
+            # The tracer only mints MockSpan instances internally; narrow the
+            # wider SpanProtocol parameter at the store boundary.
+            assert isinstance(span, MockSpan)
+            self._completed_spans.append(span)
 
     async def add_event(
         self,
@@ -139,7 +142,7 @@ class InMemoryTracer(ITracer):
             name: Event name
             attributes: Event attributes
         """
-        span.events.append(  # type: ignore[attr-defined]
+        span.events.append(
             SpanEvent(
                 name=name,
                 timestamp=self._time_source(),
@@ -160,7 +163,7 @@ class InMemoryTracer(ITracer):
             key: Attribute key
             value: Attribute value
         """
-        span.set_attribute(key, value)  # type: ignore[attr-defined]
+        span.set_attribute(key, value)
 
     async def record_exception(
         self,
@@ -175,7 +178,7 @@ class InMemoryTracer(ITracer):
             span: Span to record exception in
             exception: Exception that occurred
         """
-        span.set_status(SpanStatus.ERROR)  # type: ignore[attr-defined]
+        span.set_status(SpanStatus.ERROR)
         await self.add_event(
             span,
             "exception",
