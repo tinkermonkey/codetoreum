@@ -569,7 +569,7 @@ class TestVerifyInfraExclusivity:
         mock_es.close = AsyncMock()
 
         mock_redis = AsyncMock()
-        mock_redis.keys.return_value = [b"other-service:key:1"]  # Redis also fails
+        mock_redis.keys.return_value = ["other-service:key:1"]  # Redis also fails
         mock_redis.close = AsyncMock()
 
         mock_github_client = AsyncMock()
