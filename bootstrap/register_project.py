@@ -51,8 +51,12 @@ async def _register(config: dict, es_url: str) -> None:
     redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
     github_token = os.environ.get("GITHUB_TOKEN", "")
 
-    from codetoreum.infrastructure.bootstrap.infra_exclusivity import verify_infra_exclusivity
-    await verify_infra_exclusivity(es_url, redis_url, github_token)
+    from codetoreum.infrastructure.bootstrap.infra_exclusivity import InfraExclusivityError, verify_infra_exclusivity
+    try:
+        await verify_infra_exclusivity(es_url, redis_url, github_token)
+    except InfraExclusivityError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(e.exit_code)
 
     es_client = AsyncElasticsearch([es_url])
     try:

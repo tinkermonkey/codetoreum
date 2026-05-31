@@ -367,12 +367,17 @@ class ProductionApplicationBootstrap:
 
             # Phase 1c: Verify infrastructure exclusivity (INV-21)
             logger.info("Phase 1c: Verifying infrastructure exclusivity...")
-            from codetoreum.infrastructure.bootstrap.infra_exclusivity import verify_infra_exclusivity
+            from codetoreum.infrastructure.bootstrap.infra_exclusivity import InfraExclusivityError, verify_infra_exclusivity
+            import sys
 
             es_url = _cred_os.environ.get("ELASTICSEARCH_URL", "http://localhost:9200")
             redis_url = _cred_os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
-            await verify_infra_exclusivity(es_url, redis_url, credentials.github_token)
+            try:
+                await verify_infra_exclusivity(es_url, redis_url, credentials.github_token)
+            except InfraExclusivityError as e:
+                logger.error(f"Infrastructure exclusivity check failed: {e}")
+                sys.exit(e.exit_code)
             logger.info("Phase 1c: Infrastructure exclusivity verified.")
 
             # AdapterFactoryConfig defaults to PRODUCTION mode, which is what we need

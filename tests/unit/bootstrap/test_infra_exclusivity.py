@@ -10,10 +10,12 @@ from codetoreum.infrastructure.bootstrap.infra_exclusivity import (
     EXIT_CODE_ES_SHARED,
     EXIT_CODE_GITHUB_RATE_LIMIT,
     EXIT_CODE_REDIS_SHARED,
+    InfraExclusivityError,
     check_docker_capacity,
     check_elasticsearch_exclusivity,
     check_github_rate_limit,
     check_redis_exclusivity,
+    verify_infra_exclusivity,
 )
 
 
@@ -30,7 +32,7 @@ class TestElasticsearchExclusivity:
         }
         mock_es.close = AsyncMock()
 
-        with patch("codetoreum.infrastructure.bootstrap.infra_exclusivity.AsyncElasticsearch", return_value=mock_es):
+        with patch("elasticsearch.AsyncElasticsearch", return_value=mock_es):
             result = await check_elasticsearch_exclusivity("http://localhost:9200")
 
         assert result.passed is True
@@ -48,7 +50,7 @@ class TestElasticsearchExclusivity:
         }
         mock_es.close = AsyncMock()
 
-        with patch("codetoreum.infrastructure.bootstrap.infra_exclusivity.AsyncElasticsearch", return_value=mock_es):
+        with patch("elasticsearch.AsyncElasticsearch", return_value=mock_es):
             result = await check_elasticsearch_exclusivity("http://localhost:9200")
 
         assert result.passed is False
@@ -63,7 +65,7 @@ class TestElasticsearchExclusivity:
         mock_es.indices.get.return_value = {}
         mock_es.close = AsyncMock()
 
-        with patch("codetoreum.infrastructure.bootstrap.infra_exclusivity.AsyncElasticsearch", return_value=mock_es):
+        with patch("elasticsearch.AsyncElasticsearch", return_value=mock_es):
             result = await check_elasticsearch_exclusivity("http://localhost:9200")
 
         assert result.passed is True
@@ -75,26 +77,12 @@ class TestElasticsearchExclusivity:
         mock_es.indices.get.side_effect = ConnectionError("Cannot connect to Elasticsearch")
         mock_es.close = AsyncMock()
 
-        with patch("codetoreum.infrastructure.bootstrap.infra_exclusivity.AsyncElasticsearch", return_value=mock_es):
+        with patch("elasticsearch.AsyncElasticsearch", return_value=mock_es):
             result = await check_elasticsearch_exclusivity("http://localhost:9200")
 
         assert result.passed is False
         assert result.exit_code == EXIT_CODE_ES_SHARED
         assert "Failed to verify Elasticsearch exclusivity" in result.error_message
-
-    @pytest.mark.asyncio
-    async def test_es_import_error_fails(self) -> None:
-        """Verify Elasticsearch exclusivity check fails when elasticsearch not installed."""
-        with patch("codetoreum.infrastructure.bootstrap.infra_exclusivity.AsyncElasticsearch", side_effect=ImportError):
-            # Force the import to fail
-            with patch("codetoreum.infrastructure.bootstrap.infra_exclusivity.__import__", side_effect=ImportError):
-                # Directly test the exception path
-                result = await check_elasticsearch_exclusivity("http://localhost:9200")
-                # We can't easily trigger the ImportError in the actual code
-                # so we'll just verify the structure is correct
-                assert hasattr(result, "check_name")
-                assert hasattr(result, "passed")
-                assert hasattr(result, "exit_code")
 
 
 class TestRedisExclusivity:
@@ -104,10 +92,10 @@ class TestRedisExclusivity:
     async def test_redis_exclusive_instance_passes(self) -> None:
         """Verify Redis exclusivity check passes with only codetoreum: keys."""
         mock_redis = AsyncMock()
-        mock_redis.keys.return_value = [b"codetoreum:lock:1", b"codetoreum:event:2"]
+        mock_redis.keys.return_value = ["codetoreum:lock:1", "codetoreum:event:2"]
         mock_redis.close = AsyncMock()
 
-        with patch("codetoreum.infrastructure.bootstrap.infra_exclusivity.aioredis.from_url", return_value=mock_redis):
+        with patch("redis.asyncio.from_url", return_value=mock_redis):
             result = await check_redis_exclusivity("redis://localhost:6379/0")
 
         assert result.passed is True
@@ -119,13 +107,13 @@ class TestRedisExclusivity:
         """Verify Redis exclusivity check fails when other keys exist."""
         mock_redis = AsyncMock()
         mock_redis.keys.return_value = [
-            b"codetoreum:lock:1",
-            b"switchyard:queue:1",  # Non-Codetoreum key
-            b"cache:data:2",  # Another non-Codetoreum key
+            "codetoreum:lock:1",
+            "switchyard:queue:1",  # Non-Codetoreum key
+            "cache:data:2",  # Another non-Codetoreum key
         ]
         mock_redis.close = AsyncMock()
 
-        with patch("codetoreum.infrastructure.bootstrap.infra_exclusivity.aioredis.from_url", return_value=mock_redis):
+        with patch("redis.asyncio.from_url", return_value=mock_redis):
             result = await check_redis_exclusivity("redis://localhost:6379/0")
 
         assert result.passed is False
@@ -141,7 +129,7 @@ class TestRedisExclusivity:
         mock_redis.keys.return_value = []
         mock_redis.close = AsyncMock()
 
-        with patch("codetoreum.infrastructure.bootstrap.infra_exclusivity.aioredis.from_url", return_value=mock_redis):
+        with patch("redis.asyncio.from_url", return_value=mock_redis):
             result = await check_redis_exclusivity("redis://localhost:6379/0")
 
         assert result.passed is True
@@ -150,10 +138,10 @@ class TestRedisExclusivity:
     async def test_redis_custom_prefix_passes(self) -> None:
         """Verify Redis exclusivity check respects custom key prefix."""
         mock_redis = AsyncMock()
-        mock_redis.keys.return_value = [b"custom:key:1", b"custom:key:2"]
+        mock_redis.keys.return_value = ["custom:key:1", "custom:key:2"]
         mock_redis.close = AsyncMock()
 
-        with patch("codetoreum.infrastructure.bootstrap.infra_exclusivity.aioredis.from_url", return_value=mock_redis):
+        with patch("redis.asyncio.from_url", return_value=mock_redis):
             result = await check_redis_exclusivity("redis://localhost:6379/0", key_prefix="custom:")
 
         assert result.passed is True
@@ -161,10 +149,7 @@ class TestRedisExclusivity:
     @pytest.mark.asyncio
     async def test_redis_connection_error_fails(self) -> None:
         """Verify Redis exclusivity check fails on connection error."""
-        async def raise_connection_error(*args, **kwargs):
-            raise ConnectionError("Cannot connect to Redis")
-
-        with patch("codetoreum.infrastructure.bootstrap.infra_exclusivity.aioredis.from_url", side_effect=raise_connection_error):
+        with patch("redis.asyncio.from_url", side_effect=ConnectionError("Cannot connect to Redis")):
             result = await check_redis_exclusivity("redis://localhost:6379/0")
 
         assert result.passed is False
@@ -188,7 +173,7 @@ class TestDockerCapacity:
         ]
         mock_docker.containers = mock_containers
 
-        with patch("codetoreum.infrastructure.bootstrap.infra_exclusivity.docker.from_env", return_value=mock_docker):
+        with patch("docker.from_env", return_value=mock_docker):
             result = check_docker_capacity(agent_count=1, max_parallel_work_items=5)
 
         assert result.passed is True
@@ -208,7 +193,7 @@ class TestDockerCapacity:
         ]
         mock_docker.containers = mock_containers
 
-        with patch("codetoreum.infrastructure.bootstrap.infra_exclusivity.docker.from_env", return_value=mock_docker):
+        with patch("docker.from_env", return_value=mock_docker):
             result = check_docker_capacity(agent_count=2, max_parallel_work_items=5)
 
         assert result.passed is False
@@ -217,7 +202,7 @@ class TestDockerCapacity:
 
     def test_docker_connection_error_fails(self) -> None:
         """Verify Docker capacity check fails on connection error."""
-        with patch("codetoreum.infrastructure.bootstrap.infra_exclusivity.docker.from_env", side_effect=ConnectionError("Cannot connect to Docker")):
+        with patch("docker.from_env", side_effect=ConnectionError("Cannot connect to Docker")):
             result = check_docker_capacity()
 
         assert result.passed is False
@@ -234,7 +219,7 @@ class TestDockerCapacity:
         ]
         mock_docker.containers = mock_containers
 
-        with patch("codetoreum.infrastructure.bootstrap.infra_exclusivity.docker.from_env", return_value=mock_docker):
+        with patch("docker.from_env", return_value=mock_docker):
             # Call without parameters
             result = check_docker_capacity()
 
@@ -262,7 +247,7 @@ class TestGitHubRateLimit:
         }
 
         with patch(
-            "codetoreum.infrastructure.bootstrap.infra_exclusivity.GitHubGraphQLClient",
+            "codetoreum.infrastructure.http.github_graphql_client.GitHubGraphQLClient",
             return_value=mock_client,
         ):
             result = await check_github_rate_limit("valid-token")
@@ -286,7 +271,7 @@ class TestGitHubRateLimit:
         }
 
         with patch(
-            "codetoreum.infrastructure.bootstrap.infra_exclusivity.GitHubGraphQLClient",
+            "codetoreum.infrastructure.http.github_graphql_client.GitHubGraphQLClient",
             return_value=mock_client,
         ):
             result = await check_github_rate_limit("valid-token")
@@ -313,7 +298,7 @@ class TestGitHubRateLimit:
         }
 
         with patch(
-            "codetoreum.infrastructure.bootstrap.infra_exclusivity.GitHubGraphQLClient",
+            "codetoreum.infrastructure.http.github_graphql_client.GitHubGraphQLClient",
             return_value=mock_client,
         ):
             result = await check_github_rate_limit("invalid-token")
@@ -330,7 +315,7 @@ class TestGitHubRateLimit:
         mock_client.execute.side_effect = ConnectionError("Cannot connect to GitHub")
 
         with patch(
-            "codetoreum.infrastructure.bootstrap.infra_exclusivity.GitHubGraphQLClient",
+            "codetoreum.infrastructure.http.github_graphql_client.GitHubGraphQLClient",
             return_value=mock_client,
         ):
             result = await check_github_rate_limit("valid-token")
@@ -414,3 +399,207 @@ class TestExitCodes:
         assert EXIT_CODE_REDIS_SHARED == 71
         assert EXIT_CODE_DOCKER_CAPACITY == 72
         assert EXIT_CODE_GITHUB_RATE_LIMIT == 73
+
+
+class TestVerifyInfraExclusivity:
+    """Tests for verify_infra_exclusivity orchestrator function."""
+
+    @pytest.mark.asyncio
+    async def test_all_checks_pass_returns_successfully(self) -> None:
+        """Verify verify_infra_exclusivity returns without error when all checks pass."""
+        mock_es = AsyncMock()
+        mock_es.indices.get.return_value = {"codetoreum-events": {}}
+        mock_es.close = AsyncMock()
+
+        mock_redis = AsyncMock()
+        mock_redis.keys.return_value = ["codetoreum:lock:1"]
+        mock_redis.close = AsyncMock()
+
+        mock_github_client = AsyncMock()
+        mock_github_client.execute.return_value = {
+            "data": {
+                "viewer": {"login": "test-user"},
+                "rateLimit": {
+                    "limit": 5000,
+                    "remaining": 4500,
+                    "resetAt": "2026-05-31T23:00:00Z",
+                },
+            }
+        }
+
+        mock_docker = Mock()
+        mock_containers = Mock()
+        mock_containers.list.side_effect = [[Mock()], [Mock()]]
+        mock_docker.containers = mock_containers
+
+        with patch("elasticsearch.AsyncElasticsearch", return_value=mock_es):
+            with patch("redis.asyncio.from_url", return_value=mock_redis):
+                with patch(
+                    "codetoreum.infrastructure.http.github_graphql_client.GitHubGraphQLClient",
+                    return_value=mock_github_client,
+                ):
+                    with patch("docker.from_env", return_value=mock_docker):
+                        # Should not raise
+                        await verify_infra_exclusivity(
+                            "http://localhost:9200",
+                            "redis://localhost:6379/0",
+                            "valid-token",
+                        )
+
+    @pytest.mark.asyncio
+    async def test_elasticsearch_failure_raises_error(self) -> None:
+        """Verify verify_infra_exclusivity raises InfraExclusivityError on Elasticsearch failure."""
+        mock_es = AsyncMock()
+        mock_es.indices.get.return_value = {
+            "codetoreum-events": {},
+            "other-service-index": {},
+        }
+        mock_es.close = AsyncMock()
+
+        mock_redis = AsyncMock()
+        mock_redis.keys.return_value = ["codetoreum:lock:1"]
+        mock_redis.close = AsyncMock()
+
+        mock_github_client = AsyncMock()
+        mock_github_client.execute.return_value = {
+            "data": {
+                "viewer": {"login": "test-user"},
+                "rateLimit": {
+                    "limit": 5000,
+                    "remaining": 4500,
+                    "resetAt": "2026-05-31T23:00:00Z",
+                },
+            }
+        }
+
+        mock_docker = Mock()
+        mock_containers = Mock()
+        mock_containers.list.side_effect = [[Mock()], [Mock()]]
+        mock_docker.containers = mock_containers
+
+        with patch("elasticsearch.AsyncElasticsearch", return_value=mock_es):
+            with patch("redis.asyncio.from_url", return_value=mock_redis):
+                with patch(
+                    "codetoreum.infrastructure.http.github_graphql_client.GitHubGraphQLClient",
+                    return_value=mock_github_client,
+                ):
+                    with patch("docker.from_env", return_value=mock_docker):
+                        with pytest.raises(InfraExclusivityError) as exc_info:
+                            await verify_infra_exclusivity(
+                                "http://localhost:9200",
+                                "redis://localhost:6379/0",
+                                "valid-token",
+                            )
+
+        assert exc_info.value.exit_code == EXIT_CODE_ES_SHARED
+
+    @pytest.mark.asyncio
+    async def test_redis_failure_raises_error(self) -> None:
+        """Verify verify_infra_exclusivity raises InfraExclusivityError on Redis failure."""
+        mock_es = AsyncMock()
+        mock_es.indices.get.return_value = {"codetoreum-events": {}}
+        mock_es.close = AsyncMock()
+
+        mock_redis = AsyncMock()
+        mock_redis.keys.return_value = ["codetoreum:lock:1", "other-service:key:1"]
+        mock_redis.close = AsyncMock()
+
+        mock_github_client = AsyncMock()
+        mock_github_client.execute.return_value = {
+            "data": {
+                "viewer": {"login": "test-user"},
+                "rateLimit": {
+                    "limit": 5000,
+                    "remaining": 4500,
+                    "resetAt": "2026-05-31T23:00:00Z",
+                },
+            }
+        }
+
+        mock_docker = Mock()
+        mock_containers = Mock()
+        mock_containers.list.side_effect = [[Mock()], [Mock()]]
+        mock_docker.containers = mock_containers
+
+        with patch("elasticsearch.AsyncElasticsearch", return_value=mock_es):
+            with patch("redis.asyncio.from_url", return_value=mock_redis):
+                with patch(
+                    "codetoreum.infrastructure.http.github_graphql_client.GitHubGraphQLClient",
+                    return_value=mock_github_client,
+                ):
+                    with patch("docker.from_env", return_value=mock_docker):
+                        with pytest.raises(InfraExclusivityError) as exc_info:
+                            await verify_infra_exclusivity(
+                                "http://localhost:9200",
+                                "redis://localhost:6379/0",
+                                "valid-token",
+                            )
+
+        assert exc_info.value.exit_code == EXIT_CODE_REDIS_SHARED
+
+    @pytest.mark.asyncio
+    async def test_skip_flag_bypasses_checks(self) -> None:
+        """Verify verify_infra_exclusivity respects skip flag and doesn't run checks."""
+        with patch.dict(os.environ, {"CODETOREUM_INFRA_EXCLUSIVITY": "skip"}, clear=True):
+            # Should return without making any calls
+            with patch("codetoreum.infrastructure.bootstrap.infra_exclusivity.check_elasticsearch_exclusivity") as mock_es:
+                with patch("codetoreum.infrastructure.bootstrap.infra_exclusivity.check_redis_exclusivity") as mock_redis:
+                    with patch("codetoreum.infrastructure.bootstrap.infra_exclusivity.check_github_rate_limit") as mock_github:
+                        with patch("codetoreum.infrastructure.bootstrap.infra_exclusivity.check_docker_capacity") as mock_docker:
+                            await verify_infra_exclusivity(
+                                "http://localhost:9200",
+                                "redis://localhost:6379/0",
+                                "valid-token",
+                            )
+
+                            # Verify no checks were called
+                            mock_es.assert_not_called()
+                            mock_redis.assert_not_called()
+                            mock_github.assert_not_called()
+                            mock_docker.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_first_failure_determines_exit_code(self) -> None:
+        """Verify verify_infra_exclusivity raises with first failure's exit code."""
+        mock_es = AsyncMock()
+        mock_es.indices.get.return_value = {
+            "codetoreum-events": {},
+            "other-service-index": {},  # ES fails
+        }
+        mock_es.close = AsyncMock()
+
+        mock_redis = AsyncMock()
+        mock_redis.keys.return_value = [b"other-service:key:1"]  # Redis also fails
+        mock_redis.close = AsyncMock()
+
+        mock_github_client = AsyncMock()
+        mock_github_client.execute.return_value = {
+            "errors": [{"message": "Bad credentials"}]  # GitHub also fails
+        }
+
+        mock_docker = Mock()
+        mock_containers = Mock()
+        mock_containers.list.side_effect = [
+            [Mock() for _ in range(250)],  # Docker capacity fails
+            [Mock() for _ in range(100)],
+        ]
+        mock_docker.containers = mock_containers
+
+        with patch("elasticsearch.AsyncElasticsearch", return_value=mock_es):
+            with patch("redis.asyncio.from_url", return_value=mock_redis):
+                with patch(
+                    "codetoreum.infrastructure.http.github_graphql_client.GitHubGraphQLClient",
+                    return_value=mock_github_client,
+                ):
+                    with patch("docker.from_env", return_value=mock_docker):
+                        with pytest.raises(InfraExclusivityError) as exc_info:
+                            await verify_infra_exclusivity(
+                                "http://localhost:9200",
+                                "redis://localhost:6379/0",
+                                "invalid-token",
+                                agent_count=2,
+                                max_parallel_work_items=5,
+                            )
+
+        # Should be ES exit code since ES check runs first
+        assert exc_info.value.exit_code == EXIT_CODE_ES_SHARED

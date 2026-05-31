@@ -20,11 +20,18 @@ Must not be used in CI or production-shaped environments.
 import asyncio
 import logging
 import os
-import sys
 from dataclasses import dataclass
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+
+class InfraExclusivityError(Exception):
+    """Raised when infrastructure exclusivity checks fail."""
+
+    def __init__(self, message: str, exit_code: int) -> None:
+        super().__init__(message)
+        self.exit_code = exit_code
 
 # Exit codes for each check
 EXIT_CODE_ES_SHARED = 70
@@ -154,7 +161,7 @@ async def check_redis_exclusivity(redis_url: str, key_prefix: str = "codetoreum:
 
     redis_client = None
     try:
-        redis_client = await aioredis.from_url(redis_url)
+        redis_client = aioredis.from_url(redis_url, decode_responses=True)
 
         # Get all keys in the database
         all_keys = await redis_client.keys("*")
@@ -356,7 +363,7 @@ async def verify_infra_exclusivity(
     max_parallel_work_items: int = 5,
 ) -> None:
     """
-    Run all infra-exclusivity checks and exit on failure.
+    Run all infra-exclusivity checks and raise on failure.
 
     This is the main entry point for infra-exclusivity verification.
     Called from bootstrap/register_project.py and ProductionApplicationBootstrap.setup().
@@ -370,7 +377,8 @@ async def verify_infra_exclusivity(
         agent_count: Number of agents to verify Docker capacity for
         max_parallel_work_items: Max parallel work items per agent
 
-    Exits with code 70-73 if any check fails.
+    Raises:
+        InfraExclusivityError: If any check fails, with exit_code (70-73) for the first failure
     """
     if _should_skip_checks():
         logger.info("CODETOREUM_INFRA_EXCLUSIVITY=skip: skipping infra-exclusivity checks")
@@ -397,7 +405,10 @@ async def verify_infra_exclusivity(
         for result in failures:
             logger.error(f"  {result.check_name}: {result.error_message}")
 
-        # Exit with the first failure's exit code
-        sys.exit(failures[0].exit_code or 1)
+        # Raise with the first failure's exit code
+        raise InfraExclusivityError(
+            failures[0].error_message or "Infrastructure exclusivity check failed",
+            failures[0].exit_code or 1,
+        )
 
     logger.info(f"All infra-exclusivity checks passed ({len(results)}/{len(results)})")
