@@ -1,4 +1,4 @@
-# Phase 2: Lifecycle Event Handler Registration - Event Inventory
+# Lifecycle Event Handler Registration and Audit - Event Inventory
 
 ## Summary of Changes
 
@@ -80,7 +80,7 @@ The following event types have at least one subscriber registered:
 - ReviewCycleFeedbackSubmittedEvent
 - ReviewCycleIterationStartedEvent
 
-**WorkflowEventHandler** (NEW in Phase 2)
+**WorkflowEventHandler** (Lifecycle Event Handler Registration)
 - WorkItemCreatedEvent
 - ExecutionCompletedEvent
 - ExecutionFailedEvent
@@ -88,19 +88,19 @@ The following event types have at least one subscriber registered:
 - ReviewCycleRejectedEvent
 - ReviewCycleEscalatedToHumanEvent
 
-**ExecutionEventHandler** (NEW in Phase 2)
+**ExecutionEventHandler** (Lifecycle Event Handler Registration)
 - ExecutionInitializedEvent
 - ExecutionStartedEvent
 - ExecutionCompletedEvent
 - ExecutionFailedEvent
 - ExecutionTimedOutEvent
 
-**BranchResolutionEventHandler** (NEW in Phase 2)
+**BranchResolutionEventHandler** (Lifecycle Event Handler Registration)
 - BranchResolvedEvent
 - BranchReusedEvent
 - BranchResolutionCreatedEvent
 
-**RepairCycleEventHandler** (NEW in Phase 2)
+**RepairCycleEventHandler** (Lifecycle Event Handler Registration)
 - WorkItemColumnChangedEvent
 
 **WorkflowOrchestrator (manual subscriptions)**

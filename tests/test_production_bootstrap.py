@@ -49,29 +49,42 @@ def test_get_adapter_slot_info_before_setup_raises() -> None:
 
 
 def test_event_handler_types_declared() -> None:
-    """Verify that all wired event handlers declare their supported event types.
+    """Verify event handler decorators declare correct event types.
 
-    This test checks the @event_handler decorators on all handlers registered in
-    ProductionApplicationBootstrap to ensure they properly declare the event types
-    they subscribe to.
+    This test verifies that the @event_handler decorators on all handlers
+    match the expected event types they should subscribe to.
 
-    The mapping here matches the handlers registered in _create_fastapi_app():
+    The mapping here must match the @event_handler decorators in
+    src/codetoreum/application/event_handlers/:
     - BoardColumnEventHandler
     - PRReviewCycleDispatchHandler
     - PRReviewCycleEventHandler
     - ReviewEventHandler
-    - WorkflowEventHandler (NEW in Phase 2)
-    - ExecutionEventHandler (NEW in Phase 2)
-    - BranchResolutionEventHandler (NEW in Phase 2)
-    - RepairCycleEventHandler (NEW in Phase 2)
+    - WorkflowEventHandler (Lifecycle Event Handler Registration)
+    - ExecutionEventHandler (Lifecycle Event Handler Registration)
+    - BranchResolutionEventHandler (Lifecycle Event Handler Registration)
+    - RepairCycleEventHandler (Lifecycle Event Handler Registration)
     """
-    # Map of handlers to their declared event types
-    # These must match the @event_handler decorators in application/event_handlers/
+    # Expected event type mappings - must match @event_handler decorators
     handler_event_types = {
-        "BoardColumnEventHandler": ["WorkItemColumnChangedEvent", "AgentExecutionCompletedEvent"],
+        "BoardColumnEventHandler": [
+            "WorkItemColumnChangedEvent",
+            "AgentExecutionCompletedEvent",
+        ],
         "PRReviewCycleDispatchHandler": ["WorkItemColumnChangedEvent"],
-        "PRReviewCycleEventHandler": ["PRReviewCycleApprovedEvent", "PRReviewCycleRejectedEvent"],
-        "ReviewEventHandler": ["ReviewCycleCreatedEvent", "ReviewCycleCompletedEvent", "ReviewStatusChangedEvent"],
+        "PRReviewCycleEventHandler": [
+            "PRReviewCycleApprovedEvent",
+            "PRReviewCycleIssuesFoundEvent",
+            "PRReviewCycleMaxCyclesReachedEvent",
+        ],
+        "ReviewEventHandler": [
+            "ReviewCycleCreatedEvent",
+            "ReviewCycleIterationStartedEvent",
+            "ReviewCycleFeedbackSubmittedEvent",
+            "ReviewCycleApprovedEvent",
+            "ReviewCycleRejectedEvent",
+            "ReviewCycleEscalatedToHumanEvent",
+        ],
         "WorkflowEventHandler": [
             "WorkItemCreatedEvent",
             "ExecutionCompletedEvent",
@@ -87,7 +100,11 @@ def test_event_handler_types_declared() -> None:
             "ExecutionFailedEvent",
             "ExecutionTimedOutEvent",
         ],
-        "BranchResolutionEventHandler": ["BranchResolvedEvent", "BranchReusedEvent", "BranchResolutionCreatedEvent"],
+        "BranchResolutionEventHandler": [
+            "BranchResolvedEvent",
+            "BranchReusedEvent",
+            "BranchResolutionCreatedEvent",
+        ],
         "RepairCycleEventHandler": ["WorkItemColumnChangedEvent"],
     }
 
@@ -96,7 +113,9 @@ def test_event_handler_types_declared() -> None:
 
     # Verify each handler has at least one event type
     for handler_name, event_types in handler_event_types.items():
-        assert len(event_types) > 0, f"Handler {handler_name} should declare at least one event type"
+        assert (
+            len(event_types) > 0
+        ), f"Handler {handler_name} should declare at least one event type"
 
 
 @pytest.mark.asyncio
