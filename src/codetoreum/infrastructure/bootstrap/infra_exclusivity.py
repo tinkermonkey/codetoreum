@@ -21,7 +21,6 @@ import asyncio
 import logging
 import os
 from dataclasses import dataclass
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +45,8 @@ class InfraExclusivityCheckResult:
 
     check_name: str
     passed: bool
-    error_message: Optional[str] = None
-    exit_code: Optional[int] = None
+    error_message: str | None = None
+    exit_code: int | None = None
 
 
 def _should_skip_checks() -> bool:

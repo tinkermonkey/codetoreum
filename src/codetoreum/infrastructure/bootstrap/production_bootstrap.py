@@ -367,8 +367,12 @@ class ProductionApplicationBootstrap:
 
             # Phase 1c: Verify infrastructure exclusivity (INV-21)
             logger.info("Phase 1c: Verifying infrastructure exclusivity...")
-            from codetoreum.infrastructure.bootstrap.infra_exclusivity import InfraExclusivityError, verify_infra_exclusivity
             import sys
+
+            from codetoreum.infrastructure.bootstrap.infra_exclusivity import (
+                InfraExclusivityError,
+                verify_infra_exclusivity,
+            )
 
             es_url = _cred_os.environ.get("ELASTICSEARCH_URL", "http://localhost:9200")
             redis_url = _cred_os.environ.get("REDIS_URL", "redis://localhost:6379/0")
