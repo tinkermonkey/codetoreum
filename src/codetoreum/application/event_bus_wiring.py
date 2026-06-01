@@ -2,13 +2,6 @@
 
 import logging
 
-from codetoreum.application.event_handlers import (
-    BranchResolutionEventHandler,
-    ExecutionEventHandler,
-    RepairCycleEventHandler,
-    ReviewEventHandler,
-    WorkflowEventHandler,
-)
 from codetoreum.application.execution_service import ExecutionService
 from codetoreum.application.review_service import ReviewService
 from codetoreum.application.workflow_orchestrator import WorkflowOrchestrator
