@@ -355,7 +355,7 @@ def create_app(
     # Configure rate limiting
     limiter = Limiter(key_func=get_remote_address, default_limits=[rate_limit])
     app.state.limiter = limiter
-    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
     app.add_middleware(SlowAPIMiddleware)
 
     # Add security headers middleware

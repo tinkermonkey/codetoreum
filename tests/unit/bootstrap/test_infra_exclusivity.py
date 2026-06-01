@@ -165,7 +165,7 @@ class TestDockerCapacity:
         mock_docker = Mock()
         mock_containers = Mock()
 
-        # 10 existing containers, need 6 (1 agent × 5 work items) + 20% = 7.2
+        # 10 existing containers, need 6 (1 agent x 5 work items) + 20% = 7.2
         # Available: 256 - 10 = 246 > 7.2 ✓
         mock_containers.list.side_effect = [
             [Mock() for _ in range(10)],  # all containers
@@ -185,7 +185,7 @@ class TestDockerCapacity:
         mock_docker = Mock()
         mock_containers = Mock()
 
-        # 250 existing containers, need 12 (2 agents × 5 work items) + 20% = 14.4
+        # 250 existing containers, need 12 (2 agents x 5 work items) + 20% = 14.4
         # Available: 256 - 250 = 6 < 14.4 ✗
         mock_containers.list.side_effect = [
             [Mock() for _ in range(250)],  # all containers
