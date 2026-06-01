@@ -48,7 +48,9 @@ class TestHandlerRegistration:
                 # Dynamically import the module
                 import importlib.util
 
-                spec = importlib.util.spec_from_file_location(f"codetoreum.application.event_handlers.{module_name}", py_file)
+                spec = importlib.util.spec_from_file_location(
+                    f"codetoreum.application.event_handlers.{module_name}", py_file
+                )
                 if spec and spec.loader:
                     module = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(module)
@@ -78,7 +80,14 @@ class TestHandlerRegistration:
         Returns:
             Set of registered handler class names
         """
-        bootstrap_file = Path(__file__).parents[3] / "src" / "codetoreum" / "infrastructure" / "bootstrap" / "production_bootstrap.py"
+        bootstrap_file = (
+            Path(__file__).parents[3]
+            / "src"
+            / "codetoreum"
+            / "infrastructure"
+            / "bootstrap"
+            / "production_bootstrap.py"
+        )
 
         if not bootstrap_file.exists():
             raise RuntimeError(f"Production bootstrap file not found: {bootstrap_file}")

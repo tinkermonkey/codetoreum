@@ -71,10 +71,7 @@ def test_get_adapter_slot_info_before_setup_raises() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.skipif(
-    not _infrastructure_available(),
-    reason="Requires Elasticsearch and Redis to be running locally"
-)
+@pytest.mark.skipif(not _infrastructure_available(), reason="Requires Elasticsearch and Redis to be running locally")
 async def test_critical_adapters_have_failure_routes() -> None:
     """Verify that Phase 3a validates critical adapters declare failure routes (INV-20).
 
@@ -100,7 +97,9 @@ async def test_critical_adapters_have_failure_routes() -> None:
         if (adapter := bootstrap.adapters.__dict__.get(slot_name))
         and getattr(adapter, "failed_event_store", None) is not None
     ]
-    assert len(critical_adapters_with_failure_routes) == 5, "All 5 critical adapters should have non-None failure routes"
+    assert (
+        len(critical_adapters_with_failure_routes) == 5
+    ), "All 5 critical adapters should have non-None failure routes"
 
     # Verify DLQ retry processor was started (Phase 5d-2)
     # The failed_event_store should be a DeadLetterQueueFailedEventStoreAdapter
@@ -187,9 +186,7 @@ def test_event_handler_types_declared() -> None:
 
     # Verify each handler has at least one event type
     for handler_name, event_types in handler_event_types.items():
-        assert (
-            len(event_types) > 0
-        ), f"Handler {handler_name} should declare at least one event type"
+        assert len(event_types) > 0, f"Handler {handler_name} should declare at least one event type"
 
 
 @pytest.mark.asyncio

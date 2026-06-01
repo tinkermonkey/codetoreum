@@ -32,6 +32,7 @@ class InfraExclusivityError(Exception):
         super().__init__(message)
         self.exit_code = exit_code
 
+
 # Exit codes for each check
 EXIT_CODE_ES_SHARED = 70
 EXIT_CODE_REDIS_SHARED = 71
@@ -64,8 +65,7 @@ def _should_skip_checks() -> bool:
 
     if skip_flag and in_ci:
         logger.warning(
-            "CODETOREUM_INFRA_EXCLUSIVITY=skip is set but CI environment detected. "
-            "Checks will NOT be skipped in CI."
+            "CODETOREUM_INFRA_EXCLUSIVITY=skip is set but CI environment detected. " "Checks will NOT be skipped in CI."
         )
         return False
 
@@ -335,8 +335,7 @@ async def check_github_rate_limit(github_token: str) -> InfraExclusivityCheckRes
                 check_name="github",
                 passed=False,
                 error_message=(
-                    f"GitHub rate limit headroom insufficient. "
-                    f"Remaining: {remaining}/{limit} (need >= 1000)"
+                    f"GitHub rate limit headroom insufficient. " f"Remaining: {remaining}/{limit} (need >= 1000)"
                 ),
                 exit_code=EXIT_CODE_GITHUB_RATE_LIMIT,
             )

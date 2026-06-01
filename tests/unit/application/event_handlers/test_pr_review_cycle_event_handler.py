@@ -228,7 +228,9 @@ class TestPRReviewCycleEventHandlerErrorHandling:
     async def test_external_service_error_handling(self):
         """Test handler raises error when board service fails."""
         mock_service = AsyncMock(spec=IBoardService)
-        mock_service.move_item_to_column.side_effect = ExternalServiceError(service="BoardService", message="Board service unavailable")
+        mock_service.move_item_to_column.side_effect = ExternalServiceError(
+            service="BoardService", message="Board service unavailable"
+        )
         handler = PRReviewCycleEventHandler(mock_service)
 
         event = PRReviewCycleIssuesFoundEvent(

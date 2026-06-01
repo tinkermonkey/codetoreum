@@ -114,7 +114,9 @@ class GitHubGraphQLClient:
                 )
 
             if response.status_code >= 400:
-                raise ExternalServiceError(service="GitHub", message=f"GitHub GraphQL API error: {response.status_code}")
+                raise ExternalServiceError(
+                    service="GitHub", message=f"GitHub GraphQL API error: {response.status_code}"
+                )
 
             data = response.json()
 

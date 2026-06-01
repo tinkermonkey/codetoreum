@@ -169,7 +169,7 @@ class TestDockerCapacity:
         # Available: 256 - 10 = 246 > 7.2 ✓
         mock_containers.list.side_effect = [
             [Mock() for _ in range(10)],  # all containers
-            [Mock() for _ in range(3)],   # running containers
+            [Mock() for _ in range(3)],  # running containers
         ]
         mock_docker.containers = mock_containers
 
@@ -293,9 +293,7 @@ class TestGitHubRateLimit:
     async def test_github_api_error_fails(self) -> None:
         """Verify GitHub rate-limit check fails on API error."""
         mock_client = AsyncMock()
-        mock_client.execute.return_value = {
-            "errors": [{"message": "Bad credentials"}]
-        }
+        mock_client.execute.return_value = {"errors": [{"message": "Bad credentials"}]}
 
         with patch(
             "codetoreum.infrastructure.http.github_graphql_client.GitHubGraphQLClient",
@@ -332,40 +330,54 @@ class TestSkipFlag:
         """Verify skip flag detection returns False when not set."""
         with patch.dict(os.environ, {}, clear=True):
             from codetoreum.infrastructure.bootstrap.infra_exclusivity import _should_skip_checks
+
             assert _should_skip_checks() is False
 
     def test_skip_flag_set_returns_true_not_in_ci(self) -> None:
         """Verify skip flag is respected when set and not in CI."""
         with patch.dict(os.environ, {"CODETOREUM_INFRA_EXCLUSIVITY": "skip"}, clear=True):
             from codetoreum.infrastructure.bootstrap.infra_exclusivity import _should_skip_checks
+
             assert _should_skip_checks() is True
 
     def test_skip_flag_ignored_in_github_actions(self) -> None:
         """Verify skip flag is ignored when GITHUB_ACTIONS is set."""
-        with patch.dict(os.environ, {
-            "CODETOREUM_INFRA_EXCLUSIVITY": "skip",
-            "GITHUB_ACTIONS": "true",
-        }, clear=True):
+        with patch.dict(
+            os.environ,
+            {
+                "CODETOREUM_INFRA_EXCLUSIVITY": "skip",
+                "GITHUB_ACTIONS": "true",
+            },
+            clear=True,
+        ):
             from codetoreum.infrastructure.bootstrap.infra_exclusivity import _should_skip_checks
+
             assert _should_skip_checks() is False
 
     def test_skip_flag_ignored_in_ci_environment(self) -> None:
         """Verify skip flag is ignored when CI_ENVIRONMENT is set."""
-        with patch.dict(os.environ, {
-            "CODETOREUM_INFRA_EXCLUSIVITY": "skip",
-            "CI_ENVIRONMENT": "github-actions",
-        }, clear=True):
+        with patch.dict(
+            os.environ,
+            {
+                "CODETOREUM_INFRA_EXCLUSIVITY": "skip",
+                "CI_ENVIRONMENT": "github-actions",
+            },
+            clear=True,
+        ):
             from codetoreum.infrastructure.bootstrap.infra_exclusivity import _should_skip_checks
+
             assert _should_skip_checks() is False
 
     def test_skip_flag_case_insensitive(self) -> None:
         """Verify skip flag is case-insensitive."""
         with patch.dict(os.environ, {"CODETOREUM_INFRA_EXCLUSIVITY": "SKIP"}, clear=True):
             from codetoreum.infrastructure.bootstrap.infra_exclusivity import _should_skip_checks
+
             assert _should_skip_checks() is True
 
         with patch.dict(os.environ, {"CODETOREUM_INFRA_EXCLUSIVITY": "Skip"}, clear=True):
             from codetoreum.infrastructure.bootstrap.infra_exclusivity import _should_skip_checks
+
             assert _should_skip_checks() is True
 
 
@@ -542,10 +554,18 @@ class TestVerifyInfraExclusivity:
         """Verify verify_infra_exclusivity respects skip flag and doesn't run checks."""
         with patch.dict(os.environ, {"CODETOREUM_INFRA_EXCLUSIVITY": "skip"}, clear=True):
             # Should return without making any calls
-            with patch("codetoreum.infrastructure.bootstrap.infra_exclusivity.check_elasticsearch_exclusivity") as mock_es:
-                with patch("codetoreum.infrastructure.bootstrap.infra_exclusivity.check_redis_exclusivity") as mock_redis:
-                    with patch("codetoreum.infrastructure.bootstrap.infra_exclusivity.check_github_rate_limit") as mock_github:
-                        with patch("codetoreum.infrastructure.bootstrap.infra_exclusivity.check_docker_capacity") as mock_docker:
+            with patch(
+                "codetoreum.infrastructure.bootstrap.infra_exclusivity.check_elasticsearch_exclusivity"
+            ) as mock_es:
+                with patch(
+                    "codetoreum.infrastructure.bootstrap.infra_exclusivity.check_redis_exclusivity"
+                ) as mock_redis:
+                    with patch(
+                        "codetoreum.infrastructure.bootstrap.infra_exclusivity.check_github_rate_limit"
+                    ) as mock_github:
+                        with patch(
+                            "codetoreum.infrastructure.bootstrap.infra_exclusivity.check_docker_capacity"
+                        ) as mock_docker:
                             await verify_infra_exclusivity(
                                 "http://localhost:9200",
                                 "redis://localhost:6379/0",
@@ -573,9 +593,7 @@ class TestVerifyInfraExclusivity:
         mock_redis.close = AsyncMock()
 
         mock_github_client = AsyncMock()
-        mock_github_client.execute.return_value = {
-            "errors": [{"message": "Bad credentials"}]  # GitHub also fails
-        }
+        mock_github_client.execute.return_value = {"errors": [{"message": "Bad credentials"}]}  # GitHub also fails
 
         mock_docker = Mock()
         mock_containers = Mock()

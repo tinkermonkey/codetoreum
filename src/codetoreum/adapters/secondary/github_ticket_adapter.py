@@ -578,7 +578,9 @@ class GitHubTicketAdapter(ITicketSystem):
         if response.status_code != 200:
             sanitized_error = self._sanitize_error_message(response.text)
             msg = "GitHub"
-            raise ExternalServiceError(service=msg, message=f"Unexpected status {response.status_code}: {sanitized_error}")
+            raise ExternalServiceError(
+                service=msg, message=f"Unexpected status {response.status_code}: {sanitized_error}"
+            )
 
         issue = response.json()
         # Extract project_id from repository

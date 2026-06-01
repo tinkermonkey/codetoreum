@@ -718,7 +718,9 @@ async def test_prepare_workspace_with_resolution_service_failure_falls_back(
 ):
     """Test that prepare_workspace falls back to default logic when resolution service fails."""
     # Configure resolution service to raise exception
-    mock_branch_resolution_service.configure_to_raise(ExternalServiceError(service="branch_resolution", message="Service unavailable"))
+    mock_branch_resolution_service.configure_to_raise(
+        ExternalServiceError(service="branch_resolution", message="Service unavailable")
+    )
 
     # Mock list_branches to return no branches (for fallback logic)
     mock_repository.list_branches.return_value = []

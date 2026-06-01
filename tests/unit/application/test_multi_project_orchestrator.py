@@ -204,7 +204,9 @@ class TestOrchestrationCycle:
     ):
         """Test that reload_config failure doesn't block the cycle."""
         # Setup
-        project_manager.reload_config = AsyncMock(side_effect=ExternalServiceError(service="config_service", message="Read failed"))
+        project_manager.reload_config = AsyncMock(
+            side_effect=ExternalServiceError(service="config_service", message="Read failed")
+        )
         project_manager.get_enabled_projects = AsyncMock(return_value=["api-service"])
         project_manager.get_project_config = AsyncMock(
             return_value=ProjectConfig(

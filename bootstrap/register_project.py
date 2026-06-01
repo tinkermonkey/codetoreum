@@ -52,6 +52,7 @@ async def _register(config: dict, es_url: str) -> None:
     github_token = os.environ.get("GITHUB_TOKEN", "")
 
     from codetoreum.infrastructure.bootstrap.infra_exclusivity import InfraExclusivityError, verify_infra_exclusivity
+
     try:
         await verify_infra_exclusivity(es_url, redis_url, github_token)
     except InfraExclusivityError as e:

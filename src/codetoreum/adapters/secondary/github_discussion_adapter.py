@@ -267,7 +267,9 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
     async def _get_discussion_thread(self, discussion_id: str) -> DiscussionThread:
         """Retrieve all comments on a GitHub Discussion via GraphQL API."""
         if self._graphql_client is None:
-            raise ExternalServiceError(service="GitHub", message="GraphQL client required to fetch GitHub Discussion threads")
+            raise ExternalServiceError(
+                service="GitHub", message="GraphQL client required to fetch GitHub Discussion threads"
+            )
 
         query = """
         query GetDiscussionComments($id: ID!, $after: String) {
@@ -419,7 +421,9 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
     async def _add_discussion_comment(self, discussion_id: str, content: str) -> Comment:
         """Post a comment to a GitHub Discussion via GraphQL API."""
         if self._graphql_client is None:
-            raise ExternalServiceError(service="GitHub", message="GraphQL client required to post comments on GitHub Discussions")
+            raise ExternalServiceError(
+                service="GitHub", message="GraphQL client required to post comments on GitHub Discussions"
+            )
 
         mutation = """
         mutation AddDiscussionComment($discussionId: ID!, $body: String!) {

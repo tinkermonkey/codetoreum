@@ -196,7 +196,9 @@ class ElasticsearchEventStore(IEventStore):
                 await self._create_index_template_if_not_exists()
                 self._initialized = True
                 logger.info(f"Elasticsearch event store initialized with prefix '{self.index_prefix}'")
-            except Exception as e:  # justification: initialization failure is fatal; re-raise as EventStoreError to fail fast during bootstrap
+            except (
+                Exception
+            ) as e:  # justification: initialization failure is fatal; re-raise as EventStoreError to fail fast during bootstrap
                 msg = f"Failed to initialize event store: {e}"
                 raise EventStoreError(msg) from e
         else:
@@ -248,10 +250,7 @@ class ElasticsearchEventStore(IEventStore):
             await asyncio.wait_for(self._async_queue.join(), timeout=timeout)
         except TimeoutError:
             pending = self._async_queue.qsize() if self._async_queue else 0
-            msg = (
-                f"Async persistence queue did not drain within {timeout}s "
-                f"({pending} items still pending)"
-            )
+            msg = f"Async persistence queue did not drain within {timeout}s " f"({pending} items still pending)"
             raise TimeoutError(msg) from None
 
     async def append(
