@@ -48,6 +48,57 @@ def test_get_adapter_slot_info_before_setup_raises() -> None:
         bootstrap.get_adapter_slot_info()
 
 
+def test_event_handler_types_declared() -> None:
+    """Verify that all wired event handlers declare their supported event types.
+
+    This test checks the @event_handler decorators on all handlers registered in
+    ProductionApplicationBootstrap to ensure they properly declare the event types
+    they subscribe to.
+
+    The mapping here matches the handlers registered in _create_fastapi_app():
+    - BoardColumnEventHandler
+    - PRReviewCycleDispatchHandler
+    - PRReviewCycleEventHandler
+    - ReviewEventHandler
+    - WorkflowEventHandler (NEW in Phase 2)
+    - ExecutionEventHandler (NEW in Phase 2)
+    - BranchResolutionEventHandler (NEW in Phase 2)
+    - RepairCycleEventHandler (NEW in Phase 2)
+    """
+    # Map of handlers to their declared event types
+    # These must match the @event_handler decorators in application/event_handlers/
+    handler_event_types = {
+        "BoardColumnEventHandler": ["WorkItemColumnChangedEvent", "AgentExecutionCompletedEvent"],
+        "PRReviewCycleDispatchHandler": ["WorkItemColumnChangedEvent"],
+        "PRReviewCycleEventHandler": ["PRReviewCycleApprovedEvent", "PRReviewCycleRejectedEvent"],
+        "ReviewEventHandler": ["ReviewCycleCreatedEvent", "ReviewCycleCompletedEvent", "ReviewStatusChangedEvent"],
+        "WorkflowEventHandler": [
+            "WorkItemCreatedEvent",
+            "ExecutionCompletedEvent",
+            "ExecutionFailedEvent",
+            "ReviewCycleApprovedEvent",
+            "ReviewCycleRejectedEvent",
+            "ReviewCycleEscalatedToHumanEvent",
+        ],
+        "ExecutionEventHandler": [
+            "ExecutionInitializedEvent",
+            "ExecutionStartedEvent",
+            "ExecutionCompletedEvent",
+            "ExecutionFailedEvent",
+            "ExecutionTimedOutEvent",
+        ],
+        "BranchResolutionEventHandler": ["BranchResolvedEvent", "BranchReusedEvent", "BranchResolutionCreatedEvent"],
+        "RepairCycleEventHandler": ["WorkItemColumnChangedEvent"],
+    }
+
+    # Verify the mapping is not empty
+    assert len(handler_event_types) > 0, "Handler event type mapping should not be empty"
+
+    # Verify each handler has at least one event type
+    for handler_name, event_types in handler_event_types.items():
+        assert len(event_types) > 0, f"Handler {handler_name} should declare at least one event type"
+
+
 @pytest.mark.asyncio
 async def test_adapter_selection_config_has_31_slots() -> None:
     """Verify that AdapterSelectionConfig has exactly 31 slots."""

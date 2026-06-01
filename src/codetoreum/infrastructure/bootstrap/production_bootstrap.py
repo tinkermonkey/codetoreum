@@ -62,14 +62,26 @@ from codetoreum.application.conversational_loop_orchestrator import (
 from codetoreum.application.event_handlers.board_event_handler import (
     BoardColumnEventHandler,
 )
+from codetoreum.application.event_handlers.branch_resolution_event_handler import (
+    BranchResolutionEventHandler,
+)
+from codetoreum.application.event_handlers.execution_event_handler import (
+    ExecutionEventHandler,
+)
 from codetoreum.application.event_handlers.pr_review_cycle_dispatch_handler import (
     PRReviewCycleDispatchHandler,
 )
 from codetoreum.application.event_handlers.pr_review_cycle_event_handler import (
     PRReviewCycleEventHandler,
 )
+from codetoreum.application.event_handlers.repair_cycle_event_handler import (
+    RepairCycleEventHandler,
+)
 from codetoreum.application.event_handlers.review_event_handler import (
     ReviewEventHandler,
+)
+from codetoreum.application.event_handlers.workflow_event_handler import (
+    WorkflowEventHandler,
 )
 from codetoreum.application.execution_service import ExecutionService
 from codetoreum.application.feedback_processor import FeedbackProcessor
@@ -1586,6 +1598,10 @@ class ProductionApplicationBootstrap:
         self._register_conversational_loop_orchestrator()
         self._register_pr_review_cycle_handlers()
         self._register_review_event_handler()
+        self._register_workflow_event_handler()
+        self._register_execution_event_handler()
+        self._register_branch_resolution_event_handler()
+        self._register_repair_cycle_event_handler()
 
         return app
 
@@ -1674,6 +1690,57 @@ class ProductionApplicationBootstrap:
         )
         self.infrastructure.event_bus.register_handler(handler)
         logger.info("Registered ReviewEventHandler with event bus")
+
+    def _register_workflow_event_handler(self) -> None:
+        """Register workflow event handler for orchestration events."""
+        if not self.infrastructure or not self.services:
+            logger.warning("Cannot register workflow event handler: components not ready")
+            return
+
+        handler = WorkflowEventHandler(
+            orchestrator=self.services.workflow_orchestrator,
+        )
+        self.infrastructure.event_bus.register_handler(handler)
+        logger.info("Registered WorkflowEventHandler with event bus")
+
+    def _register_execution_event_handler(self) -> None:
+        """Register execution event handler for execution lifecycle events."""
+        if not self.infrastructure or not self.services:
+            logger.warning("Cannot register execution event handler: components not ready")
+            return
+
+        handler = ExecutionEventHandler(
+            execution_service=self.services.execution_service,
+        )
+        self.infrastructure.event_bus.register_handler(handler)
+        logger.info("Registered ExecutionEventHandler with event bus")
+
+    def _register_branch_resolution_event_handler(self) -> None:
+        """Register branch resolution event handler for branch tracking and audit."""
+        if not self.infrastructure:
+            logger.warning("Cannot register branch resolution event handler: components not ready")
+            return
+
+        handler = BranchResolutionEventHandler(
+            event_bus=self.infrastructure.event_bus,
+        )
+        self.infrastructure.event_bus.register_handler(handler)
+        logger.info("Registered BranchResolutionEventHandler with event bus")
+
+    def _register_repair_cycle_event_handler(self) -> None:
+        """Register repair cycle event handler for test-fix-validate automation."""
+        if not self.adapters or not self.infrastructure:
+            logger.warning("Cannot register repair cycle event handler: components not ready")
+            return
+
+        handler = RepairCycleEventHandler(
+            repair_cycle=self.adapters.repair_cycle,
+            workflow_config=self.adapters.workflow_config,
+            event_bus=self.infrastructure.event_bus,
+            ci_pipeline_service=self.adapters.ci_pipeline,
+        )
+        self.infrastructure.event_bus.register_handler(handler)
+        logger.info("Registered RepairCycleEventHandler with event bus")
 
     # =========================================================================
     # Teardown

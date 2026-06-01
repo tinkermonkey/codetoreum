@@ -885,26 +885,19 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
         Subscribe workflow engine to adapter events.
 
         Subscribes to:
-        - workitem.column_changed: Handle column transitions
         - comment.needs_response: Handle discussion responses
-        - lock.released: Handle lock release and queue progression
         - review.status_changed: Handle review cycle completion
+        - repair_cycle.completed: Handle repair cycle completion
+
+        NOTE: WorkItemColumnChangedEvent and lock release events are now handled
+        by BoardColumnEventHandler (Phase 2 of lifecycle event handler registration).
+        These were vestigial polling-era wiring left in place during transition.
         """
         if not self.event_bus:
             return
 
-        # Subscribe to board events.
-        # NOTE: EventBus routes callbacks by event.event_type, which is the Python class name
-        # (e.g. "WorkItemColumnChangedEvent"), not the dot-notation constant from EventTypes.
-        # Using the class name here ensures this callback actually receives the event.
-        self.event_bus.subscribe("WorkItemColumnChangedEvent", self._handle_column_change)
-
         # Subscribe to discussion events
         self.event_bus.subscribe("CommentNeedsResponseEvent", self._handle_comment_needs_response)
-
-        # Subscribe to lock events
-        self.event_bus.subscribe("LockReleasedEvent", self._handle_lock_released)
-        self.event_bus.subscribe("PipelineLockReleasedEvent", self._handle_lock_released)
 
         # Subscribe to review events
         self.event_bus.subscribe("ReviewStatusChangedEvent", self._handle_review_status_changed)
