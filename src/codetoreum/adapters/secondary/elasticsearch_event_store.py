@@ -215,6 +215,41 @@ class ElasticsearchEventStore(IEventStore):
                 f"refresh={self._bulk_refresh!r})"
             )
 
+    async def wait_for_async_queue(self, timeout_seconds: float | None = None) -> None:
+        """
+        Wait for the async persistence queue to drain.
+
+        This is useful in tests to ensure all enqueued events have been
+        persisted before reading them back. Has no effect if async persistence
+        is disabled.
+
+        Args:
+            timeout_seconds: Maximum time to wait. Defaults to
+                shutdown_drain_timeout_seconds if not specified.
+
+        Raises:
+            TimeoutError: If the queue doesn't drain within the timeout
+            EventStoreError: If the event store is not initialized
+        """
+        if not self._initialized:
+            raise EventStoreError("Event store not initialized")
+
+        if not self._enable_async_persistence or self._async_queue is None:
+            # Async persistence disabled, nothing to wait for
+            return
+
+        timeout = timeout_seconds if timeout_seconds is not None else self._shutdown_drain_timeout_seconds
+
+        try:
+            await asyncio.wait_for(self._async_queue.join(), timeout=timeout)
+        except TimeoutError:
+            pending = self._async_queue.qsize() if self._async_queue else 0
+            msg = (
+                f"Async persistence queue did not drain within {timeout}s "
+                f"({pending} items still pending)"
+            )
+            raise TimeoutError(msg) from None
+
     async def append(
         self,
         stream_id: str,
