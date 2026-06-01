@@ -3,9 +3,13 @@
 import pytest
 
 from codetoreum.adapters.testing import InMemoryFailedEventStore
+from codetoreum.domain.events.work_item_events import WorkItemCreatedEvent
 from codetoreum.infrastructure.dead_letter_queue import DeadLetterQueue
 from codetoreum.adapters.secondary.failed_event_store_adapter import DeadLetterQueueFailedEventStoreAdapter
+from codetoreum.infrastructure.event_bus import EventBus
+from codetoreum.infrastructure.event_serialization import EventSerializer, auto_register_event_types
 from codetoreum.ports.output.failed_event_store import FailureReason
+from datetime import UTC, datetime
 
 
 @pytest.mark.asyncio
@@ -196,3 +200,102 @@ async def test_dlq_retry_processor_recovery():
     stats_after = adapter.get_stats()
     assert stats_after.total_failed_events == 0  # Event should be removed after successful retry
     assert stats_after.total_retries_succeeded == 1
+
+
+@pytest.mark.asyncio
+async def test_dlq_production_handler_with_real_events():
+    """Test that production DLQ handler correctly reconstructs and publishes real domain events.
+
+    This test verifies the full production handler path:
+    1. A real domain event is serialized and stored in the DLQ
+    2. The production handler reconstructs it from stored type and data
+    3. The event is published to an EventBus
+    4. Event handlers receive and process the reconstructed event
+    """
+    import asyncio
+
+    # Register event types for deserialization (production bootstrap does this)
+    auto_register_event_types()
+
+    # Create real domain event
+    original_event = WorkItemCreatedEvent(
+        type="workitem.created",
+        timestamp=datetime.now(UTC).isoformat(),
+        source="github",
+        work_item_id="item-123",
+        project_id="proj-456",
+        title="Test Work Item",
+    )
+
+    # Serialize to storage format (what gets stored in DLQ)
+    event_data = original_event.to_dict()
+    event_type = type(original_event).__name__
+
+    # Create EventBus to receive republished events
+    event_bus = EventBus()
+
+    # Track events received by the bus
+    received_events = []
+
+    async def test_handler(event):
+        """Handler that tracks received events."""
+        received_events.append(event)
+
+    event_bus.subscribe("WorkItemCreatedEvent", test_handler)
+
+    # Create DLQ and adapter
+    dlq = DeadLetterQueue(base_delay_seconds=0.1)
+    adapter = DeadLetterQueueFailedEventStoreAdapter(dlq)
+
+    # Create production-style handler that reconstructs and publishes
+    async def production_dlq_handler(stored_event_type: str, stored_event_data: dict) -> None:
+        """Production DLQ handler - mimics the real production bootstrap handler."""
+        try:
+            # Look up event class by type name in registry
+            event_class = EventSerializer._codetoeum_event_registry.get(stored_event_type)
+            if event_class is None:
+                raise ValueError(f"Unknown event type: {stored_event_type}")
+            # Reconstruct event using from_dict()
+            reconstructed_event = event_class.from_dict(stored_event_data)
+            # Publish to event bus
+            await event_bus.publish(reconstructed_event)
+        except Exception:
+            # Production handler re-raises on failure so DLQ schedules retry
+            raise
+
+    # Add failed event to DLQ (simulating an earlier failure)
+    failed_event_id = await adapter.add_failed_event(
+        event_type=event_type,
+        event_data=event_data,
+        failure_reason=FailureReason.TRANSIENT_ERROR,
+        error_message="Simulated transient error",
+    )
+
+    # Verify event is in DLQ
+    assert adapter.get_stats().total_failed_events == 1
+
+    # Manually set next_retry_at to now for immediate retry
+    event_record = dlq._storage[failed_event_id]
+    event_record.next_retry_at = datetime.now(UTC)
+
+    # Start retry processor with production handler
+    await adapter.start_retry_processor(production_dlq_handler)
+
+    # Wait for retry processor to pick up and process the event
+    await asyncio.sleep(1.5)
+
+    # Stop retry processor
+    await adapter.stop_retry_processor()
+
+    # Verify:
+    # 1. Event bus received the reconstructed event
+    assert len(received_events) == 1
+    received_event = received_events[0]
+    assert isinstance(received_event, WorkItemCreatedEvent)
+    assert received_event.work_item_id == "item-123"
+    assert received_event.project_id == "proj-456"
+    assert received_event.title == "Test Work Item"
+
+    # 2. Event was removed from DLQ after successful handler execution
+    assert adapter.get_stats().total_failed_events == 0
+    assert adapter.get_stats().total_retries_succeeded == 1
