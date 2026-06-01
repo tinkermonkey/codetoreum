@@ -196,7 +196,7 @@ class ElasticsearchEventStore(IEventStore):
                 await self._create_index_template_if_not_exists()
                 self._initialized = True
                 logger.info(f"Elasticsearch event store initialized with prefix '{self.index_prefix}'")
-            except Exception as e:
+            except Exception as e:  # justification: initialization failure is fatal; re-raise as EventStoreError to fail fast during bootstrap
                 msg = f"Failed to initialize event store: {e}"
                 raise EventStoreError(msg) from e
         else:

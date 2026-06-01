@@ -106,7 +106,7 @@ class EventBusRegistry:
                 self._services["clock"] = clock
                 logger.info("Registered simulation clock")
 
-        except Exception as e:
+        except Exception as e:  # justification: service registration failure is fatal; re-raise as EventBusWiringError to fail fast during bootstrap
             message = f"Failed to register services: {e}"
             raise EventBusWiringError(message) from e
 

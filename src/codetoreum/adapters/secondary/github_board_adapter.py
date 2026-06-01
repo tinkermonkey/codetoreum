@@ -138,7 +138,7 @@ class GitHubBoardAdapter(IBoardService):
             for handler in self._event_handlers[event_type]:
                 try:
                     handler(event)
-                except Exception as e:
+                except Exception as e:  # justification: handler plugins can raise any exception; log and continue to allow other handlers to run
                     logger.error(
                         f"Event handler failed for {event_type}: {e}",
                         exc_info=True,
@@ -298,7 +298,7 @@ class GitHubBoardAdapter(IBoardService):
             return self._parse_board_response(project_id, board_id, board_node)
         except ExternalServiceError:
             raise
-        except Exception as e:
+        except Exception as e:  # justification: convert unexpected parsing/request errors to ExternalServiceError for consistent failure routing
             msg = "GitHub"
             raise ExternalServiceError(service=msg, message=f"Failed to fetch board: {e!s}")
 
@@ -774,7 +774,7 @@ class GitHubBoardAdapter(IBoardService):
                     "board_id": board_id,
                 },
             )
-        except Exception as e:
+        except Exception as e:  # justification: unexpected errors during polling indicate critical state; log and disable polling to avoid cascade failures
             # Unexpected errors - log critically and stop polling
             logger.critical(
                 f"Unexpected error during board polling for {project_id}:{board_id}: {e}",

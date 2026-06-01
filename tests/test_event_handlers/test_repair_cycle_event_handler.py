@@ -909,7 +909,7 @@ class TestCIPipelineIntegration:
         )
 
         # CI pipeline raises an expected exception (external service error)
-        ci_pipeline_service.run_ci_checks.side_effect = ExternalServiceError("CI service", "Connection failed")
+        ci_pipeline_service.run_ci_checks.side_effect = ExternalServiceError(service="CI service", message="Connection failed")
 
         handler = RepairCycleEventHandler(
             repair_cycle=repair_cycle_adapter,

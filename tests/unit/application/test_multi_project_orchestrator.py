@@ -156,7 +156,7 @@ class TestOrchestrationCycle:
         )
         project_manager.ensure_project_cloned = AsyncMock(
             side_effect=[
-                ExternalServiceError("git", "Clone failed"),
+                ExternalServiceError(service="git", message="Clone failed"),
                 "/workspace/web-app",
             ]
         )
@@ -186,7 +186,7 @@ class TestOrchestrationCycle:
         # Setup
         project_manager.reload_config = AsyncMock()
         project_manager.get_enabled_projects = AsyncMock(
-            side_effect=ExternalServiceError("config_service", "Service unavailable")
+            side_effect=ExternalServiceError(service="config_service", message="Service unavailable")
         )
 
         # Execute
@@ -204,7 +204,7 @@ class TestOrchestrationCycle:
     ):
         """Test that reload_config failure doesn't block the cycle."""
         # Setup
-        project_manager.reload_config = AsyncMock(side_effect=ExternalServiceError("config_service", "Read failed"))
+        project_manager.reload_config = AsyncMock(side_effect=ExternalServiceError(service="config_service", message="Read failed"))
         project_manager.get_enabled_projects = AsyncMock(return_value=["api-service"])
         project_manager.get_project_config = AsyncMock(
             return_value=ProjectConfig(
@@ -603,7 +603,7 @@ class TestMultiProjectOrchestratorLifecycle:
         # Setup: board service fails during initial setup
         project_manager.get_enabled_projects = AsyncMock(return_value=["project-a"])
         board_service.reconcile_board = AsyncMock(
-            side_effect=ExternalServiceError("board_service", "Failed to reconcile boards")
+            side_effect=ExternalServiceError(service="board_service", message="Failed to reconcile boards")
         )
         multi_orchestrator.run_orchestration_cycle = AsyncMock()
 

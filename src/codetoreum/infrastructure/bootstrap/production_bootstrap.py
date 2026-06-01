@@ -596,22 +596,28 @@ class ProductionApplicationBootstrap:
                 )
 
                 if isinstance(self.infrastructure.failed_event_store, DeadLetterQueueFailedEventStoreAdapter):
-                    # Create a simple retry handler that logs and does not republish (basic implementation)
+                    # Create retry handler that republishes failed events to the event bus
                     async def _dlq_retry_handler(event_type: str, event_data: dict) -> None:
-                        """Basic DLQ retry handler - logs failures for manual intervention."""
+                        """DLQ retry handler - republishes failed events to the event bus for recovery."""
                         logger.info(
                             f"Retrying failed event type={event_type}",
                             extra={"event_data": event_data},
                         )
+                        # Republish event to event bus - if this succeeds, the event is removed from DLQ
+                        # If it fails (raises an exception), the DLQ will schedule another retry
+                        await self.infrastructure.event_bus.emit_event(event_type, event_data)
 
                     await self.infrastructure.failed_event_store.start_retry_processor(_dlq_retry_handler)
                     logger.info("Phase 5d-2: DLQ retry processor started")
             except Exception as e:
-                logger.warning(
-                    f"Failed to start DLQ retry processor: {e}",
+                # justification: DLQ startup failure is a fatal condition - system cannot recover from
+                # unprocessed failed events (INV-20 violation). Log at ERROR level and raise to fail fast.
+                logger.error(
+                    f"Failed to start DLQ retry processor - system cannot guarantee failure routing: {e}",
                     exc_info=True,
                     extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
                 )
+                raise RuntimeError("DLQ retry processor startup failed - cannot guarantee INV-20 compliance") from e
 
             # Phase 5e: Start multi-project orchestrator poll loop
             # MPO is the sole orchestration entry point. It polls all enabled projects
@@ -1091,16 +1097,16 @@ class ProductionApplicationBootstrap:
         # Check critical slot adapters
         for slot_name in CRITICAL_ADAPTER_SLOTS:
             adapter = self.adapters.__dict__.get(slot_name)
-            if adapter and not hasattr(adapter, "failed_event_store"):
+            if adapter and getattr(adapter, "failed_event_store", None) is None:
                 missing_routes.append(
-                    f"{slot_name}: {type(adapter).__name__} missing failed_event_store attribute"
+                    f"{slot_name}: {type(adapter).__name__} failed_event_store is None (no failure route)"
                 )
 
         # Check event store adapter (also critical per INV-20)
         event_store = self.adapters.event_store if self.adapters else None
-        if event_store and not hasattr(event_store, "failed_event_store"):
+        if event_store and getattr(event_store, "failed_event_store", None) is None:
             missing_routes.append(
-                f"event_store: {type(event_store).__name__} missing failed_event_store attribute"
+                f"event_store: {type(event_store).__name__} failed_event_store is None (no failure route)"
             )
 
         if missing_routes:
