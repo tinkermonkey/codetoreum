@@ -213,6 +213,7 @@ async def test_dlq_production_handler_with_real_events():
     4. Event handlers receive and process the reconstructed event
     """
     import asyncio
+    from codetoreum.infrastructure.dlq_retry import create_dlq_retry_handler
 
     # Register event types for deserialization (production bootstrap does this)
     auto_register_event_types()
@@ -247,21 +248,8 @@ async def test_dlq_production_handler_with_real_events():
     dlq = DeadLetterQueue(base_delay_seconds=0.1)
     adapter = DeadLetterQueueFailedEventStoreAdapter(dlq)
 
-    # Create production-style handler that reconstructs and publishes
-    async def production_dlq_handler(stored_event_type: str, stored_event_data: dict) -> None:
-        """Production DLQ handler - mimics the real production bootstrap handler."""
-        try:
-            # Look up event class by type name in registry
-            event_class = EventSerializer._codetoeum_event_registry.get(stored_event_type)
-            if event_class is None:
-                raise ValueError(f"Unknown event type: {stored_event_type}")
-            # Reconstruct event using from_dict()
-            reconstructed_event = event_class.from_dict(stored_event_data)
-            # Publish to event bus
-            await event_bus.publish(reconstructed_event)
-        except Exception:
-            # Production handler re-raises on failure so DLQ schedules retry
-            raise
+    # Create the actual production handler (not a copy)
+    production_dlq_handler = await create_dlq_retry_handler(event_bus)
 
     # Add failed event to DLQ (simulating an earlier failure)
     failed_event_id = await adapter.add_failed_event(

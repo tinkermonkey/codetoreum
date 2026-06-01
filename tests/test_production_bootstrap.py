@@ -1,9 +1,30 @@
 """Tests for ProductionApplicationBootstrap critical path enforcement."""
 
+import os
 import pytest
 
 from codetoreum.infrastructure.bootstrap import ProductionApplicationBootstrap
 from codetoreum.infrastructure.simulation.simulation_config import AdapterSelectionConfig
+
+
+def _infrastructure_available() -> bool:
+    """Check if required infrastructure services are available for testing."""
+    # For this test to run, we need Elasticsearch and Redis running locally
+    # This is typically only available in full integration test environments
+    import socket
+
+    def service_available(host: str, port: int) -> bool:
+        try:
+            socket.create_connection((host, port), timeout=0.5)
+            return True
+        except (socket.timeout, ConnectionRefusedError):
+            return False
+
+    # Check if Elasticsearch and Redis are available
+    es_available = service_available("localhost", 9200)
+    redis_available = service_available("localhost", 6380)
+
+    return es_available and redis_available
 
 
 @pytest.mark.asyncio
@@ -49,8 +70,17 @@ def test_get_adapter_slot_info_before_setup_raises() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(
+    not _infrastructure_available(),
+    reason="Requires Elasticsearch and Redis to be running locally"
+)
 async def test_critical_adapters_have_failure_routes() -> None:
-    """Verify that Phase 3a validates critical adapters declare failure routes (INV-20)."""
+    """Verify that Phase 3a validates critical adapters declare failure routes (INV-20).
+
+    This test requires live Elasticsearch and Redis services for infrastructure
+    exclusivity verification (Phase 1c). It verifies that critical adapters
+    are properly configured with failure routes via the DLQ.
+    """
     # Use default production config (all real adapters)
     bootstrap = ProductionApplicationBootstrap()
 
@@ -62,14 +92,14 @@ async def test_critical_adapters_have_failure_routes() -> None:
     assert bootstrap.infrastructure is not None
     assert bootstrap.infrastructure.failed_event_store is not None
 
-    # Verify critical adapters have the failure route
+    # Verify critical adapters have non-None failure routes (exactly 5 critical adapters)
     critical_adapters_with_failure_routes = [
         adapter
         for slot_name in ["board", "ticket", "version_control", "container", "code_review"]
         if (adapter := bootstrap.adapters.__dict__.get(slot_name))
-        and hasattr(adapter, "failed_event_store")
+        and getattr(adapter, "failed_event_store", None) is not None
     ]
-    assert len(critical_adapters_with_failure_routes) >= 1, "At least one critical adapter should have failure route"
+    assert len(critical_adapters_with_failure_routes) == 5, "All 5 critical adapters should have non-None failure routes"
 
     # Verify DLQ retry processor was started (Phase 5d-2)
     # The failed_event_store should be a DeadLetterQueueFailedEventStoreAdapter

@@ -107,6 +107,7 @@ from codetoreum.infrastructure.bootstrap.codetoreum_board_setup import (
     CODETOREUM_BOARD_ID,
 )
 from codetoreum.infrastructure.dead_letter_queue import DeadLetterQueue
+from codetoreum.infrastructure.dlq_retry import create_dlq_retry_handler
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.event_serialization import EventSerializer
@@ -598,34 +599,8 @@ class ProductionApplicationBootstrap:
 
                 if isinstance(self.infrastructure.failed_event_store, DeadLetterQueueFailedEventStoreAdapter):
                     # Create retry handler that republishes failed events to the event bus
-                    async def _dlq_retry_handler(event_type: str, event_data: dict) -> None:
-                        """DLQ retry handler - republishes failed events to the event bus for recovery."""
-                        logger.info(
-                            f"Retrying failed event type={event_type}",
-                            extra={"event_data": event_data},
-                        )
-                        # Reconstruct the CodetoreumEvent from stored type and data,
-                        # then publish it to the event bus for retry.
-                        # If this succeeds, the event is removed from DLQ.
-                        # If it fails (raises an exception), the DLQ will schedule another retry.
-                        try:
-                            # Look up event class by type name in registry
-                            event_class = EventSerializer._codetoeum_event_registry.get(event_type)
-                            if event_class is None:
-                                raise ValueError(f"Unknown event type: {event_type}")
-                            # Reconstruct event using from_dict()
-                            reconstructed_event = event_class.from_dict(event_data)
-                            # Publish to event bus
-                            await self.infrastructure.event_bus.publish(reconstructed_event)
-                        except Exception as e:
-                            logger.error(
-                                f"Failed to reconstruct and publish event type={event_type}: {e}",
-                                exc_info=True,
-                                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
-                            )
-                            raise
-
-                    await self.infrastructure.failed_event_store.start_retry_processor(_dlq_retry_handler)
+                    dlq_retry_handler = await create_dlq_retry_handler(self.infrastructure.event_bus)
+                    await self.infrastructure.failed_event_store.start_retry_processor(dlq_retry_handler)
                     logger.info("Phase 5d-2: DLQ retry processor started")
             except Exception as e:
                 # justification: DLQ startup failure is a fatal condition - system cannot recover from

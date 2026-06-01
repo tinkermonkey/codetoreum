@@ -21,7 +21,7 @@ class TestCriticalAdapterFailureRouting:
         adapter = GitHubTicketAdapter(config=config, failed_event_store=failed_event_store)
         assert adapter.failed_event_store is failed_event_store
 
-    def test_github_ticket_adapter_fails_without_failed_event_store(self):
+    def test_github_ticket_adapter_defaults_to_none_failed_event_store(self):
         """Test that GitHubTicketAdapter can be created without failed_event_store (for backward compat in tests)."""
         config = GitHubConfig(token="test", organization="test-org")
         adapter = GitHubTicketAdapter(config=config)
