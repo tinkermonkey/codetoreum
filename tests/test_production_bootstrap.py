@@ -1,6 +1,7 @@
 """Tests for ProductionApplicationBootstrap critical path enforcement."""
 
 import os
+
 import pytest
 
 from codetoreum.infrastructure.bootstrap import ProductionApplicationBootstrap
@@ -17,7 +18,7 @@ def _infrastructure_available() -> bool:
         try:
             socket.create_connection((host, port), timeout=0.5)
             return True
-        except (socket.timeout, ConnectionRefusedError):
+        except (TimeoutError, ConnectionRefusedError):
             return False
 
     # Check if Elasticsearch and Redis are available

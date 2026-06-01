@@ -28,7 +28,6 @@ from codetoreum.adapters.secondary import (
     GitRepositoryAdapter,
     MockEventEmitter,
 )
-from codetoreum.ports.output.failed_event_store import IFailedEventStore
 from codetoreum.adapters.secondary.elasticsearch_project_manager_adapter import (
     ElasticsearchProjectManagerAdapter,
 )

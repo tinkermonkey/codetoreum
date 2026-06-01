@@ -110,7 +110,6 @@ from codetoreum.infrastructure.dead_letter_queue import DeadLetterQueue
 from codetoreum.infrastructure.dlq_retry import create_dlq_retry_handler
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.event_bus import EventBus
-from codetoreum.infrastructure.event_serialization import EventSerializer
 from codetoreum.infrastructure.event_store_poller import EventStorePoller
 from codetoreum.infrastructure.resilience.config import OperationMode
 from codetoreum.infrastructure.resilience.factory import ResilienceFactory

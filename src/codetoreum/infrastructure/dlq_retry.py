@@ -3,8 +3,8 @@
 import logging
 from typing import TYPE_CHECKING
 
-from codetoreum.infrastructure.event_serialization import EventSerializer
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.infrastructure.event_serialization import EventSerializer
 
 if TYPE_CHECKING:
     from codetoreum.infrastructure.event_bus import EventBus

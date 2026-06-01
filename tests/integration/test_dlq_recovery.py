@@ -1,15 +1,16 @@
 """Integration tests for DLQ event recovery and retry processing."""
 
+from datetime import UTC, datetime
+
 import pytest
 
+from codetoreum.adapters.secondary.failed_event_store_adapter import DeadLetterQueueFailedEventStoreAdapter
 from codetoreum.adapters.testing import InMemoryFailedEventStore
 from codetoreum.domain.events.work_item_events import WorkItemCreatedEvent
 from codetoreum.infrastructure.dead_letter_queue import DeadLetterQueue
-from codetoreum.adapters.secondary.failed_event_store_adapter import DeadLetterQueueFailedEventStoreAdapter
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.event_serialization import EventSerializer, auto_register_event_types
 from codetoreum.ports.output.failed_event_store import FailureReason
-from datetime import UTC, datetime
 
 
 @pytest.mark.asyncio
@@ -151,7 +152,7 @@ async def test_dlq_retry_processor_recovery():
     3. The event is successfully retried and removed from the queue
     """
     import asyncio
-    from datetime import datetime, UTC
+    from datetime import UTC, datetime
 
     # Create DLQ with short backoff for testing
     dlq = DeadLetterQueue(base_delay_seconds=0.1)
@@ -213,6 +214,7 @@ async def test_dlq_production_handler_with_real_events():
     4. Event handlers receive and process the reconstructed event
     """
     import asyncio
+
     from codetoreum.infrastructure.dlq_retry import create_dlq_retry_handler
 
     # Register event types for deserialization (production bootstrap does this)

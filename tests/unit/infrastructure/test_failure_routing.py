@@ -2,10 +2,10 @@
 
 import pytest
 
-from codetoreum.adapters.secondary.docker_container_adapter import DockerContainerAdapter, DockerConfig
+from codetoreum.adapters.secondary.docker_container_adapter import DockerConfig, DockerContainerAdapter
 from codetoreum.adapters.secondary.github_board_adapter import GitHubBoardAdapter
 from codetoreum.adapters.secondary.github_code_review_adapter import GitHubCodeReviewAdapter
-from codetoreum.adapters.secondary.github_ticket_adapter import GitHubTicketAdapter, GitHubConfig
+from codetoreum.adapters.secondary.github_ticket_adapter import GitHubConfig, GitHubTicketAdapter
 from codetoreum.adapters.secondary.github_version_control_adapter import GitHubVersionControlAdapter
 from codetoreum.adapters.testing import InMemoryFailedEventStore
 
