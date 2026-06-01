@@ -207,7 +207,7 @@ class AdapterResolver:
         """Resolve event store adapter."""
         return self._factory.create_event_store(
             adapter_name=self._config.event_store,
-            failed_event_store=self._adapter_deps.failed_event_store,
+            failed_event_store=self._deps.failed_event_store,
         )
 
     def resolve_config_store(self) -> IConfigStore:
@@ -271,7 +271,7 @@ class AdapterResolver:
         """Resolve ticket system adapter."""
         return self._factory.create_ticket_system(
             adapter_name=self._config.ticket,
-            failed_event_store=self._adapter_deps.failed_event_store,
+            failed_event_store=self._deps.failed_event_store,
         )
 
     def resolve_coding_agent(
@@ -363,7 +363,7 @@ class AdapterResolver:
             adapter_name=self._config.container,
             event_emitter=self._resolved["event_emitter"],
             event_bus=self._deps.event_bus,
-            failed_event_store=self._adapter_deps.failed_event_store,
+            failed_event_store=self._deps.failed_event_store,
         )
 
     def resolve_board(self) -> IBoardService:
@@ -386,12 +386,12 @@ class AdapterResolver:
                 ticket_adapter=self._resolved.get("ticket"),
                 graphql_client=graphql_client,
                 event_emitter=self._resolved["event_emitter"],
-                failed_event_store=self._adapter_deps.failed_event_store,
+                failed_event_store=self._deps.failed_event_store,
             )
         return self._factory.create_board_service(
             adapter_name=self._config.board,
             event_emitter=self._resolved["event_emitter"],
-            failed_event_store=self._adapter_deps.failed_event_store,
+            failed_event_store=self._deps.failed_event_store,
         )
 
     def resolve_discussion_adapter(self) -> IDiscussionAdapter:
@@ -543,7 +543,7 @@ class AdapterResolver:
         if self._config.version_control == "in_memory":
             kwargs["time_source"] = lambda: self._deps.engine.get_clock_for_testing().now()
             kwargs["event_emitter"] = self._resolved["event_emitter"]
-        kwargs["failed_event_store"] = self._adapter_deps.failed_event_store
+        kwargs["failed_event_store"] = self._deps.failed_event_store
         return self._factory.create_version_control_service(
             adapter_name=self._config.version_control,
             **kwargs,
@@ -684,12 +684,12 @@ class AdapterResolver:
             return GitHubCodeReviewAdapter(
                 ticket_adapter=self._resolved.get("ticket"),
                 graphql_client=graphql_client,
-                failed_event_store=self._adapter_deps.failed_event_store,
+                failed_event_store=self._deps.failed_event_store,
             )
         return self._factory.create_code_review_service(
             adapter_name=self._config.code_review,
             time_source=lambda: self._deps.engine.get_clock_for_testing().now(),
-            failed_event_store=self._adapter_deps.failed_event_store,
+            failed_event_store=self._deps.failed_event_store,
         )
 
     def resolve_container_recovery(self) -> IAgentContainerRecoveryService:

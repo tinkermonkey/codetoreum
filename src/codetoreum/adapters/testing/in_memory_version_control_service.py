@@ -11,6 +11,7 @@ import os
 import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 from codetoreum.domain.events.repository_events import BranchCreatedEvent
 from codetoreum.ports.exceptions import (
@@ -53,6 +54,7 @@ class InMemoryVersionControlService(IVersionControlService):
         self,
         time_source: Callable[[], datetime] | None = None,
         event_emitter: IEventEmitter | None = None,
+        failed_event_store: "Any | None" = None,
     ) -> None:
         """Initialize the in-memory version control service.
 
@@ -60,6 +62,7 @@ class InMemoryVersionControlService(IVersionControlService):
             time_source: Optional callable returning current datetime for simulation clock control.
                         Defaults to datetime.now(UTC).
             event_emitter: Optional event emitter for broadcasting domain events (e.g. BranchCreatedEvent).
+            failed_event_store: Optional failed event store (unused in simulation).
         """
         # Map of (repo_path) -> {
         #     'url': str,

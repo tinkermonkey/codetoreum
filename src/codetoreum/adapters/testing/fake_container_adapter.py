@@ -91,6 +91,7 @@ class FakeContainerAdapter(IContainer):
         config: "SimulationConfig | None" = None,
         clock: "SimulationClock | None" = None,
         llm_provider: "Any | None" = None,
+        failed_event_store: "Any | None" = None,
     ):
         """
         Initialize the fake container adapter.
@@ -106,6 +107,7 @@ class FakeContainerAdapter(IContainer):
             config: Optional SimulationConfig for fidelity-based timing
             clock: Optional SimulationClock for time manipulation
             llm_provider: Optional LLM provider for command execution delegation
+            failed_event_store: Optional failed event store (unused in simulation)
 
         Raises:
             ValidationError: If parameters are invalid

@@ -7,6 +7,7 @@ test helper methods for simulation scenarios.
 
 from collections.abc import Callable
 from datetime import UTC, datetime
+from typing import Any
 
 from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.domain.events.review_events import ReviewStatusChangedEvent
@@ -63,12 +64,17 @@ class InMemoryCodeReviewAdapter(MockEventEmitter, ICodeReviewService):
         assert len(comments) == 1
     """
 
-    def __init__(self, time_source: Callable[[], datetime] | None = None) -> None:
+    def __init__(
+        self,
+        time_source: Callable[[], datetime] | None = None,
+        failed_event_store: "Any | None" = None,
+    ) -> None:
         """Initialize the code review adapter.
 
         Args:
             time_source: Optional callable returning current datetime for simulation clock control.
                         Defaults to datetime.now(UTC).
+            failed_event_store: Optional failed event store (unused in simulation).
         """
         super().__init__()
         self._reviews: dict[str, CodeReview] = {}  # review_id -> CodeReview

@@ -96,7 +96,12 @@ class MockBoardAdapter(IBoardService):
         assert history[0].moved_by == MovedByType.HUMAN
     """
 
-    def __init__(self, event_emitter: IEventEmitter | None = None, clock: "SimulationClock | None" = None) -> None:
+    def __init__(
+        self,
+        event_emitter: IEventEmitter | None = None,
+        clock: "SimulationClock | None" = None,
+        failed_event_store: Any | None = None,
+    ) -> None:
         """Initialize the board adapter.
 
         Args:
