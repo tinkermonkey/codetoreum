@@ -71,6 +71,23 @@ async def test_critical_adapters_have_failure_routes() -> None:
     ]
     assert len(critical_adapters_with_failure_routes) >= 1, "At least one critical adapter should have failure route"
 
+    # Verify DLQ retry processor was started (Phase 5d-2)
+    # The failed_event_store should be a DeadLetterQueueFailedEventStoreAdapter
+    # wrapping a running DeadLetterQueue instance
+    from codetoreum.adapters.secondary.failed_event_store_adapter import (
+        DeadLetterQueueFailedEventStoreAdapter,
+    )
+
+    failed_event_store = bootstrap.infrastructure.failed_event_store
+    assert isinstance(
+        failed_event_store, DeadLetterQueueFailedEventStoreAdapter
+    ), "failed_event_store should be DeadLetterQueueFailedEventStoreAdapter in production"
+
+    # Check that the underlying DLQ's retry processor is running
+    dlq = failed_event_store._dead_letter_queue
+    assert dlq is not None, "DeadLetterQueue should be initialized"
+    assert dlq._running is True, "DLQ retry processor should be running (Phase 5d-2)"
+
     await bootstrap.teardown()
 
 
