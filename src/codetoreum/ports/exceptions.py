@@ -27,12 +27,15 @@ class ValidationError(PortError):
 class ExternalServiceError(PortError):
     """External service failure."""
 
-    def __init__(self, service: str, message: str):
+    def __init__(self, *, service: str, message: str):
         """
         Initialize ExternalServiceError.
 
-        Args: service: Name of external service
-            message: Error message
+        Args: service: Name of external service (keyword-only)
+            message: Error message (keyword-only)
+
+        Raises:
+            TypeError: If positional arguments are used instead of keyword arguments
         """
         super().__init__(f"{service} error: {message}")
         self.service = service

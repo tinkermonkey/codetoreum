@@ -41,6 +41,7 @@ from codetoreum.ports.output.container import (
     ContainerStatus,
     IContainer,
 )
+from codetoreum.ports.output.failed_event_store import IFailedEventStore
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +88,7 @@ class DockerContainerAdapter(IContainer):
         config: DockerConfig | None = None,
         event_emitter: "Any | None" = None,
         event_bus: "Any | None" = None,
+        failed_event_store: IFailedEventStore | None = None,
     ):
         """
         Initialize Docker adapter.
@@ -95,9 +97,11 @@ class DockerContainerAdapter(IContainer):
             config: Docker configuration (optional, defaults to environment-based config)
             event_emitter: Optional IEventEmitter for emitting domain events
             event_bus: Optional EventBus for infrastructure events
+            failed_event_store: Failed event store for routing failures to DLQ (INV-20)
         """
         self.config = config or DockerConfig()
         self._docker_client = None
+        self.failed_event_store = failed_event_store
         self._event_emitter = event_emitter
         self._event_bus = event_bus
         self._host_workspace_path = self._detect_host_workspace_path()

@@ -339,7 +339,7 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
                     "error_type": "unexpected",
                 },
             )
-            raise ExternalServiceError("GitHub", f"Failed to query PR CI status: {e}") from e
+            raise ExternalServiceError(service="GitHub", message=f"Failed to query PR CI status: {e}") from e
 
     async def run_ci_checks(self, project_id: str, working_directory: str, timeout_seconds: int = 600) -> CIRunResult:
         """Execute CI checks locally in a working directory.
@@ -555,7 +555,7 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
             return check_results, overall_status, pipeline_url, status_counts
 
         except (KeyError, TypeError, AttributeError) as e:
-            raise ExternalServiceError("GitHub", f"Invalid check runs response format: {e!s}") from e
+            raise ExternalServiceError(service="GitHub", message=f"Invalid check runs response format: {e!s}") from e
 
     async def _get_owner_repo(self) -> tuple[str, str]:
         """Get GitHub owner and repo from ticket adapter.
@@ -570,4 +570,4 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
             return self._ticket_adapter.get_owner_repo()
         except (ValueError, AttributeError) as e:
             msg = f"GitHub integration: {e}"
-            raise ExternalServiceError("GitHub", msg) from e
+            raise ExternalServiceError(service="GitHub", message=msg) from e

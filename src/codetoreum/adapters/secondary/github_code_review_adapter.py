@@ -40,6 +40,7 @@ from codetoreum.ports.output.code_review_service import (
     ICodeReviewService,
     ReviewComment,
 )
+from codetoreum.ports.output.failed_event_store import IFailedEventStore
 from codetoreum.ports.output.monitoring import (
     MonitoringConfig,
     MonitoringState,
@@ -87,6 +88,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
         graphql_client: GitHubGraphQLClient,
         webhook_enabled: bool = True,
         time_source: Callable[[], datetime] | None = None,
+        failed_event_store: IFailedEventStore | None = None,
     ):
         """Initialize GitHub code review adapter.
 
@@ -95,10 +97,12 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
             graphql_client: GitHub GraphQL client for PR queries and mutations
             webhook_enabled: If False, use polling fallback for change detection
             time_source: Optional time source for clock injection (unused; accepted for factory compatibility)
+            failed_event_store: Failed event store for routing failures to DLQ (INV-20)
         """
         self._ticket_adapter = ticket_adapter
         self._graphql = graphql_client
         self._webhook_enabled = webhook_enabled
+        self.failed_event_store = failed_event_store
 
         # Monitoring state per project
         self._monitoring: dict[str, MonitoringStatus] = {}
@@ -405,7 +409,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
             return None
         except Exception as e:
             msg = "github"
-            raise ExternalServiceError(msg, f"Failed to search for PR: {e}")
+            raise ExternalServiceError(service=msg, message=f"Failed to search for PR: {e}")
 
     async def get_review_status(self, review_id: str) -> CodeReviewStatus:
         """Query current PR review status.
@@ -459,7 +463,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
             raise
         except Exception as e:
             msg = "github"
-            raise ExternalServiceError(msg, f"Failed to fetch PR status: {e}")
+            raise ExternalServiceError(service=msg, message=f"Failed to fetch PR status: {e}")
 
     async def get_review_comments(self, review_id: str) -> list[ReviewComment]:
         """Retrieve all comments on a code review.
@@ -576,7 +580,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
             raise
         except Exception as e:
             msg = "github"
-            raise ExternalServiceError(msg, f"Failed to fetch PR comments: {e}")
+            raise ExternalServiceError(service=msg, message=f"Failed to fetch PR comments: {e}")
 
     # Command Operations
 
@@ -650,7 +654,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
             review_node = result.get("submitPullRequestReview", {}).get("pullRequestReview")
             if not review_node:
                 msg = "github"
-                raise ExternalServiceError(msg, "Failed to submit review: empty response")
+                raise ExternalServiceError(service=msg, message="Failed to submit review: empty response")
 
             # Get new status
             new_status = await self.get_review_status(review_id)
@@ -700,7 +704,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
             raise
         except Exception as e:
             msg = "github"
-            raise ExternalServiceError(msg, f"Failed to request changes: {e}")
+            raise ExternalServiceError(service=msg, message=f"Failed to request changes: {e}")
 
     async def approve(self, review_id: str) -> None:
         """Approve a code review.
@@ -762,7 +766,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
             review_node = result.get("submitPullRequestReview", {}).get("pullRequestReview")
             if not review_node:
                 msg = "github"
-                raise ExternalServiceError(msg, "Failed to approve: empty response")
+                raise ExternalServiceError(service=msg, message="Failed to approve: empty response")
 
             # Get new status
             new_status = await self.get_review_status(review_id)
@@ -791,7 +795,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
             raise
         except Exception as e:
             msg = "github"
-            raise ExternalServiceError(msg, f"Failed to approve: {e}")
+            raise ExternalServiceError(service=msg, message=f"Failed to approve: {e}")
 
     # Webhook handling
 
@@ -1091,7 +1095,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
             raise
         except Exception as e:
             msg = "github"
-            raise ExternalServiceError(msg, f"Failed to fetch PR details: {e}")
+            raise ExternalServiceError(service=msg, message=f"Failed to fetch PR details: {e}")
 
     async def _get_open_prs(self, project_id: str) -> list[dict[str, Any]]:
         """Query all open PRs for a project.
@@ -1142,7 +1146,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
             return prs
         except Exception as e:
             msg = "github"
-            raise ExternalServiceError(msg, f"Failed to fetch open PRs: {e}")
+            raise ExternalServiceError(service=msg, message=f"Failed to fetch open PRs: {e}")
 
     def _compute_review_status(self, pr_node: dict[str, Any]) -> CodeReviewStatus:
         """Compute overall review status from PR node.
@@ -1293,7 +1297,7 @@ class GitHubCodeReviewAdapter(ICodeReviewService):
             return (self._ticket_adapter._owner, self._ticket_adapter._repo)
 
         msg = "github"
-        raise ExternalServiceError(msg, "Unable to determine GitHub owner/repo from adapter")
+        raise ExternalServiceError(service=msg, message="Unable to determine GitHub owner/repo from adapter")
 
     async def _get_project_id(self) -> str:
         """Get current project ID.

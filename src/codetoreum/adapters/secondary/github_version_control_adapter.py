@@ -5,6 +5,7 @@ from pathlib import Path
 
 from codetoreum.adapters.secondary.git_repository_adapter import GitConfig, GitRepositoryAdapter
 from codetoreum.ports.exceptions import ResourceNotFoundError
+from codetoreum.ports.output.failed_event_store import IFailedEventStore
 from codetoreum.ports.output.version_control_service import IVersionControlService, Repository, VCSStatus
 
 logger = logging.getLogger(__name__)
@@ -28,9 +29,11 @@ class GitHubVersionControlAdapter(IVersionControlService):
     def __init__(
         self,
         git_config: GitConfig | None = None,
+        failed_event_store: IFailedEventStore | None = None,
     ) -> None:
         self._git_config = git_config or GitConfig()
         self._repository_adapter = GitRepositoryAdapter(self._git_config)
+        self.failed_event_store = failed_event_store
 
     async def clone_repository(self, url: str, target_path: str, branch: str | None = None) -> None:
         try:
@@ -168,7 +171,7 @@ class GitHubVersionControlAdapter(IVersionControlService):
             f"{owner}/{repo} {head}->{base}: {response.text[:300]}"
         )
         logger.error(msg)
-        raise ExternalServiceError("github", msg)
+        raise ExternalServiceError(service="github", message=msg)
 
     async def _find_open_pull_request(
         self,

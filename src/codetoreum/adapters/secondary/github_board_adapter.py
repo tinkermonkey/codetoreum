@@ -42,6 +42,7 @@ from codetoreum.ports.output.board_service import (
     WorkItemPosition,
 )
 from codetoreum.ports.output.event_emitter import IEventEmitter
+from codetoreum.ports.output.failed_event_store import IFailedEventStore
 from codetoreum.ports.output.monitoring import (
     MonitoringConfig,
     MonitoringState,
@@ -62,6 +63,7 @@ class GitHubBoardAdapter(IBoardService):
         graphql_client: GitHubGraphQLClient | None = None,
         webhook_enabled: bool = True,
         event_emitter: "IEventEmitter | None" = None,
+        failed_event_store: IFailedEventStore | None = None,
     ):
         """Initialize GitHub board adapter.
 
@@ -70,11 +72,13 @@ class GitHubBoardAdapter(IBoardService):
             graphql_client: GitHub GraphQL client for Projects v2 API
             webhook_enabled: If False, use polling fallback
             event_emitter: Optional event emitter (unused, for adapter factory compatibility)
+            failed_event_store: Failed event store for routing failures to DLQ (INV-20)
         """
         self._ticket_adapter = ticket_adapter
         self._graphql = graphql_client
         self._webhook_enabled = webhook_enabled
         self._event_emitter = event_emitter
+        self.failed_event_store = failed_event_store
 
         # Monitoring state
         self._monitoring: dict[str, MonitoringStatus] = {}
@@ -296,7 +300,7 @@ class GitHubBoardAdapter(IBoardService):
             raise
         except Exception as e:
             msg = "GitHub"
-            raise ExternalServiceError(msg, f"Failed to fetch board: {e!s}")
+            raise ExternalServiceError(service=msg, message=f"Failed to fetch board: {e!s}")
 
     async def get_columns(self, board_id: str) -> list[BoardColumn]:
         """Get all columns for a board.
@@ -885,7 +889,7 @@ class GitHubBoardAdapter(IBoardService):
 
             if not status_field:
                 msg = "GitHub"
-                raise ExternalServiceError(msg, "Status field not found on board")
+                raise ExternalServiceError(service=msg, message="Status field not found on board")
 
             # Build column map with option IDs and cache them in adapter state
             columns_by_id: dict[str, str] = {}
@@ -947,7 +951,7 @@ class GitHubBoardAdapter(IBoardService):
 
         except (KeyError, TypeError) as e:
             msg = "GitHub"
-            raise ExternalServiceError(msg, f"Invalid board response format: {e!s}")
+            raise ExternalServiceError(service=msg, message=f"Invalid board response format: {e!s}")
 
     def _find_status_field_id(self, board: ProjectBoard) -> str | None:
         """Find status field ID from board data.

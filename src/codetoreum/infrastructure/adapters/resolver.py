@@ -31,6 +31,7 @@ from codetoreum.ports.output.encryption_service import IEncryptionService
 from codetoreum.ports.output.environment_repair_service import IEnvironmentRepairService
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.event_store import IEventStore
+from codetoreum.ports.output.failed_event_store import IFailedEventStore
 from codetoreum.ports.output.identity_service import IIdentityService
 from codetoreum.ports.output.message_broker import IMessageBroker
 from codetoreum.ports.output.metrics import IMetrics
@@ -79,6 +80,7 @@ class AdapterDependencies:
     logger: logging.Logger  # No ILogger ABC implemented yet; using stdlib Logger
     engine: "SimulationEngine"  # For clock injection in time-aware adapters (actively used)
     config: "SimulationConfig"  # Actively used for metadata/config lookups
+    failed_event_store: IFailedEventStore | None = None  # INV-20: Failure route for critical adapters
 
 
 class AdapterConfigurationError(Exception):
@@ -203,7 +205,10 @@ class AdapterResolver:
 
     def resolve_event_store(self) -> IEventStore:
         """Resolve event store adapter."""
-        return self._factory.create_event_store(adapter_name=self._config.event_store)
+        return self._factory.create_event_store(
+            adapter_name=self._config.event_store,
+            failed_event_store=self._adapter_deps.failed_event_store,
+        )
 
     def resolve_config_store(self) -> IConfigStore:
         """Resolve config store adapter.
@@ -264,7 +269,10 @@ class AdapterResolver:
 
     def resolve_ticket(self) -> ITicketSystem:
         """Resolve ticket system adapter."""
-        return self._factory.create_ticket_system(adapter_name=self._config.ticket)
+        return self._factory.create_ticket_system(
+            adapter_name=self._config.ticket,
+            failed_event_store=self._adapter_deps.failed_event_store,
+        )
 
     def resolve_coding_agent(
         self,
@@ -355,6 +363,7 @@ class AdapterResolver:
             adapter_name=self._config.container,
             event_emitter=self._resolved["event_emitter"],
             event_bus=self._deps.event_bus,
+            failed_event_store=self._adapter_deps.failed_event_store,
         )
 
     def resolve_board(self) -> IBoardService:
@@ -377,10 +386,12 @@ class AdapterResolver:
                 ticket_adapter=self._resolved.get("ticket"),
                 graphql_client=graphql_client,
                 event_emitter=self._resolved["event_emitter"],
+                failed_event_store=self._adapter_deps.failed_event_store,
             )
         return self._factory.create_board_service(
             adapter_name=self._config.board,
             event_emitter=self._resolved["event_emitter"],
+            failed_event_store=self._adapter_deps.failed_event_store,
         )
 
     def resolve_discussion_adapter(self) -> IDiscussionAdapter:
@@ -532,6 +543,7 @@ class AdapterResolver:
         if self._config.version_control == "in_memory":
             kwargs["time_source"] = lambda: self._deps.engine.get_clock_for_testing().now()
             kwargs["event_emitter"] = self._resolved["event_emitter"]
+        kwargs["failed_event_store"] = self._adapter_deps.failed_event_store
         return self._factory.create_version_control_service(
             adapter_name=self._config.version_control,
             **kwargs,
@@ -672,10 +684,12 @@ class AdapterResolver:
             return GitHubCodeReviewAdapter(
                 ticket_adapter=self._resolved.get("ticket"),
                 graphql_client=graphql_client,
+                failed_event_store=self._adapter_deps.failed_event_store,
             )
         return self._factory.create_code_review_service(
             adapter_name=self._config.code_review,
             time_source=lambda: self._deps.engine.get_clock_for_testing().now(),
+            failed_event_store=self._adapter_deps.failed_event_store,
         )
 
     def resolve_container_recovery(self) -> IAgentContainerRecoveryService:

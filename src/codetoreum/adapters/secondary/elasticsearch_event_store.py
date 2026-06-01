@@ -23,6 +23,7 @@ from codetoreum.ports.exceptions import (
     ResourceNotFoundError,
 )
 from codetoreum.ports.output.event_store import IEventStore
+from codetoreum.ports.output.failed_event_store import IFailedEventStore
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +111,7 @@ class ElasticsearchEventStore(IEventStore):
         shutdown_drain_timeout_seconds: float = 10.0,
         bulk_refresh: bool | str = False,
         on_drop_callback: "Callable[[str, list[CodetoreumEvent], Exception], Awaitable[None]] | None" = None,
+        failed_event_store: IFailedEventStore | None = None,
     ):
         """
         Initialize Elasticsearch event store.
@@ -142,6 +144,7 @@ class ElasticsearchEventStore(IEventStore):
                 this to the dead letter queue so failed coding-agent telemetry isn't
                 silently lost under Elasticsearch pressure. Exceptions from the
                 callback are caught and logged but do not propagate.
+            failed_event_store: Failed event store for routing failures to DLQ (INV-20)
         """
         self.client = es_client
         self.index_prefix = index_prefix
@@ -150,6 +153,7 @@ class ElasticsearchEventStore(IEventStore):
         self.batch_size_limit = batch_size_limit
         self.shard_count = shard_count
         self.replica_count = replica_count
+        self.failed_event_store = failed_event_store
 
         # Async persistence configuration
         self._enable_async_persistence = enable_async_persistence

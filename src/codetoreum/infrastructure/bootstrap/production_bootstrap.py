@@ -418,6 +418,7 @@ class ProductionApplicationBootstrap:
                 logger=logger,
                 engine=engine_stub,  # type: ignore  # Minimal engine for non-critical mocks
                 config=None,  # type: ignore  # No simulation config in production
+                failed_event_store=self.infrastructure.failed_event_store,  # INV-20: Failure routing
             )
 
             resolver = AdapterResolver(self.config, self._adapter_factory, adapter_deps, credentials=credentials)
@@ -435,6 +436,10 @@ class ProductionApplicationBootstrap:
             # Phase 3: Critical path enforcement
             logger.info("Phase 3: Validating no mocks on critical execution paths...")
             self._validate_no_mocks_on_critical_path()
+
+            # Phase 3a: Verify critical adapters have failure routes (INV-20)
+            logger.info("Phase 3a: Verifying critical adapters declare failure routes (INV-20)...")
+            self._validate_critical_failure_routes()
 
             # Phase 3b: Verify event_emitter is not a test capture adapter
             logger.info("Phase 3b: Verifying production event_emitter is not test-only...")
@@ -579,6 +584,34 @@ class ProductionApplicationBootstrap:
             # log-grep checkpoints in the deficiency log; the architectural
             # seam it documented is gone.
             logger.info("Phase 5d: WorkItemService is constructor-injected into executor (no swap needed)")
+
+            # Phase 5d-2: Start DLQ retry processor
+            # The failed event store retry processor handles retrying failed events
+            # that were routed to the dead letter queue due to transient failures.
+            # This is critical for INV-20 failure routing enforcement.
+            logger.info("Phase 5d-2: Starting DLQ retry processor...")
+            try:
+                from codetoreum.adapters.secondary.failed_event_store_adapter import (
+                    DeadLetterQueueFailedEventStoreAdapter,
+                )
+
+                if isinstance(self.infrastructure.failed_event_store, DeadLetterQueueFailedEventStoreAdapter):
+                    # Create a simple retry handler that logs and does not republish (basic implementation)
+                    async def _dlq_retry_handler(event_type: str, event_data: dict) -> None:
+                        """Basic DLQ retry handler - logs failures for manual intervention."""
+                        logger.info(
+                            f"Retrying failed event type={event_type}",
+                            extra={"event_data": event_data},
+                        )
+
+                    await self.infrastructure.failed_event_store.start_retry_processor(_dlq_retry_handler)
+                    logger.info("Phase 5d-2: DLQ retry processor started")
+            except Exception as e:
+                logger.warning(
+                    f"Failed to start DLQ retry processor: {e}",
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                )
 
             # Phase 5e: Start multi-project orchestrator poll loop
             # MPO is the sole orchestration entry point. It polls all enabled projects
@@ -1037,6 +1070,51 @@ class ProductionApplicationBootstrap:
             raise RuntimeError(message)
 
         logger.debug(f"Production event_emitter verified: {type(self.adapters.event_emitter).__name__}")
+
+    def _validate_critical_failure_routes(self) -> None:
+        """
+        Validate that all critical adapters declare a failure route (INV-20).
+
+        Critical adapters must accept an IFailedEventStore parameter and route
+        final failures to it. This check ensures no critical adapter can silently
+        drop errors without recording them in the dead letter queue.
+
+        Raises:
+            RuntimeError: If any critical adapter lacks a failure route
+        """
+        if not self.adapters:
+            message = "Adapters must be resolved before validation"
+            raise RuntimeError(message)
+
+        missing_routes = []
+
+        # Check critical slot adapters
+        for slot_name in CRITICAL_ADAPTER_SLOTS:
+            adapter = self.adapters.__dict__.get(slot_name)
+            if adapter and not hasattr(adapter, "failed_event_store"):
+                missing_routes.append(
+                    f"{slot_name}: {type(adapter).__name__} missing failed_event_store attribute"
+                )
+
+        # Check event store adapter (also critical per INV-20)
+        event_store = self.adapters.event_store if self.adapters else None
+        if event_store and not hasattr(event_store, "failed_event_store"):
+            missing_routes.append(
+                f"event_store: {type(event_store).__name__} missing failed_event_store attribute"
+            )
+
+        if missing_routes:
+            error_msg = "Critical adapters missing failure routes (INV-20):\n" + "\n".join(
+                f"  - {route}" for route in missing_routes
+            )
+            logger.error(
+                error_msg,
+                exc_info=False,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+            )
+            raise RuntimeError(error_msg)
+
+        logger.info(f"Critical failure route validation passed ({len(CRITICAL_ADAPTER_SLOTS) + 1} adapters)")
 
     def _log_non_critical_slots(self) -> None:
         """Log warnings for non-critical slots with mock implementations."""

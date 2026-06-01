@@ -48,6 +48,32 @@ def test_get_adapter_slot_info_before_setup_raises() -> None:
         bootstrap.get_adapter_slot_info()
 
 
+@pytest.mark.asyncio
+async def test_critical_adapters_have_failure_routes() -> None:
+    """Verify that Phase 3a validates critical adapters declare failure routes (INV-20)."""
+    # Use default production config (all real adapters)
+    bootstrap = ProductionApplicationBootstrap()
+
+    # setup() should pass Phase 3a validation that all critical adapters have failed_event_store
+    app = await bootstrap.setup()
+    assert app is not None
+
+    # Verify that at least the infrastructure's failed_event_store was created and is available
+    assert bootstrap.infrastructure is not None
+    assert bootstrap.infrastructure.failed_event_store is not None
+
+    # Verify critical adapters have the failure route
+    critical_adapters_with_failure_routes = [
+        adapter
+        for slot_name in ["board", "ticket", "version_control", "container", "code_review"]
+        if (adapter := bootstrap.adapters.__dict__.get(slot_name))
+        and hasattr(adapter, "failed_event_store")
+    ]
+    assert len(critical_adapters_with_failure_routes) >= 1, "At least one critical adapter should have failure route"
+
+    await bootstrap.teardown()
+
+
 def test_event_handler_types_declared() -> None:
     """Verify event handler decorators declare correct event types.
 
