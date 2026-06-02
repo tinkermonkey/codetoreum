@@ -201,7 +201,7 @@ class PipelineOrchestrator(EventHandler):
                     locks_scanned=len(all_holders),
                     orphaned_locks_found=orphaned_locks_found,
                     orphaned_locks_released=orphaned_locks_released,
-                    errors=errors if errors else None,
+                    errors=tuple(errors) if errors else None,
                 )
 
         except Exception:
@@ -214,6 +214,6 @@ class PipelineOrchestrator(EventHandler):
                     locks_scanned=0,
                     orphaned_locks_found=0,
                     orphaned_locks_released=0,
-                    errors=["Startup orphan scan failed"],
+                    errors=("Startup orphan scan failed",),
                 )
 

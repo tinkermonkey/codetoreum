@@ -21,7 +21,7 @@ class InMemoryOrphanScanRegistry(IOrphanScanRegistry):
         locks_scanned: int,
         orphaned_locks_found: int,
         orphaned_locks_released: int,
-        errors: list[str] | None = None,
+        errors: tuple[str, ...] | None = None,
     ) -> OrphanScanResult:
         """Record an orphan scan result."""
         result = OrphanScanResult(
@@ -30,7 +30,7 @@ class InMemoryOrphanScanRegistry(IOrphanScanRegistry):
             locks_scanned=locks_scanned,
             orphaned_locks_found=orphaned_locks_found,
             orphaned_locks_released=orphaned_locks_released,
-            errors=errors or [],
+            errors=errors or (),
         )
         self._last_scan = result
         return result

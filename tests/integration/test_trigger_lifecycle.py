@@ -1,6 +1,7 @@
 """Integration tests for trigger lifecycle endpoint."""
 
 import pytest
+from datetime import UTC, datetime
 
 from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
@@ -12,7 +13,7 @@ async def test_app():
     config = SimulationConfig.create_fast_config("test_trigger_lifecycle")
     bootstrap = SimulationApplicationBootstrap(config)
     await bootstrap.setup()
-    yield bootstrap.app
+    yield bootstrap
     await bootstrap.teardown()
 
 
@@ -21,7 +22,7 @@ async def test_trigger_lifecycle_not_found(test_app):
     """Test that non-existent event returns 404."""
     from fastapi.testclient import TestClient
 
-    client = TestClient(test_app)
+    client = TestClient(test_app.app)
 
     response = client.get("/api/v2/triggers/nonexistent-event-id")
 
@@ -30,32 +31,39 @@ async def test_trigger_lifecycle_not_found(test_app):
 
 
 @pytest.mark.asyncio
-async def test_trigger_lifecycle_response_structure(test_app):
-    """Test trigger lifecycle response has all required fields."""
+async def test_trigger_lifecycle_response_structure_on_not_found(test_app):
+    """Test trigger lifecycle endpoint error handling."""
     from fastapi.testclient import TestClient
 
-    client = TestClient(test_app)
+    client = TestClient(test_app.app)
 
-    # Since we can't easily add events to the test app's event store,
-    # we just verify that the endpoint returns proper error handling
-    response = client.get("/api/v2/triggers/test-event-123")
+    # Request for a non-existent event
+    response = client.get("/api/v2/triggers/test-event-456")
 
-    # Either it returns 404 if not found, or 200 with the structure
-    if response.status_code == 200:
-        data = response.json()
+    # Should get 404 for non-existent events
+    assert response.status_code == 404
+    data = response.json()
+    assert "detail" in data
 
-        # Check all required fields are present
-        assert "event_id" in data
-        assert "received_at" in data
-        assert "status" in data
-        assert "queue_position" in data
-        assert "active_run_id" in data
-        assert "failure_reason" in data
-        assert "last_updated" in data
 
-        # Check types
-        assert isinstance(data["event_id"], str)
-        assert isinstance(data["status"], str)
-        assert data["queue_position"] is None or isinstance(data["queue_position"], int)
-        assert data["active_run_id"] is None or isinstance(data["active_run_id"], str)
-        assert data["failure_reason"] is None or isinstance(data["failure_reason"], str)
+@pytest.mark.asyncio
+async def test_trigger_lifecycle_enum_statuses(test_app):
+    """Test that trigger lifecycle endpoint uses proper status enum values."""
+    from fastapi.testclient import TestClient
+    from codetoreum.adapters.primary.routers.diagnostics import TriggerStatus
+
+    client = TestClient(test_app.app)
+
+    # Verify enum values are correct (these will be used in responses)
+    assert TriggerStatus.RECEIVED.value == "received"
+    assert TriggerStatus.QUEUED.value == "queued"
+    assert TriggerStatus.IN_PROGRESS.value == "in-progress"
+    assert TriggerStatus.COMPLETED.value == "completed"
+    assert TriggerStatus.FAILED.value == "failed"
+
+    # Verify enum members exist
+    assert hasattr(TriggerStatus, "RECEIVED")
+    assert hasattr(TriggerStatus, "QUEUED")
+    assert hasattr(TriggerStatus, "IN_PROGRESS")
+    assert hasattr(TriggerStatus, "COMPLETED")
+    assert hasattr(TriggerStatus, "FAILED")

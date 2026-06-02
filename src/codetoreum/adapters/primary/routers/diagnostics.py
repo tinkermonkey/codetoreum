@@ -1,10 +1,14 @@
 """Diagnostics router for system operations and maintenance."""
 
+import logging
 from datetime import UTC, datetime
+from enum import Enum
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
 from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
@@ -110,7 +114,7 @@ class DiagnosticsStateResponse(BaseModel):
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
-class TriggerStatus(str):
+class TriggerStatus(str, Enum):
     """Status of a trigger/event."""
 
     RECEIVED = "received"
@@ -293,9 +297,6 @@ def create_diagnostics_router(
                         for work_item_id, run_info in runs
                     ]
                 except Exception as e:
-                    import logging
-
-                    logger = logging.getLogger(__name__)
                     logger.warning(f"Failed to get active runs: {e!s}", exc_info=True)
 
             # Get pipeline locks
@@ -314,21 +315,38 @@ def create_diagnostics_router(
                         for holder in holders
                     ]
                 except Exception as e:
-                    import logging
-
-                    logger = logging.getLogger(__name__)
                     logger.warning(f"Failed to get lock holders: {e!s}", exc_info=True)
 
             # Get pipeline queues
             if pipeline_queue:
                 try:
-                    # Get unique queue keys from active runs and locks
+                    # Discover queue keys from multiple sources:
+                    # 1. Active runs
+                    # 2. Lock holders
+                    # 3. Event store (WorkItemQueuedEvent records queue_key in metadata)
                     queue_keys = set()
+
+                    # Add queue keys from active runs
                     for run in active_runs:
                         queue_keys.add(f"{run.project_id}:{run.board_id}")
+
+                    # Add queue keys from lock holders
                     for lock in pipeline_locks:
-                        # Assume lock_key format is "project_id:board_id"
                         queue_keys.add(lock.lock_key)
+
+                    # Add queue keys from event store (WorkItemQueuedEvent)
+                    if event_store:
+                        try:
+                            # Query for WorkItemQueuedEvent to find all queue keys ever used
+                            queued_events = await event_store.get_events_by_type(
+                                "WorkItemQueuedEvent",
+                                limit=1000,  # Get up to 1000 recent queued events
+                            )
+                            for event in queued_events:
+                                if event.event_data and "queue_key" in event.event_data:
+                                    queue_keys.add(str(event.event_data["queue_key"]))
+                        except Exception as e:
+                            logger.debug(f"Failed to query WorkItemQueuedEvent from event store: {e!s}")
 
                     for queue_key in queue_keys:
                         try:
@@ -350,13 +368,9 @@ def create_diagnostics_router(
                                     depth=depth,
                                 )
                             )
-                        except Exception:
-                            # Skip queues that can't be read
-                            pass
+                        except Exception as e:
+                            logger.warning(f"Failed to read queue {queue_key}: {e!s}", exc_info=True)
                 except Exception as e:
-                    import logging
-
-                    logger = logging.getLogger(__name__)
                     logger.warning(f"Failed to get queue states: {e!s}", exc_info=True)
 
             # Get failed event stats
@@ -375,9 +389,6 @@ def create_diagnostics_router(
                         failure_reasons=stats.failure_reasons,
                     )
                 except Exception as e:
-                    import logging
-
-                    logger = logging.getLogger(__name__)
                     logger.warning(f"Failed to get failed event stats: {e!s}", exc_info=True)
 
             # Get last orphan scan result
@@ -394,9 +405,6 @@ def create_diagnostics_router(
                             errors=last_scan.errors or [],
                         )
                 except Exception as e:
-                    import logging
-
-                    logger = logging.getLogger(__name__)
                     logger.warning(f"Failed to get orphan scan results: {e!s}", exc_info=True)
 
             return DiagnosticsStateResponse(
@@ -408,9 +416,6 @@ def create_diagnostics_router(
             )
 
         except Exception as e:
-            import logging
-
-            logger = logging.getLogger(__name__)
             logger.error(f"Diagnostics state query failed: {e!s}", exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -482,7 +487,7 @@ def create_diagnostics_router(
             received_at = first_event.timestamp
 
             # Determine status based on event types and active runs
-            status_value = "received"
+            status_value = TriggerStatus.RECEIVED
             queue_position: int | None = None
             active_run_id: str | None = None
             failure_reason: str | None = None
@@ -491,20 +496,22 @@ def create_diagnostics_router(
             event_types = [e.event_type for e in events]
 
             if "WorkItemQueuedEvent" in event_types:
-                status_value = "queued"
+                status_value = TriggerStatus.QUEUED
                 # Try to get queue position from the event data or registry
-                if pipeline_queue and active_runs:
-                    for run in active_runs:
-                        pos = await pipeline_queue.position_of(
-                            f"{run.project_id}:{run.board_id}",
-                            first_event.aggregate_id,
-                        )
-                        if pos is not None:
-                            queue_position = pos
-                            break
+                if pipeline_queue:
+                    # Query queue for position using first event's work item ID
+                    # Queue key format is project_id:board_id from event metadata
+                    if first_event.event_data and "project_id" in first_event.event_data and "board_id" in first_event.event_data:
+                        queue_key = f"{first_event.event_data['project_id']}:{first_event.event_data['board_id']}"
+                        try:
+                            pos = await pipeline_queue.position_of(queue_key, first_event.aggregate_id)
+                            if pos is not None:
+                                queue_position = pos
+                        except Exception as e:
+                            logger.warning(f"Failed to get queue position for {first_event.aggregate_id}: {e!s}")
 
             if "WorkflowStartedEvent" in event_types or "ExecutionStartedEvent" in event_types:
-                status_value = "in-progress"
+                status_value = TriggerStatus.IN_PROGRESS
                 # Find the associated run_id from active runs
                 if active_run_registry:
                     active_run = await active_run_registry.get_active_run(
@@ -514,14 +521,14 @@ def create_diagnostics_router(
                         active_run_id = active_run.run_id
 
             if "WorkflowCompletedEvent" in event_types or "ExecutionCompletedEvent" in event_types:
-                status_value = "completed"
+                status_value = TriggerStatus.COMPLETED
 
             if (
                 "WorkflowFailedEvent" in event_types
                 or "ExecutionFailedEvent" in event_types
                 or "EventDeadLetterQueuedEvent" in event_types
             ):
-                status_value = "failed"
+                status_value = TriggerStatus.FAILED
                 # Extract failure reason from the event
                 for event in events:
                     if "failure_reason" in event.event_data:
@@ -541,9 +548,6 @@ def create_diagnostics_router(
         except HTTPException:
             raise
         except Exception as e:
-            import logging
-
-            logger = logging.getLogger(__name__)
             logger.error(f"Trigger lifecycle query failed: {e!s}", exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
