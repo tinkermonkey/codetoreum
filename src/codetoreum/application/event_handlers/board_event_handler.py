@@ -332,6 +332,9 @@ class BoardColumnEventHandler(EventHandler):
                 queue_length = result.queue_length
             else:
                 # Use separate lock and queue APIs
+                assert self.distributed_lock is not None, "distributed_lock must be provided when lock_service is None"
+                assert self.pipeline_queue is not None, "pipeline_queue must be provided when lock_service is None"
+
                 queue_entry = QueueEntry(
                     work_item_id=work_item_id,
                     stage_name=column_config.name,
@@ -371,6 +374,7 @@ class BoardColumnEventHandler(EventHandler):
                         queue_length=queue_length,
                     )
                 else:
+                    # already_held_by_other: work item is queued
                     result = LockAcquisitionResult(
                         status=LockStatus.QUEUED,
                         work_item_id=work_item_id,
@@ -405,40 +409,8 @@ class BoardColumnEventHandler(EventHandler):
             ):
                 await self._trigger_agent(work_item_id, column_config, board_id)
 
-        elif result.status.value == "already_held_by_other":
-            logger.info(f"Lock held by {result.holder_id}, {work_item_id} queued")
-
-        elif result.status.value == "already_held_by_self":
-            logger.info(
-                f"{work_item_id} re-entering pipeline trigger column (already holds lock). "
-                f"Re-triggering agent if configured."
-            )
-            # Even though the lock is already held, we should still trigger the agent
-            # when re-entering the column (e.g., after reviewer rejection in maker-checker flow).
-            # Skip conversational columns — handled by WorkflowOrchestrator via CLO.
-            # Skip PR review cycle columns — driven by PRReviewCycleDispatchHandler.
-            if (
-                column_config.agent_id
-                and getattr(column_config, "execution_type", "task_queue") != "conversational"
-                and not column_config.pr_review_cycle_config
-            ):
-                # Check if workflow run is already registered
-                existing_run = None
-                if self.run_registry:
-                    try:
-                        existing_run = await self.run_registry.get_active_run(work_item_id)
-                    except Exception:
-                        logger.debug(f"Failed to check existing run for {work_item_id}")
-
-                if existing_run is None:
-                    await self._start_workflow_run(
-                        work_item_id,
-                        project_id,
-                        board_id,
-                        column_config,
-                        workflow_config,
-                    )
-                await self._trigger_agent(work_item_id, column_config, board_id)
+        elif result.status.name == "QUEUED":
+            logger.info(f"Lock held by another work item, {work_item_id} queued")
 
     async def _handle_exit_column(
         self,
@@ -465,22 +437,29 @@ class BoardColumnEventHandler(EventHandler):
         # Release lock
         lock_key = f"{project_id}:{board_id}"
 
+        released = False
+        release_reason = None
+        next_work_item_id = None
+
         try:
             if self.lock_service:
                 # Use unified lock service API
-                release_result = await self.lock_service.release_lock(
+                lock_release_result = await self.lock_service.release_lock(
                     project_id=project_id,
                     board_id=board_id,
                     work_item_id=work_item_id,
                 )
                 released = True
+                next_work_item_id = lock_release_result.next_work_item_id
             else:
                 # Use separate lock API
-                release_result = await self.distributed_lock.release(
+                assert self.distributed_lock is not None, "distributed_lock must be provided when lock_service is None"
+                dist_lock_result = await self.distributed_lock.release(
                     lock_key=lock_key,
                     holder_id=work_item_id,
                 )
-                released = release_result.released
+                released = dist_lock_result.released
+                release_reason = dist_lock_result.reason
         except Exception as e:
             logger.critical(
                 f"Lock release failed for {work_item_id}: {e}",
@@ -508,7 +487,7 @@ class BoardColumnEventHandler(EventHandler):
                 logger.warning(f"Lock not released for {work_item_id}: unknown error")
             else:
                 logger.warning(
-                    f"Lock not released for {work_item_id}: {release_result.reason.value if release_result.reason else 'unknown'}"
+                    f"Lock not released for {work_item_id}: {release_reason.value if release_reason else 'unknown'}"
                 )
             return
 
@@ -517,8 +496,8 @@ class BoardColumnEventHandler(EventHandler):
         # Complete workflow run lifecycle tracking
         await self._complete_workflow_run(work_item_id, column_config.name)
 
-        # If using unified lock service and there's a next item, trigger its agent
-        if self.lock_service and hasattr(release_result, "next_work_item_id") and release_result.next_work_item_id:
+        # If there's a next item in queue, trigger its agent
+        if next_work_item_id:
             # Find the pipeline trigger column (where agent was originally triggered)
             trigger_column = next(
                 (col for col in workflow_config.columns if col.is_pipeline_trigger),
@@ -526,7 +505,7 @@ class BoardColumnEventHandler(EventHandler):
             )
             if trigger_column and trigger_column.agent_id:
                 await self._trigger_agent(
-                    work_item_id=release_result.next_work_item_id,
+                    work_item_id=next_work_item_id,
                     column_config=trigger_column,
                     board_id=board_id,
                 )
@@ -817,9 +796,12 @@ class BoardColumnEventHandler(EventHandler):
                 # Release the lock to unblock next queued item (critical for pipeline unblocking)
                 lock_key = f"{project_id}:{board_id}"
                 try:
+                    released = False
+                    release_reason = None
+
                     if self.lock_service:
                         # Use unified lock service API
-                        release_result = await self.lock_service.release_lock(
+                        await self.lock_service.release_lock(
                             project_id=project_id,
                             board_id=board_id,
                             work_item_id=work_item_id,
@@ -827,11 +809,13 @@ class BoardColumnEventHandler(EventHandler):
                         released = True
                     else:
                         # Use separate lock API
-                        release_result = await self.distributed_lock.release(
+                        assert self.distributed_lock is not None, "distributed_lock must be provided when lock_service is None"
+                        dist_lock_result = await self.distributed_lock.release(
                             lock_key=lock_key,
                             holder_id=work_item_id,
                         )
-                        released = release_result.released
+                        released = dist_lock_result.released
+                        release_reason = dist_lock_result.reason
 
                     if released:
                         logger.info(
@@ -840,7 +824,7 @@ class BoardColumnEventHandler(EventHandler):
                         )
                     else:
                         logger.warning(
-                            f"Cannot release lock for {work_item_id}: {release_result.reason.value if release_result.reason else 'unknown'}",
+                            f"Cannot release lock for {work_item_id}: {release_reason.value if release_reason else 'unknown'}",
                             extra={"error_id": "ERR_BOARD_EVENT_LOCK_RELEASE_NOT_HELD"},
                         )
                 except Exception as lock_err:

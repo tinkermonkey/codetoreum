@@ -145,7 +145,6 @@ class MockWorkflowStateManager(IWorkflowStateManager):
         self.item_positions: dict[str, dict] = {}
 
     async def get_workflow_state(self, issue_id: str) -> WorkflowState:
-        if issue_id not in self.states:
         return self.states[issue_id]
 
     async def update_workflow_state(self, issue_id: str, state: WorkflowState) -> None:
