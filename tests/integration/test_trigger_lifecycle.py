@@ -1,7 +1,8 @@
 """Integration tests for trigger lifecycle endpoint."""
 
-import pytest
 from datetime import UTC, datetime
+
+import pytest
 
 from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
@@ -50,6 +51,7 @@ async def test_trigger_lifecycle_response_structure_on_not_found(test_app):
 async def test_trigger_lifecycle_enum_statuses(test_app):
     """Test that trigger lifecycle endpoint uses proper status enum values."""
     from fastapi.testclient import TestClient
+
     from codetoreum.adapters.primary.routers.diagnostics import TriggerStatus
 
     client = TestClient(test_app.app)

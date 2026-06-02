@@ -1,7 +1,8 @@
 """Integration tests for diagnostics state endpoint."""
 
-import pytest
 from datetime import UTC, datetime, timedelta
+
+import pytest
 
 from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
 from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
@@ -47,6 +48,7 @@ async def test_diagnostics_state_endpoint_basic(test_app):
 async def test_diagnostics_state_with_pipeline_queue_data(test_app):
     """Test diagnostics state correctly reports pipeline queue contents."""
     from fastapi.testclient import TestClient
+
     from codetoreum.ports.output.pipeline_queue import QueueEntry
 
     client = TestClient(test_app.app)
