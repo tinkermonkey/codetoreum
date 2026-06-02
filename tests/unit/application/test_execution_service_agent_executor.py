@@ -159,6 +159,7 @@ class TestExecutionServiceAgentExecutorExecution:
             project_id="project-1",
             stage_name="Ready",
             board_id="board-1",
+            started_at=datetime.now(UTC).isoformat(),
         )
         executor._run_registry.get_active_run.return_value = run_info
 
@@ -192,6 +193,7 @@ class TestExecutionServiceAgentExecutorExecution:
             project_id="project-1",
             stage_name="Ready",
             board_id="board-1",
+            started_at=datetime.now(UTC).isoformat(),
         )
 
         await executor.execute("item-1", "coder", board_id="custom-board")
@@ -313,6 +315,7 @@ class TestExecutionServiceAgentExecutorChainSteps:
             project_id="project-1",
             stage_name="Ready",
             board_id="board-1",
+            started_at=datetime.now(UTC).isoformat(),
         )
         executor._run_registry.get_active_run.return_value = run_info
 
@@ -352,6 +355,7 @@ class TestExecutionServiceAgentExecutorChainSteps:
             project_id="project-1",
             stage_name="Ready",
             board_id="board-1",
+            started_at=datetime.now(UTC).isoformat(),
         )
         executor._run_registry.get_active_run.return_value = run_info
 
@@ -395,6 +399,7 @@ class TestExecutionServiceAgentExecutorChainSteps:
             project_id="project-1",
             stage_name="Ready",
             board_id="board-1",
+            started_at=datetime.now(UTC).isoformat(),
         )
         executor._run_registry.get_active_run.return_value = run_info
 
@@ -497,6 +502,7 @@ class TestExecutionServiceAgentExecutorMultipleExecutions:
             project_id="project-1",
             stage_name="Ready",
             board_id="board-1",
+            started_at=datetime.now(UTC).isoformat(),
         )
 
         # Execute multiple times — item-1/coder is deduplicated because item-1 is still in
@@ -529,6 +535,7 @@ class TestExecutionServiceAgentExecutorMultipleExecutions:
             project_id="project-1",
             stage_name="Ready",
             board_id="board-1",
+            started_at=datetime.now(UTC).isoformat(),
         )
 
         await executor.execute("item-1", "architect")
@@ -544,6 +551,7 @@ class TestExecutionServiceAgentExecutorMultipleExecutions:
             project_id="project-1",
             stage_name="Ready",
             board_id="board-1",
+            started_at=datetime.now(UTC).isoformat(),
         )
         await executor.execute("item-2", "architect")
 

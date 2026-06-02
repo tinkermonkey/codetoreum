@@ -30,8 +30,11 @@ class MockRedis:
         """Mock Redis GET operation."""
         return self._data.get(key)
 
-    async def set(self, key: str, value: str, ex: int | None = None) -> str:
+    async def set(self, key: str, value: str, ex: int | None = None, nx: bool = False, px: int | None = None) -> str | None:
         """Mock Redis SET operation."""
+        # If NX (only set if not exists), check if key already exists
+        if nx and key in self._data:
+            return None
         self._data[key] = value
         return "OK"
 
@@ -297,7 +300,6 @@ class TestRedisActiveWorkflowRunRegistry:
         assert result is None
 
 
-@pytest.mark.asyncio
 class TestActiveRunInfoValidation:
     """Tests for ActiveRunInfo validation."""
 

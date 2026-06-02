@@ -16,6 +16,7 @@ Also covers recovery logic:
 """
 
 import asyncio
+from datetime import UTC, datetime
 from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
@@ -71,6 +72,7 @@ class ProductionPathFixture:
             stage_name="implementation",
             project_id="proj-1",
             board_id="board-1",
+            started_at=datetime.now(UTC).isoformat(),
         )
         self.run_registry.get_active_run.return_value = self.run_info
 

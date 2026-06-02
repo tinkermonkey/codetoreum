@@ -7,6 +7,7 @@ Verifies that every failure mode in _run_execution:
 """
 
 import asyncio
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -102,6 +103,7 @@ class ExecutorFixture:
             stage_name="coding",
             project_id="proj-1",
             board_id=self.BOARD_ID,
+            started_at=datetime.now(UTC).isoformat(),
         )
         self.run_registry.get_active_run.return_value = self.run_info
 

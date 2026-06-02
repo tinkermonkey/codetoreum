@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import fakeredis.aioredis
 import pytest
 
@@ -29,12 +31,14 @@ async def registry(redis_client):
 class TestRedisActiveWorkflowRunRegistryRoundTrip:
     @pytest.mark.asyncio
     async def test_set_then_get(self, registry):
+        started_at = datetime.now(UTC).isoformat()
         await registry.set_active_run(
             work_item_id="wi-1",
             run_id="run-1",
             stage_name="In Progress",
             project_id="proj-1",
             board_id="board-1",
+            started_at=started_at,
         )
         info = await registry.get_active_run("wi-1")
         assert info == ActiveRunInfo(
@@ -43,6 +47,7 @@ class TestRedisActiveWorkflowRunRegistryRoundTrip:
             stage_name="In Progress",
             project_id="proj-1",
             board_id="board-1",
+            started_at=started_at,
         )
 
     @pytest.mark.asyncio
@@ -51,14 +56,14 @@ class TestRedisActiveWorkflowRunRegistryRoundTrip:
 
     @pytest.mark.asyncio
     async def test_clear_run(self, registry):
-        await registry.set_active_run("wi-1", "run-1", "In Progress", "proj-1", "board-1")
+        await registry.set_active_run(work_item_id="wi-1", run_id="run-1", stage_name="In Progress", project_id="proj-1", board_id="board-1", started_at=datetime.now(UTC).isoformat())
         await registry.clear_run("wi-1")
         assert await registry.get_active_run("wi-1") is None
 
     @pytest.mark.asyncio
     async def test_set_overwrites_existing(self, registry):
-        await registry.set_active_run("wi-1", "run-1", "stage-A", "proj-1", "board-1")
-        await registry.set_active_run("wi-1", "run-2", "stage-B", "proj-1", "board-1")
+        await registry.set_active_run(work_item_id="wi-1", run_id="run-1", stage_name="stage-A", project_id="proj-1", board_id="board-1", started_at=datetime.now(UTC).isoformat())
+        await registry.set_active_run(work_item_id="wi-1", run_id="run-2", stage_name="stage-B", project_id="proj-1", board_id="board-1", started_at=datetime.now(UTC).isoformat())
         info = await registry.get_active_run("wi-1")
         assert info is not None
         assert info.run_id == "run-2"
@@ -68,9 +73,9 @@ class TestRedisActiveWorkflowRunRegistryRoundTrip:
 class TestRedisActiveWorkflowRunRegistryGetAllRuns:
     @pytest.mark.asyncio
     async def test_get_all_runs_returns_all_active(self, registry):
-        await registry.set_active_run("wi-1", "run-1", "In Progress", "proj-1", "board-1")
-        await registry.set_active_run("wi-2", "run-2", "In Progress", "proj-1", "board-1")
-        await registry.set_active_run("wi-3", "run-3", "In Review", "proj-2", "board-2")
+        await registry.set_active_run(work_item_id="wi-1", run_id="run-1", stage_name="In Progress", project_id="proj-1", board_id="board-1", started_at=datetime.now(UTC).isoformat())
+        await registry.set_active_run(work_item_id="wi-2", run_id="run-2", stage_name="In Progress", project_id="proj-1", board_id="board-1", started_at=datetime.now(UTC).isoformat())
+        await registry.set_active_run(work_item_id="wi-3", run_id="run-3", stage_name="In Review", project_id="proj-2", board_id="board-2", started_at=datetime.now(UTC).isoformat())
 
         runs = await registry.get_all_runs()
         assert len(runs) == 3
@@ -86,7 +91,7 @@ class TestRedisActiveWorkflowRunRegistryPersistence:
     @pytest.mark.asyncio
     async def test_run_state_survives_registry_recreation(self, redis_client):
         r1 = RedisActiveWorkflowRunRegistry(redis_client=redis_client, ttl_seconds=60)
-        await r1.set_active_run("wi-1", "run-1", "In Progress", "proj-1", "board-1")
+        await r1.set_active_run(work_item_id="wi-1", run_id="run-1", stage_name="In Progress", project_id="proj-1", board_id="board-1", started_at=datetime.now(UTC).isoformat())
 
         # Simulate restart: drop registry, build a new one against the same Redis.
         del r1
@@ -104,7 +109,7 @@ class TestRedisActiveWorkflowRunRegistryCorruption:
 
     @pytest.mark.asyncio
     async def test_corrupt_in_get_all_runs_is_skipped(self, registry, redis_client):
-        await registry.set_active_run("wi-good", "run-1", "In Progress", "proj-1", "board-1")
+        await registry.set_active_run(work_item_id="wi-good", run_id="run-1", stage_name="In Progress", project_id="proj-1", board_id="board-1", started_at=datetime.now(UTC).isoformat())
         await redis_client.set(registry._key("wi-bad"), "{corrupt}", ex=60)
         runs = await registry.get_all_runs()
         wids = {wid for wid, _ in runs}
