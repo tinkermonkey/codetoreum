@@ -612,16 +612,19 @@ class ProductionApplicationBootstrap:
                 )
                 raise RuntimeError("DLQ retry processor startup failed - cannot guarantee INV-20 compliance") from e
 
-            # Phase 5e: Start multi-project orchestrator poll loop
-            # MPO is the sole orchestration entry point. It polls all enabled projects
-            # every 30s, reconciles boards, and delegates per-project work to
-            # WorkflowOrchestrator. Starting it here (after Phase 5d) ensures WorkItemService
-            # is fully wired before the first poll cycle runs.
-            logger.info("Phase 5e: Starting multi-project orchestrator poll loop...")
-            import asyncio as _asyncio
+            # Phase 5e: Initialize all projects
+            # One-time initialization of enabled projects on bootstrap.
+            # Reconciles all project boards so the event-driven system can detect changes.
+            # Polling is now adapter-internal (e.g., GitHubBoardAdapter), not application-layer.
+            logger.info("Phase 5e: Initializing all projects...")
+            from codetoreum.application.project_lifecycle_service import ProjectLifecycleService
 
-            _asyncio.ensure_future(self.services.multi_project_orchestrator.start())
-            logger.info("Phase 5e: Multi-project orchestrator poll loop started (background task)")
+            lifecycle_service = ProjectLifecycleService(
+                project_manager=self.adapters.project_manager,
+                board_service=self.adapters.board,
+            )
+            await lifecycle_service.initialize_all_projects()
+            logger.info("Phase 5e: Project initialization completed")
 
             # Phase 6: Create ports
             logger.info("Phase 6: Creating 17 input port implementations...")
@@ -1155,14 +1158,10 @@ class ProductionApplicationBootstrap:
         )
 
         # Multi-Project Orchestrator
+        # Now provides admin query methods only (list_enabled_projects, get_project_status).
+        # Lifecycle initialization moved to ProjectLifecycleService.
         multi_project_orchestrator = MultiProjectOrchestrator(
             project_manager=self.adapters.project_manager,
-            workflow_orchestrator=workflow_orchestrator,
-            board_service=self.adapters.board,
-            event_emitter=self.adapters.event_emitter,
-            poll_interval_seconds=30,
-            # D-Q: surface in-flight workflow runs in each poll cycle log/event.
-            run_registry=self.adapters.run_registry,
         )
 
         logger.info("Created all 11 application services with production adapters")
@@ -1553,6 +1552,7 @@ class ProductionApplicationBootstrap:
             adapter_slot_info=self._slot_info,
             event_store_poller=event_store_poller,
             issue_intake_port=issue_intake_service,
+            multi_project_orchestrator=self.services.multi_project_orchestrator,
         )
 
         logger.info("Created FastAPI application with all ports wired")
@@ -1769,18 +1769,6 @@ class ProductionApplicationBootstrap:
                     )
                     # Continue with other cleanup even if scheduler stop fails
 
-            # Stop multi-project orchestrator poll loop
-            if self.services and self.services.multi_project_orchestrator:
-                logger.info("Stopping multi-project orchestrator poll loop...")
-                try:
-                    await self.services.multi_project_orchestrator.stop()
-                except Exception as e:
-                    logger.error(
-                        f"Error stopping multi-project orchestrator: {e}",
-                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
-                        exc_info=True,
-                    )
-                    # Continue with other cleanup even if orchestrator stop fails
 
             # Close event store (closes Elasticsearch client for production deployments)
             if self.adapters and self.adapters.event_store:

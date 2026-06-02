@@ -293,6 +293,7 @@ def create_app(
     adapter_slot_info: dict[str, str] | None = None,
     event_store_poller: Any | None = None,
     issue_intake_port: IIssueIntakePort | None = None,
+    multi_project_orchestrator: Any | None = None,
 ) -> FastAPI:
     """
     Create and configure FastAPI application.
@@ -555,6 +556,18 @@ def create_app(
         auth_deps=auth_deps,
     )
     app.include_router(orchestrator_router)
+
+    # Include Projects administration router
+    if multi_project_orchestrator is not None:
+        from codetoreum.adapters.primary.routers.projects import (
+            create_projects_router,
+        )
+
+        projects_router = create_projects_router(
+            multi_project_orchestrator=multi_project_orchestrator,
+            auth_deps=auth_deps,
+        )
+        app.include_router(projects_router)
 
     # Include Scheduler router
     scheduler_router = create_scheduler_router(

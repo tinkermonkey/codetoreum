@@ -160,7 +160,6 @@ from .project_context_events import (
 
 # Project management events
 from .project_events import (
-    OrchestrationCycleCompletedEvent,
     ProjectClonedEvent,
     ProjectCloneFailedEvent,
     ProjectDisabledEvent,
@@ -395,7 +394,6 @@ __all__ = [
     "ProjectCloneFailedEvent",
     "ProjectEnabledEvent",
     "ProjectDisabledEvent",
-    "OrchestrationCycleCompletedEvent",
     # Queue events
     "QueueItemAddedEvent",
     "QueueItemRemovedEvent",

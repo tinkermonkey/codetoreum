@@ -1835,12 +1835,6 @@ class SimulationApplicationBootstrap:
         # Multi-Project Orchestrator
         multi_project_orchestrator = MultiProjectOrchestrator(
             project_manager=self.adapters.project_manager,
-            workflow_orchestrator=workflow_orchestrator,
-            board_service=self.adapters.board,
-            event_emitter=self.adapters.event_emitter,
-            poll_interval_seconds=30,
-            # D-Q: surface in-flight workflow runs in each cycle log/event.
-            run_registry=self.adapters.run_registry,
         )
 
         logger.info(
