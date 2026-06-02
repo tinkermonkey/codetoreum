@@ -71,7 +71,6 @@ def mock_work_item_service():
     from unittest.mock import AsyncMock
 
     service = AsyncMock()
-    service.move_to_column = AsyncMock()
     return service
 
 
