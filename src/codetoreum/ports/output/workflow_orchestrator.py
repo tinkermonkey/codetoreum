@@ -5,9 +5,7 @@ a single project, handling card movements, stage transitions, and
 agent execution.
 """
 
-from abc import ABC, abstractmethod
-
-from codetoreum.domain.value_objects import ProjectConfig
+from abc import ABC
 
 
 class IWorkflowOrchestrator(ABC):

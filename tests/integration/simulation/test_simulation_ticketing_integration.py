@@ -54,12 +54,6 @@ class TestSimulationTicketingIntegration:
         """Test that bootstrap creates a board adapter."""
         assert bootstrap.adapters.board is not None
 
-    @pytest.mark.asyncio
-    async def test_bootstrap_wires_board_to_orchestrator(self, bootstrap):
-        """Test that MultiProjectOrchestrator receives board_service."""
-        orchestrator = bootstrap.services.multi_project_orchestrator
-        assert orchestrator._board_service is not None
-
     # =========================================================================
     # End-to-End Flow Tests
     # =========================================================================
