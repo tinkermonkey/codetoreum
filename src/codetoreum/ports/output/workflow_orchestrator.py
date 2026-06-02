@@ -22,4 +22,3 @@ class IWorkflowOrchestrator(ABC):
     polling is handled internally by adapters as a private concern.
     """
 
-    pass

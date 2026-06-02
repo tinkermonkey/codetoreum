@@ -11,14 +11,10 @@ from typing import Any
 from codetoreum.domain.board_workflow_template import ColumnTemplate
 from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.domain.events.repair_cycle_events import RepairCycleCompletedEvent
-from codetoreum.domain.value_objects import ProjectConfig
 from codetoreum.domain.work_item import WorkItemPriority
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.observability.instrumentation import (
     instrument_async_function,
-)
-from codetoreum.ports.exceptions import (
-    ExternalServiceError,
 )
 from codetoreum.ports.exceptions import (
     TimeoutError as PortTimeoutError,

@@ -57,7 +57,7 @@ def create_projects_router(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to list projects: {str(e)}",
+                detail=f"Failed to list projects: {e!s}",
             )
 
     @router.get(
@@ -98,7 +98,7 @@ def create_projects_router(
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to get project status: {str(e)}",
+                detail=f"Failed to get project status: {e!s}",
             )
 
     return router

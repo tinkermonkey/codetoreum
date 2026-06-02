@@ -6,9 +6,6 @@ Lifecycle initialization is handled by ProjectLifecycleService.
 
 import logging
 
-from codetoreum.ports.exceptions import (
-    ResourceNotFoundError,
-)
 from codetoreum.ports.output.multi_project_orchestrator import (
     IMultiProjectOrchestrator,
     ProjectStatus,
