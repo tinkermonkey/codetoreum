@@ -11,7 +11,7 @@ import os
 import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from codetoreum.domain.events.repository_events import BranchCreatedEvent
 from codetoreum.ports.exceptions import (

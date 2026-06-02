@@ -44,10 +44,9 @@ class AcquireResult:
             if self.acquired_at is None:
                 msg = "acquired_at must be set when status is ACQUIRED"
                 raise ValueError(msg)
-        else:
-            if self.acquired_at is not None:
-                msg = "acquired_at must be None when status is not ACQUIRED"
-                raise ValueError(msg)
+        elif self.acquired_at is not None:
+            msg = "acquired_at must be None when status is not ACQUIRED"
+            raise ValueError(msg)
 
 
 @dataclass(frozen=True)
@@ -64,10 +63,9 @@ class ReleaseResult:
             if self.reason is not None:
                 msg = "reason must be None when released is True"
                 raise ValueError(msg)
-        else:
-            if self.reason is None:
-                msg = "reason must be set when released is False"
-                raise ValueError(msg)
+        elif self.reason is None:
+            msg = "reason must be set when released is False"
+            raise ValueError(msg)
 
 
 @dataclass(frozen=True)

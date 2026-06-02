@@ -78,7 +78,7 @@ class FileBackedPipelineQueue(IPipelineQueue):
         """
         try:
             if self._lock_file_path.exists():
-                with open(self._lock_file_path, "r") as f:
+                with open(self._lock_file_path) as f:
                     pid_str = f.read().strip()
                     try:
                         other_pid = int(pid_str)
@@ -112,7 +112,7 @@ class FileBackedPipelineQueue(IPipelineQueue):
             return
 
         try:
-            with open(self._file_path, "r") as f:
+            with open(self._file_path) as f:
                 for line in f:
                     line = line.strip()
                     if not line:

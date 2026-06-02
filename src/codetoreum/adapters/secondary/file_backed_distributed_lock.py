@@ -11,7 +11,6 @@ import asyncio
 import json
 import logging
 import os
-import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -82,7 +81,7 @@ class FileBackedDistributedLock(IDistributedLock):
         """
         try:
             if self._lock_file_path.exists():
-                with open(self._lock_file_path, "r") as f:
+                with open(self._lock_file_path) as f:
                     pid_str = f.read().strip()
                     try:
                         other_pid = int(pid_str)
@@ -116,7 +115,7 @@ class FileBackedDistributedLock(IDistributedLock):
             return
 
         try:
-            with open(self._file_path, "r") as f:
+            with open(self._file_path) as f:
                 for line in f:
                     line = line.strip()
                     if not line:
@@ -203,13 +202,12 @@ class FileBackedDistributedLock(IDistributedLock):
                         holder_id=holder_id,
                         acquired_at=None,
                     )
-                else:
-                    return AcquireResult(
-                        status=AcquireStatus.ALREADY_HELD_BY_OTHER,
-                        lock_key=lock_key,
-                        holder_id=current_holder_id,
-                        acquired_at=None,
-                    )
+                return AcquireResult(
+                    status=AcquireStatus.ALREADY_HELD_BY_OTHER,
+                    lock_key=lock_key,
+                    holder_id=current_holder_id,
+                    acquired_at=None,
+                )
 
             # Acquire the lock
             self._locks[lock_key] = (holder_id, now, ttl_seconds, expires_at, holder_metadata)
@@ -246,7 +244,7 @@ class FileBackedDistributedLock(IDistributedLock):
         Returns:
             ReleaseResult with released=True on success.
         """
-        now = datetime.now(UTC)
+        datetime.now(UTC)
 
         async with self._lock:
             if lock_key not in self._locks:
