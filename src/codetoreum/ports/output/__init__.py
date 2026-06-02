@@ -89,19 +89,10 @@ from codetoreum.ports.output.distributed_lock import (
     ReleaseReason,
     ReleaseResult,
 )
-from codetoreum.ports.output.pipeline_lock_service import (
-    IPipelineLockService,
-    PipelineLock,
-)
 from codetoreum.ports.output.pipeline_queue import (
     EnqueueResult,
     IPipelineQueue,
     QueueEntry as IPipelineQueueEntry,
-)
-from codetoreum.ports.output.pipeline_queue_service import (
-    IPipelineQueueService,
-    PipelineQueueEntry,
-    QueueEntry,  # Backward compatibility alias
 )
 from codetoreum.ports.output.pr_review_cycle_service import (
     IPRReviewCycle,
@@ -218,20 +209,17 @@ __all__ = [
     "NotificationPriority",
     "NotificationResult",
     "RichContent",
-    # Distributed Lock (Phase 5 decomposition)
+    # Distributed Lock
     "IDistributedLock",
     "AcquireResult",
     "AcquireStatus",
     "LockHolder",
     "ReleaseResult",
     "ReleaseReason",
-    # Pipeline Queue (Phase 5 decomposition)
+    # Pipeline Queue
     "IPipelineQueue",
     "EnqueueResult",
     "IPipelineQueueEntry",
-    # Pipeline Lock Service (legacy, being replaced by above)
-    "IPipelineLockService",
-    "PipelineLock",
     # Project Manager Service
     "IProjectManagerService",
     "ProjectConfig",

@@ -321,6 +321,7 @@ class BoardColumnEventHandler(EventHandler):
 
         # Enqueue and try to acquire lock
         lock_key = f"{project_id}:{board_id}"
+        queue_length = 0
 
         try:
             queue_entry = QueueEntry(
@@ -331,18 +332,24 @@ class BoardColumnEventHandler(EventHandler):
                 metadata={"project_id": project_id, "board_id": board_id},
             )
             await self.pipeline_queue.enqueue(queue_key=lock_key, entry=queue_entry)
+            queue_length = await self.pipeline_queue.length(lock_key)
         except Exception as e:
             logger.error(
                 f"Failed to enqueue {work_item_id}: {e}",
                 exc_info=True,
             )
+            return
 
         try:
             result = await self.distributed_lock.try_acquire(
                 lock_key=lock_key,
                 holder_id=work_item_id,
                 ttl_seconds=7200,
-                holder_metadata={"project_id": project_id, "board_id": board_id},
+                holder_metadata={
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "queue_length_at_acquire": str(queue_length),
+                },
             )
         except Exception as e:
             logger.error(
@@ -670,10 +677,13 @@ class BoardColumnEventHandler(EventHandler):
         reason: str,
     ) -> None:
         """Persist WorkflowFailed event on agent failure."""
-        if not self.event_store or work_item_id not in self._active_runs:
+        if not self.event_store or not self.run_registry:
             return
 
-        run_info = self._active_runs.pop(work_item_id)
+        run_info = await self.run_registry.get_active_run(work_item_id)
+        if run_info is None:
+            return
+
         workflow_run_id = run_info.run_id
         now = datetime.now(UTC)
 
@@ -689,6 +699,7 @@ class BoardColumnEventHandler(EventHandler):
         )
         try:
             await self.event_store.append(workflow_run_id, [event])
+            await self.run_registry.clear_run(work_item_id)
             logger.debug(f"Workflow run {workflow_run_id} failed for {work_item_id}: {reason}")
         except Exception as e:
             logger.error(
@@ -726,23 +737,24 @@ class BoardColumnEventHandler(EventHandler):
         logger.info(f"Triggering agent '{column_config.agent_id}' for {work_item_id}")
 
         # Update registry with current stage (so executor knows which stage is active)
-        if self.run_registry and work_item_id in self._active_runs:
-            run_info = self._active_runs[work_item_id]
-            try:
-                await self.run_registry.set_active_run(
-                    work_item_id=work_item_id,
-                    run_id=run_info.run_id,
-                    stage_name=column_config.name,
-                    project_id=run_info.project_id,
-                    board_id=run_info.board_id,
-                )
-            except Exception as e:
-                logger.error(
-                    f"Failed to update active run registry for {work_item_id}: {e}",
-                    exc_info=True,
-                    extra={"error_id": "ERR_BOARD_EVENT_RUN_REGISTRY_UPDATE_FAILURE"},
-                )
-                return
+        if self.run_registry:
+            run_info = await self.run_registry.get_active_run(work_item_id)
+            if run_info:
+                try:
+                    await self.run_registry.set_active_run(
+                        work_item_id=work_item_id,
+                        run_id=run_info.run_id,
+                        stage_name=column_config.name,
+                        project_id=run_info.project_id,
+                        board_id=run_info.board_id,
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"Failed to update active run registry for {work_item_id}: {e}",
+                        exc_info=True,
+                        extra={"error_id": "ERR_BOARD_EVENT_RUN_REGISTRY_UPDATE_FAILURE"},
+                    )
+                    return
 
         try:
             await self.agent_executor.execute(
@@ -759,9 +771,12 @@ class BoardColumnEventHandler(EventHandler):
             )
 
             # Handle synchronous execution failure (before task creation, lock still held)
-            if work_item_id in self._active_runs:
-                run_info = self._active_runs[work_item_id]
-                project_id = run_info.project_id
+            if self.run_registry:
+                run_info = await self.run_registry.get_active_run(work_item_id)
+                if run_info:
+                    project_id = run_info.project_id
+                else:
+                    return
 
                 # Use recovery service to fail workflow run (wrapped in try/except to ensure
                 # lock release is not skipped even if recovery service fails)
@@ -885,15 +900,15 @@ class BoardColumnEventHandler(EventHandler):
                 config = await self.workflow_config.get_board_workflow_template(board_id)
                 if config:
                     current_position = await self._find_item_position(board_id, work_item_id, config)
-                    if not current_position and work_item_id in self._active_runs:
+                    if not current_position and self.run_registry:
                         # Board service couldn't locate the item (no real Projects v2 board for
                         # this project, or the item is invisible at this moment). Fall back to
                         # our own tracking — mirrors the success-path fallback below.
-                        tracked_column = self._active_runs[work_item_id].current_column
-                        if tracked_column:
+                        run_info = await self.run_registry.get_active_run(work_item_id)
+                        if run_info and run_info.stage_name:
                             current_position = WorkItemPosition(
                                 work_item_id=work_item_id,
-                                column_name=tracked_column,
+                                column_name=run_info.stage_name,
                                 position=0,
                             )
                     column_config = config.get_column_config(current_position.column_name) if current_position else None
@@ -901,9 +916,10 @@ class BoardColumnEventHandler(EventHandler):
                         # Set board context so GitHubBoardAdapter._move_item_to_column_locked
                         # doesn't raise "Project and board context required" -- mirrors the
                         # success-path pattern below.
-                        if work_item_id in self._active_runs:
-                            run_meta = self._active_runs[work_item_id]
-                            await self.board_service.get_board(run_meta.project_id, board_id)
+                        if self.run_registry:
+                            run_meta = await self.run_registry.get_active_run(work_item_id)
+                            if run_meta:
+                                await self.board_service.get_board(run_meta.project_id, board_id)
                         await self.board_service.move_item_to_column(
                             work_item_id, column_config.on_failure_column, MovedByType.ORCHESTRATOR
                         )
@@ -931,14 +947,14 @@ class BoardColumnEventHandler(EventHandler):
                 return
 
             current_position = await self._find_item_position(board_id, work_item_id, config)
-            if not current_position and work_item_id in self._active_runs:
+            if not current_position and self.run_registry:
                 # Board service couldn't locate the item (e.g. externally-triggered work item
                 # not yet visible to the board adapter). Fall back to our own tracking.
-                tracked_column = self._active_runs[work_item_id].current_column
-                if tracked_column:
+                run_info = await self.run_registry.get_active_run(work_item_id)
+                if run_info and run_info.stage_name:
                     current_position = WorkItemPosition(
                         work_item_id=work_item_id,
-                        column_name=tracked_column,
+                        column_name=run_info.stage_name,
                         position=0,
                     )
             if not current_position:
@@ -982,9 +998,10 @@ class BoardColumnEventHandler(EventHandler):
             try:
                 # Set board context so GitHubBoardAdapter._move_item_to_column_locked
                 # doesn't raise "Project and board context required".
-                if work_item_id in self._active_runs:
-                    run_meta = self._active_runs[work_item_id]
-                    await self.board_service.get_board(run_meta.project_id, board_id)
+                if self.run_registry:
+                    run_meta = await self.run_registry.get_active_run(work_item_id)
+                    if run_meta:
+                        await self.board_service.get_board(run_meta.project_id, board_id)
                 await self.board_service.move_item_to_column(work_item_id, next_column_name, MovedByType.ORCHESTRATOR)
             except Exception as board_err:
                 # External board sync failures (missing context, wrong node ID, token scope) must
@@ -1002,8 +1019,10 @@ class BoardColumnEventHandler(EventHandler):
                 # stream too.
                 if self.event_emitter:
                     project_id_for_event = ""
-                    if work_item_id in self._active_runs:
-                        project_id_for_event = self._active_runs[work_item_id].project_id
+                    if self.run_registry:
+                        run_meta = await self.run_registry.get_active_run(work_item_id)
+                        if run_meta:
+                            project_id_for_event = run_meta.project_id
                     try:
                         self.event_emitter.emit(
                             BoardSyncFailedEvent(

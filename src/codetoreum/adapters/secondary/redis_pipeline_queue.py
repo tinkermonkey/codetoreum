@@ -191,12 +191,13 @@ class RedisPipelineQueue(IPipelineQueue):
         # Emit event
         if self._event_bus:
             try:
+                board_id = meta_dict.get("board_id", queue_key.split(":")[1] if ":" in queue_key else "")
                 event = WorkItemDequeuedEvent(
                     type="workitem.dequeued",
                     timestamp=datetime.now(UTC).isoformat(),
                     source="redis_pipeline_queue",
                     work_item_id=work_item_id,
-                    board_id=meta_dict.get("board_id", ""),
+                    board_id=board_id or "unknown",
                     reason="popped",
                 )
                 await self._event_bus.publish(event)
@@ -230,6 +231,18 @@ class RedisPipelineQueue(IPipelineQueue):
         if rank is None:
             return False
 
+        # Get metadata before deletion (needed for event emission)
+        entry_metadata = await self._redis.hget(meta_key, work_item_id)
+        entry_data = {}
+        if entry_metadata:
+            import json as json_lib
+            try:
+                if isinstance(entry_metadata, bytes):
+                    entry_metadata = entry_metadata.decode("utf-8")
+                entry_data = json_lib.loads(entry_metadata)
+            except Exception:
+                logger.warning(f"Failed to parse metadata for {work_item_id}")
+
         # Remove from sorted set and metadata
         await self._redis.zrem(zset_key, work_item_id)
         await self._redis.hdel(meta_key, work_item_id)
@@ -237,12 +250,13 @@ class RedisPipelineQueue(IPipelineQueue):
         # Emit event
         if self._event_bus:
             try:
+                board_id = entry_data.get("board_id", queue_key.split(":")[1] if ":" in queue_key else "")
                 event = WorkItemDequeuedEvent(
                     type="workitem.dequeued",
                     timestamp=datetime.now(UTC).isoformat(),
                     source="redis_pipeline_queue",
                     work_item_id=work_item_id,
-                    board_id="",
+                    board_id=board_id or "unknown",
                     reason="removed",
                 )
                 await self._event_bus.publish(event)

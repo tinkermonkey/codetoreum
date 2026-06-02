@@ -180,6 +180,18 @@ async def lifespan(app: FastAPI):
             )
             # Continue startup despite poller failure - handlers will still work for direct events
 
+    # Run pipeline orchestrator startup orphan scan
+    if hasattr(app.state, "pipeline_orchestrator"):
+        try:
+            logger.info("Running pipeline orchestrator startup orphan recovery scan")
+            await app.state.pipeline_orchestrator.on_startup()
+            logger.info("Pipeline orchestrator orphan recovery scan completed")
+        except Exception:
+            logger.warning(
+                "Pipeline orchestrator orphan recovery scan failed (non-critical)",
+                exc_info=True,
+            )
+
     # Run container recovery on startup if available
     if hasattr(app.state, "container_recovery_service"):
         try:

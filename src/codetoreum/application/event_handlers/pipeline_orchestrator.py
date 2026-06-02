@@ -83,36 +83,25 @@ class PipelineOrchestrator(EventHandler):
         - Remove the holder from the queue if present
         - Trigger workflow run setup and agent execution if needed
         """
-        lock_key = self._construct_lock_key(event.holder_metadata)
-        if not lock_key:
-            logger.warning(
-                f"Cannot construct lock_key from event metadata for work_item_id={event.work_item_id}",
-                extra={"work_item_id": event.work_item_id},
-            )
-            return
-
+        lock_key = f"{event.project_id}:{event.board_id}"
         queue_key = lock_key  # Same key per spec
 
         try:
             # Remove holder from queue if present (idempotent)
-            in_queue = await self.pipeline_queue.contains(queue_key, event.holder_id)
+            in_queue = await self.pipeline_queue.contains(queue_key, event.work_item_id)
             if in_queue:
-                await self.pipeline_queue.remove(queue_key, event.holder_id)
+                await self.pipeline_queue.remove(queue_key, event.work_item_id)
                 logger.info(
-                    f"Removed {event.holder_id} from queue (now holds lock)",
-                    extra={"work_item_id": event.holder_id},
+                    f"Removed {event.work_item_id} from queue (now holds lock)",
+                    extra={"work_item_id": event.work_item_id},
                 )
 
             # Trigger workflow setup and agent execution
-            # (This is where the handler would call workflow_orchestrator to start
-            # the workflow run and trigger the agent. For now, log as placeholder.)
-            if self.workflow_orchestrator:
-                # TODO: Call workflow_orchestrator.start_workflow_for_locked_item(...)
-                pass
+            # TODO: Call workflow_orchestrator to start workflow for locked item
 
         except Exception:
             logger.error(
-                f"Error handling lock acquisition for {event.holder_id}",
+                f"Error handling lock acquisition for {event.work_item_id}",
                 exc_info=True,
             )
 
@@ -121,21 +110,14 @@ class PipelineOrchestrator(EventHandler):
 
         Grants the lock to the next queued work item.
         """
-        lock_key = self._construct_lock_key(event.holder_metadata)
-        if not lock_key:
-            logger.warning(
-                f"Cannot construct lock_key from event metadata for released_holder_id={event.released_holder_id}",
-                extra={"released_holder_id": event.released_holder_id},
-            )
-            return
-
+        lock_key = f"{event.project_id}:{event.board_id}"
         queue_key = lock_key
 
         try:
             # Get next queued item
             next_entry = await self.pipeline_queue.peek(queue_key)
             if next_entry is None:
-                logger.info(f"No queued items after {event.released_holder_id} released lock")
+                logger.info(f"No queued items after {event.work_item_id} released lock")
                 return
 
             # Try to acquire lock for next item
@@ -161,7 +143,7 @@ class PipelineOrchestrator(EventHandler):
 
         except Exception:
             logger.error(
-                f"Error handling lock release for {event.released_holder_id}",
+                f"Error handling lock release for {event.work_item_id}",
                 exc_info=True,
             )
 
@@ -197,19 +179,3 @@ class PipelineOrchestrator(EventHandler):
                 exc_info=True,
             )
 
-    def _construct_lock_key(self, holder_metadata: dict[str, str] | None) -> str | None:
-        """Construct lock key from holder metadata.
-
-        Expects metadata to contain 'project_id' and 'board_id'.
-        Returns f"{project_id}:{board_id}" or None if missing.
-        """
-        if not holder_metadata:
-            return None
-
-        project_id = holder_metadata.get("project_id")
-        board_id = holder_metadata.get("board_id")
-
-        if not project_id or not board_id:
-            return None
-
-        return f"{project_id}:{board_id}"

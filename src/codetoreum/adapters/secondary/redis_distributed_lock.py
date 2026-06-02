@@ -127,14 +127,15 @@ class RedisDistributedLock(IDistributedLock):
             # Emit event via event bus if available
             if self._event_bus:
                 try:
+                    metadata = holder_metadata or {}
                     event = PipelineLockAcquiredEvent(
-                        type="lock.acquired",
+                        type="pipeline.lock_acquired",
                         timestamp=now.isoformat(),
                         source="redis_distributed_lock",
-                        lock_key=lock_key,
-                        holder_id=holder_id,
-                        acquired_at=now,
-                        holder_metadata=holder_metadata or {},
+                        project_id=metadata.get("project_id", ""),
+                        work_item_id=holder_id,
+                        board_id=metadata.get("board_id", ""),
+                        queue_length_at_acquire=int(metadata.get("queue_length_at_acquire", 0)),
                     )
                     await self._event_bus.publish(event)
                 except Exception:
@@ -168,44 +169,62 @@ class RedisDistributedLock(IDistributedLock):
         """Release the lock if held by the given holder.
 
         Idempotent — returns success=False if not held or held by different holder.
+        Uses Lua script for atomicity to prevent TOCTOU races.
         """
         redis_key = self._lock_key(lock_key)
         holder_data_key = self._holder_data_key(lock_key)
 
-        # Check who holds the lock
-        existing = await self._redis.get(redis_key)
-        if existing is None:
-            # Lock not held
-            return ReleaseResult(
-                released=False,
-                reason=ReleaseReason.NOT_HELD,
-                lock_key=lock_key,
-            )
+        # Lua script for atomic release: if holder matches, delete the lock
+        lua_script = """
+            if redis.call("get", KEYS[1]) == ARGV[1] then
+                return redis.call("del", KEYS[1])
+            else
+                return 0
+            end
+        """
 
-        existing_holder_id = existing.decode("utf-8") if isinstance(existing, bytes) else str(existing)
-        if existing_holder_id != holder_id:
-            # Held by different holder
-            return ReleaseResult(
-                released=False,
-                reason=ReleaseReason.HELD_BY_OTHER,
-                lock_key=lock_key,
-            )
-
-        # Release the lock
         try:
-            await self._redis.delete(redis_key)
+            # Register and execute Lua script
+            result = await self._redis.eval(lua_script, 1, redis_key, holder_id)
+
+            if not result:
+                # Check if lock exists but held by different holder
+                existing = await self._redis.get(redis_key)
+                if existing is None:
+                    return ReleaseResult(
+                        released=False,
+                        reason=ReleaseReason.NOT_HELD,
+                        lock_key=lock_key,
+                    )
+                else:
+                    return ReleaseResult(
+                        released=False,
+                        reason=ReleaseReason.HELD_BY_OTHER,
+                        lock_key=lock_key,
+                    )
+
+            # Lock was released successfully, also clean up metadata
             await self._redis.delete(holder_data_key)
+
+            # Get holder metadata before deletion to emit event
+            holder_data_dict = await self._redis.hgetall(holder_data_key)
+            holder_data = {}
+            for k, v in holder_data_dict.items():
+                k_str = k.decode("utf-8") if isinstance(k, bytes) else str(k)
+                v_str = v.decode("utf-8") if isinstance(v, bytes) else str(v)
+                holder_data[k_str] = v_str
 
             # Emit event via event bus if available
             if self._event_bus:
                 try:
                     event = PipelineLockReleasedEvent(
-                        type="lock.released",
+                        type="pipeline.lock_released",
                         timestamp=datetime.now(UTC).isoformat(),
                         source="redis_distributed_lock",
-                        lock_key=lock_key,
-                        released_holder_id=holder_id,
-                        released_at=datetime.now(UTC),
+                        project_id=holder_data.get("project_id", ""),
+                        work_item_id=holder_id,
+                        board_id=holder_data.get("board_id", ""),
+                        next_work_item_id=None,
                     )
                     await self._event_bus.publish(event)
                 except Exception:

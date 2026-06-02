@@ -31,7 +31,6 @@ from codetoreum.ports.output.identity_service import IIdentityService
 from codetoreum.ports.output.message_broker import IMessageBroker
 from codetoreum.ports.output.metrics import IMetrics
 from codetoreum.ports.output.notifier import INotifier
-from codetoreum.ports.output.pipeline_lock_service import IPipelineLockService
 from codetoreum.ports.output.pipeline_queue_service import IPipelineQueueService
 from codetoreum.ports.output.pr_review_cycle_service import IPRReviewCycle
 from codetoreum.ports.output.project_manager_service import IProjectManagerService
@@ -501,34 +500,6 @@ class EncryptionRegistry(AdapterRegistry[IEncryptionService]):
     def _is_valid_adapter(self, adapter_type: type[IEncryptionService]) -> bool:
         """Validate that an adapter implements IEncryptionService."""
         return _validate_adapter_implements_interface(adapter_type, self._port_interface)
-
-
-class PipelineLockServiceRegistry(AdapterRegistry[IPipelineLockService]):
-    """Registry for IPipelineLockService adapter implementations.
-
-    This registry accepts adapters that implement either:
-    - IPipelineLockService (port interface, 3-parameter lock methods)
-    - IQueuedPipelineLockService (application interface, 4-parameter lock methods with position-based queue)
-    """
-
-    def __init__(self):
-        """Initialize the pipeline lock service registry."""
-        super().__init__(IPipelineLockService)
-
-    def _is_valid_adapter(self, adapter_type: type[IPipelineLockService]) -> bool:
-        """Validate that an adapter implements IPipelineLockService or IQueuedPipelineLockService."""
-        # Check if implements port interface
-        try:
-            if _validate_adapter_implements_interface(adapter_type, self._port_interface):
-                return True
-        except ValueError:
-            # Fall through to check IQueuedPipelineLockService alternative
-            pass
-        # Also accept adapters that implement IQueuedPipelineLockService (application interface)
-        try:
-            return _validate_adapter_implements_interface(adapter_type, IQueuedPipelineLockService)
-        except ValueError:
-            return False
 
 
 class PipelineQueueServiceRegistry(AdapterRegistry[IPipelineQueueService]):

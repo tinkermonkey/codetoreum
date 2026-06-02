@@ -553,20 +553,8 @@ class ProductionApplicationBootstrap:
 
             # Phase 4e: Detect orphaned workflow runs left over from a crashed
             # or SIGTERM-killed previous instance. The Redis-backed
-            # IActiveWorkflowRunRegistry preserved ActiveRunInfo across the
-            # restart, but the in-process WorkflowOrchestrator state is gone.
-            # For each persisted run, check the event store for a terminal
-            # workflow event; if none exists and the started event is older
-            # than the stale threshold, emit WorkflowOrphanedEvent so audit
-            # consumers and downstream handlers can reconcile.
-            logger.info("Phase 4e: Running orphan workflow-run detection...")
-            try:
-                await self._detect_orphaned_workflow_runs()
-            except Exception:
-                logger.exception(
-                    "Phase 4e orphan detection failed; continuing bootstrap "
-                    "(orphan runs will not be cleaned up this cycle)",
-                )
+            # Orphan detection has moved to PipelineOrchestrator.on_startup()
+            # which runs via the FastAPI lifespan, not in bootstrap
 
             # Log non-critical slots with mock implementations
             self._log_non_critical_slots()
@@ -779,211 +767,7 @@ class ProductionApplicationBootstrap:
     # enough to never false-positive a slow in-flight run.
     _ORPHAN_STALE_THRESHOLD_SECONDS: int = 5 * 60
 
-    async def _detect_orphaned_workflow_runs(self) -> None:
-        """Scan the active-workflow-run registry for entries left over from
-        a crashed instance and emit ``WorkflowOrphanedEvent`` for each.
-
-        Algorithm (per-run, narrow false-positive surface):
-
-        1. Pull every ``(work_item_id, ActiveRunInfo)`` from the registry.
-        2. For each, read the run's event stream (stream_id == ``run_id``)
-           from the event store.
-        3. If the stream is empty, the run never made it past
-           ``WorkflowStartedEvent`` recording — skip (resolver may not have
-           appended yet, or the registry entry is from a partial write).
-        4. If a terminal event (workflow.completed | workflow.failed |
-           workflow.cancelled) is present, the run actually finished — clear
-           the registry entry and move on. Not an orphan.
-        5. Otherwise, if the latest event is older than the stale threshold
-           (default 5 min), emit ``WorkflowOrphanedEvent`` on the event bus
-           and clear the registry entry. The downstream Phase 4d subscriber
-           and ES sink will pick up the orphan event.
-
-        All failures are logged and swallowed; orphan detection is best-effort
-        and must not block bootstrap. INV-11: no retry/circuit-breaker logic.
-        """
-        if not self.adapters or not self.adapters.run_registry:
-            logger.info("Phase 4e: skipped (no run_registry adapter resolved)")
-            return
-        if not self.adapters.event_store:
-            logger.info("Phase 4e: skipped (no event_store adapter resolved)")
-            return
-        if not self.infrastructure or not self.infrastructure.event_bus:
-            logger.info("Phase 4e: skipped (no event_bus available)")
-            return
-
-        from datetime import UTC, datetime, timedelta
-
-        from codetoreum.domain.events.workflow_events import WorkflowOrphanedEvent
-
-        _TERMINAL_TYPES = {"workflow.completed", "workflow.failed", "workflow.cancelled"}
-        now = datetime.now(UTC)
-        stale_cutoff = now - timedelta(seconds=self._ORPHAN_STALE_THRESHOLD_SECONDS)
-
-        try:
-            entries = await self.adapters.run_registry.get_all_runs()
-        except Exception:
-            logger.exception("Phase 4e: failed to list active runs from registry")
-            return
-
-        logger.info(
-            "Phase 4e: scanning %d persisted active workflow run(s) for orphans",
-            len(entries),
-        )
-
-        emitted = 0
-        cleared_completed = 0
-        skipped_fresh = 0
-
-        for work_item_id, run_info in entries:
-            try:
-                events = await self.adapters.event_store.get_events(run_info.run_id)
-            except Exception:
-                logger.exception(
-                    "Phase 4e: failed to read event stream for run_id=%s; " "leaving registry entry untouched",
-                    run_info.run_id,
-                )
-                continue
-
-            if not events:
-                # Nothing landed in ES for this run yet. Don't emit an orphan
-                # event from a half-written record; clear the stale registry
-                # entry so we don't keep re-checking it.
-                logger.warning(
-                    "Phase 4e: registry has run_id=%s for work_item_id=%s "
-                    "but event stream is empty — clearing stale entry",
-                    run_info.run_id,
-                    work_item_id,
-                )
-                try:
-                    await self.adapters.run_registry.clear_run(work_item_id)
-                except Exception:
-                    logger.exception(
-                        "Phase 4e: failed to clear empty-stream registry entry " "for work_item_id=%s",
-                        work_item_id,
-                    )
-                continue
-
-            # Find latest event timestamp and check for terminal type.
-            terminal_seen = False
-            latest_ts: datetime | None = None
-            for ev in events:
-                ev_type = getattr(ev, "event_type", None) or getattr(ev, "type", "")
-                if ev_type in _TERMINAL_TYPES:
-                    terminal_seen = True
-                ts_str = getattr(ev, "timestamp", "") or ""
-                if ts_str:
-                    try:
-                        ts = datetime.fromisoformat(ts_str)
-                        if ts.tzinfo is None:
-                            ts = ts.replace(tzinfo=UTC)
-                        if latest_ts is None or ts > latest_ts:
-                            latest_ts = ts
-                    except ValueError:
-                        continue
-
-            if terminal_seen:
-                # Run actually completed; registry just wasn't cleared.
-                try:
-                    await self.adapters.run_registry.clear_run(work_item_id)
-                    cleared_completed += 1
-                except Exception:
-                    logger.exception(
-                        "Phase 4e: failed to clear completed-run registry entry " "for work_item_id=%s",
-                        work_item_id,
-                    )
-                continue
-
-            if latest_ts is None or latest_ts > stale_cutoff:
-                # Either we couldn't parse a timestamp (be conservative, skip)
-                # or the run is younger than the stale threshold — could still
-                # be in-flight on another instance / pre-orphan.
-                skipped_fresh += 1
-                continue
-
-            # Genuine orphan: stream exists, no terminal event, latest event
-            # is older than the stale threshold.
-            try:
-                orphan_event = WorkflowOrphanedEvent(
-                    type="workflow.orphaned",
-                    timestamp=now.isoformat(),
-                    source="production_bootstrap.phase_4e",
-                    workflow_id=run_info.run_id,
-                    work_item_id=work_item_id,
-                    project_id=run_info.project_id,
-                    board_id=run_info.board_id,
-                    stage_name=run_info.stage_name,
-                    detected_at=now.isoformat(),
-                    reason=(
-                        f"No terminal workflow event in stream; latest event at "
-                        f"{latest_ts.isoformat()} is older than stale threshold "
-                        f"({self._ORPHAN_STALE_THRESHOLD_SECONDS}s)."
-                    ),
-                )
-                await self.infrastructure.event_bus.publish(orphan_event)
-                emitted += 1
-                logger.warning(
-                    "Phase 4e: emitted WorkflowOrphanedEvent for run_id=%s " "work_item_id=%s stage=%s",
-                    run_info.run_id,
-                    work_item_id,
-                    run_info.stage_name,
-                )
-            except Exception:
-                logger.exception(
-                    "Phase 4e: failed to emit WorkflowOrphanedEvent for run_id=%s",
-                    run_info.run_id,
-                )
-                continue
-
-            # Clear the registry entry so subsequent bootstraps don't re-emit.
-            try:
-                await self.adapters.run_registry.clear_run(work_item_id)
-            except Exception:
-                logger.exception(
-                    "Phase 4e: failed to clear orphaned-run registry entry " "for work_item_id=%s",
-                    work_item_id,
-                )
-
-            # Release the pipeline lock held by the orphaned work item.
-            # Without this, the lock stays pinned to a dead run until its TTL
-            # expires (>1h), blocking every subsequent work item on that board
-            # behind a phantom holder. The lock service handles the queue
-            # hand-off (pops the next queued WI and grants it the lock).
-            if self.adapters.lock_service is not None:
-                try:
-                    release_result = await self.adapters.lock_service.release_lock(
-                        project_id=run_info.project_id,
-                        board_id=run_info.board_id,
-                        work_item_id=work_item_id,
-                    )
-                    logger.info(
-                        "Phase 4e: released orphaned pipeline lock for work_item_id=%s " "(next_queued=%s)",
-                        work_item_id,
-                        release_result.next_work_item_id,
-                    )
-                except ValueError:
-                    # Lock not held, or held by a different work item — both
-                    # benign for orphan recovery; nothing to release.
-                    logger.info(
-                        "Phase 4e: no orphan lock to release for work_item_id=%s "
-                        "(lock not held or held by another work item)",
-                        work_item_id,
-                    )
-                except Exception:
-                    logger.exception(
-                        "Phase 4e: failed to release orphan pipeline lock " "for work_item_id=%s",
-                        work_item_id,
-                    )
-
-        logger.info(
-            "Phase 4e: orphan detection complete " "(scanned=%d emitted=%d cleared_completed=%d skipped_fresh=%d)",
-            len(entries),
-            emitted,
-            cleared_completed,
-            skipped_fresh,
-        )
-
-    # =========================================================================
+# =========================================================================
     # Phase 3: Critical Path Enforcement
     # =========================================================================
 
@@ -1742,12 +1526,9 @@ class ProductionApplicationBootstrap:
         self.infrastructure.event_bus.register_handler(orchestrator)
         logger.info("Registered PipelineOrchestrator with event bus")
 
-        # Perform startup orphan recovery scan
-        try:
-            import asyncio
-            asyncio.run(orchestrator.on_startup())
-        except Exception:
-            logger.warning("Orphan recovery scan failed (non-critical)", exc_info=True)
+        # Store orchestrator in app.state so the FastAPI lifespan can call on_startup
+        if self.app:
+            self.app.state.pipeline_orchestrator = orchestrator
 
     def _register_conversational_loop_orchestrator(self) -> None:
         """Register conversational loop orchestrator to handle column changes."""
