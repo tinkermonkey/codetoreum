@@ -14,7 +14,6 @@ import os
 import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from codetoreum.ports.output.distributed_lock import (
     AcquireResult,
@@ -24,9 +23,6 @@ from codetoreum.ports.output.distributed_lock import (
     ReleaseReason,
     ReleaseResult,
 )
-
-if TYPE_CHECKING:
-    from codetoreum.infrastructure.event_bus import EventBus
 
 logger = logging.getLogger(__name__)
 
@@ -49,13 +45,16 @@ class FileBackedDistributedLock(IDistributedLock):
     def __init__(
         self,
         file_path: str | None = None,
-        event_bus: "EventBus | None" = None,
     ) -> None:
         """Initialize the file-backed lock.
 
         Args:
             file_path: Path to the JSONL file. Defaults to /tmp/codetoreum/distributed_lock.jsonl
-            event_bus: Optional EventBus for emitting lock lifecycle events
+
+        Note:
+            This adapter does not emit domain events because it operates at the distributed lock
+            primitive level and lacks sufficient context (project_id, board_id, etc.) to create
+            meaningful domain events. Event emission is the caller's responsibility.
         """
         if file_path is None:
             base_dir = Path("/tmp/codetoreum")
@@ -64,7 +63,6 @@ class FileBackedDistributedLock(IDistributedLock):
 
         self._file_path = Path(file_path)
         self._lock_file_path = Path(f"{file_path}.lock")
-        self._event_bus = event_bus
         self._lock = asyncio.Lock()
 
         # State: maps lock_key -> (holder_id, acquired_at, ttl_seconds, expires_at, holder_metadata)
@@ -108,7 +106,7 @@ class FileBackedDistributedLock(IDistributedLock):
             with open(self._lock_file_path, "w") as f:
                 f.write(str(current_pid))
                 os.fsync(f.fileno())
-        except Exception as e:
+        except Exception:
             logger.error("Failed to acquire single-process guard", exc_info=True)
             raise
 
@@ -141,7 +139,15 @@ class FileBackedDistributedLock(IDistributedLock):
                         lock_key = entry["lock_key"]
                         self._locks.pop(lock_key, None)
 
-        except Exception as e:
+                    elif entry_type == "lock_renewed":
+                        lock_key = entry["lock_key"]
+                        if lock_key in self._locks:
+                            holder_id, acquired_at, _, _, holder_metadata = self._locks[lock_key]
+                            ttl_seconds = entry["ttl_seconds"]
+                            expires_at = acquired_at + timedelta(seconds=ttl_seconds)
+                            self._locks[lock_key] = (holder_id, acquired_at, ttl_seconds, expires_at, holder_metadata)
+
+        except Exception:
             logger.error(f"Failed to load lock state from {self._file_path}", exc_info=True)
             raise
 
@@ -218,27 +224,6 @@ class FileBackedDistributedLock(IDistributedLock):
             }
             self._append_entry(entry)
 
-            # Emit event if event bus available
-            if self._event_bus:
-                try:
-                    from codetoreum.domain.events.pipeline_events import PipelineLockAcquiredEvent
-
-                    event = PipelineLockAcquiredEvent(
-                        type="pipeline.lock_acquired",
-                        timestamp=now.isoformat(),
-                        source="file_backed_distributed_lock",
-                        lock_key=lock_key,
-                        holder_id=holder_id,
-                        acquired_at=now.isoformat(),
-                        holder_metadata=holder_metadata,
-                    )
-                    await self._event_bus.publish(event)
-                except Exception:
-                    logger.error(
-                        f"Failed to emit PipelineLockAcquiredEvent for lock_key={lock_key}, holder_id={holder_id}",
-                        exc_info=True,
-                    )
-
             return AcquireResult(
                 status=AcquireStatus.ACQUIRED,
                 lock_key=lock_key,
@@ -288,26 +273,6 @@ class FileBackedDistributedLock(IDistributedLock):
                 "holder_id": holder_id,
             }
             self._append_entry(entry)
-
-            # Emit event if event bus available
-            if self._event_bus:
-                try:
-                    from codetoreum.domain.events.pipeline_events import PipelineLockReleasedEvent
-
-                    event = PipelineLockReleasedEvent(
-                        type="pipeline.lock_released",
-                        timestamp=now.isoformat(),
-                        source="file_backed_distributed_lock",
-                        lock_key=lock_key,
-                        released_holder_id=holder_id,
-                        released_at=now.isoformat(),
-                    )
-                    await self._event_bus.publish(event)
-                except Exception:
-                    logger.error(
-                        f"Failed to emit PipelineLockReleasedEvent for lock_key={lock_key}, holder_id={holder_id}",
-                        exc_info=True,
-                    )
 
             return ReleaseResult(
                 released=True,
@@ -382,12 +347,12 @@ class FileBackedDistributedLock(IDistributedLock):
             if lock_key not in self._locks:
                 return False
 
-            current_holder_id, _, _, _, holder_metadata = self._locks[lock_key]
+            current_holder_id, acquired_at, _, _, holder_metadata = self._locks[lock_key]
             if current_holder_id != holder_id:
                 return False
 
-            # Update the lock
-            self._locks[lock_key] = (holder_id, now, ttl_seconds, expires_at, holder_metadata)
+            # Update the lock, preserving original acquired_at
+            self._locks[lock_key] = (holder_id, acquired_at, ttl_seconds, expires_at, holder_metadata)
 
             # Persist to file
             entry = {

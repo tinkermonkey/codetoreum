@@ -13,16 +13,12 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from codetoreum.ports.output.pipeline_queue import (
     EnqueueResult,
     IPipelineQueue,
     QueueEntry,
 )
-
-if TYPE_CHECKING:
-    from codetoreum.infrastructure.event_bus import EventBus
 
 logger = logging.getLogger(__name__)
 
@@ -45,13 +41,16 @@ class FileBackedPipelineQueue(IPipelineQueue):
     def __init__(
         self,
         file_path: str | None = None,
-        event_bus: "EventBus | None" = None,
     ) -> None:
         """Initialize the file-backed queue.
 
         Args:
             file_path: Path to the JSONL file. Defaults to /tmp/codetoreum/pipeline_queue.jsonl
-            event_bus: Optional EventBus for emitting queue lifecycle events
+
+        Note:
+            This adapter does not emit domain events because it operates at the pipeline queue
+            primitive level and lacks sufficient context (project_id, board_id, etc.) to create
+            meaningful domain events. Event emission is the caller's responsibility.
         """
         if file_path is None:
             base_dir = Path("/tmp/codetoreum")
@@ -60,7 +59,6 @@ class FileBackedPipelineQueue(IPipelineQueue):
 
         self._file_path = Path(file_path)
         self._lock_file_path = Path(f"{file_path}.lock")
-        self._event_bus = event_bus
         self._lock = asyncio.Lock()
 
         # State: maps queue_key -> list of QueueEntry objects in FIFO order
@@ -104,7 +102,7 @@ class FileBackedPipelineQueue(IPipelineQueue):
             with open(self._lock_file_path, "w") as f:
                 f.write(str(current_pid))
                 os.fsync(f.fileno())
-        except Exception as e:
+        except Exception:
             logger.error("Failed to acquire single-process guard", exc_info=True)
             raise
 
@@ -158,7 +156,7 @@ class FileBackedPipelineQueue(IPipelineQueue):
                             if not self._queues[queue_key]:
                                 del self._queues[queue_key]
 
-        except Exception as e:
+        except Exception:
             logger.error(f"Failed to load queue state from {self._file_path}", exc_info=True)
             raise
 
@@ -175,7 +173,7 @@ class FileBackedPipelineQueue(IPipelineQueue):
             with open(self._file_path, "a") as f:
                 f.write(json.dumps(entry) + "\n")
                 os.fsync(f.fileno())
-        except Exception as e:
+        except Exception:
             logger.error(f"Failed to write queue entry to {self._file_path}", exc_info=True)
             raise
 
@@ -221,27 +219,6 @@ class FileBackedPipelineQueue(IPipelineQueue):
             }
             self._append_entry(file_entry)
 
-            # Emit event if event bus available
-            if self._event_bus:
-                try:
-                    from codetoreum.domain.events.queue_events import WorkItemQueuedEvent
-
-                    event = WorkItemQueuedEvent(
-                        type="queue.item_queued",
-                        timestamp=datetime.now().isoformat(),
-                        source="file_backed_pipeline_queue",
-                        queue_key=queue_key,
-                        work_item_id=entry.work_item_id,
-                        position=position,
-                        metadata=entry.metadata,
-                    )
-                    await self._event_bus.publish(event)
-                except Exception:
-                    logger.error(
-                        f"Failed to emit WorkItemQueuedEvent for queue_key={queue_key}, work_item_id={entry.work_item_id}",
-                        exc_info=True,
-                    )
-
             return EnqueueResult(position=position, already_present=False)
 
     async def peek(self, queue_key: str) -> QueueEntry | None:
@@ -284,26 +261,6 @@ class FileBackedPipelineQueue(IPipelineQueue):
                 "work_item_id": entry.work_item_id,
             }
             self._append_entry(file_entry)
-
-            # Emit event if event bus available
-            if self._event_bus:
-                try:
-                    from codetoreum.domain.events.queue_events import WorkItemDequeuedEvent
-
-                    event = WorkItemDequeuedEvent(
-                        type="queue.item_dequeued",
-                        timestamp=datetime.now().isoformat(),
-                        source="file_backed_pipeline_queue",
-                        queue_key=queue_key,
-                        work_item_id=entry.work_item_id,
-                        reason="popped",
-                    )
-                    await self._event_bus.publish(event)
-                except Exception:
-                    logger.error(
-                        f"Failed to emit WorkItemDequeuedEvent for queue_key={queue_key}, work_item_id={entry.work_item_id}",
-                        exc_info=True,
-                    )
 
             return entry
 
@@ -353,26 +310,6 @@ class FileBackedPipelineQueue(IPipelineQueue):
                         "work_item_id": work_item_id,
                     }
                     self._append_entry(file_entry)
-
-                    # Emit event if event bus available
-                    if self._event_bus:
-                        try:
-                            from codetoreum.domain.events.queue_events import WorkItemDequeuedEvent
-
-                            event = WorkItemDequeuedEvent(
-                                type="queue.item_dequeued",
-                                timestamp=datetime.now().isoformat(),
-                                source="file_backed_pipeline_queue",
-                                queue_key=queue_key,
-                                work_item_id=work_item_id,
-                                reason="removed",
-                            )
-                            await self._event_bus.publish(event)
-                        except Exception:
-                            logger.error(
-                                f"Failed to emit WorkItemDequeuedEvent for queue_key={queue_key}, work_item_id={work_item_id}",
-                                exc_info=True,
-                            )
 
                     return True
 
