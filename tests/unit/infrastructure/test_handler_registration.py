@@ -96,20 +96,30 @@ class TestHandlerRegistration:
             content = f.read()
 
         # Find all handler instantiations in the bootstrap file
-        # Look for patterns like: handler = WorkflowEventHandler(...) or handler = ExecutionEventHandler(...)
+        # Look for patterns like: handler = WorkflowEventHandler(...) or orchestrator = PipelineOrchestrator(...)
         handlers = set()
 
-        # Pattern 1: handler = ClassName(...)
+        # Pattern 1: handler = ClassName(...) - match any class with 'Handler' suffix
         pattern = r"handler\s*=\s*(\w+Handler)\s*\("
         for match in re.finditer(pattern, content):
             handler_class = match.group(1)
             handlers.add(handler_class)
 
-        # Pattern 2: pr_dispatch_handler = ClassName(...) or similar
-        pattern = r"(\w+(?:_handler|_handlers))\s*=\s*(\w+Handler)\s*\("
+        # Pattern 2: orchestrator = ClassName(...) or other orchestrator/handler variables
+        pattern = r"(?:handler|orchestrator)\s*=\s*(\w+)\s*\("
+        for match in re.finditer(pattern, content):
+            handler_class = match.group(1)
+            # Skip if it's not a class name pattern (should start with capital letter)
+            if handler_class and handler_class[0].isupper():
+                handlers.add(handler_class)
+
+        # Pattern 3: *_handler = ClassName(...) or *_handlers = ClassName(...)
+        pattern = r"(\w+(?:_handler|_handlers))\s*=\s*(\w+)\s*\("
         for match in re.finditer(pattern, content):
             handler_class = match.group(2)
-            handlers.add(handler_class)
+            # Skip if it's not a class name pattern (should start with capital letter)
+            if handler_class and handler_class[0].isupper():
+                handlers.add(handler_class)
 
         return handlers
 

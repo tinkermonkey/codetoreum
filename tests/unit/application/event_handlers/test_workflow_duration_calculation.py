@@ -5,7 +5,7 @@ calculation from started_at timestamp.
 """
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -30,12 +30,20 @@ class TestWorkflowDurationCalculation:
         run_registry = InMemoryActiveWorkflowRunRegistry()
         board_service = AsyncMock()
         event_bus = AsyncMock()
+        workflow_config = AsyncMock()
+        agent_executor = AsyncMock()
+        work_item_service = AsyncMock()
+        lock_service = AsyncMock()
 
         handler = BoardColumnEventHandler(
             event_store=event_store,
             run_registry=run_registry,
             board_service=board_service,
             event_bus=event_bus,
+            workflow_config=workflow_config,
+            agent_executor=agent_executor,
+            work_item_service=work_item_service,
+            lock_service=lock_service,
         )
 
         # Set up an active run that started 5 minutes ago
@@ -58,7 +66,7 @@ class TestWorkflowDurationCalculation:
 
         # Verify event was stored with proper duration
         # The duration should be approximately 300 seconds (5 minutes)
-        stored_events = event_store._events.get(run_id, [])
+        stored_events = event_store.get_events_for_stream(run_id)
 
         from codetoreum.domain.events.workflow_events import WorkflowCompletedEvent
 
@@ -84,6 +92,10 @@ class TestWorkflowDurationCalculation:
             run_registry=run_registry,
             board_service=AsyncMock(),
             event_bus=AsyncMock(),
+            workflow_config=AsyncMock(),
+            agent_executor=AsyncMock(),
+            work_item_service=AsyncMock(),
+            lock_service=AsyncMock(),
         )
 
         work_item_id = "wi-test"
@@ -124,6 +136,10 @@ class TestWorkflowDurationCalculation:
             run_registry=run_registry,
             board_service=AsyncMock(),
             event_bus=AsyncMock(),
+            workflow_config=AsyncMock(),
+            agent_executor=AsyncMock(),
+            work_item_service=AsyncMock(),
+            lock_service=AsyncMock(),
         )
 
         work_item_id = "wi-short"
@@ -162,6 +178,10 @@ class TestWorkflowDurationCalculation:
             run_registry=run_registry,
             board_service=AsyncMock(),
             event_bus=AsyncMock(),
+            workflow_config=AsyncMock(),
+            agent_executor=AsyncMock(),
+            work_item_service=AsyncMock(),
+            lock_service=AsyncMock(),
         )
 
         # Try to complete a workflow with no active run
@@ -169,4 +189,4 @@ class TestWorkflowDurationCalculation:
         await handler._complete_workflow_run("nonexistent-wi", "done")
 
         # Should not have stored anything
-        assert len(event_store._events) == 0
+        assert event_store.get_total_event_count() == 0
