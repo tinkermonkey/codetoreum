@@ -18,12 +18,19 @@ from codetoreum.adapters.testing.in_memory_agent_repository import (
 from codetoreum.adapters.testing.in_memory_checkpoint_store import InMemoryCheckpointStore
 from codetoreum.adapters.testing.in_memory_code_review_adapter import InMemoryCodeReviewAdapter
 from codetoreum.adapters.testing.in_memory_config_store import InMemoryConfigStore
+from codetoreum.adapters.testing.in_memory_distributed_lock import (
+    InMemoryDistributedLock,
+)
 from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
 from codetoreum.adapters.testing.in_memory_failed_event_store import (
     InMemoryFailedEventStore,
 )
 from codetoreum.adapters.testing.in_memory_message_broker import InMemoryMessageBroker
 from codetoreum.adapters.testing.in_memory_metrics_adapter import InMemoryMetricsAdapter
+from codetoreum.adapters.testing.in_memory_orphan_scan_registry import (
+    InMemoryOrphanScanRegistry,
+)
+from codetoreum.adapters.testing.in_memory_pipeline_queue import InMemoryPipelineQueue
 from codetoreum.adapters.testing.in_memory_queue_service import InMemoryQueueService
 from codetoreum.adapters.testing.in_memory_repository_adapter import (
     InMemoryRepositoryAdapter,
@@ -86,10 +93,13 @@ __all__ = [
     "InMemoryCheckpointStore",
     "InMemoryCodeReviewAdapter",
     "InMemoryConfigStore",
+    "InMemoryDistributedLock",
     "InMemoryEventStore",
     "InMemoryFailedEventStore",
     "InMemoryMessageBroker",
     "InMemoryMetricsAdapter",
+    "InMemoryOrphanScanRegistry",
+    "InMemoryPipelineQueue",
     "InMemoryQueueService",
     "InMemoryRepositoryAdapter",
     "InMemoryTicketAdapter",

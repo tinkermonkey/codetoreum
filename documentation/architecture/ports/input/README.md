@@ -30,11 +30,12 @@ Input ports are grouped by functional domain:
    - Query configuration values
    - Query system metrics
 
-6. **system-services.md** — IAuthenticationPort, IConversationalLoopService, IWorkspaceQueryPort, IAuditQueryPort, IIssueIntakePort
+6. **system-services.md** — IAuthenticationPort, IConversationalLoopService, IWorkspaceQueryPort, IAuditQueryPort, IIssueIntakePort, Diagnostics endpoints
    - Verify user authentication
    - Multi-turn agent conversations
    - Workspace file operations
    - Audit log queries
+   - System diagnostics and observability (state snapshot, trigger lifecycle)
 
 ## Interface Definition Pattern
 

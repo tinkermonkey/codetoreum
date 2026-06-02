@@ -295,6 +295,11 @@ def create_app(
     event_store_poller: Any | None = None,
     issue_intake_port: IIssueIntakePort | None = None,
     multi_project_orchestrator: IMultiProjectOrchestrator | None = None,
+    active_workflow_run_registry: Any | None = None,
+    distributed_lock: Any | None = None,
+    pipeline_queue: Any | None = None,
+    failed_event_store: Any | None = None,
+    orphan_scan_registry: Any | None = None,
 ) -> FastAPI:
     """
     Create and configure FastAPI application.
@@ -327,6 +332,13 @@ def create_app(
         container_recovery_service: Optional container recovery service for startup recovery
         adapter_slot_info: Optional dictionary mapping adapter slot names to implementation names
         event_store_poller: Optional event store poller for cross-process event distribution
+        issue_intake_port: Optional port for work item intake
+        multi_project_orchestrator: Optional multi-project orchestrator service
+        active_workflow_run_registry: Optional registry for tracking active workflow runs
+        distributed_lock: Optional distributed lock service
+        pipeline_queue: Optional pipeline queue service
+        failed_event_store: Optional store for failed events
+        orphan_scan_registry: Optional registry for orphan scan results
 
     Returns:
         Configured FastAPI application
@@ -634,6 +646,12 @@ def create_app(
     diagnostics_router = create_diagnostics_router(
         board_service=board_service,
         workflow_config=workflow_config_service,
+        active_run_registry=active_workflow_run_registry,
+        distributed_lock=distributed_lock,
+        pipeline_queue=pipeline_queue,
+        failed_event_store=failed_event_store,
+        orphan_scan_registry=orphan_scan_registry,
+        event_store=event_store,
         auth_deps=auth_deps,
     )
     app.include_router(diagnostics_router)

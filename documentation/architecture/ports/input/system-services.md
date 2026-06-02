@@ -455,3 +455,136 @@ sequenceDiagram
     BS-->>IIP: OK
     IIP-->>WH: IssueIntakeResult(success=True, work_item_id=issue_number)
 ```
+
+### Diagnostics Endpoints
+
+**Paths**: 
+- `GET /api/v2/diagnostics/state` — System state snapshot
+- `GET /api/v2/triggers/{event_id}` — Trigger/event lifecycle tracking
+
+**Purpose**: Observability and debugging interfaces for system state and event tracking. These endpoints provide a unified view for diagnostics without requiring direct Redis introspection.
+
+#### GET /api/v2/diagnostics/state
+
+**Response Schema**:
+
+```python
+@dataclass
+class DiagnosticsStateResponse:
+    """Complete diagnostics state snapshot."""
+    
+    active_runs: list[ActiveRunInfo]  # From IActiveWorkflowRunRegistry.get_all_runs()
+    pipeline_locks: list[LockHolderInfo]  # From IDistributedLock.get_all_holders()
+    pipeline_queues: list[PipelineQueueState]  # From IPipelineQueue.list() per known key
+    failed_event_stats: FailedEventStats | None  # From IFailedEventStore.get_stats()
+    last_orphan_scan: OrphanScanResultInfo | None  # From IOrphanScanRegistry.get_last_scan()
+    timestamp: datetime  # Query timestamp
+```
+
+**Sub-structures**:
+
+```python
+@dataclass
+class ActiveRunInfo:
+    work_item_id: str
+    run_id: str
+    stage_name: str
+    project_id: str
+    board_id: str
+    started_at: str
+
+@dataclass
+class LockHolderInfo:
+    lock_key: str
+    holder_id: str
+    acquired_at: datetime
+    ttl_seconds: int
+    expires_at: datetime
+    holder_metadata: dict[str, str]
+
+@dataclass
+class PipelineQueueState:
+    queue_key: str
+    entries: list[QueueEntryInfo]
+    depth: int
+
+@dataclass
+class FailedEventStats:
+    total_failed_events: int
+    pending_retries: int
+    exhausted_retries: int
+    total_retries_attempted: int
+    total_retries_succeeded: int
+    total_retries_failed: int
+    oldest_event: datetime | None
+    newest_event: datetime | None
+    failure_reasons: dict[str, int] | None
+
+@dataclass
+class OrphanScanResultInfo:
+    scan_id: str
+    scanned_at: datetime
+    locks_scanned: int
+    orphaned_locks_found: int
+    orphaned_locks_released: int
+    errors: list[str]
+```
+
+**Use Cases**:
+- **Debugging**: Understand the current state of locks, queues, and active runs
+- **Monitoring**: Track failed event accumulation and recovery metrics
+- **Orphan Detection**: See results of the last startup orphan scan
+
+#### GET /api/v2/triggers/{event_id}
+
+**Response Schema**:
+
+```python
+@dataclass
+class TriggerLifecycleResponse:
+    """Trigger/event lifecycle information."""
+    
+    event_id: str  # The queried event/trigger ID
+    received_at: datetime  # When the event was first received
+    status: str  # One of: "received", "queued", "in-progress", "completed", "failed"
+    queue_position: int | None  # 0-indexed queue position if queued, else None
+    active_run_id: str | None  # Workflow run ID if in-progress, else None
+    failure_reason: str | None  # Failure description if failed, else None
+    last_updated: datetime  # Timestamp of last status change
+```
+
+**Status Transitions**:
+
+- **received**: Event first arrived; no processing yet (default initial state)
+- **queued**: Event is in a pipeline queue waiting for lock acquisition
+- **in-progress**: Workflow/execution running (detected by `WorkflowStartedEvent` or `ExecutionStartedEvent`)
+- **completed**: Workflow/execution finished successfully (detected by `WorkflowCompletedEvent` or `ExecutionCompletedEvent`)
+- **failed**: Workflow/execution failed or was dead-lettered (detected by `WorkflowFailedEvent`, `ExecutionFailedEvent`, or `EventDeadLetterQueuedEvent`)
+
+**Status Detection**:
+
+Status is determined by querying the event store and cross-referencing with:
+- `IActiveWorkflowRunRegistry` for in-progress status
+- `IPipelineQueue` for queue position
+- Event types in the stream for state transitions
+
+**Use Cases**:
+- **Trigger Tracking**: Poll to see where a trigger is in the pipeline
+- **Debugging**: Understand why a trigger hasn't been processed
+- **API-Driven Automation**: Monitor trigger status without polling the event store directly
+
+#### Caller / Subscriber
+
+| Caller | Location | Notes |
+|---|---|---|
+| `run-bootstrap` skill | `bootstrap/run-bootstrap.py` | Queries `/diagnostics/state` and `/triggers/{event_id}` instead of direct Redis reads |
+| Observability clients | (external) | Direct HTTP calls for debugging and monitoring |
+
+#### Adapter Implementations
+
+These endpoints are implemented directly by the FastAPI router (`adapters/primary/routers/diagnostics.py`):
+
+| Component | Implementation | Notes |
+|---|---|---|
+| Diagnostics state | `create_diagnostics_router()` | Aggregates data from IActiveWorkflowRunRegistry, IDistributedLock, IPipelineQueue, IFailedEventStore, IOrphanScanRegistry |
+| Trigger lifecycle | `create_diagnostics_router()` | Queries IEventStore and IActiveWorkflowRunRegistry for status determination |

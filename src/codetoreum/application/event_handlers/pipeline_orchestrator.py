@@ -22,6 +22,7 @@ from codetoreum.ports.output.active_workflow_run_registry import (
     IActiveWorkflowRunRegistry,
 )
 from codetoreum.ports.output.distributed_lock import IDistributedLock
+from codetoreum.ports.output.orphan_scan_registry import IOrphanScanRegistry
 from codetoreum.ports.output.pipeline_queue import IPipelineQueue
 
 if TYPE_CHECKING:
@@ -47,6 +48,7 @@ class PipelineOrchestrator(EventHandler):
         distributed_lock: IDistributedLock,
         pipeline_queue: IPipelineQueue,
         run_registry: IActiveWorkflowRunRegistry,
+        orphan_scan_registry: IOrphanScanRegistry | None = None,
         workflow_orchestrator: "IWorkflowOrchestrator | None" = None,
     ):
         """Initialize the pipeline orchestrator.
@@ -55,11 +57,13 @@ class PipelineOrchestrator(EventHandler):
             distributed_lock: IDistributedLock port for lock operations
             pipeline_queue: IPipelineQueue port for queue operations
             run_registry: IActiveWorkflowRunRegistry for tracking active runs
+            orphan_scan_registry: Optional registry to track orphan scan results
             workflow_orchestrator: Optional IWorkflowOrchestrator to trigger next WI
         """
         self.distributed_lock = distributed_lock
         self.pipeline_queue = pipeline_queue
         self.run_registry = run_registry
+        self.orphan_scan_registry = orphan_scan_registry
         self.workflow_orchestrator = workflow_orchestrator
 
     def get_event_types(self) -> list[str]:
@@ -161,29 +165,55 @@ class PipelineOrchestrator(EventHandler):
         Scan all locks; any lock held without an active workflow run in the
         registry is released (triggering PipelineLockReleasedEvent).
         """
+        errors: list[str] = []
+        orphaned_locks_released = 0
+
         try:
             all_holders = await self.distributed_lock.get_all_holders()
             logger.info(f"Starting orphan-recovery scan: {len(all_holders)} locks held")
 
+            orphaned_locks_found = 0
             for holder in all_holders:
                 # Check if holder has an active workflow run
                 active_run = await self.run_registry.get_active_run(holder.holder_id)
                 if active_run is None:
                     # Orphaned lock — release it
+                    orphaned_locks_found += 1
                     logger.warning(
                         f"Orphaned lock detected for {holder.holder_id} (no active run)",
                         extra={"work_item_id": holder.holder_id},
                     )
-                    result = await self.distributed_lock.release(
-                        lock_key=holder.lock_key,
-                        holder_id=holder.holder_id,
-                    )
-                    if result.released:
-                        logger.info(f"Released orphaned lock for {holder.holder_id}")
+                    try:
+                        result = await self.distributed_lock.release(
+                            lock_key=holder.lock_key,
+                            holder_id=holder.holder_id,
+                        )
+                        if result.released:
+                            orphaned_locks_released += 1
+                            logger.info(f"Released orphaned lock for {holder.holder_id}")
+                    except Exception as e:
+                        errors.append(f"Failed to release lock {holder.lock_key}: {e!s}")
+                        logger.error(f"Error releasing orphaned lock: {e!s}", exc_info=True)
+
+            # Record the scan result if registry is available
+            if self.orphan_scan_registry:
+                await self.orphan_scan_registry.record_scan(
+                    locks_scanned=len(all_holders),
+                    orphaned_locks_found=orphaned_locks_found,
+                    orphaned_locks_released=orphaned_locks_released,
+                    errors=errors if errors else None,
+                )
 
         except Exception:
             logger.error(
                 "Error during orphan-recovery startup scan",
                 exc_info=True,
             )
+            if self.orphan_scan_registry:
+                await self.orphan_scan_registry.record_scan(
+                    locks_scanned=0,
+                    orphaned_locks_found=0,
+                    orphaned_locks_released=0,
+                    errors=["Startup orphan scan failed"],
+                )
 
