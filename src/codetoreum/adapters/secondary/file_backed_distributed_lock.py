@@ -144,7 +144,8 @@ class FileBackedDistributedLock(IDistributedLock):
                         if lock_key in self._locks:
                             holder_id, acquired_at, _, _, holder_metadata = self._locks[lock_key]
                             ttl_seconds = entry["ttl_seconds"]
-                            expires_at = acquired_at + timedelta(seconds=ttl_seconds)
+                            renewed_at = datetime.fromisoformat(entry["renewed_at"])
+                            expires_at = renewed_at + timedelta(seconds=ttl_seconds)
                             self._locks[lock_key] = (holder_id, acquired_at, ttl_seconds, expires_at, holder_metadata)
 
         except Exception:
@@ -164,7 +165,7 @@ class FileBackedDistributedLock(IDistributedLock):
             with open(self._file_path, "a") as f:
                 f.write(json.dumps(entry) + "\n")
                 os.fsync(f.fileno())
-        except Exception as e:
+        except Exception:
             logger.error(f"Failed to write lock entry to {self._file_path}", exc_info=True)
             raise
 
