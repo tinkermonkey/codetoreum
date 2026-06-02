@@ -71,40 +71,7 @@ class RedisDistributedLock(IDistributedLock):
         holder_data_key = self._holder_data_key(lock_key)
         now = datetime.now(UTC)
 
-        # Check if lock is already held
-        existing_holder = await self._redis.get(redis_key)
-        if existing_holder is not None:
-            try:
-                existing_holder_id = existing_holder.decode("utf-8") if isinstance(existing_holder, bytes) else existing_holder
-                if existing_holder_id == holder_id:
-                    # Same holder re-entering (reentrant)
-                    return AcquireResult(
-                        status=AcquireStatus.ALREADY_HELD_BY_SELF,
-                        lock_key=lock_key,
-                        holder_id=holder_id,
-                        acquired_at=None,
-                    )
-                # Different holder holds the lock
-                return AcquireResult(
-                    status=AcquireStatus.ALREADY_HELD_BY_OTHER,
-                    lock_key=lock_key,
-                    holder_id=existing_holder_id,
-                    acquired_at=None,
-                )
-            except Exception:
-                logger.warning(
-                    f"Failed to parse existing lock holder for {lock_key}",
-                    exc_info=True,
-                )
-                # Treat as held by unknown
-                return AcquireResult(
-                    status=AcquireStatus.ALREADY_HELD_BY_OTHER,
-                    lock_key=lock_key,
-                    holder_id="unknown",
-                    acquired_at=None,
-                )
-
-        # Try to acquire the lock atomically
+        # Try to acquire the lock atomically first (SET NX EX)
         acquired = await self._redis.set(
             redis_key,
             holder_id,
@@ -148,15 +115,46 @@ class RedisDistributedLock(IDistributedLock):
                 holder_id=holder_id,
                 acquired_at=now,
             )
-        # Lock is held by someone else; return holder info if available
-        existing = await self._redis.get(redis_key)
-        holder_id_str = existing.decode("utf-8") if isinstance(existing, bytes) else str(existing)
-        return AcquireResult(
-            status=AcquireStatus.ALREADY_HELD_BY_OTHER,
-            lock_key=lock_key,
-            holder_id=holder_id_str,
-            acquired_at=None,
-        )
+
+        # Lock acquisition failed; inspect who holds it
+        existing_holder = await self._redis.get(redis_key)
+        if existing_holder is None:
+            # Lock was released or expired between SET NX check and read
+            return AcquireResult(
+                status=AcquireStatus.ALREADY_HELD_BY_OTHER,
+                lock_key=lock_key,
+                holder_id="unknown",
+                acquired_at=None,
+            )
+
+        try:
+            existing_holder_id = existing_holder.decode("utf-8") if isinstance(existing_holder, bytes) else existing_holder
+            if existing_holder_id == holder_id:
+                # Same holder re-entering (reentrant)
+                return AcquireResult(
+                    status=AcquireStatus.ALREADY_HELD_BY_SELF,
+                    lock_key=lock_key,
+                    holder_id=holder_id,
+                    acquired_at=None,
+                )
+            # Different holder holds the lock
+            return AcquireResult(
+                status=AcquireStatus.ALREADY_HELD_BY_OTHER,
+                lock_key=lock_key,
+                holder_id=existing_holder_id,
+                acquired_at=None,
+            )
+        except Exception:
+            logger.warning(
+                f"Failed to parse existing lock holder for {lock_key}",
+                exc_info=True,
+            )
+            return AcquireResult(
+                status=AcquireStatus.ALREADY_HELD_BY_OTHER,
+                lock_key=lock_key,
+                holder_id="unknown",
+                acquired_at=None,
+            )
 
     async def release(
         self,
@@ -170,6 +168,15 @@ class RedisDistributedLock(IDistributedLock):
         """
         redis_key = self._lock_key(lock_key)
         holder_data_key = self._holder_data_key(lock_key)
+
+        # Read holder metadata BEFORE executing Lua script, so we capture
+        # the original metadata before another process can acquire and overwrite it
+        holder_data_dict = await self._redis.hgetall(holder_data_key)
+        holder_data = {}
+        for k, v in holder_data_dict.items():
+            k_str = k.decode("utf-8") if isinstance(k, bytes) else str(k)
+            v_str = v.decode("utf-8") if isinstance(v, bytes) else str(v)
+            holder_data[k_str] = v_str
 
         # Lua script for atomic release: if holder matches, delete the lock
         lua_script = """
@@ -199,16 +206,8 @@ class RedisDistributedLock(IDistributedLock):
                     lock_key=lock_key,
                 )
 
-            # Get holder metadata before deletion to emit event
-            holder_data_dict = await self._redis.hgetall(holder_data_key)
-
             # Lock was released successfully, also clean up metadata
             await self._redis.delete(holder_data_key)
-            holder_data = {}
-            for k, v in holder_data_dict.items():
-                k_str = k.decode("utf-8") if isinstance(k, bytes) else str(k)
-                v_str = v.decode("utf-8") if isinstance(v, bytes) else str(v)
-                holder_data[k_str] = v_str
 
             # Emit event via event bus if available
             if self._event_bus:
@@ -316,21 +315,32 @@ class RedisDistributedLock(IDistributedLock):
         holder_id: str,
         ttl_seconds: int,
     ) -> bool:
-        """Extend the TTL on a held lock."""
+        """Extend the TTL on a held lock.
+
+        Uses Lua script for atomicity to prevent TOCTOU race where lock
+        could be released and re-acquired by another holder between verification
+        and TTL update.
+        """
         redis_key = self._lock_key(lock_key)
-
-        # Verify the holder
-        existing = await self._redis.get(redis_key)
-        if existing is None:
-            return False
-
-        existing_holder_id = existing.decode("utf-8") if isinstance(existing, bytes) else str(existing)
-        if existing_holder_id != holder_id:
-            return False
-
-        # Update TTL
-        await self._redis.expire(redis_key, ttl_seconds)
         holder_data_key = self._holder_data_key(lock_key)
-        await self._redis.expire(holder_data_key, ttl_seconds)
 
-        return True
+        # Lua script for atomic renew: if holder matches, extend TTL on both lock and metadata
+        lua_script = """
+            if redis.call("get", KEYS[1]) == ARGV[1] then
+                redis.call("expire", KEYS[1], ARGV[2])
+                redis.call("expire", KEYS[2], ARGV[2])
+                return 1
+            else
+                return 0
+            end
+        """
+
+        try:
+            result = await self._redis.eval(lua_script, 2, redis_key, holder_data_key, holder_id, ttl_seconds)
+            return bool(result)
+        except Exception:
+            logger.error(
+                f"Failed to renew lock {lock_key} for holder {holder_id}",
+                exc_info=True,
+            )
+            raise
