@@ -21,7 +21,7 @@ from codetoreum.domain.events.lock_events import StaleLockDetectedEvent
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.ports.output.board_service import IBoardService, MovedByType
 from codetoreum.ports.output.event_emitter import IEventEmitter
-from codetoreum.ports.output.pipeline_lock_service import IPipelineLockService
+from codetoreum.ports.output.distributed_lock import IDistributedLock
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 if TYPE_CHECKING:
@@ -61,7 +61,7 @@ class StaleLockWatchdog:
     registered with the event bus in bootstrap.py).
 
     Attributes:
-        _lock_service: IPipelineLockService for lock iteration and release
+        _lock_service: IDistributedLock for lock iteration and release
         _event_emitter: IEventEmitter for domain event publication
         _clock: SimulationClock for time access and callback scheduling
         _stale_threshold: Age (timedelta) beyond which locks are stale
@@ -72,7 +72,7 @@ class StaleLockWatchdog:
 
     def __init__(
         self,
-        lock_service: IPipelineLockService,
+        lock_service: IDistributedLock,
         event_emitter: IEventEmitter,
         clock: SimulationClock,
         stale_threshold_seconds: int = 7200,
@@ -81,7 +81,7 @@ class StaleLockWatchdog:
         """Initialize stale lock watchdog.
 
         Args:
-            lock_service: IPipelineLockService instance for lock access
+            lock_service: IDistributedLock instance for lock access
             event_emitter: IEventEmitter for domain event publication
             clock: SimulationClock for time and callback scheduling
             stale_threshold_seconds: Age in seconds before lock is considered stale

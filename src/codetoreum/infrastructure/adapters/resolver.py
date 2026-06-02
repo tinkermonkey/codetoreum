@@ -36,7 +36,7 @@ from codetoreum.ports.output.identity_service import IIdentityService
 from codetoreum.ports.output.message_broker import IMessageBroker
 from codetoreum.ports.output.metrics import IMetrics
 from codetoreum.ports.output.notifier import INotifier
-from codetoreum.ports.output.pipeline_lock_service import IPipelineLockService
+from codetoreum.ports.output.distributed_lock import IDistributedLock
 from codetoreum.ports.output.pipeline_queue_service import IPipelineQueueService
 from codetoreum.ports.output.pr_review_cycle_service import IPRReviewCycle
 from codetoreum.ports.output.project_manager_service import IProjectManagerService
@@ -404,7 +404,7 @@ class AdapterResolver:
             time_source=lambda: self._deps.engine.get_clock_for_testing().now(),
         )
 
-    def resolve_lock_service(self) -> IPipelineLockService:
+    def resolve_lock_service(self) -> IDistributedLock:
         """Resolve pipeline lock service adapter.
 
         For "redis", an aioredis client is constructed from REDIS_URL

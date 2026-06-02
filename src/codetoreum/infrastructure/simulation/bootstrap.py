@@ -446,15 +446,17 @@ class SimulationAdapters:
             raise TypeError(msg)
         return cast("MockProjectManagerAdapter", self.project_manager)
 
-    def lock_service_as_memory(self) -> InMemoryLockService:
-        """Get lock service as InMemoryLockService.
+    def lock_service_as_memory(self) -> "FileBackedDistributedLock":
+        """Get lock service as FileBackedDistributedLock.
 
-        Raises TypeError if lock_service is not InMemoryLockService.
+        Raises TypeError if lock_service is not FileBackedDistributedLock.
         """
-        if not isinstance(self.lock_service, InMemoryLockService):
-            msg = f"lock_service is {type(self.lock_service).__name__}, not InMemoryLockService"
+        from codetoreum.adapters.secondary.file_backed_distributed_lock import FileBackedDistributedLock
+
+        if not isinstance(self.lock_service, FileBackedDistributedLock):
+            msg = f"lock_service is {type(self.lock_service).__name__}, not FileBackedDistributedLock"
             raise TypeError(msg)
-        return cast("InMemoryLockService", self.lock_service)
+        return cast("FileBackedDistributedLock", self.lock_service)
 
     def workflow_config_as_memory(self) -> InMemoryWorkflowConfigService:
         """Get workflow config as InMemoryWorkflowConfigService.
@@ -839,7 +841,7 @@ class SimulationApplicationBootstrap:
         self._execution_timeout_watchdog: ExecutionTimeoutWatchdog | None = None
         self._sla_expiry_watchdog: SLAExpiryWatchdog | None = None
         self._column_progression_watchdog: ColumnProgressionWatchdog | None = None
-        self._queued_lock_service: InMemoryLockService | None = None
+        self._queued_lock_service: "FileBackedDistributedLock | None" = None
 
     @property
     def is_degraded(self) -> bool:
