@@ -579,3 +579,80 @@ class WorkItemQueuedEvent(CodetoreumEvent):
             board_id=data.get("board_id", ""),
             queue_position=data.get("queue_position", 0),
         )
+
+
+@dataclass(frozen=True)
+class WorkItemDequeuedEvent(CodetoreumEvent):
+    """Emitted when a work item is removed from pipeline queue.
+
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Events represent immutable facts—attempting to modify any field
+    will raise `FrozenInstanceError`. This immutability is essential because
+    events are the permanent record of state changes in the system and must
+    never be altered once created.
+
+    Indicates that a work item has been popped from the queue (because its
+    lock was acquired) or removed from the queue (e.g., by the lock holder
+    when it acquires the lock and discovers the item still in queue).
+
+    Attributes:
+        type (str): Fixed to "workitem.dequeued"
+        work_item_id (str): ID of the work item dequeued
+        board_id (str): ID of the board containing the work item
+        reason (Literal["popped", "removed"]): Why the item was dequeued
+
+    Example:
+        >>> event = WorkItemDequeuedEvent(
+        ...     type="workitem.dequeued",
+        ...     timestamp="2025-01-14T10:30:00+00:00",
+        ...     source="pipeline_queue",
+        ...     work_item_id="123",
+        ...     board_id="board-1",
+        ...     reason="popped"
+        ... )
+        >>> event.reason = "removed"  # ❌ Raises FrozenInstanceError
+    """
+
+    work_item_id: str = ""
+    board_id: str = ""
+    reason: Literal["popped", "removed"] = "popped"
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
+        if not self.work_item_id:
+            msg = "work_item_id is required"
+            raise ValueError(msg)
+        if not self.board_id:
+            msg = "board_id is required"
+            raise ValueError(msg)
+        if self.reason not in ("popped", "removed"):
+            msg = f"reason must be 'popped' or 'removed', got: {self.reason}"
+            raise ValueError(msg)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update(
+            {
+                "work_item_id": self.work_item_id,
+                "board_id": self.board_id,
+                "reason": self.reason,
+            }
+        )
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "WorkItemDequeuedEvent":
+        """Deserialize from dictionary."""
+        return cls(
+            type=data.get("type", "workitem.dequeued"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", ""),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            work_item_id=data.get("work_item_id", ""),
+            board_id=data.get("board_id", ""),
+            reason=data.get("reason", "popped"),
+        )

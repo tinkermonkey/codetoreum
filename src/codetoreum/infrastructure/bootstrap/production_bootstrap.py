@@ -47,6 +47,12 @@ from codetoreum.adapters.primary.input_port_adapters.mock import (
 from codetoreum.adapters.secondary.failed_event_store_adapter import (
     DeadLetterQueueFailedEventStoreAdapter,
 )
+from codetoreum.adapters.secondary.redis_distributed_lock import (
+    RedisDistributedLock,
+)
+from codetoreum.adapters.secondary.redis_pipeline_queue import (
+    RedisPipelineQueue,
+)
 from codetoreum.application.agent_execution_recovery_service import (
     AgentExecutionRecoveryService,
 )
@@ -61,6 +67,9 @@ from codetoreum.application.conversational_loop_orchestrator import (
 )
 from codetoreum.application.event_handlers.board_event_handler import (
     BoardColumnEventHandler,
+)
+from codetoreum.application.event_handlers.pipeline_orchestrator import (
+    PipelineOrchestrator,
 )
 from codetoreum.application.event_handlers.branch_resolution_event_handler import (
     BranchResolutionEventHandler,
@@ -1687,12 +1696,28 @@ class ProductionApplicationBootstrap:
             logger.warning("Cannot register board column handler: components not ready")
             return
 
+        # Create distributed lock and pipeline queue adapters (Phase 5 decomposition)
+        # These replace the old IPipelineLockService
+        redis_client = self.adapters.redis_client
+        event_bus = self.infrastructure.event_bus
+
+        distributed_lock = RedisDistributedLock(
+            redis_client=redis_client,
+            event_bus=event_bus,
+        )
+
+        pipeline_queue = RedisPipelineQueue(
+            redis_client=redis_client,
+            event_bus=event_bus,
+        )
+
         handler = BoardColumnEventHandler(
             board_service=self.adapters.board,
-            lock_service=self.adapters.lock_service,
+            distributed_lock=distributed_lock,
+            pipeline_queue=pipeline_queue,
             workflow_config=self.adapters.workflow_config,
             agent_executor=self.adapters.agent_executor,
-            event_bus=self.infrastructure.event_bus,
+            event_bus=event_bus,
             event_store=self.adapters.event_store,
             run_registry=self.adapters.run_registry,
             event_emitter=self.adapters.event_emitter,
@@ -1701,17 +1726,28 @@ class ProductionApplicationBootstrap:
         )
 
         self.infrastructure.event_bus.register_handler(handler)
-        # `register_handler` subscribes BoardColumnEventHandler to both
-        # WorkItemColumnChangedEvent and AgentExecutionCompletedEvent. The
-        # latter replaces the legacy `set_completion_handler` callback wiring:
-        # ExecutionServiceAgentExecutor publishes AgentExecutionCompletedEvent
-        # on the event bus when it finishes processing a work item, and the
-        # handler runs auto-progression in its handle_agent_execution_completed
-        # bridge. See INV-05 in `bootstrap/ARCHITECTURE.md` §6.
         logger.info(
             "Registered BoardColumnEventHandler with event bus "
             "(WorkItemColumnChangedEvent + AgentExecutionCompletedEvent)"
         )
+
+        # Register PipelineOrchestrator to coordinate lock and queue events
+        orchestrator = PipelineOrchestrator(
+            distributed_lock=distributed_lock,
+            pipeline_queue=pipeline_queue,
+            run_registry=self.adapters.run_registry,
+            workflow_orchestrator=self.services.workflow_orchestrator,
+        )
+
+        self.infrastructure.event_bus.register_handler(orchestrator)
+        logger.info("Registered PipelineOrchestrator with event bus")
+
+        # Perform startup orphan recovery scan
+        try:
+            import asyncio
+            asyncio.run(orchestrator.on_startup())
+        except Exception:
+            logger.warning("Orphan recovery scan failed (non-critical)", exc_info=True)
 
     def _register_conversational_loop_orchestrator(self) -> None:
         """Register conversational loop orchestrator to handle column changes."""

@@ -129,6 +129,7 @@ from .lock_events import (
     PipelineLockAcquiredEvent,
     PipelineLockReleasedEvent,
     StaleLockDetectedEvent,
+    WorkItemDequeuedEvent,
     WorkItemQueuedEvent,
 )
 
@@ -318,6 +319,7 @@ __all__ = [
     "LockStuckEvent",
     "PipelineLockAcquiredEvent",
     "PipelineLockReleasedEvent",
+    "WorkItemDequeuedEvent",
     "WorkItemQueuedEvent",
     # Work item events
     "WorkItemCreatedEvent",

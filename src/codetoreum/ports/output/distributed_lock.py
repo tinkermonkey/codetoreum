@@ -1,11 +1,12 @@
-"""Distributed lock service port interface for pipeline coordination.
+"""Distributed lock primitive port interface.
 
-This interface defines contracts for a distributed lock primitive with no knowledge
-of queues, work items, workflow runs, or downstream orchestration. A lock has a key
-and a holder; operations are atomic at the storage layer.
+IDistributedLock is a dumb distributed lock primitive that knows nothing about
+queues, work items, or downstream orchestration. It has a key and a holder;
+operations are atomic at the storage layer.
 
-Production implementation: RedisDistributedLock (SET NX EX).
-Local-dev / harness: FileBackedDistributedLock (JSONL + fsync).
+The adapter emits PipelineLockAcquiredEvent on every successful acquire and
+PipelineLockReleasedEvent on every successful release. Callers and subscribers
+MUST treat these events as the only public signal of state change.
 """
 
 from abc import ABC, abstractmethod
@@ -14,128 +15,61 @@ from datetime import datetime
 from enum import Enum
 
 
-class AcquireStatus(str, Enum):
-    """Status of lock acquisition attempt."""
+class AcquireStatus(Enum):
+    """Status codes returned by try_acquire()."""
+    ACQUIRED = "acquired"  # Lock was free; now held by requested holder
+    ALREADY_HELD_BY_SELF = "already_held_by_self"  # Reentrant — same holder, no-op
+    ALREADY_HELD_BY_OTHER = "already_held_by_other"  # Different holder has the lock
 
-    ACQUIRED = "acquired"
-    ALREADY_HELD_BY_SELF = "already_held_by_self"
-    ALREADY_HELD_BY_OTHER = "already_held_by_other"
 
-
-class ReleaseReason(str, Enum):
-    """Reason why a lock release was not successful."""
-
-    NOT_HELD = "not_held"
-    HELD_BY_OTHER = "held_by_other"
+class ReleaseReason(Enum):
+    """Reasons for unsuccessful release."""
+    NOT_HELD = "not_held"  # Lock is not currently held
+    HELD_BY_OTHER = "held_by_other"  # Lock is held by a different holder
 
 
 @dataclass(frozen=True)
 class AcquireResult:
-    """Result of a lock acquisition attempt."""
-
+    """Result of an acquire attempt."""
     status: AcquireStatus
     lock_key: str
-    holder_id: str
-    acquired_at: datetime | None
-
-    def __post_init__(self) -> None:
-        """Validate result consistency."""
-        if self.status == AcquireStatus.ACQUIRED:
-            if self.acquired_at is None:
-                msg = "acquired_at must be set when status is ACQUIRED"
-                raise ValueError(msg)
-        elif self.acquired_at is not None:
-            msg = "acquired_at must be None when status is not ACQUIRED"
-            raise ValueError(msg)
+    holder_id: str  # The current holder (may be != requested on ALREADY_HELD_BY_OTHER)
+    acquired_at: datetime | None  # Set if status == ACQUIRED; None otherwise
 
 
 @dataclass(frozen=True)
 class ReleaseResult:
-    """Result of a lock release attempt."""
-
-    released: bool
-    reason: ReleaseReason | None
+    """Result of a release attempt."""
+    released: bool  # True if the lock was held and is now free
+    reason: ReleaseReason | None  # Set if released=False; explains why
     lock_key: str
-
-    def __post_init__(self) -> None:
-        """Validate result consistency."""
-        if self.released:
-            if self.reason is not None:
-                msg = "reason must be None when released is True"
-                raise ValueError(msg)
-        elif self.reason is None:
-            msg = "reason must be set when released is False"
-            raise ValueError(msg)
 
 
 @dataclass(frozen=True)
 class LockHolder:
-    """Represents the current holder of a lock."""
-
+    """Current holder of a lock."""
     lock_key: str
     holder_id: str
     acquired_at: datetime
     ttl_seconds: int
     expires_at: datetime
-    holder_metadata: dict[str, str]
-
-    def __post_init__(self) -> None:
-        """Validate all fields at construction time."""
-        if not isinstance(self.lock_key, str) or not self.lock_key:
-            msg = "lock_key must be a non-empty string"
-            raise ValueError(msg)
-
-        if not isinstance(self.holder_id, str) or not self.holder_id:
-            msg = "holder_id must be a non-empty string"
-            raise ValueError(msg)
-
-        if not isinstance(self.acquired_at, datetime):
-            msg = "acquired_at must be a datetime object"
-            raise ValueError(msg)
-
-        if not isinstance(self.ttl_seconds, int) or self.ttl_seconds <= 0:
-            msg = "ttl_seconds must be a positive integer"
-            raise ValueError(msg)
-
-        if not isinstance(self.expires_at, datetime):
-            msg = "expires_at must be a datetime object"
-            raise ValueError(msg)
-
-        if not isinstance(self.holder_metadata, dict):
-            msg = "holder_metadata must be a dict"
-            raise ValueError(msg)
-
-        if self.expires_at <= self.acquired_at:
-            msg = "expires_at must be after acquired_at"
-            raise ValueError(msg)
+    holder_metadata: dict[str, str]  # Empty dict if none provided at acquire time
 
 
 class IDistributedLock(ABC):
-    """Distributed lock primitive for pipeline coordination.
+    """Distributed lock primitive.
 
     Knows nothing about queues, work items, workflow runs, or downstream
     orchestration. A lock has a key and a holder; operations are atomic at
     the storage layer.
 
+    Production implementation: RedisDistributedLock (SET NX EX).
+    Local-dev / harness: FileBackedDistributedLock (JSONL + fsync).
+
     The adapter emits PipelineLockAcquiredEvent on every successful acquire
     and PipelineLockReleasedEvent on every successful release. Callers and
     subscribers MUST treat these events as the only public signal of state
     change — no other side effects are emitted from the adapter.
-
-    Example:
-        # Attempt to acquire lock
-        result = await lock.try_acquire(
-            lock_key="proj-1:board-1",
-            holder_id="item-123",
-            ttl_seconds=7200,
-            holder_metadata={"project_id": "proj-1", "board_id": "board-1"}
-        )
-
-        if result.status == AcquireStatus.ACQUIRED:
-            # Lock acquired, process item
-            await process_item()
-            # Release when done
-            await lock.release("proj-1:board-1", "item-123")
     """
 
     @abstractmethod
@@ -184,14 +118,6 @@ class IDistributedLock(ABC):
         Calling release when the lock is held by a different holder returns
         ReleaseResult(released=False, reason="held_by_other") with no error.
 
-        Args:
-            lock_key: The lock key to release.
-            holder_id: The holder ID that must match the current holder.
-
-        Returns:
-            ReleaseResult with released=True on successful release,
-            released=False with reason on no-op cases.
-
         Emits:
             PipelineLockReleasedEvent on successful release. Not on no-op cases.
         """
@@ -201,12 +127,6 @@ class IDistributedLock(ABC):
         """Return the current holder, or None if unlocked.
 
         Used for diagnostics and the orphan-scan startup behaviour.
-
-        Args:
-            lock_key: The lock key to check.
-
-        Returns:
-            LockHolder if a lock is held, None otherwise.
         """
 
     @abstractmethod
@@ -216,9 +136,6 @@ class IDistributedLock(ABC):
         Used by PipelineOrchestrator's startup orphan scan (each holder cross-
         referenced against IActiveWorkflowRunRegistry; mismatches release
         through the normal release() path).
-
-        Returns:
-            List of LockHolder objects for all currently held locks.
         """
 
     @abstractmethod
@@ -228,19 +145,9 @@ class IDistributedLock(ABC):
         holder_id: str,
         ttl_seconds: int,
     ) -> bool:
-        """Extend the TTL on a held lock.
-
-        Returns False if not held by this holder.
+        """Extend the TTL on a held lock. Returns False if not held by this holder.
 
         Optional in practice — only callers that hold long-running locks need
         to refresh. Codetoreum's current usage relies on the default 2h TTL
         and never renews.
-
-        Args:
-            lock_key: The lock key to renew.
-            holder_id: The holder ID that must match the current holder.
-            ttl_seconds: The new TTL in seconds.
-
-        Returns:
-            True if renewed, False if not held by this holder.
         """

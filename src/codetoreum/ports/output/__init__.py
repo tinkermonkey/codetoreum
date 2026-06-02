@@ -81,9 +81,22 @@ from codetoreum.ports.output.notifier import (
     NotificationResult,
     RichContent,
 )
+from codetoreum.ports.output.distributed_lock import (
+    AcquireResult,
+    AcquireStatus,
+    IDistributedLock,
+    LockHolder,
+    ReleaseReason,
+    ReleaseResult,
+)
 from codetoreum.ports.output.pipeline_lock_service import (
     IPipelineLockService,
     PipelineLock,
+)
+from codetoreum.ports.output.pipeline_queue import (
+    EnqueueResult,
+    IPipelineQueue,
+    QueueEntry as IPipelineQueueEntry,
 )
 from codetoreum.ports.output.pipeline_queue_service import (
     IPipelineQueueService,
@@ -205,7 +218,18 @@ __all__ = [
     "NotificationPriority",
     "NotificationResult",
     "RichContent",
-    # Pipeline Lock Service
+    # Distributed Lock (Phase 5 decomposition)
+    "IDistributedLock",
+    "AcquireResult",
+    "AcquireStatus",
+    "LockHolder",
+    "ReleaseResult",
+    "ReleaseReason",
+    # Pipeline Queue (Phase 5 decomposition)
+    "IPipelineQueue",
+    "EnqueueResult",
+    "IPipelineQueueEntry",
+    # Pipeline Lock Service (legacy, being replaced by above)
     "IPipelineLockService",
     "PipelineLock",
     # Project Manager Service
