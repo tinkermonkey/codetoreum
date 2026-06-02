@@ -48,6 +48,7 @@ from codetoreum.adapters.primary.rest_api_adapter import RestAPIAdapter
 from codetoreum.adapters.primary.routers.agents import create_agents_router
 from codetoreum.adapters.primary.routers.audit import create_audit_router
 from codetoreum.adapters.primary.routers.config import create_config_router
+from codetoreum.adapters.primary.routers.diagnostics import create_diagnostics_router
 from codetoreum.adapters.primary.routers.events import create_events_router
 from codetoreum.adapters.primary.routers.executions import create_executions_router
 from codetoreum.adapters.primary.routers.metrics import create_metrics_router
@@ -90,7 +91,9 @@ from codetoreum.ports.input.workflow_definition_command import (
 from codetoreum.ports.input.workflow_query import IWorkflowQueryPort
 from codetoreum.ports.input.workflow_run_query import IWorkflowRunQueryPort
 from codetoreum.ports.input.workspace_query import IWorkspaceQueryPort
+from codetoreum.ports.output.board_service import IBoardService
 from codetoreum.ports.output.event_store import IEventStore
+from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 # Load environment variables from .env file
 load_dotenv()
@@ -280,6 +283,8 @@ def create_app(
     event_bus: IEventBus,
     config_service: IConfigurationService,
     logger: ILogger,
+    board_service: "IBoardService | None" = None,
+    workflow_config_service: "IWorkflowConfigService | None" = None,
     audit_query_port: IAuditQueryPort | None = None,
     auth_secret_key: str | None = None,
     disable_auth: bool = False,
@@ -606,9 +611,18 @@ def create_app(
     # Include Trigger router (dev/testing: manual column-change trigger)
     trigger_router = create_trigger_router(
         event_bus=event_bus,
+        board_service=board_service,
         auth_deps=auth_deps,
     )
     app.include_router(trigger_router)
+
+    # Include Diagnostics router (system maintenance operations)
+    diagnostics_router = create_diagnostics_router(
+        board_service=board_service,
+        workflow_config=workflow_config_service,
+        auth_deps=auth_deps,
+    )
+    app.include_router(diagnostics_router)
 
     # Include Audit router (if audit_query_port is provided)
     if audit_query_port is not None:
@@ -1199,8 +1213,6 @@ def create_development_app() -> FastAPI:
                 assigned_at=None,
                 current_workflow_id=None,
                 current_stage=None,
-                current_column=None,
-                entered_column_at=None,
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
                 completed_at=None,
@@ -1223,8 +1235,6 @@ def create_development_app() -> FastAPI:
                 assigned_at=datetime.now(UTC),
                 current_workflow_id=None,
                 current_stage=None,
-                current_column=None,
-                entered_column_at=None,
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
                 completed_at=None,
@@ -1254,8 +1264,6 @@ def create_development_app() -> FastAPI:
                 assigned_at=datetime.now(UTC),
                 current_workflow_id=None,
                 current_stage=None,
-                current_column=None,
-                entered_column_at=None,
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
                 completed_at=None,
@@ -1278,8 +1286,6 @@ def create_development_app() -> FastAPI:
                 assigned_at=datetime.now(UTC),
                 current_workflow_id=None,
                 current_stage=None,
-                current_column=None,
-                entered_column_at=None,
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
                 completed_at=None,
@@ -1302,8 +1308,6 @@ def create_development_app() -> FastAPI:
                 assigned_at=datetime.now(UTC),
                 current_workflow_id=None,
                 current_stage=None,
-                current_column=None,
-                entered_column_at=None,
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
                 completed_at=None,
@@ -1326,8 +1330,6 @@ def create_development_app() -> FastAPI:
                 assigned_at=datetime.now(UTC),
                 current_workflow_id=command.workflow_id,
                 current_stage=None,
-                current_column=None,
-                entered_column_at=None,
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
                 completed_at=None,
@@ -1350,8 +1352,6 @@ def create_development_app() -> FastAPI:
                 assigned_at=datetime.now(UTC),
                 current_workflow_id="wf-123",
                 current_stage=command.stage,
-                current_column=None,
-                entered_column_at=None,
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
                 completed_at=None,
@@ -1374,8 +1374,6 @@ def create_development_app() -> FastAPI:
                 assigned_at=datetime.now(UTC),
                 current_workflow_id=None,
                 current_stage=None,
-                current_column=command.column,
-                entered_column_at=None,
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
                 completed_at=None,
@@ -1401,8 +1399,6 @@ def create_development_app() -> FastAPI:
                 assigned_at=datetime.now(UTC),
                 current_workflow_id="wf-123",
                 current_stage="development",
-                current_column=None,
-                entered_column_at=None,
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
                 completed_at=None,
@@ -1425,8 +1421,6 @@ def create_development_app() -> FastAPI:
                 assigned_at=datetime.now(UTC),
                 current_workflow_id="wf-123",
                 current_stage="development",
-                current_column=None,
-                entered_column_at=None,
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
                 completed_at=None,

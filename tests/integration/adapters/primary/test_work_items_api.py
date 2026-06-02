@@ -142,8 +142,6 @@ def sample_work_item():
         assigned_at=now,
         current_workflow_id="wf-123",
         current_stage="development",
-        current_column=None,
-        entered_column_at=None,
         created_at=now,
         updated_at=now,
         completed_at=None,

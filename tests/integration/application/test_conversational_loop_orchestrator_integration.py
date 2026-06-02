@@ -401,8 +401,6 @@ def sample_work_item_for_clo():
         assigned_at=datetime.now(UTC),
         current_workflow_id=None,
         current_stage=None,
-        current_column="In Review",
-        entered_column_at=datetime.now(UTC),
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
     )

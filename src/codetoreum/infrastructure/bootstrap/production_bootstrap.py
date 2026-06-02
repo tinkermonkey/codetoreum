@@ -575,13 +575,17 @@ class ProductionApplicationBootstrap:
             logger.info("Phase 5c: Loading project bootstrap configurations...")
             await self._load_bootstrap_projects()
 
-            # Phase 5d removed: WorkItemService is now constructor-injected into
+            # Phase 5d: Reconcile board structures
+            logger.info("Phase 5d: Reconciling board structures for all projects...")
+            await self._reconcile_board_structures()
+
+            # Phase 5d-1 removed: WorkItemService is now constructor-injected into
             # the executor in _create_services (see "WorkItemService must be
             # constructed BEFORE the executor" block). No post-hoc swap is
             # required. The phase ordering log line is retained for parity with
             # log-grep checkpoints in the deficiency log; the architectural
             # seam it documented is gone.
-            logger.info("Phase 5d: WorkItemService is constructor-injected into executor (no swap needed)")
+            logger.info("Phase 5d-1: WorkItemService is constructor-injected into executor (no swap needed)")
 
             # Phase 5d-2: Start DLQ retry processor
             # The failed event store retry processor handles retrying failed events
@@ -1366,6 +1370,68 @@ class ProductionApplicationBootstrap:
             raise RuntimeError(message) from e
 
     # =========================================================================
+    # Phase 5d: Reconcile Board Structures
+    # =========================================================================
+
+    async def _reconcile_board_structures(self) -> None:
+        """
+        Reconcile board structures with expected configuration for all projects.
+
+        Creates missing columns and validates board state is consistent.
+        Non-fatal - failures are logged but don't block bootstrap.
+        """
+        if not self.adapters or not self.adapters.config_store:
+            logger.warning("Cannot reconcile boards: adapters not initialized")
+            return
+
+        try:
+            project_configs = await self.adapters.config_store.list_projects()
+
+            for project_config in project_configs:
+                if not project_config.board_config:
+                    logger.debug(f"Project {project_config.id} has no board configuration")
+                    continue
+
+                try:
+                    board_config = project_config.board_config
+                    result = await self.adapters.board_service.reconcile_board(
+                        board_config.board_id,
+                        board_config,
+                    )
+
+                    if result.columns_added or result.columns_removed or result.columns_renamed:
+                        logger.info(
+                            f"Reconciled board {board_config.board_id} for project {project_config.id}: "
+                            f"added={result.columns_added}, removed={result.columns_removed}, "
+                            f"renamed={result.columns_renamed}",
+                            extra={
+                                "board_id": board_config.board_id,
+                                "project_id": project_config.id,
+                                "columns_added": len(result.columns_added),
+                                "columns_removed": len(result.columns_removed),
+                            },
+                        )
+                    else:
+                        logger.debug(f"Board {board_config.board_id} is in sync")
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to reconcile board {project_config.board_config.board_id} "
+                        f"for project {project_config.id}: {e}",
+                        exc_info=True,
+                        extra={
+                            "error_id": "ERR_BOOTSTRAP_BOARD_RECONCILE_FAILURE",
+                            "project_id": project_config.id,
+                            "board_id": project_config.board_config.board_id,
+                        },
+                    )
+        except Exception as e:
+            logger.warning(
+                f"Failed to list projects for board reconciliation: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_BOOTSTRAP_LIST_PROJECTS_FAILURE"},
+            )
+
+    # =========================================================================
     # Phase 7: Create FastAPI Application and Register Event Handlers
     # =========================================================================
 
@@ -1450,6 +1516,8 @@ class ProductionApplicationBootstrap:
             event_bus=self.infrastructure.event_bus,
             config_service=config_service_interface,
             logger=logger_interface,
+            board_service=self.adapters.board,
+            workflow_config_service=self.adapters.workflow_config,
             audit_query_port=self.ports.audit_query,
             auth_secret_key=_os.getenv("CODETOREUM_SECRET_KEY"),
             disable_auth=False,  # Production auth enabled

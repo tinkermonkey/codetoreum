@@ -107,8 +107,6 @@ def sample_work_item():
         assigned_at=None,
         current_workflow_id=None,
         current_stage=None,
-        current_column=None,
-        entered_column_at=None,
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
         completed_at=None,

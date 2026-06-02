@@ -1995,6 +1995,8 @@ class SimulationApplicationBootstrap:
             event_bus=self.infrastructure.event_bus,
             config_service=config_service_interface,
             logger=logger_interface,
+            board_service=self.adapters.board,
+            workflow_config_service=self.adapters.workflow_config,
             audit_query_port=None,  # Defer to simulation bootstrap to include with event_store
             disable_auth=True,  # ADR-003: Disable authentication in simulation
             cors_origins=["*"],  # Allow all origins in simulation mode (auth is disabled)
