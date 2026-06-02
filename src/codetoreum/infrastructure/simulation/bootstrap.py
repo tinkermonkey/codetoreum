@@ -116,6 +116,7 @@ from codetoreum.adapters.testing.mock_work_item_service import MockWorkItemServi
 from codetoreum.application.agent_execution_recovery_service import (
     AgentExecutionRecoveryService,
 )
+from codetoreum.application.pipeline_lock_service import IPipelineLockService
 from codetoreum.application.agent_scheduler import (
     AgentScheduler,
     InMemoryTaskQueue,
@@ -335,6 +336,7 @@ class SimulationAdapters:
     project_manager: IProjectManagerService
     workflow_config: IWorkflowConfigService
     queue_service: IPipelineQueueService
+    lock_service: IPipelineLockService
     event_emitter: IEventEmitter  # CapturingMockEventEmitter in simulation
     audit_store: IAuditStore | None  # InMemoryAuditStore in simulation, None in testing
 
@@ -2676,7 +2678,7 @@ class SimulationApplicationBootstrap:
 
         handler = BoardColumnEventHandler(
             board_service=self.adapters.board,
-            lock_service=self._queued_lock_service,
+            lock_service=self.adapters.lock_service,
             workflow_config=self.adapters.workflow_config,
             agent_executor=self.adapters.agent_executor,
             event_bus=self.infrastructure.event_bus,

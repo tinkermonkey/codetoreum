@@ -33,6 +33,7 @@ from codetoreum.ports.output.notifier import INotifier
 from codetoreum.ports.output.pipeline_queue_service import IPipelineQueueService
 from codetoreum.ports.output.pr_review_cycle_service import IPRReviewCycle
 from codetoreum.ports.output.project_manager_service import IProjectManagerService
+from codetoreum.application.pipeline_lock_service import IPipelineLockService
 from codetoreum.ports.output.repair_cycle_checkpoint_store import IRepairCycleCheckpointStore
 from codetoreum.ports.output.repair_cycle_service import IRepairCycle
 from codetoreum.ports.output.repository import IRepository
@@ -678,4 +679,16 @@ class PRReviewCycleServiceRegistry(AdapterRegistry[IPRReviewCycle]):
 
     def _is_valid_adapter(self, adapter_type: type[IPRReviewCycle]) -> bool:
         """Validate that an adapter implements IPRReviewCycle."""
+        return _validate_adapter_implements_interface(adapter_type, self._port_interface)
+
+
+class PipelineLockServiceRegistry(AdapterRegistry[IPipelineLockService]):
+    """Registry for IPipelineLockService adapter implementations."""
+
+    def __init__(self):
+        """Initialize the pipeline lock service registry."""
+        super().__init__(IPipelineLockService)
+
+    def _is_valid_adapter(self, adapter_type: type[IPipelineLockService]) -> bool:
+        """Validate that an adapter implements IPipelineLockService."""
         return _validate_adapter_implements_interface(adapter_type, self._port_interface)

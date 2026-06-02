@@ -31,6 +31,7 @@ from codetoreum.domain.events.workflow_events import (
     WorkflowStageAdvancedEvent,
     WorkflowStartedEvent,
 )
+from codetoreum.application.pipeline_lock_service import IPipelineLockService
 from codetoreum.infrastructure.event_bus import EventBus, EventHandler, event_handler
 from codetoreum.ports.exceptions import ExternalServiceError, ResourceNotFoundError
 from codetoreum.ports.input.work_item_command import IWorkItemCommandPort, MoveToColumnCommand
@@ -91,12 +92,13 @@ class BoardColumnEventHandler(EventHandler):
     def __init__(
         self,
         board_service: IBoardService,
-        distributed_lock: IDistributedLock,
-        pipeline_queue: IPipelineQueue,
         workflow_config: IWorkflowConfigService,
         agent_executor: IAgentExecutor,
         event_bus: EventBus,
         work_item_service: IWorkItemCommandPort,
+        lock_service: IPipelineLockService | None = None,
+        distributed_lock: IDistributedLock | None = None,
+        pipeline_queue: IPipelineQueue | None = None,
         event_store: IEventStore | None = None,
         run_registry: IActiveWorkflowRunRegistry | None = None,
         event_emitter: IEventEmitter | None = None,
@@ -107,18 +109,20 @@ class BoardColumnEventHandler(EventHandler):
 
         Args:
             board_service: Board service for querying positions and moving items
-            distributed_lock: Distributed lock for exclusive access coordination
-            pipeline_queue: Pipeline queue for work item ordering
             workflow_config: Configuration service for workflow templates
             agent_executor: Service for triggering agent executions
             event_bus: Event bus for publishing domain events
             work_item_service: Command port for persisting work item column state
+            lock_service: Optional unified pipeline lock service (preferred if provided)
+            distributed_lock: Optional distributed lock (used if lock_service not provided)
+            pipeline_queue: Optional pipeline queue (used if lock_service not provided)
             event_store: Optional event store for persisting workflow lifecycle events
             run_registry: Optional registry for tracking active workflow runs
             event_emitter: Optional event emitter for CodetoreumEvent instances (e.g. LockStuckEvent)
             recovery_service: Optional recovery service for handling agent execution failures
         """
         self.board_service = board_service
+        self.lock_service = lock_service
         self.distributed_lock = distributed_lock
         self.pipeline_queue = pipeline_queue
         self.workflow_config = workflow_config
@@ -129,6 +133,12 @@ class BoardColumnEventHandler(EventHandler):
         self.event_emitter = event_emitter
         self.recovery_service = recovery_service
         self.work_item_service = work_item_service
+
+        # Validate that either lock_service or both distributed_lock and pipeline_queue are provided
+        if lock_service is None and (distributed_lock is None or pipeline_queue is None):
+            raise ValueError(
+                "Either lock_service or both distributed_lock and pipeline_queue must be provided"
+            )
 
     def get_event_types(self) -> list[str]:
         """Get list of event types this handler processes.
@@ -319,38 +329,66 @@ class BoardColumnEventHandler(EventHandler):
             # Could retry or emit error event
             return
 
-        # Enqueue and try to acquire lock
+        # Try to acquire lock
         lock_key = f"{project_id}:{board_id}"
-        queue_length = 0
 
         try:
-            queue_entry = QueueEntry(
-                work_item_id=work_item_id,
-                stage_name=column_config.name,
-                board_position=position.position,
-                enqueued_at=datetime.now(UTC),
-                metadata={"project_id": project_id, "board_id": board_id},
-            )
-            await self.pipeline_queue.enqueue(queue_key=lock_key, entry=queue_entry)
-            queue_length = await self.pipeline_queue.length(lock_key)
-        except Exception as e:
-            logger.error(
-                f"Failed to enqueue {work_item_id}: {e}",
-                exc_info=True,
-            )
-            return
+            if self.lock_service:
+                # Use unified lock service API
+                result = await self.lock_service.try_acquire_lock(
+                    project_id=project_id,
+                    board_id=board_id,
+                    work_item_id=work_item_id,
+                    board_position=position.position,
+                )
+                queue_length = result.queue_length
+            else:
+                # Use separate lock and queue APIs
+                queue_entry = QueueEntry(
+                    work_item_id=work_item_id,
+                    stage_name=column_config.name,
+                    board_position=position.position,
+                    enqueued_at=datetime.now(UTC),
+                    metadata={"project_id": project_id, "board_id": board_id},
+                )
+                await self.pipeline_queue.enqueue(queue_key=lock_key, entry=queue_entry)
+                queue_length = await self.pipeline_queue.length(lock_key)
 
-        try:
-            result = await self.distributed_lock.try_acquire(
-                lock_key=lock_key,
-                holder_id=work_item_id,
-                ttl_seconds=7200,
-                holder_metadata={
-                    "project_id": project_id,
-                    "board_id": board_id,
-                    "queue_length_at_acquire": str(queue_length),
-                },
-            )
+                lock_result = await self.distributed_lock.try_acquire(
+                    lock_key=lock_key,
+                    holder_id=work_item_id,
+                    ttl_seconds=7200,
+                    holder_metadata={
+                        "project_id": project_id,
+                        "board_id": board_id,
+                        "queue_length_at_acquire": str(queue_length),
+                    },
+                )
+                # Adapt old API result to match new API
+                from codetoreum.application.pipeline_lock_service import (
+                    LockAcquisitionResult,
+                    LockStatus,
+                )
+
+                if lock_result.status.value == "acquired":
+                    result = LockAcquisitionResult(
+                        status=LockStatus.ACQUIRED,
+                        work_item_id=work_item_id,
+                        queue_length=queue_length,
+                    )
+                elif lock_result.status.value == "already_held_by_self":
+                    result = LockAcquisitionResult(
+                        status=LockStatus.ALREADY_HELD,
+                        work_item_id=work_item_id,
+                        queue_length=queue_length,
+                    )
+                else:
+                    result = LockAcquisitionResult(
+                        status=LockStatus.QUEUED,
+                        work_item_id=work_item_id,
+                        queue_position=0,
+                        queue_length=queue_length,
+                    )
         except Exception as e:
             logger.error(
                 f"Lock acquisition failed for {work_item_id}: {e}",
@@ -358,8 +396,10 @@ class BoardColumnEventHandler(EventHandler):
             )
             return
 
-        if result.status.value == "acquired":
-            logger.info(f"Lock acquired for {work_item_id}")
+        # Check if lock was acquired or re-entered (ALREADY_HELD means work item holds lock and re-entered column)
+        if result.status.name in ("ACQUIRED", "ALREADY_HELD"):
+            status_msg = "Lock acquired" if result.status.name == "ACQUIRED" else "Lock already held (re-entry)"
+            logger.info(f"{status_msg} for {work_item_id}")
 
             # D-S: sync the external (GitHub Project v2) board column to the
             # triggered column. The trigger endpoint emits an internal
@@ -406,8 +446,9 @@ class BoardColumnEventHandler(EventHandler):
                             },
                         )
 
-            # Start workflow run lifecycle tracking
-            await self._start_workflow_run(work_item_id, project_id, board_id, column_config, workflow_config)
+            # Start workflow run lifecycle tracking (only on first acquisition)
+            if result.status.name == "ACQUIRED":
+                await self._start_workflow_run(work_item_id, project_id, board_id, column_config, workflow_config)
 
             # Trigger agent if column has one, is NOT a conversational column, and is NOT a PR review cycle column.
             # Conversational columns are handled by WorkflowOrchestrator via
@@ -482,10 +523,21 @@ class BoardColumnEventHandler(EventHandler):
         lock_key = f"{project_id}:{board_id}"
 
         try:
-            release_result = await self.distributed_lock.release(
-                lock_key=lock_key,
-                holder_id=work_item_id,
-            )
+            if self.lock_service:
+                # Use unified lock service API
+                release_result = await self.lock_service.release_lock(
+                    project_id=project_id,
+                    board_id=board_id,
+                    work_item_id=work_item_id,
+                )
+                released = True
+            else:
+                # Use separate lock API
+                release_result = await self.distributed_lock.release(
+                    lock_key=lock_key,
+                    holder_id=work_item_id,
+                )
+                released = release_result.released
         except Exception as e:
             logger.critical(
                 f"Lock release failed for {work_item_id}: {e}",
@@ -508,16 +560,33 @@ class BoardColumnEventHandler(EventHandler):
                     logger.error(f"Failed to emit LockStuckEvent: {emit_err}", exc_info=True)
             return
 
-        if not release_result.released:
-            logger.warning(
-                f"Lock not released for {work_item_id}: {release_result.reason.value if release_result.reason else 'unknown'}"
-            )
+        if not released:
+            if self.lock_service:
+                logger.warning(f"Lock not released for {work_item_id}: unknown error")
+            else:
+                logger.warning(
+                    f"Lock not released for {work_item_id}: {release_result.reason.value if release_result.reason else 'unknown'}"
+                )
             return
 
         logger.info(f"Lock released for {work_item_id}")
 
         # Complete workflow run lifecycle tracking
         await self._complete_workflow_run(work_item_id, column_config.name)
+
+        # If using unified lock service and there's a next item, trigger its agent
+        if self.lock_service and hasattr(release_result, 'next_work_item_id') and release_result.next_work_item_id:
+            # Find the pipeline trigger column (where agent was originally triggered)
+            trigger_column = next(
+                (col for col in workflow_config.columns if col.is_pipeline_trigger),
+                None
+            )
+            if trigger_column and trigger_column.agent_id:
+                await self._trigger_agent(
+                    work_item_id=release_result.next_work_item_id,
+                    column_config=trigger_column,
+                    board_id=board_id,
+                )
 
         # PipelineOrchestrator subscribes to PipelineLockReleasedEvent and
         # orchestrates granting the lock to the next queued item
@@ -805,11 +874,23 @@ class BoardColumnEventHandler(EventHandler):
                 # Release the lock to unblock next queued item (critical for pipeline unblocking)
                 lock_key = f"{project_id}:{board_id}"
                 try:
-                    release_result = await self.distributed_lock.release(
-                        lock_key=lock_key,
-                        holder_id=work_item_id,
-                    )
-                    if release_result.released:
+                    if self.lock_service:
+                        # Use unified lock service API
+                        release_result = await self.lock_service.release_lock(
+                            project_id=project_id,
+                            board_id=board_id,
+                            work_item_id=work_item_id,
+                        )
+                        released = True
+                    else:
+                        # Use separate lock API
+                        release_result = await self.distributed_lock.release(
+                            lock_key=lock_key,
+                            holder_id=work_item_id,
+                        )
+                        released = release_result.released
+
+                    if released:
                         logger.info(
                             f"Released lock for {work_item_id} due to execution failure",
                             extra={"error_id": "INFO_BOARD_EVENT_LOCK_RELEASED_AFTER_FAILURE"},
