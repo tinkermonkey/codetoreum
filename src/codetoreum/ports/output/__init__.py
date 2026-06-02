@@ -44,6 +44,14 @@ from codetoreum.ports.output.discussion_adapter import (
     DiscussionThread,
     IDiscussionAdapter,
 )
+from codetoreum.ports.output.distributed_lock import (
+    AcquireResult,
+    AcquireStatus,
+    IDistributedLock,
+    LockHolder,
+    ReleaseReason,
+    ReleaseResult,
+)
 from codetoreum.ports.output.encryption_service import (
     DecryptionError,
     EncryptionError,
@@ -81,17 +89,11 @@ from codetoreum.ports.output.notifier import (
     NotificationResult,
     RichContent,
 )
-from codetoreum.ports.output.distributed_lock import (
-    AcquireResult,
-    AcquireStatus,
-    IDistributedLock,
-    LockHolder,
-    ReleaseReason,
-    ReleaseResult,
-)
 from codetoreum.ports.output.pipeline_queue import (
     EnqueueResult,
     IPipelineQueue,
+)
+from codetoreum.ports.output.pipeline_queue import (
     QueueEntry as IPipelineQueueEntry,
 )
 from codetoreum.ports.output.pr_review_cycle_service import (

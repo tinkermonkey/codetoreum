@@ -10,7 +10,6 @@ RedisPipelineLockService.
 """
 
 import logging
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from codetoreum.domain.events import CodetoreumEvent

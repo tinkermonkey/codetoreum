@@ -37,6 +37,7 @@ from codetoreum.adapters.secondary.github_version_control_adapter import (
 from codetoreum.adapters.secondary.local_key_encryption_adapter import (
     LocalKeyEncryptionAdapter,
 )
+
 # Import testing adapters
 from codetoreum.adapters.testing import (
     CapturingMockEventEmitter,

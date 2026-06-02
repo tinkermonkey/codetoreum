@@ -13,13 +13,6 @@ from uuid import uuid4
 from codetoreum.application.agent_execution_recovery_service import (
     AgentExecutionRecoveryService,
 )
-from codetoreum.ports.output.distributed_lock import (
-    IDistributedLock,
-)
-from codetoreum.ports.output.pipeline_queue import (
-    IPipelineQueue,
-    QueueEntry,
-)
 from codetoreum.domain.board_workflow_template import (
     BoardWorkflowTemplate,
     ColumnTemplate,
@@ -46,8 +39,15 @@ from codetoreum.ports.output.active_workflow_run_registry import (
 )
 from codetoreum.ports.output.agent_executor import IAgentExecutor
 from codetoreum.ports.output.board_service import IBoardService, MovedByType, WorkItemPosition
+from codetoreum.ports.output.distributed_lock import (
+    IDistributedLock,
+)
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.event_store import IEventStore
+from codetoreum.ports.output.pipeline_queue import (
+    IPipelineQueue,
+    QueueEntry,
+)
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 logger = logging.getLogger(__name__)

@@ -4,7 +4,6 @@ Uses Redis SET NX EX for atomic acquire/release. Emits PipelineLockAcquiredEvent
 and PipelineLockReleasedEvent via an injected event bus.
 """
 
-import json
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
@@ -20,8 +19,8 @@ from codetoreum.ports.output.distributed_lock import (
     AcquireStatus,
     IDistributedLock,
     LockHolder,
-    ReleaseResult,
     ReleaseReason,
+    ReleaseResult,
 )
 
 if TYPE_CHECKING:
@@ -85,14 +84,13 @@ class RedisDistributedLock(IDistributedLock):
                         holder_id=holder_id,
                         acquired_at=None,
                     )
-                else:
-                    # Different holder holds the lock
-                    return AcquireResult(
-                        status=AcquireStatus.ALREADY_HELD_BY_OTHER,
-                        lock_key=lock_key,
-                        holder_id=existing_holder_id,
-                        acquired_at=None,
-                    )
+                # Different holder holds the lock
+                return AcquireResult(
+                    status=AcquireStatus.ALREADY_HELD_BY_OTHER,
+                    lock_key=lock_key,
+                    holder_id=existing_holder_id,
+                    acquired_at=None,
+                )
             except Exception:
                 logger.warning(
                     f"Failed to parse existing lock holder for {lock_key}",
@@ -150,16 +148,15 @@ class RedisDistributedLock(IDistributedLock):
                 holder_id=holder_id,
                 acquired_at=now,
             )
-        else:
-            # Lock is held by someone else; return holder info if available
-            existing = await self._redis.get(redis_key)
-            holder_id_str = existing.decode("utf-8") if isinstance(existing, bytes) else str(existing)
-            return AcquireResult(
-                status=AcquireStatus.ALREADY_HELD_BY_OTHER,
-                lock_key=lock_key,
-                holder_id=holder_id_str,
-                acquired_at=None,
-            )
+        # Lock is held by someone else; return holder info if available
+        existing = await self._redis.get(redis_key)
+        holder_id_str = existing.decode("utf-8") if isinstance(existing, bytes) else str(existing)
+        return AcquireResult(
+            status=AcquireStatus.ALREADY_HELD_BY_OTHER,
+            lock_key=lock_key,
+            holder_id=holder_id_str,
+            acquired_at=None,
+        )
 
     async def release(
         self,
@@ -196,12 +193,11 @@ class RedisDistributedLock(IDistributedLock):
                         reason=ReleaseReason.NOT_HELD,
                         lock_key=lock_key,
                     )
-                else:
-                    return ReleaseResult(
-                        released=False,
-                        reason=ReleaseReason.HELD_BY_OTHER,
-                        lock_key=lock_key,
-                    )
+                return ReleaseResult(
+                    released=False,
+                    reason=ReleaseReason.HELD_BY_OTHER,
+                    lock_key=lock_key,
+                )
 
             # Get holder metadata before deletion to emit event
             holder_data_dict = await self._redis.hgetall(holder_data_key)
