@@ -657,7 +657,7 @@ class ExecutionService:
         commit_sha: str | None,
         execution: AgentExecution,
     ) -> None:
-        """Open a PR for the pushed branch. Best-effort: logs and swallows."""
+        """Open a PR for the pushed branch and refresh title on commit. Best-effort: logs and swallows."""
         if self.vcs is None or not context.repository_path:
             return
         repo_path: str = context.repository_path
@@ -695,9 +695,29 @@ class ExecutionService:
                     "pr_url": pr_url,
                 },
             )
+
+            # Refresh PR title to ensure it reflects the current work item.
+            # When a branch is reused across work items, the PR title must be
+            # updated to show the new work_item_id. The update is idempotent:
+            # if the title already matches, no API call is made.
+            title_updated = await self.vcs.update_pull_request_title(
+                repo_path=repo_path,
+                head=branch,
+                base=base,
+                new_title=title,
+            )
+            if title_updated:
+                logger.info(
+                    f"Refreshed PR title for execution {execution.id}",
+                    extra={
+                        "work_item_id": context.work_item_id,
+                        "branch": branch,
+                        "new_title": title,
+                    },
+                )
         except Exception:
             logger.error(
-                f"Failed to open pull request for execution {execution.id} "
+                f"Failed to open/update pull request for execution {execution.id} "
                 f"(branch={branch}); the push succeeded so the work is on "
                 "the remote — open the PR manually or re-run the stage",
                 exc_info=True,

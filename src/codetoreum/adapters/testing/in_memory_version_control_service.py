@@ -349,6 +349,11 @@ class InMemoryVersionControlService(IVersionControlService):
             raise ValidationError(msg)
         with self._lock:
             self._pull_requests = getattr(self, "_pull_requests", [])
+            # Check if PR already exists for this head->base pair
+            for pr in self._pull_requests:
+                if pr["repo_path"] == repo_path and pr["head"] == head and pr["base"] == base:
+                    # Return existing PR URL (idempotent)
+                    return pr["url"]
             pr_number = len(self._pull_requests) + 1
             pr_url = f"https://in-memory.local/{repo_path}/pull/{pr_number}"
             self._pull_requests.append(
@@ -363,6 +368,39 @@ class InMemoryVersionControlService(IVersionControlService):
                 }
             )
             return pr_url
+
+    async def update_pull_request_title(
+        self,
+        repo_path: str,
+        head: str,
+        base: str,
+        new_title: str,
+    ) -> bool:
+        """Update PR title if it exists and differs (idempotent no-op).
+
+        Looks up an existing PR for head→base. If found and the title differs,
+        updates it. If the title already matches, skips the update and returns
+        False (idempotent no-op). If no PR exists, returns False silently.
+        """
+        if not repo_path:
+            msg = "Repository path cannot be empty"
+            raise ValidationError(msg)
+        if not head or not base:
+            msg = "head and base must be non-empty"
+            raise ValidationError(msg)
+        with self._lock:
+            self._pull_requests = getattr(self, "_pull_requests", [])
+            for pr in self._pull_requests:
+                if pr["repo_path"] == repo_path and pr["head"] == head and pr["base"] == base:
+                    # Found the PR
+                    if pr["title"] == new_title:
+                        # Title already matches (idempotent no-op)
+                        return False
+                    # Update the title
+                    pr["title"] = new_title
+                    return True
+        # No PR found
+        return False
 
     async def list_branches(self, repo_path: str, remote: bool = False) -> list[str]:
         """List all branches in the in-memory repository."""

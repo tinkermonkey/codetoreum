@@ -290,3 +290,35 @@ class IVersionControlService(ABC):
             ExternalServiceError: Provider rejected the request for any
                 other reason.
         """
+
+    @abstractmethod
+    async def update_pull_request_title(
+        self,
+        repo_path: str,
+        head: str,
+        base: str,
+        new_title: str,
+    ) -> bool:
+        """Update the title of an open pull request if it exists and differs.
+
+        Refreshes the PR title on the remote when new commits are added to
+        a branch with an existing PR, ensuring the title reflects the current
+        work item. Skips the API call if the PR already has the requested
+        title (idempotent no-op).
+
+        Args:
+            repo_path: Local repository path (used to look up the remote
+                URL, e.g. via ``git remote get-url origin``).
+            head: Source branch name.
+            base: Target branch name.
+            new_title: The new PR title.
+
+        Returns:
+            bool: True if the PR title was updated, False if no update was
+            needed (PR already had the title or PR does not exist).
+
+        Raises:
+            AuthenticationError: Credentials are missing or invalid.
+            ExternalServiceError: Provider rejected the request for any
+                other reason.
+        """
