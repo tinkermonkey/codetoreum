@@ -11,6 +11,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+from codetoreum.application.pipeline_lock_service import IPipelineLockService
 from codetoreum.infrastructure.adapters.registry_base import AdapterRegistry
 from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
 from codetoreum.ports.output.agent_executor import IAgentExecutor
@@ -33,7 +34,6 @@ from codetoreum.ports.output.notifier import INotifier
 from codetoreum.ports.output.pipeline_queue_service import IPipelineQueueService
 from codetoreum.ports.output.pr_review_cycle_service import IPRReviewCycle
 from codetoreum.ports.output.project_manager_service import IProjectManagerService
-from codetoreum.application.pipeline_lock_service import IPipelineLockService
 from codetoreum.ports.output.repair_cycle_checkpoint_store import IRepairCycleCheckpointStore
 from codetoreum.ports.output.repair_cycle_service import IRepairCycle
 from codetoreum.ports.output.repository import IRepository

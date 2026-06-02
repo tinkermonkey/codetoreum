@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
 from codetoreum.infrastructure.event_bus import EventBus
-from codetoreum.ports.output.board_service import IBoardService, ColumnMovementResult, MovedByType
+from codetoreum.ports.output.board_service import ColumnMovementResult, IBoardService, MovedByType
 
 # Defaults match the codetoreum board setup constants (codetoreum_board_setup.py).
 # Defined here as literals to avoid a circular import through the bootstrap package.

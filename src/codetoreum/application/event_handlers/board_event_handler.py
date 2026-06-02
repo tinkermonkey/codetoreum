@@ -13,6 +13,7 @@ from uuid import uuid4
 from codetoreum.application.agent_execution_recovery_service import (
     AgentExecutionRecoveryService,
 )
+from codetoreum.application.pipeline_lock_service import IPipelineLockService
 from codetoreum.domain.board_workflow_template import (
     BoardWorkflowTemplate,
     ColumnTemplate,
@@ -31,7 +32,6 @@ from codetoreum.domain.events.workflow_events import (
     WorkflowStageAdvancedEvent,
     WorkflowStartedEvent,
 )
-from codetoreum.application.pipeline_lock_service import IPipelineLockService
 from codetoreum.infrastructure.event_bus import EventBus, EventHandler, event_handler
 from codetoreum.ports.exceptions import ExternalServiceError, ResourceNotFoundError
 from codetoreum.ports.input.work_item_command import IWorkItemCommandPort
@@ -518,7 +518,7 @@ class BoardColumnEventHandler(EventHandler):
         await self._complete_workflow_run(work_item_id, column_config.name)
 
         # If using unified lock service and there's a next item, trigger its agent
-        if self.lock_service and hasattr(release_result, 'next_work_item_id') and release_result.next_work_item_id:
+        if self.lock_service and hasattr(release_result, "next_work_item_id") and release_result.next_work_item_id:
             # Find the pipeline trigger column (where agent was originally triggered)
             trigger_column = next(
                 (col for col in workflow_config.columns if col.is_pipeline_trigger),

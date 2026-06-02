@@ -99,9 +99,9 @@ class MockRedis:
 
             # Compare (decode if needed)
             if isinstance(current_value, bytes):
-                current_value = current_value.decode('utf-8')
+                current_value = current_value.decode("utf-8")
             if isinstance(holder_id, bytes):
-                holder_id = holder_id.decode('utf-8')
+                holder_id = holder_id.decode("utf-8")
 
             # If values match, delete and return 1, else return 0
             if current_value == holder_id:

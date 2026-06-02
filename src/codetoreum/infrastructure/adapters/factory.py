@@ -34,11 +34,11 @@ from codetoreum.adapters.secondary.elasticsearch_project_manager_adapter import 
 from codetoreum.adapters.secondary.github_version_control_adapter import (
     GitHubVersionControlAdapter,
 )
-from codetoreum.adapters.secondary.local_key_encryption_adapter import (
-    LocalKeyEncryptionAdapter,
-)
 from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
     InMemoryLockService,
+)
+from codetoreum.adapters.secondary.local_key_encryption_adapter import (
+    LocalKeyEncryptionAdapter,
 )
 
 # Import testing adapters
@@ -209,6 +209,7 @@ except ImportError:
     )
     BasicPRReviewCycleAdapter = None  # type: ignore
 
+from codetoreum.application.pipeline_lock_service import IPipelineLockService
 from codetoreum.infrastructure.adapters.registries import (
     ActiveWorkflowRunRegistryRegistry,
     AgentExecutorRegistry,
@@ -228,8 +229,8 @@ from codetoreum.infrastructure.adapters.registries import (
     MessageBrokerRegistry,
     MetricsAdapterRegistry,
     NotifierRegistry,
-    PipelineQueueServiceRegistry,
     PipelineLockServiceRegistry,
+    PipelineQueueServiceRegistry,
     ProjectManagerServiceRegistry,
     PRReviewCycleServiceRegistry,
     RepairCycleCheckpointStoreRegistry,
@@ -276,7 +277,6 @@ from codetoreum.ports.output.metrics import IMetrics
 from codetoreum.ports.output.notifier import INotifier
 from codetoreum.ports.output.pipeline_queue_service import IPipelineQueueService
 from codetoreum.ports.output.pr_review_cycle_service import IPRReviewCycle
-from codetoreum.application.pipeline_lock_service import IPipelineLockService
 from codetoreum.ports.output.project_manager_service import IProjectManagerService
 from codetoreum.ports.output.repair_cycle_checkpoint_store import IRepairCycleCheckpointStore
 from codetoreum.ports.output.repair_cycle_service import IRepairCycle

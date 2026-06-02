@@ -27,6 +27,7 @@ from codetoreum.ports.output.config_store import IConfigStore
 from codetoreum.ports.output.container import IContainer
 from codetoreum.ports.output.container_recovery import IAgentContainerRecoveryService
 from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
+from codetoreum.ports.output.distributed_lock import IDistributedLock
 from codetoreum.ports.output.encryption_service import IEncryptionService
 from codetoreum.ports.output.environment_repair_service import IEnvironmentRepairService
 from codetoreum.ports.output.event_emitter import IEventEmitter
@@ -36,7 +37,6 @@ from codetoreum.ports.output.identity_service import IIdentityService
 from codetoreum.ports.output.message_broker import IMessageBroker
 from codetoreum.ports.output.metrics import IMetrics
 from codetoreum.ports.output.notifier import INotifier
-from codetoreum.ports.output.distributed_lock import IDistributedLock
 from codetoreum.ports.output.pipeline_queue_service import IPipelineQueueService
 from codetoreum.ports.output.pr_review_cycle_service import IPRReviewCycle
 from codetoreum.ports.output.project_manager_service import IProjectManagerService

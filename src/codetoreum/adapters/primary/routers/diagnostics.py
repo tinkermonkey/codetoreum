@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
-from codetoreum.ports.output.board_service import IBoardService, ReconciliationResult, BoardConfig
+from codetoreum.ports.output.board_service import BoardConfig, IBoardService, ReconciliationResult
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 

@@ -116,7 +116,6 @@ from codetoreum.adapters.testing.mock_work_item_service import MockWorkItemServi
 from codetoreum.application.agent_execution_recovery_service import (
     AgentExecutionRecoveryService,
 )
-from codetoreum.application.pipeline_lock_service import IPipelineLockService
 from codetoreum.application.agent_scheduler import (
     AgentScheduler,
     InMemoryTaskQueue,
@@ -143,6 +142,7 @@ from codetoreum.application.event_handlers.review_event_handler import (
 from codetoreum.application.execution_service import ExecutionService
 from codetoreum.application.feedback_processor import FeedbackProcessor
 from codetoreum.application.multi_project_orchestrator import MultiProjectOrchestrator
+from codetoreum.application.pipeline_lock_service import IPipelineLockService
 from codetoreum.application.pipeline_manager import PipelineManager
 from codetoreum.application.prompt_building import DefaultPromptBuilder
 from codetoreum.application.review_service import ReviewService
@@ -843,7 +843,7 @@ class SimulationApplicationBootstrap:
         self._execution_timeout_watchdog: ExecutionTimeoutWatchdog | None = None
         self._sla_expiry_watchdog: SLAExpiryWatchdog | None = None
         self._column_progression_watchdog: ColumnProgressionWatchdog | None = None
-        self._queued_lock_service: "FileBackedDistributedLock | None" = None
+        self._queued_lock_service: FileBackedDistributedLock | None = None
 
     @property
     def is_degraded(self) -> bool:

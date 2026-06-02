@@ -20,8 +20,8 @@ from codetoreum.domain.events.execution_events import ExecutionTimedOutEvent
 from codetoreum.domain.events.lock_events import StaleLockDetectedEvent
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.ports.output.board_service import IBoardService, MovedByType
-from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.distributed_lock import IDistributedLock
+from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 if TYPE_CHECKING:

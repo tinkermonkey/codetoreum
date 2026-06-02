@@ -7,7 +7,6 @@ testing and development environments where distributed state is not required.
 import asyncio
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Optional
 
 from codetoreum.application.pipeline_lock_service import (
     IPipelineLockService,
@@ -28,15 +27,15 @@ class QueueItem:
 @dataclass
 class QueueState:
     """Current state of a lock and queue."""
-    lock_holder: Optional[str]
+    lock_holder: str | None
     queue: list[QueueItem]
 
 
 @dataclass
 class LockState:
     """State of a lock and its queue."""
-    lock_holder: Optional[str] = None  # Work item ID holding the lock
-    lock_acquired_at: Optional[datetime] = None
+    lock_holder: str | None = None  # Work item ID holding the lock
+    lock_acquired_at: datetime | None = None
     queue: list[str] = field(default_factory=list)  # Work item IDs in queue order
     board_positions: dict[str, int] = field(default_factory=dict)  # work_item_id -> board position
 
@@ -50,7 +49,7 @@ class InMemoryLockService(IPipelineLockService):
 
     def __init__(
         self,
-        event_bus: Optional[EventBus] = None,
+        event_bus: EventBus | None = None,
         stale_threshold_seconds: int = 7200,
     ):
         """Initialize the lock service.
@@ -81,7 +80,7 @@ class InMemoryLockService(IPipelineLockService):
         elapsed = (datetime.now(UTC) - state.lock_acquired_at).total_seconds()
         return elapsed > self.stale_threshold_seconds
 
-    def _recover_stale_lock(self, state: LockState) -> Optional[str]:
+    def _recover_stale_lock(self, state: LockState) -> str | None:
         """Recover a stale lock and return next holder."""
         if not self._is_lock_stale(state):
             return None
@@ -152,7 +151,7 @@ class InMemoryLockService(IPipelineLockService):
                 # Insert in position order (lowest board position first)
                 insert_pos = 0
                 for i, queued_id in enumerate(state.queue):
-                    queued_pos = state.board_positions.get(queued_id, float('inf'))
+                    queued_pos = state.board_positions.get(queued_id, float("inf"))
                     if board_position < queued_pos:
                         insert_pos = i
                         break
@@ -237,7 +236,7 @@ class InMemoryLockService(IPipelineLockService):
             # Re-sort queue based on updated positions
             queue_items = state.queue[:]
             queue_items.sort(
-                key=lambda item: state.board_positions.get(item, float('inf'))
+                key=lambda item: state.board_positions.get(item, float("inf"))
             )
             state.queue = queue_items
 
