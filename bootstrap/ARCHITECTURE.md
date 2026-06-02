@@ -373,7 +373,7 @@ Every port exercised in a bootstrap run, with its production adapter and role.
 
 The following constraints MUST hold for bootstrap to work correctly. Violating any of them produces a failure mode that may not be immediately obvious.
 
-**Cross-reference**: invariants that apply globally (not bootstrap-specific) have been promoted to [`documentation/architecture/invariants.md`](../documentation/architecture/invariants.md). The numbering is preserved across both files for traceability. Bootstrap-specific invariants (INV-01 through INV-06, INV-13) remain authoritative in this file; platform-wide invariants (INV-07 through INV-12, INV-14 through INV-21) are authoritative in `invariants.md` and referenced here for completeness.
+**Cross-reference**: invariants that apply globally (not bootstrap-specific) have been promoted to [`documentation/architecture/invariants.md`](../documentation/architecture/invariants.md). The numbering is preserved across both files for traceability. Bootstrap-specific invariants (INV-01 through INV-06) remain authoritative in this file; platform-wide invariants (INV-07 through INV-21) are authoritative in `invariants.md` and referenced here for completeness.
 
 ### Ordering constraints
 
@@ -397,8 +397,6 @@ The following constraints MUST hold for bootstrap to work correctly. Violating a
 - Scheduling note: the executor publishes via `asyncio.create_task` (fire-and-forget) rather than awaiting the publish inline. Awaiting would keep the executor's task alive across the BEH handler chain — which can re-enter the workflow via deferred bridge tasks and produce an `ALREADY_HELD` re-trigger loop. Publish failures are still routed to `AgentExecutionRecoveryService` via a done-callback on the publish task.
 
 **INV-06**: `dispatch_via_task_queue=False` on `WorkflowOrchestrator` is required in production. `BoardColumnEventHandler` owns event-driven dispatch. Setting this to `True` causes double-dispatch.
-
-**INV-13**: `MultiProjectOrchestrator` is the sole orchestration entry point. It is started in Phase 5e and polls all enabled projects every 30 seconds. Direct execution dispatch from non-event-handler paths is forbidden. `BoardColumnEventHandler` is the event-driven complement — it reacts to column changes in real time. These two mechanisms are cooperative, not competing: MPO handles initial pickup and board reconciliation; BEH handles real-time reactions to column movements.
 
 ### Isolation constraints
 

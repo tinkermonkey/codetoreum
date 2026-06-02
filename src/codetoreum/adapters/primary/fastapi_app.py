@@ -93,6 +93,7 @@ from codetoreum.ports.input.workflow_run_query import IWorkflowRunQueryPort
 from codetoreum.ports.input.workspace_query import IWorkspaceQueryPort
 from codetoreum.ports.output.board_service import IBoardService
 from codetoreum.ports.output.event_store import IEventStore
+from codetoreum.ports.output.multi_project_orchestrator import IMultiProjectOrchestrator
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 # Load environment variables from .env file
@@ -293,7 +294,7 @@ def create_app(
     adapter_slot_info: dict[str, str] | None = None,
     event_store_poller: Any | None = None,
     issue_intake_port: IIssueIntakePort | None = None,
-    multi_project_orchestrator: Any | None = None,
+    multi_project_orchestrator: IMultiProjectOrchestrator | None = None,
 ) -> FastAPI:
     """
     Create and configure FastAPI application.

@@ -7,6 +7,7 @@ project status and listing enabled projects.
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
+from codetoreum.ports.exceptions import ResourceNotFoundError
 from codetoreum.ports.output.multi_project_orchestrator import (
     IMultiProjectOrchestrator,
     ProjectStatus,
@@ -101,7 +102,3 @@ def create_projects_router(
             )
 
     return router
-
-
-# Import at bottom to avoid circular imports
-from codetoreum.ports.exceptions import ResourceNotFoundError
