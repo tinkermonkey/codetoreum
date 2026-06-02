@@ -37,10 +37,6 @@ from codetoreum.adapters.secondary.github_version_control_adapter import (
 from codetoreum.adapters.secondary.local_key_encryption_adapter import (
     LocalKeyEncryptionAdapter,
 )
-# from codetoreum.adapters.secondary.redis_pipeline_lock_service import (  # REMOVED: Port discontinued in Phase 5
-#     RedisPipelineLockService,
-# )
-
 # Import testing adapters
 from codetoreum.adapters.testing import (
     CapturingMockEventEmitter,
@@ -228,7 +224,6 @@ from codetoreum.infrastructure.adapters.registries import (
     MessageBrokerRegistry,
     MetricsAdapterRegistry,
     NotifierRegistry,
-    # PipelineLockServiceRegistry,  # REMOVED: Port discontinued in Phase 5
     PipelineQueueServiceRegistry,
     ProjectManagerServiceRegistry,
     PRReviewCycleServiceRegistry,
@@ -274,7 +269,6 @@ from codetoreum.ports.output.identity_service import IIdentityService
 from codetoreum.ports.output.message_broker import IMessageBroker
 from codetoreum.ports.output.metrics import IMetrics
 from codetoreum.ports.output.notifier import INotifier
-from codetoreum.ports.output.pipeline_lock_service import IPipelineLockService
 from codetoreum.ports.output.pipeline_queue_service import IPipelineQueueService
 from codetoreum.ports.output.pr_review_cycle_service import IPRReviewCycle
 from codetoreum.ports.output.project_manager_service import IProjectManagerService
@@ -345,7 +339,6 @@ class AdapterFactory:
         self._pr_review_cycle_registry = PRReviewCycleServiceRegistry()
         self._container_recovery_registry = ContainerRecoveryRegistry()
         self._encryption_registry = EncryptionRegistry()
-        # self._pipeline_lock_registry = PipelineLockServiceRegistry()  # REMOVED: Port discontinued in Phase 5
         self._pipeline_queue_registry = PipelineQueueServiceRegistry()
         self._project_manager_registry = ProjectManagerServiceRegistry()
         self._workflow_config_registry = WorkflowConfigServiceRegistry()
@@ -801,38 +794,6 @@ class AdapterFactory:
             ),
         )
 
-        # Pipeline Lock Service Adapters
-        # REMOVED: InMemoryLockService - IPipelineLockService port discontinued in Phase 5
-        # self._pipeline_lock_registry.register(
-        #     name="in_memory",
-        #     adapter_type=InMemoryLockService,
-        #     description="In-memory pipeline lock service with position-based queue ordering",
-        #     version="1.0.0",
-        #     tags=["testing", "simulation", "mock", "production"],
-        #     config_schema=AdapterCredentialRequirement(
-        #         simulation_only=True,
-        #         description="Simulation-only adapter, no credentials required",
-        #     ),
-        #     set_as_default=True,
-        # )
-        # Redis-backed pipeline lock service: lock state survives restart and
-        # coordinates across multiple Codetoreum instances. Requires a running
-        # Redis at REDIS_URL.
-        # REMOVED: RedisPipelineLockService - IPipelineLockService port discontinued in Phase 5
-        # self._pipeline_lock_registry.register(
-        #     name="redis",
-        #     adapter_type=RedisPipelineLockService,
-        #     description="Redis-backed pipeline lock service with sorted-set queue ordering",
-        #     version="1.0.0",
-        #     tags=["production", "persistent", "multi_instance"],
-        #     config_schema=AdapterCredentialRequirement(
-        #         description=(
-        #             "Requires a Redis client (redis.asyncio.Redis). The resolver injects "
-        #             "one constructed from REDIS_URL. EventBus is injected for lock event emission."
-        #         ),
-        #     ),
-        # )
-
         # Pipeline Queue Service Adapters
         self._pipeline_queue_registry.register(
             name="in_memory",
@@ -1259,11 +1220,6 @@ class AdapterFactory:
         """Get the encryption service registry."""
         return self._encryption_registry
 
-    # @property  # REMOVED: Port discontinued in Phase 5
-    # def pipeline_lock_registry(self) -> PipelineLockServiceRegistry:
-    #     """Get the pipeline lock service registry."""
-    #     return self._pipeline_lock_registry
-
     @property
     def pipeline_queue_registry(self) -> PipelineQueueServiceRegistry:
         """Get the pipeline queue service registry."""
@@ -1360,7 +1316,6 @@ class AdapterFactory:
             "container_recovery": self._container_recovery_registry,
             "agent_executor": self._agent_executor_registry,
             "project_manager": self._project_manager_registry,
-            "lock_service": self._pipeline_lock_registry,
             "workflow_config": self._workflow_config_registry,
             "queue_service": self._pipeline_queue_registry,
             "event_emitter": self._event_emitter_registry,
@@ -1694,10 +1649,6 @@ class AdapterFactory:
         """Create an encryption service adapter instance."""
         return self._create_adapter(self._encryption_registry, adapter_name, "encryption service", **kwargs)
 
-    def create_pipeline_lock_service(self, adapter_name: str | None = None, **kwargs) -> IPipelineLockService:
-        """Create a pipeline lock service adapter instance."""
-        return self._create_adapter(self._pipeline_lock_registry, adapter_name, "pipeline lock service", **kwargs)
-
     def create_pipeline_queue_service(self, adapter_name: str | None = None, **kwargs) -> IPipelineQueueService:
         """Create a pipeline queue service adapter instance."""
         return self._create_adapter(self._pipeline_queue_registry, adapter_name, "pipeline queue service", **kwargs)
@@ -1793,6 +1744,7 @@ class AdapterFactory:
             organization=org,
         )
 
+    def _build_git_config(self) -> GitConfig:
         """Build GitConfig from environment variables."""
         import os
 
