@@ -55,6 +55,56 @@ class RedisDistributedLock(IDistributedLock):
         """Get Redis key for holder metadata hash."""
         return f"{self._key_prefix}:holder:{lock_key}"
 
+    async def _finalize_acquisition(
+        self,
+        lock_key: str,
+        holder_id: str,
+        holder_data_key: str,
+        ttl_seconds: int,
+        holder_metadata: dict[str, str] | None,
+        now: datetime,
+    ) -> AcquireResult:
+        """Finalize a successful lock acquisition.
+
+        Stores holder metadata, emits event, and returns AcquireResult.
+        Extracted to eliminate duplication in try_acquire retry path.
+        """
+        # Store holder metadata in sibling hash
+        if holder_metadata:
+            await self._redis.hset(
+                holder_data_key,
+                mapping=holder_metadata,
+            )
+            # Set same TTL on metadata hash
+            await self._redis.expire(holder_data_key, ttl_seconds)
+
+        # Emit event via event bus if available
+        if self._event_bus:
+            try:
+                metadata = holder_metadata or {}
+                event = PipelineLockAcquiredEvent(
+                    type="pipeline.lock_acquired",
+                    timestamp=now.isoformat(),
+                    source="redis_distributed_lock",
+                    project_id=metadata.get("project_id", ""),
+                    work_item_id=holder_id,
+                    board_id=metadata.get("board_id", ""),
+                    queue_length_at_acquire=int(metadata.get("queue_length_at_acquire", 0)),
+                )
+                await self._event_bus.publish(event)
+            except Exception:
+                logger.error(
+                    f"Failed to publish PipelineLockAcquiredEvent for {lock_key}",
+                    exc_info=True,
+                )
+
+        return AcquireResult(
+            status=AcquireStatus.ACQUIRED,
+            lock_key=lock_key,
+            holder_id=holder_id,
+            acquired_at=now,
+        )
+
     async def try_acquire(
         self,
         lock_key: str,
@@ -80,40 +130,8 @@ class RedisDistributedLock(IDistributedLock):
         )
 
         if acquired:
-            # Store holder metadata in sibling hash
-            if holder_metadata:
-                await self._redis.hset(
-                    holder_data_key,
-                    mapping=holder_metadata,
-                )
-                # Set same TTL on metadata hash
-                await self._redis.expire(holder_data_key, ttl_seconds)
-
-            # Emit event via event bus if available
-            if self._event_bus:
-                try:
-                    metadata = holder_metadata or {}
-                    event = PipelineLockAcquiredEvent(
-                        type="pipeline.lock_acquired",
-                        timestamp=now.isoformat(),
-                        source="redis_distributed_lock",
-                        project_id=metadata.get("project_id", ""),
-                        work_item_id=holder_id,
-                        board_id=metadata.get("board_id", ""),
-                        queue_length_at_acquire=int(metadata.get("queue_length_at_acquire", 0)),
-                    )
-                    await self._event_bus.publish(event)
-                except Exception:
-                    logger.error(
-                        f"Failed to publish PipelineLockAcquiredEvent for {lock_key}",
-                        exc_info=True,
-                    )
-
-            return AcquireResult(
-                status=AcquireStatus.ACQUIRED,
-                lock_key=lock_key,
-                holder_id=holder_id,
-                acquired_at=now,
+            return await self._finalize_acquisition(
+                lock_key, holder_id, holder_data_key, ttl_seconds, holder_metadata, now
             )
 
         # Lock acquisition failed; inspect who holds it
@@ -128,44 +146,21 @@ class RedisDistributedLock(IDistributedLock):
                 ex=ttl_seconds,
             )
             if acquired:
-                # Store holder metadata in sibling hash
-                if holder_metadata:
-                    await self._redis.hset(
-                        holder_data_key,
-                        mapping=holder_metadata,
-                    )
-                    # Set same TTL on metadata hash
-                    await self._redis.expire(holder_data_key, ttl_seconds)
-
-                # Emit event via event bus if available
-                if self._event_bus:
-                    try:
-                        metadata = holder_metadata or {}
-                        event = PipelineLockAcquiredEvent(
-                            type="pipeline.lock_acquired",
-                            timestamp=now.isoformat(),
-                            source="redis_distributed_lock",
-                            project_id=metadata.get("project_id", ""),
-                            work_item_id=holder_id,
-                            board_id=metadata.get("board_id", ""),
-                            queue_length_at_acquire=int(metadata.get("queue_length_at_acquire", 0)),
-                        )
-                        await self._event_bus.publish(event)
-                    except Exception:
-                        logger.error(
-                            f"Failed to publish PipelineLockAcquiredEvent for {lock_key}",
-                            exc_info=True,
-                        )
-
-                return AcquireResult(
-                    status=AcquireStatus.ACQUIRED,
-                    lock_key=lock_key,
-                    holder_id=holder_id,
-                    acquired_at=now,
+                return await self._finalize_acquisition(
+                    lock_key, holder_id, holder_data_key, ttl_seconds, holder_metadata, now
                 )
             # Retry also failed, meaning another holder acquired it
             # Fall through to check who holds it now
             existing_holder = await self._redis.get(redis_key)
+
+        # Guard against race where lock expires between retry and GET
+        if existing_holder is None:
+            return AcquireResult(
+                status=AcquireStatus.ALREADY_HELD_BY_OTHER,
+                lock_key=lock_key,
+                holder_id="unknown",
+                acquired_at=None,
+            )
 
         try:
             existing_holder_id = existing_holder.decode("utf-8") if isinstance(existing_holder, bytes) else existing_holder
