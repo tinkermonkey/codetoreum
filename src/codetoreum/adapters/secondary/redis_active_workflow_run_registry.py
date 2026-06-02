@@ -60,6 +60,7 @@ class RedisActiveWorkflowRunRegistry(IActiveWorkflowRunRegistry):
         stage_name: str,
         project_id: str,
         board_id: str,
+        started_at: str,
     ) -> None:
         payload = json.dumps(
             {
@@ -68,6 +69,7 @@ class RedisActiveWorkflowRunRegistry(IActiveWorkflowRunRegistry):
                 "stage_name": stage_name,
                 "project_id": project_id,
                 "board_id": board_id,
+                "started_at": started_at,
             }
         )
         await self._redis.set(self._key(work_item_id), payload, ex=self._ttl_seconds)
@@ -107,6 +109,7 @@ class RedisActiveWorkflowRunRegistry(IActiveWorkflowRunRegistry):
                 stage_name=data["stage_name"],
                 project_id=data["project_id"],
                 board_id=data["board_id"],
+                started_at=data["started_at"],
             )
         except Exception:
             logger.error(

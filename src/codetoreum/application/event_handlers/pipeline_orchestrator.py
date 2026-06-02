@@ -96,8 +96,17 @@ class PipelineOrchestrator(EventHandler):
                     extra={"work_item_id": event.work_item_id},
                 )
 
-            # Trigger workflow setup and agent execution
-            # TODO: Call workflow_orchestrator to start workflow for locked item
+            # Work item now holds the lock. Workflow execution will be triggered
+            # by the next orchestration cycle (MultiProjectOrchestrator polls every 30s).
+            # The lock ensures mutual exclusion during execution.
+            logger.info(
+                f"Lock acquired for {event.work_item_id} on board {event.board_id}",
+                extra={
+                    "work_item_id": event.work_item_id,
+                    "board_id": event.board_id,
+                    "project_id": event.project_id,
+                },
+            )
 
         except Exception:
             logger.error(

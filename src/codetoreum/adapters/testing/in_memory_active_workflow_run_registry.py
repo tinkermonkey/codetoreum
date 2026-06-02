@@ -20,6 +20,7 @@ class InMemoryActiveWorkflowRunRegistry(IActiveWorkflowRunRegistry):
         stage_name: str,
         project_id: str,
         board_id: str,
+        started_at: str,
     ) -> None:
         """Register an active workflow run for a work item.
 
@@ -28,6 +29,7 @@ class InMemoryActiveWorkflowRunRegistry(IActiveWorkflowRunRegistry):
             stage_name: Current stage name
             project_id: Project identifier
             board_id: Board identifier
+            started_at: ISO timestamp when the workflow run started
         """
         self._runs[work_item_id] = ActiveRunInfo(
             work_item_id=work_item_id,
@@ -35,6 +37,7 @@ class InMemoryActiveWorkflowRunRegistry(IActiveWorkflowRunRegistry):
             stage_name=stage_name,
             project_id=project_id,
             board_id=board_id,
+            started_at=started_at,
         )
 
     async def get_active_run(self, work_item_id: str) -> ActiveRunInfo | None:

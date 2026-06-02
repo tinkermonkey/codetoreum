@@ -203,11 +203,11 @@ class RedisDistributedLock(IDistributedLock):
                         lock_key=lock_key,
                     )
 
-            # Lock was released successfully, also clean up metadata
-            await self._redis.delete(holder_data_key)
-
             # Get holder metadata before deletion to emit event
             holder_data_dict = await self._redis.hgetall(holder_data_key)
+
+            # Lock was released successfully, also clean up metadata
+            await self._redis.delete(holder_data_key)
             holder_data = {}
             for k, v in holder_data_dict.items():
                 k_str = k.decode("utf-8") if isinstance(k, bytes) else str(k)

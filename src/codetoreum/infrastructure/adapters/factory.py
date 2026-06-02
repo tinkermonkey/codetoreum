@@ -34,15 +34,12 @@ from codetoreum.adapters.secondary.elasticsearch_project_manager_adapter import 
 from codetoreum.adapters.secondary.github_version_control_adapter import (
     GitHubVersionControlAdapter,
 )
-from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
-    InMemoryLockService,
-)
 from codetoreum.adapters.secondary.local_key_encryption_adapter import (
     LocalKeyEncryptionAdapter,
 )
-from codetoreum.adapters.secondary.redis_pipeline_lock_service import (
-    RedisPipelineLockService,
-)
+# from codetoreum.adapters.secondary.redis_pipeline_lock_service import (  # REMOVED: Port discontinued in Phase 5
+#     RedisPipelineLockService,
+# )
 
 # Import testing adapters
 from codetoreum.adapters.testing import (
@@ -231,7 +228,7 @@ from codetoreum.infrastructure.adapters.registries import (
     MessageBrokerRegistry,
     MetricsAdapterRegistry,
     NotifierRegistry,
-    PipelineLockServiceRegistry,
+    # PipelineLockServiceRegistry,  # REMOVED: Port discontinued in Phase 5
     PipelineQueueServiceRegistry,
     ProjectManagerServiceRegistry,
     PRReviewCycleServiceRegistry,
@@ -348,7 +345,7 @@ class AdapterFactory:
         self._pr_review_cycle_registry = PRReviewCycleServiceRegistry()
         self._container_recovery_registry = ContainerRecoveryRegistry()
         self._encryption_registry = EncryptionRegistry()
-        self._pipeline_lock_registry = PipelineLockServiceRegistry()
+        # self._pipeline_lock_registry = PipelineLockServiceRegistry()  # REMOVED: Port discontinued in Phase 5
         self._pipeline_queue_registry = PipelineQueueServiceRegistry()
         self._project_manager_registry = ProjectManagerServiceRegistry()
         self._workflow_config_registry = WorkflowConfigServiceRegistry()
@@ -805,34 +802,36 @@ class AdapterFactory:
         )
 
         # Pipeline Lock Service Adapters
-        self._pipeline_lock_registry.register(
-            name="in_memory",
-            adapter_type=InMemoryLockService,
-            description="In-memory pipeline lock service with position-based queue ordering",
-            version="1.0.0",
-            tags=["testing", "simulation", "mock", "production"],
-            config_schema=AdapterCredentialRequirement(
-                simulation_only=True,
-                description="Simulation-only adapter, no credentials required",
-            ),
-            set_as_default=True,
-        )
+        # REMOVED: InMemoryLockService - IPipelineLockService port discontinued in Phase 5
+        # self._pipeline_lock_registry.register(
+        #     name="in_memory",
+        #     adapter_type=InMemoryLockService,
+        #     description="In-memory pipeline lock service with position-based queue ordering",
+        #     version="1.0.0",
+        #     tags=["testing", "simulation", "mock", "production"],
+        #     config_schema=AdapterCredentialRequirement(
+        #         simulation_only=True,
+        #         description="Simulation-only adapter, no credentials required",
+        #     ),
+        #     set_as_default=True,
+        # )
         # Redis-backed pipeline lock service: lock state survives restart and
         # coordinates across multiple Codetoreum instances. Requires a running
         # Redis at REDIS_URL.
-        self._pipeline_lock_registry.register(
-            name="redis",
-            adapter_type=RedisPipelineLockService,
-            description="Redis-backed pipeline lock service with sorted-set queue ordering",
-            version="1.0.0",
-            tags=["production", "persistent", "multi_instance"],
-            config_schema=AdapterCredentialRequirement(
-                description=(
-                    "Requires a Redis client (redis.asyncio.Redis). The resolver injects "
-                    "one constructed from REDIS_URL. EventBus is injected for lock event emission."
-                ),
-            ),
-        )
+        # REMOVED: RedisPipelineLockService - IPipelineLockService port discontinued in Phase 5
+        # self._pipeline_lock_registry.register(
+        #     name="redis",
+        #     adapter_type=RedisPipelineLockService,
+        #     description="Redis-backed pipeline lock service with sorted-set queue ordering",
+        #     version="1.0.0",
+        #     tags=["production", "persistent", "multi_instance"],
+        #     config_schema=AdapterCredentialRequirement(
+        #         description=(
+        #             "Requires a Redis client (redis.asyncio.Redis). The resolver injects "
+        #             "one constructed from REDIS_URL. EventBus is injected for lock event emission."
+        #         ),
+        #     ),
+        # )
 
         # Pipeline Queue Service Adapters
         self._pipeline_queue_registry.register(
@@ -1260,10 +1259,10 @@ class AdapterFactory:
         """Get the encryption service registry."""
         return self._encryption_registry
 
-    @property
-    def pipeline_lock_registry(self) -> PipelineLockServiceRegistry:
-        """Get the pipeline lock service registry."""
-        return self._pipeline_lock_registry
+    # @property  # REMOVED: Port discontinued in Phase 5
+    # def pipeline_lock_registry(self) -> PipelineLockServiceRegistry:
+    #     """Get the pipeline lock service registry."""
+    #     return self._pipeline_lock_registry
 
     @property
     def pipeline_queue_registry(self) -> PipelineQueueServiceRegistry:

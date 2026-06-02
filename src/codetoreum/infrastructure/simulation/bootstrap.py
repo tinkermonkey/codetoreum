@@ -79,9 +79,6 @@ from codetoreum.adapters.primary.routers.simulation_ticketing import (
 from codetoreum.adapters.secondary.execution_service_agent_executor import (
     ExecutionServiceAgentExecutor,
 )
-from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
-    InMemoryLockService,
-)
 
 # Adapters
 from codetoreum.adapters.testing import (
@@ -186,7 +183,7 @@ from codetoreum.infrastructure.simulation.watchdogs import (
     ColumnProgressionWatchdog,
     ExecutionTimeoutWatchdog,
     SLAExpiryWatchdog,
-    StaleLockWatchdog,
+    # StaleLockWatchdog,  # Removed - IPipelineLockService port discontinued in Phase 5
 )
 from codetoreum.ports.input.agent_command import IAgentCommandPort
 from codetoreum.ports.input.agent_query import IAgentQueryPort
@@ -233,7 +230,6 @@ from codetoreum.ports.output.identity_service import IIdentityService
 from codetoreum.ports.output.message_broker import IMessageBroker
 from codetoreum.ports.output.metrics import IMetrics
 from codetoreum.ports.output.notifier import INotifier
-from codetoreum.ports.output.pipeline_lock_service import IPipelineLockService
 from codetoreum.ports.output.pipeline_queue_service import IPipelineQueueService
 from codetoreum.ports.output.pr_review_cycle_service import IPRReviewCycle
 from codetoreum.ports.output.project_manager_service import IProjectManagerService
@@ -338,7 +334,7 @@ class SimulationAdapters:
     board: IBoardService
     repair_cycle: IRepairCycle
     project_manager: IProjectManagerService
-    lock_service: IPipelineLockService
+    # lock_service field removed - IPipelineLockService port discontinued in Phase 5
     workflow_config: IWorkflowConfigService
     queue_service: IPipelineQueueService
     event_emitter: IEventEmitter  # CapturingMockEventEmitter in simulation
@@ -842,7 +838,7 @@ class SimulationApplicationBootstrap:
         self._adapter_factory: AdapterFactory | None = None
         self._engine: SimulationEngine | None = None
         self._board_event_handler: BoardColumnEventHandler | None = None
-        self._stale_lock_watchdog: StaleLockWatchdog | None = None
+        # self._stale_lock_watchdog: StaleLockWatchdog | None = None  # Removed - IPipelineLockService discontinued
         self._execution_timeout_watchdog: ExecutionTimeoutWatchdog | None = None
         self._sla_expiry_watchdog: SLAExpiryWatchdog | None = None
         self._column_progression_watchdog: ColumnProgressionWatchdog | None = None
@@ -996,42 +992,42 @@ class SimulationApplicationBootstrap:
                     # Continue without auto-advance rather than crashing the server
                     logger.info("Continuing server startup in degraded mode without auto-advance")
 
-            # Phase 6b: Register stale lock watchdog
-            # Must come after auto-advance starts so it can schedule callbacks with the clock
-            if self.adapters and self._engine:
-                try:
-                    logger.info("Phase 6b: Registering stale lock watchdog...")
-                    self._stale_lock_watchdog = StaleLockWatchdog(
-                        lock_service=self.adapters.lock_service,
-                        event_emitter=self.adapters.event_emitter,
-                        clock=self._engine.get_clock_for_testing(),
-                        stale_threshold_seconds=7200,  # 2 hours default
-                    )
-                    self._stale_lock_watchdog.start()
-
-                    # Wire the on_lock_acquired event handler to clear deduplication tracking
-                    # when locks are newly acquired after being recovered
-                    if self.infrastructure and self.infrastructure.event_bus:
-                        self.infrastructure.event_bus.subscribe(
-                            "lock.acquired",
-                            self._stale_lock_watchdog.on_lock_acquired,
-                        )
-
-                    logger.info("Stale lock watchdog registered and started")
-                except Exception as e:
-                    # Mark as degraded - stale lock detection is critical for deadlock prevention
-                    error_msg = f"Failed to register stale lock watchdog: {e}"
-                    logger.error(
-                        error_msg,
-                        exc_info=True,
-                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
-                    )
-                    self._degraded_mode.mark_failed(BootstrapPhase.STALE_LOCK_WATCHDOG, str(e))
-                    # Continue without watchdog rather than crashing the server
-                    logger.warning(
-                        "Continuing server startup in degraded mode without stale lock watchdog. "
-                        "Pipeline may deadlock if locks become stale."
-                    )
+            # Phase 6b: Stale lock watchdog removed - IPipelineLockService port discontinued in Phase 5
+            # # Must come after auto-advance starts so it can schedule callbacks with the clock
+            # if self.adapters and self._engine:
+            #     try:
+            #         logger.info("Phase 6b: Registering stale lock watchdog...")
+            #         self._stale_lock_watchdog = StaleLockWatchdog(
+            #             lock_service=self.adapters.lock_service,
+            #             event_emitter=self.adapters.event_emitter,
+            #             clock=self._engine.get_clock_for_testing(),
+            #             stale_threshold_seconds=7200,  # 2 hours default
+            #         )
+            #         self._stale_lock_watchdog.start()
+            #
+            #         # Wire the on_lock_acquired event handler to clear deduplication tracking
+            #         # when locks are newly acquired after being recovered
+            #         if self.infrastructure and self.infrastructure.event_bus:
+            #             self.infrastructure.event_bus.subscribe(
+            #                 "lock.acquired",
+            #                 self._stale_lock_watchdog.on_lock_acquired,
+            #             )
+            #
+            #         logger.info("Stale lock watchdog registered and started")
+            #     except Exception as e:
+            #         # Mark as degraded - stale lock detection is critical for deadlock prevention
+            #         error_msg = f"Failed to register stale lock watchdog: {e}"
+            #         logger.error(
+            #             error_msg,
+            #             exc_info=True,
+            #             extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+            #         )
+            #         self._degraded_mode.mark_failed(BootstrapPhase.STALE_LOCK_WATCHDOG, str(e))
+            #         # Continue without watchdog rather than crashing the server
+            #         logger.warning(
+            #             "Continuing server startup in degraded mode without stale lock watchdog. "
+            #             "Pipeline may deadlock if locks become stale."
+            #         )
 
             # Phase 6c: Register execution timeout watchdog
             # Must come after auto-advance starts and ExecutionServiceAgentExecutor is initialized
@@ -1189,9 +1185,9 @@ class SimulationApplicationBootstrap:
             # Stop all watchdogs before cleaning up adapters/infrastructure
             # This prevents scheduled callbacks from firing during teardown and
             # attempting to access None references (adapters, lock_service, etc.)
-            if self._stale_lock_watchdog:
-                self._stale_lock_watchdog.stop()
-                logger.debug("Stale lock watchdog stopped")
+            # if self._stale_lock_watchdog:
+            #     self._stale_lock_watchdog.stop()
+            #     logger.debug("Stale lock watchdog stopped")
 
             if self._execution_timeout_watchdog:
                 self._execution_timeout_watchdog.stop()
@@ -1228,7 +1224,7 @@ class SimulationApplicationBootstrap:
             self.adapters = None
             self._adapter_factory = None
             self._engine = None
-            self._stale_lock_watchdog = None
+            # self._stale_lock_watchdog = None  # Removed - IPipelineLockService discontinued
             self._execution_timeout_watchdog = None
             self._sla_expiry_watchdog = None
             self._column_progression_watchdog = None
@@ -2719,10 +2715,11 @@ class SimulationApplicationBootstrap:
         # Use the shared lock service instance resolved by AdapterResolver
         # The lock_service implements IQueuedPipelineLockService (with 4-parameter try_acquire_lock)
         # via IPipelineLockService (backward compat alias). Store reference for tests.
-        if not isinstance(self.adapters.lock_service, InMemoryLockService):
-            msg = f"Expected InMemoryLockService, got {type(self.adapters.lock_service).__name__}"
-            logger.warning(msg)
-        self._queued_lock_service = self.adapters.lock_service
+        # REMOVED: IPipelineLockService port discontinued in Phase 5
+        # if not isinstance(self.adapters.lock_service, InMemoryLockService):
+        #     msg = f"Expected InMemoryLockService, got {type(self.adapters.lock_service).__name__}"
+        #     logger.warning(msg)
+        # self._queued_lock_service = self.adapters.lock_service
 
         work_item_svc = self.services.work_item_service if self.services else None
         if work_item_svc is None:

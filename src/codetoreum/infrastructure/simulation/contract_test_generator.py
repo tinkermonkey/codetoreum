@@ -30,7 +30,6 @@ from codetoreum.ports.output.code_review_service import ICodeReviewService
 from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.identity_service import IIdentityService
-from codetoreum.ports.output.pipeline_lock_service import IPipelineLockService
 from codetoreum.ports.output.repository import IRepository
 from codetoreum.ports.output.version_control_service import IVersionControlService
 from codetoreum.ports.output.work_item_service import IWorkItemService
@@ -50,7 +49,6 @@ class ContractTestGenerator:
         "IDiscussionAdapter": IDiscussionAdapter,
         "IEventEmitter": IEventEmitter,
         "IIdentityService": IIdentityService,
-        "IPipelineLockService": IPipelineLockService,
         "IRepository": IRepository,
         "IVersionControlService": IVersionControlService,
         "IWorkItemService": IWorkItemService,

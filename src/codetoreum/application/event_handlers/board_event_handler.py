@@ -592,6 +592,7 @@ class BoardColumnEventHandler(EventHandler):
                     stage_name=column_config.name,
                     project_id=project_id,
                     board_id=board_id,
+                    started_at=now.isoformat(),
                 )
             except Exception as e:
                 logger.error(
@@ -649,8 +650,9 @@ class BoardColumnEventHandler(EventHandler):
 
         workflow_run_id = active_run.run_id
         now = datetime.now(UTC)
-        # Estimate duration from run_id if possible; otherwise use 0
-        duration = 0
+        # Calculate duration from start time
+        started = datetime.fromisoformat(active_run.started_at)
+        duration = int((now - started).total_seconds())
 
         event = WorkflowCompletedEvent(
             type="workflow.completed",
@@ -747,6 +749,7 @@ class BoardColumnEventHandler(EventHandler):
                         stage_name=column_config.name,
                         project_id=run_info.project_id,
                         board_id=run_info.board_id,
+                        started_at=run_info.started_at,
                     )
                 except Exception as e:
                     logger.error(

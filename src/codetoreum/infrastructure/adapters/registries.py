@@ -11,7 +11,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-from codetoreum.application.pipeline_lock_service import IQueuedPipelineLockService
+# from codetoreum.application.pipeline_lock_service import IQueuedPipelineLockService  # REMOVED: Port discontinued in Phase 5
 from codetoreum.infrastructure.adapters.registry_base import AdapterRegistry
 from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
 from codetoreum.ports.output.agent_executor import IAgentExecutor
