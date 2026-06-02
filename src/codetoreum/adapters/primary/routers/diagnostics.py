@@ -8,8 +8,6 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-logger = logging.getLogger(__name__)
-
 from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
 from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
 from codetoreum.ports.output.board_service import BoardConfig, IBoardService, ReconciliationResult
@@ -19,6 +17,8 @@ from codetoreum.ports.output.failed_event_store import IFailedEventStore
 from codetoreum.ports.output.orphan_scan_registry import IOrphanScanRegistry
 from codetoreum.ports.output.pipeline_queue import IPipelineQueue
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
+
+logger = logging.getLogger(__name__)
 
 
 class BoardReconcileRequest(BaseModel):
@@ -346,7 +346,7 @@ def create_diagnostics_router(
                                 if event.event_data and "queue_key" in event.event_data:
                                     queue_keys.add(str(event.event_data["queue_key"]))
                         except Exception as e:
-                            logger.debug(f"Failed to query WorkItemQueuedEvent from event store: {e!s}")
+                            logger.debug(f"Failed to query WorkItemQueuedEvent from event store: {e!s}", exc_info=True)
 
                     for queue_key in queue_keys:
                         try:
@@ -508,7 +508,7 @@ def create_diagnostics_router(
                             if pos is not None:
                                 queue_position = pos
                         except Exception as e:
-                            logger.warning(f"Failed to get queue position for {first_event.aggregate_id}: {e!s}")
+                            logger.warning(f"Failed to get queue position for {first_event.aggregate_id}: {e!s}", exc_info=True)
 
             if "WorkflowStartedEvent" in event_types or "ExecutionStartedEvent" in event_types:
                 status_value = TriggerStatus.IN_PROGRESS
