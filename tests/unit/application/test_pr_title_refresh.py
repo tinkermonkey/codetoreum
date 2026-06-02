@@ -1,4 +1,4 @@
-"""Tests for PR title refresh on commit add (Phase 9).
+"""Tests for PR title refresh on commit.
 
 Ensures that when new commits are added to a branch with an existing PR,
 the PR title is refreshed to reference the current work item, and that
@@ -345,3 +345,117 @@ async def test_execution_service_calls_update_pull_request_title_on_commit(
     # Verify PR title matches the work item
     expected_title = f"[{work_item.id}] Development: {agent.id}"
     assert prs[0]["title"] == expected_title
+
+
+@pytest.mark.asyncio
+async def test_execution_service_refreshes_stale_pr_title_on_branch_reuse(
+    execution_service: ExecutionService,
+    coding_agent_mock: AsyncMock,
+    vcs_service: InMemoryVersionControlService,
+    event_store: InMemoryEventStore,
+) -> None:
+    """ExecutionService refreshes stale PR title when branch is reused.
+
+    Scenario:
+    1. Work item A creates PR on branch "feature/test" with title "[WI-A] ..."
+    2. Work item B reuses same branch with a new execution
+    3. ExecutionService should call update_pull_request_title to refresh to "[WI-B] ..."
+    4. Verify the PR title was updated to the new work item
+
+    This integration test verifies the core feature: when a branch is reused
+    across different work items, ExecutionService correctly refreshes the
+    stale PR title to reflect the current work item.
+    """
+    # Setup: clone repo and create branch with initial PR from work item A
+    agent = _make_agent()
+    work_item_a = _make_work_item("Work Item A")
+    work_item_b = _make_work_item("Work Item B")
+    repo_path = "/tmp/test-repo-branch-reuse"
+
+    await vcs_service.clone_repository("https://github.com/test/repo.git", repo_path)
+    await vcs_service.create_branch(repo_path, "feature/test")
+    await vcs_service.checkout(repo_path, "feature/test")
+
+    # Pre-create PR with work item A's title
+    old_title = f"[{work_item_a.id}] Development: {agent.id}"
+    await vcs_service.create_pull_request(
+        repo_path=repo_path,
+        head="feature/test",
+        base="main",
+        title=old_title,
+        body="Initial PR from work item A",
+    )
+
+    # Verify PR exists with old title
+    prs = vcs_service._pull_requests
+    assert len(prs) == 1
+    assert prs[0]["title"] == old_title
+
+    # Now execute with work item B, reusing the same branch
+    execution = AgentExecution.create(
+        agent_id=agent.id,
+        work_item_id=work_item_b.id,
+        workflow_id="wf-1",
+        stage_name="Development",
+        prompt="prompt",
+        model=agent.invocation.model,
+    )
+    execution.clear_events()
+    execution.start(container_name=None)
+    execution.clear_events()
+
+    context = ExecutionContext(
+        work_item_id=work_item_b.id,
+        workflow_id="wf-1",
+        stage_name="Development",
+        agent_id=agent.id,
+        model=agent.invocation.model,
+        timeout_seconds=300,
+        workspace_type="issue",
+        branch_name="feature/test",  # Reuse same branch
+        discussion_id=None,
+        project_id="proj-1",
+        repository_url="https://github.com/test/repo",
+        tech_stack=("python",),
+        filesystem_write_allowed=True,
+        can_make_commits=True,
+        requires_docker=True,
+        mcp_servers=(),
+        commit_policy=CommitPolicy.ALWAYS,
+        repository_path=repo_path,
+        auto_create_pull_requests=True,
+        metadata={},
+    )
+
+    workspace_context = WorkspaceContext.for_issue(
+        project_id="proj-1",
+        work_item_id=work_item_b.id,
+        branch_name="feature/test",
+        create_pr=True,
+    )
+
+    options = CodingAgentInvocationOptions(
+        invocation_mode=InvocationMode.HOST,
+        model="claude-sonnet-4-5-20250929",
+        timeout_seconds=300,
+        cost_limit_usd=None,
+        mode_config={},
+    )
+
+    # Execute with work item B
+    result = await execution_service.execute(
+        execution,
+        context,
+        workspace_context,
+        options,
+    )
+
+    # Verify execution succeeded
+    assert result.success is True
+
+    # Verify PR title was refreshed to work item B
+    prs = vcs_service._pull_requests
+    assert len(prs) == 1  # Still only one PR
+    new_title = f"[{work_item_b.id}] Development: {agent.id}"
+    assert prs[0]["title"] == new_title
+    assert prs[0]["title"] != old_title  # Title changed from work item A to B

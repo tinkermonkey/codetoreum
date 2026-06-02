@@ -696,10 +696,7 @@ class ExecutionService:
                 },
             )
 
-            # Refresh PR title to ensure it reflects the current work item.
-            # When a branch is reused across work items, the PR title must be
-            # updated to show the new work_item_id. The update is idempotent:
-            # if the title already matches, no API call is made.
+            # Branch reuse across work items can leave a stale title on the existing PR.
             title_updated = await self.vcs.update_pull_request_title(
                 repo_path=repo_path,
                 head=branch,
