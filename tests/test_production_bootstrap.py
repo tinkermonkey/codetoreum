@@ -350,3 +350,75 @@ async def test_teardown_safe_when_not_setup() -> None:
 
     # Verify it's still safe to call again
     await bootstrap.teardown()
+
+
+@pytest.mark.asyncio
+async def test_board_reconciliation_runs_at_bootstrap() -> None:
+    """Verify that board reconciliation is invoked during bootstrap Phase 5c.
+
+    This test verifies that _reconcile_board_structures is called and:
+    1. Retrieves projects from config_store
+    2. Gets board workflow templates for each project
+    3. Calls reconcile_board on the board service for each template
+    4. Non-fatal - doesn't block bootstrap if reconciliation fails
+    """
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    # Create a bootstrap instance with minimal setup
+    bootstrap = ProductionApplicationBootstrap()
+
+    # Mock the adapters
+    mock_adapters = MagicMock()
+    mock_config_store = AsyncMock()
+    mock_workflow_config = AsyncMock()
+    mock_board_service = AsyncMock()
+
+    bootstrap.adapters = mock_adapters
+    bootstrap.adapters.config_store = mock_config_store
+    bootstrap.adapters.workflow_config = mock_workflow_config
+    bootstrap.adapters.board = mock_board_service
+
+    # Create mock project config
+    mock_project_config = MagicMock()
+    mock_project_config.id = "proj-1"
+    mock_config_store.list_projects = AsyncMock(return_value=[mock_project_config])
+
+    # Create mock board workflow template
+    from codetoreum.domain.board_workflow_template import BoardWorkflowTemplate, ColumnTemplate
+
+    mock_column_1 = MagicMock(spec=ColumnTemplate)
+    mock_column_1.name = "Backlog"
+
+    mock_column_2 = MagicMock(spec=ColumnTemplate)
+    mock_column_2.name = "In Progress"
+
+    mock_template = MagicMock(spec=BoardWorkflowTemplate)
+    mock_template.board_id = "board-1"
+    mock_template.columns = (mock_column_1, mock_column_2)
+
+    mock_workflow_config.list_board_workflow_templates = AsyncMock(return_value=[mock_template])
+
+    # Mock reconciliation result
+    from codetoreum.ports.output.board_service import ReconciliationResult
+
+    mock_result = MagicMock(spec=ReconciliationResult)
+    mock_result.columns_added = []
+    mock_result.columns_removed = []
+    mock_result.columns_renamed = []
+    mock_board_service.reconcile_board = AsyncMock(return_value=mock_result)
+
+    # Call the reconciliation method
+    await bootstrap._reconcile_board_structures()
+
+    # Verify the flow
+    mock_config_store.list_projects.assert_called_once()
+    mock_workflow_config.list_board_workflow_templates.assert_called_once_with("proj-1")
+    mock_board_service.reconcile_board.assert_called_once()
+
+    # Verify reconcile_board was called with the correct board_id and column config
+    call_args = mock_board_service.reconcile_board.call_args
+    assert call_args is not None
+    board_id, board_config = call_args[0]
+    assert board_id == "board-1"
+    assert board_config.board_id == "board-1"
+    assert board_config.expected_columns == ("Backlog", "In Progress")

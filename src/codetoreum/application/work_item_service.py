@@ -15,7 +15,6 @@ from codetoreum.ports.input.work_item_command import (
     AttachWorkflowCommand,
     CreateWorkItemCommand,
     IWorkItemCommandPort,
-    MoveToColumnCommand,
     UpdateLabelsCommand,
     UpdatePriorityCommand,
     UpdateStageCommand,
@@ -241,13 +240,6 @@ class WorkItemService(IWorkItemCommandPort, IWorkItemQueryPort):
         # Persist events
         await self._save_work_item(work_item)
 
-        return work_item
-
-    async def move_to_column(self, command: MoveToColumnCommand) -> WorkItem:
-        """Persists a board column change to the work item event stream."""
-        work_item = await self._load_work_item(command.work_item_id)
-        work_item.move_to_column(command.column)
-        await self._save_work_item(work_item)
         return work_item
 
     # ========================================================================

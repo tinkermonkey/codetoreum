@@ -1380,7 +1380,7 @@ class ProductionApplicationBootstrap:
         Creates missing columns and validates board state is consistent.
         Non-fatal - failures are logged but don't block bootstrap.
         """
-        if not self.adapters or not self.adapters.config_store:
+        if not self.adapters or not self.adapters.config_store or not self.adapters.workflow_config:
             logger.warning("Cannot reconcile boards: adapters not initialized")
             return
 
@@ -1388,40 +1388,67 @@ class ProductionApplicationBootstrap:
             project_configs = await self.adapters.config_store.list_projects()
 
             for project_config in project_configs:
-                if not project_config.board_config:
-                    logger.debug(f"Project {project_config.id} has no board configuration")
-                    continue
-
                 try:
-                    board_config = project_config.board_config
-                    result = await self.adapters.board_service.reconcile_board(
-                        board_config.board_id,
-                        board_config,
+                    # Get all board workflow templates for this project
+                    templates = await self.adapters.workflow_config.list_board_workflow_templates(
+                        project_config.id
                     )
 
-                    if result.columns_added or result.columns_removed or result.columns_renamed:
-                        logger.info(
-                            f"Reconciled board {board_config.board_id} for project {project_config.id}: "
-                            f"added={result.columns_added}, removed={result.columns_removed}, "
-                            f"renamed={result.columns_renamed}",
-                            extra={
-                                "board_id": board_config.board_id,
-                                "project_id": project_config.id,
-                                "columns_added": len(result.columns_added),
-                                "columns_removed": len(result.columns_removed),
-                            },
-                        )
-                    else:
-                        logger.debug(f"Board {board_config.board_id} is in sync")
+                    if not templates:
+                        logger.debug(f"Project {project_config.id} has no board templates")
+                        continue
+
+                    # Reconcile each board template
+                    for template in templates:
+                        try:
+                            # Extract expected column names from template
+                            expected_columns = tuple(col.name for col in template.columns)
+
+                            # Create BoardConfig from template
+                            from codetoreum.ports.output.board_service import BoardConfig
+
+                            board_config = BoardConfig(
+                                board_id=template.board_id,
+                                expected_columns=expected_columns,
+                                auto_create_missing=True,
+                            )
+
+                            # Reconcile the board
+                            result = await self.adapters.board.reconcile_board(
+                                board_config.board_id,
+                                board_config,
+                            )
+
+                            if result.columns_added or result.columns_removed or result.columns_renamed:
+                                logger.info(
+                                    f"Reconciled board {board_config.board_id} for project {project_config.id}: "
+                                    f"added={result.columns_added}, removed={result.columns_removed}, "
+                                    f"renamed={result.columns_renamed}",
+                                    extra={
+                                        "board_id": board_config.board_id,
+                                        "project_id": project_config.id,
+                                        "columns_added": len(result.columns_added),
+                                        "columns_removed": len(result.columns_removed),
+                                    },
+                                )
+                            else:
+                                logger.debug(f"Board {board_config.board_id} is in sync")
+                        except Exception as e:
+                            logger.warning(
+                                f"Failed to reconcile board for project {project_config.id}: {e}",
+                                exc_info=True,
+                                extra={
+                                    "error_id": "ERR_BOOTSTRAP_BOARD_RECONCILE_FAILURE",
+                                    "project_id": project_config.id,
+                                },
+                            )
                 except Exception as e:
                     logger.warning(
-                        f"Failed to reconcile board {project_config.board_config.board_id} "
-                        f"for project {project_config.id}: {e}",
+                        f"Failed to reconcile boards for project {project_config.id}: {e}",
                         exc_info=True,
                         extra={
-                            "error_id": "ERR_BOOTSTRAP_BOARD_RECONCILE_FAILURE",
+                            "error_id": "ERR_BOOTSTRAP_PROJECT_BOARD_RECONCILE_FAILURE",
                             "project_id": project_config.id,
-                            "board_id": project_config.board_config.board_id,
                         },
                     )
         except Exception as e:

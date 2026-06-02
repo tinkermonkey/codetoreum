@@ -34,7 +34,7 @@ from codetoreum.domain.events.workflow_events import (
 from codetoreum.application.pipeline_lock_service import IPipelineLockService
 from codetoreum.infrastructure.event_bus import EventBus, EventHandler, event_handler
 from codetoreum.ports.exceptions import ExternalServiceError, ResourceNotFoundError
-from codetoreum.ports.input.work_item_command import IWorkItemCommandPort, MoveToColumnCommand
+from codetoreum.ports.input.work_item_command import IWorkItemCommandPort
 from codetoreum.ports.output.active_workflow_run_registry import (
     IActiveWorkflowRunRegistry,
 )
@@ -214,18 +214,6 @@ class BoardColumnEventHandler(EventHandler):
         to_column: str = event.to_column
 
         logger.info(f"Processing column change for {work_item_id}: {from_column} -> {to_column}")
-
-        # Persist the new column on the work item so API queries reflect current state
-        if self.work_item_service is not None:
-            try:
-                await self.work_item_service.move_to_column(MoveToColumnCommand(work_item_id, to_column))
-            except Exception:
-                logger.warning(
-                    "Failed to persist column update for work item %s to '%s'",
-                    work_item_id,
-                    to_column,
-                    exc_info=True,
-                )
 
         # Get workflow configuration for this board
         config = await self.workflow_config.get_board_workflow_template(board_id)
@@ -1019,20 +1007,6 @@ class BoardColumnEventHandler(EventHandler):
             logger.info(f"Auto-progressing {work_item_id} from {current_position.column_name} to {next_column_name}")
 
             await self._advance_workflow_stage(work_item_id, current_position.column_name, next_column_name)
-
-            try:
-                await self.work_item_service.move_to_column(
-                    MoveToColumnCommand(work_item_id=work_item_id, column=next_column_name)
-                )
-            except Exception as wi_err:
-                logger.error(
-                    f"Failed to persist column change for {work_item_id} to '{next_column_name}': {wi_err}",
-                    exc_info=True,
-                    extra={
-                        "error_id": "ERR_BOARD_EVENT_WORK_ITEM_COLUMN_PERSIST_FAILURE",
-                        "work_item_id": work_item_id,
-                    },
-                )
 
             try:
                 # Set board context so GitHubBoardAdapter._move_item_to_column_locked

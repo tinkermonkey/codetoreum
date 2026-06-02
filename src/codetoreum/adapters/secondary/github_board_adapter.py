@@ -477,9 +477,9 @@ class GitHubBoardAdapter(IBoardService):
         timestamp = datetime.now(UTC).isoformat()
 
         # Suppress the event when the orchestrator is the mover — the orchestrator
-        # already emits WorkItemColumnUpdatedEvent via work_item_service.move_to_column().
-        # Emitting WorkItemColumnChangedEvent here would cause BoardColumnEventHandler to
-        # re-trigger and create a duplicate execution cycle.
+        # already emits WorkItemColumnChangedEvent via IBoardService.move_item_to_column().
+        # Emitting again here would cause BoardColumnEventHandler to re-trigger and create
+        # a duplicate execution cycle.
         if moved_by != MovedByType.ORCHESTRATOR:
             self.emit(
                 WorkItemColumnChangedEvent(

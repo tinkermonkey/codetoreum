@@ -1357,28 +1357,6 @@ def create_development_app() -> FastAPI:
                 completed_at=None,
             )
 
-        async def move_to_column(self, command):
-            from datetime import datetime
-
-            return WorkItem(
-                id=command.work_item_id,
-                project_id="proj-123",
-                title="Mock Work Item",
-                description="Mock description",
-                status=WorkItemStatus.IN_PROGRESS,
-                priority=WorkItemPriority.MEDIUM,
-                labels=[],
-                external_id=None,
-                external_url=None,
-                assigned_agent_id="agent-123",
-                assigned_at=datetime.now(UTC),
-                current_workflow_id=None,
-                current_stage=None,
-                created_at=datetime.now(UTC),
-                updated_at=datetime.now(UTC),
-                completed_at=None,
-            )
-
     class MockWorkItemQueryPort(IWorkItemQueryPort):
         """Mock work item query port for development."""
 
