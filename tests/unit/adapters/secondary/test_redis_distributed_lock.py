@@ -5,6 +5,7 @@ Tests the Redis-backed distributed lock adapter, including:
 - Metadata handling on release
 - Event emission
 - TOCTOU race condition prevention (Lua script atomicity)
+- Contract compliance via TestDistributedLockContract
 """
 
 import json
@@ -22,6 +23,7 @@ from codetoreum.domain.events.lock_events import (
     PipelineLockReleasedEvent,
 )
 from codetoreum.infrastructure.event_bus import EventBus
+from tests.unit.ports.output.test_distributed_lock_contract import TestDistributedLockContract
 
 
 class MockRedis:
@@ -31,6 +33,7 @@ class MockRedis:
         """Initialize mock Redis storage."""
         self._data: dict[str, bytes] = {}
         self._hashes: dict[str, dict[str, bytes]] = {}
+        self._ttl: dict[str, int] = {}  # Track TTL in seconds for each key
 
     async def get(self, key: str) -> bytes | None:
         """Mock Redis GET operation."""
@@ -44,6 +47,9 @@ class MockRedis:
         if isinstance(value, str):
             value = value.encode("utf-8")
         self._data[key] = value
+        # Set TTL if provided
+        if ex is not None:
+            self._ttl[key] = ex
         return "OK"
 
     async def delete(self, key: str) -> int:
@@ -55,6 +61,9 @@ class MockRedis:
         if key in self._hashes:
             del self._hashes[key]
             deleted = 1
+        # Clean up TTL if it exists
+        if key in self._ttl:
+            del self._ttl[key]
         return deleted
 
     async def hset(self, key: str, mapping: dict) -> int:
@@ -83,44 +92,74 @@ class MockRedis:
         return hash_data.get(field)
 
     async def eval(self, script: str, numkeys: int, *keys_and_args) -> int:
-        """Mock Redis EVAL for Lua script."""
+        """Mock Redis EVAL for Lua script.
+
+        Handles two patterns:
+        1. Release script (1 key): if holder matches, delete key and return 1
+        2. Renew script (2 keys): if holder matches, expire both keys and return 1
+        """
         # Extract keys and arguments
         keys = keys_and_args[:numkeys]
         args = keys_and_args[numkeys:]
 
-        # Simulate the Lua script used in RedisDistributedLock.release()
-        # Script: if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end
-        if numkeys > 0:
-            key = keys[0]
-            holder_id = args[0] if args else None
+        if numkeys < 1:
+            return 0
 
-            # Get current value
-            current_value = self._data.get(key)
+        # Get holder_id from first argument
+        holder_id = args[0] if args else None
+        if isinstance(holder_id, bytes):
+            holder_id = holder_id.decode("utf-8")
 
-            # Compare (decode if needed)
-            if isinstance(current_value, bytes):
-                current_value = current_value.decode("utf-8")
-            if isinstance(holder_id, bytes):
-                holder_id = holder_id.decode("utf-8")
+        # Get current value of first key
+        key1 = keys[0]
+        current_value = self._data.get(key1)
+        if isinstance(current_value, bytes):
+            current_value = current_value.decode("utf-8")
 
-            # If values match, delete and return 1, else return 0
-            if current_value == holder_id:
-                if key in self._data:
-                    del self._data[key]
-                return 1
+        # Check if holder matches
+        if current_value != holder_id:
+            return 0
+
+        # Release script (1 key): delete the lock key
+        if numkeys == 1:
+            if key1 in self._data:
+                del self._data[key1]
+            # Clean up TTL
+            if key1 in self._ttl:
+                del self._ttl[key1]
+            return 1
+
+        # Renew script (2 keys): expire both lock key and metadata key
+        if numkeys == 2:
+            ttl_seconds = args[1] if len(args) > 1 else None
+            if ttl_seconds is not None:
+                # Set TTL for both keys (simulating redis.call("expire", ...))
+                if isinstance(ttl_seconds, bytes):
+                    ttl_seconds = int(ttl_seconds.decode("utf-8"))
+                else:
+                    ttl_seconds = int(ttl_seconds)
+
+                key2 = keys[1]
+                self._ttl[key1] = ttl_seconds
+                self._ttl[key2] = ttl_seconds
+            return 1
+
         return 0
 
     async def expire(self, key: str, seconds: int) -> int:
         """Mock Redis EXPIRE operation."""
-        # In a real implementation, this would set TTL metadata
-        # For testing, we just return success
-        return 1 if key in self._data else 0
+        # Set TTL for the key
+        if key in self._data or key in self._hashes:
+            self._ttl[key] = seconds
+            return 1
+        return 0
 
     async def ttl(self, key: str) -> int:
         """Mock Redis TTL operation."""
-        # In a real implementation, this would return remaining seconds
-        # For testing, return a high value to simulate valid TTL
-        return 3600 if key in self._data else -2
+        # Return the stored TTL in seconds, or -2 if key doesn't exist
+        if key in self._data or key in self._hashes:
+            return self._ttl.get(key, -1)
+        return -2
 
     async def scan(self, cursor: int, match: str | None = None, count: int = 100) -> tuple[int, list[str]]:
         """Mock Redis SCAN operation."""
@@ -133,8 +172,13 @@ class MockRedis:
 
 
 @pytest.mark.asyncio
-class TestRedisDistributedLock:
+class TestRedisDistributedLock(TestDistributedLockContract):
     """Tests for RedisDistributedLock."""
+
+    async def create_lock(self):
+        """Create a RedisDistributedLock with mock Redis for testing."""
+        redis = MockRedis()
+        return RedisDistributedLock(redis_client=redis)
 
     async def test_metadata_read_before_deletion(self):
         """Test that metadata is read BEFORE being deleted.

@@ -119,13 +119,53 @@ class RedisDistributedLock(IDistributedLock):
         # Lock acquisition failed; inspect who holds it
         existing_holder = await self._redis.get(redis_key)
         if existing_holder is None:
-            # Lock was released or expired between SET NX check and read
-            return AcquireResult(
-                status=AcquireStatus.ALREADY_HELD_BY_OTHER,
-                lock_key=lock_key,
-                holder_id="unknown",
-                acquired_at=None,
+            # Lock was released or expired between SET NX check and read.
+            # Retry SET NX once since the lock is now free.
+            acquired = await self._redis.set(
+                redis_key,
+                holder_id,
+                nx=True,
+                ex=ttl_seconds,
             )
+            if acquired:
+                # Store holder metadata in sibling hash
+                if holder_metadata:
+                    await self._redis.hset(
+                        holder_data_key,
+                        mapping=holder_metadata,
+                    )
+                    # Set same TTL on metadata hash
+                    await self._redis.expire(holder_data_key, ttl_seconds)
+
+                # Emit event via event bus if available
+                if self._event_bus:
+                    try:
+                        metadata = holder_metadata or {}
+                        event = PipelineLockAcquiredEvent(
+                            type="pipeline.lock_acquired",
+                            timestamp=now.isoformat(),
+                            source="redis_distributed_lock",
+                            project_id=metadata.get("project_id", ""),
+                            work_item_id=holder_id,
+                            board_id=metadata.get("board_id", ""),
+                            queue_length_at_acquire=int(metadata.get("queue_length_at_acquire", 0)),
+                        )
+                        await self._event_bus.publish(event)
+                    except Exception:
+                        logger.error(
+                            f"Failed to publish PipelineLockAcquiredEvent for {lock_key}",
+                            exc_info=True,
+                        )
+
+                return AcquireResult(
+                    status=AcquireStatus.ACQUIRED,
+                    lock_key=lock_key,
+                    holder_id=holder_id,
+                    acquired_at=now,
+                )
+            # Retry also failed, meaning another holder acquired it
+            # Fall through to check who holds it now
+            existing_holder = await self._redis.get(redis_key)
 
         try:
             existing_holder_id = existing_holder.decode("utf-8") if isinstance(existing_holder, bytes) else existing_holder
