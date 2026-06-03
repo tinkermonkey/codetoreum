@@ -129,6 +129,7 @@ from .lock_events import (
     PipelineLockAcquiredEvent,
     PipelineLockReleasedEvent,
     StaleLockDetectedEvent,
+    WorkItemDequeuedEvent,
     WorkItemQueuedEvent,
 )
 
@@ -159,7 +160,6 @@ from .project_context_events import (
 
 # Project management events
 from .project_events import (
-    OrchestrationCycleCompletedEvent,
     ProjectClonedEvent,
     ProjectCloneFailedEvent,
     ProjectDisabledEvent,
@@ -170,6 +170,7 @@ from .project_events import (
 from .queue_events import (
     QueueItemAddedEvent,
     QueueItemRemovedEvent,
+    QueueMetadataCorruptionEvent,
     QueuePositionChangedEvent,
     TaskDispatchFailedEvent,
     WorkItemDeadLetterQueuedEvent,
@@ -269,7 +270,6 @@ from .workflow_events import (
     WorkflowCompletedEvent,
     WorkflowCreatedEvent,
     WorkflowFailedEvent,
-    WorkflowOrphanedEvent,
     WorkflowPausedEvent,
     WorkflowResumedEvent,
     WorkflowStageAdvancedEvent,
@@ -318,6 +318,7 @@ __all__ = [
     "LockStuckEvent",
     "PipelineLockAcquiredEvent",
     "PipelineLockReleasedEvent",
+    "WorkItemDequeuedEvent",
     "WorkItemQueuedEvent",
     # Work item events
     "WorkItemCreatedEvent",
@@ -394,10 +395,10 @@ __all__ = [
     "ProjectCloneFailedEvent",
     "ProjectEnabledEvent",
     "ProjectDisabledEvent",
-    "OrchestrationCycleCompletedEvent",
     # Queue events
     "QueueItemAddedEvent",
     "QueueItemRemovedEvent",
+    "QueueMetadataCorruptionEvent",
     "QueuePositionChangedEvent",
     "TaskDispatchFailedEvent",
     "WorkItemDeadLetterQueuedEvent",
@@ -416,7 +417,6 @@ __all__ = [
     "WorkflowCompletedEvent",
     "WorkflowCreatedEvent",
     "WorkflowFailedEvent",
-    "WorkflowOrphanedEvent",
     "WorkflowPausedEvent",
     "WorkflowResumedEvent",
     "WorkflowStageAdvancedEvent",

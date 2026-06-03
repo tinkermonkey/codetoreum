@@ -74,6 +74,9 @@ class TestSharedEventBus:
             assert cli.adapters is not None, "CLI adapters not initialized"
             await cli.adapters.event_store.append(work_item_id, [test_event])
 
+            # Wait for the async queue to drain before reading
+            await cli.adapters.event_store.wait_for_async_queue()
+
             # Refresh Elasticsearch indices to make events immediately searchable
             await elasticsearch_client.indices.refresh(index="events-*")
 
@@ -131,6 +134,9 @@ class TestSharedEventBus:
             ]
 
             await cli.adapters.event_store.append(work_item_id, events)
+
+            # Wait for the async queue to drain before reading
+            await cli.adapters.event_store.wait_for_async_queue()
 
             # Refresh Elasticsearch indices to make events immediately searchable
             await elasticsearch_client.indices.refresh(index="events-*")
@@ -195,6 +201,9 @@ class TestSharedEventBus:
             assert cli.adapters is not None, "CLI adapters not initialized"
             await cli.adapters.event_store.append(stream1_id, [event1])
             await cli.adapters.event_store.append(stream2_id, [event2])
+
+            # Wait for the async queue to drain before reading
+            await cli.adapters.event_store.wait_for_async_queue()
 
             # Refresh Elasticsearch indices to make events immediately searchable
             await elasticsearch_client.indices.refresh(index="events-*")

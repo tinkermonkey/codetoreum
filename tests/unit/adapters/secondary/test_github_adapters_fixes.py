@@ -508,7 +508,9 @@ class TestGitHubTicketAdapterDiscussionId:
         adapter = GitHubTicketAdapter(config)
 
         mock_graphql_client = AsyncMock()
-        mock_graphql_client.execute = AsyncMock(side_effect=ExternalServiceError("GitHub", "Query timeout"))
+        mock_graphql_client.execute = AsyncMock(
+            side_effect=ExternalServiceError(service="GitHub", message="Query timeout")
+        )
 
         with patch.object(adapter, "_get_graphql_client", return_value=mock_graphql_client):
             result = await adapter._fetch_discussions_for_repository()
@@ -603,7 +605,7 @@ class TestGitHubTicketAdapterDiscussionId:
         mock_graphql_client = AsyncMock()
 
         # First call fails, second call succeeds
-        first_call_error = ExternalServiceError("GitHub", "Temporary timeout")
+        first_call_error = ExternalServiceError(service="GitHub", message="Temporary timeout")
         success_response = {
             "repository": {
                 "discussions": {

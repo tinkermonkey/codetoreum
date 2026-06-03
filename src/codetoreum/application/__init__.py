@@ -15,15 +15,6 @@ from codetoreum.application.execution_service import (
     ExecutionServiceResult,
 )
 from codetoreum.application.metrics_service import MetricsService
-from codetoreum.application.pipeline_lock_service import (
-    IPipelineLockService,  # Backward compatibility alias
-    IQueuedPipelineLockService,
-    LockAcquisitionResult,
-    LockReleaseResult,
-    LockStatus,
-    PipelineQueueState,
-    QueueEntry,
-)
 from codetoreum.application.pipeline_manager import (
     PipelineManager,
     PipelineResult,
@@ -48,17 +39,10 @@ __all__ = [
     "ExecutionFailureReason",
     "ExecutionService",
     "ExecutionServiceResult",
-    "IPipelineLockService",  # Backward compatibility alias
-    "IQueuedPipelineLockService",
-    "LockAcquisitionResult",
-    "LockReleaseResult",
-    "LockStatus",
     "MetricsService",
     "PipelineManager",
-    "PipelineQueueState",
     "PipelineResult",
     "PipelineStatus",
-    "QueueEntry",
     "StageOutput",
     "StageResult",
     "WorkflowOrchestrator",

@@ -43,8 +43,12 @@ class InMemoryTicketAdapter(MockEventEmitter, ITicketSystem):
     by a lock.
     """
 
-    def __init__(self):
-        """Initialize the in-memory ticket adapter with thread-safe storage."""
+    def __init__(self, failed_event_store: Any | None = None):
+        """Initialize the in-memory ticket adapter with thread-safe storage.
+
+        Args:
+            failed_event_store: Optional failed event store (unused in simulation).
+        """
         super().__init__()
         self._work_items: dict[str, WorkItem] = {}
         self._comments: dict[str, list[Comment]] = {}  # work_item_id -> comments

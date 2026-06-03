@@ -233,7 +233,9 @@ class MockProjectManagerAdapter(IProjectManagerService):
                 if self._event_emitter:
                     self._event_emitter.emit(failed_event)
                 msg = "mock_project_manager"
-                raise ExternalServiceError(msg, f"Failed to clone project '{project_name}': simulated network timeout")
+                raise ExternalServiceError(
+                    service=msg, message=f"Failed to clone project '{project_name}': simulated network timeout"
+                )
 
             # Mark as cloned
             state.cloned = True

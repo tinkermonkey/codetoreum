@@ -10,7 +10,6 @@ from codetoreum.domain.events.adapter_events import CodetoreumEvent, now_iso
 from codetoreum.domain.events.work_item_events import (
     AgentAssignedEvent,
     WorkItemBlockedEvent,
-    WorkItemColumnUpdatedEvent,
     WorkItemCompletedEvent,
     WorkItemCreatedEvent,
     WorkItemFailedEvent,
@@ -80,10 +79,6 @@ class WorkItem:
     # Workflow tracking
     current_workflow_id: str | None
     current_stage: str | None
-
-    # Board column tracking (for SLA monitoring)
-    current_column: str | None
-    entered_column_at: datetime | None
 
     # Timestamps
     created_at: datetime
@@ -175,8 +170,6 @@ class WorkItem:
             assigned_at=None,
             current_workflow_id=None,
             current_stage=None,
-            current_column=None,
-            entered_column_at=None,
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),
             pr_id=pr_id,
@@ -502,26 +495,6 @@ class WorkItem:
         )
         self._add_event(event)
 
-    def move_to_column(self, column: str) -> None:
-        """
-        Update the board column this work item occupies.
-
-        Emits: WorkItemColumnUpdated event
-        """
-        old_column = self.current_column or ""
-        self.current_column = column
-        self.updated_at = datetime.now(UTC)
-        self._version += 1
-
-        event = WorkItemColumnUpdatedEvent(
-            type="workitem.column_updated",
-            timestamp=now_iso(),
-            source="domain",
-            work_item_id=self.id,
-            old_column=old_column,
-            new_column=column,
-        )
-        self._add_event(event)
 
     # Metadata
     def update_labels(self, labels: list[str]) -> None:
@@ -686,8 +659,6 @@ class WorkItem:
             assigned_at=None,
             current_workflow_id=None,
             current_stage=None,
-            current_column=None,
-            entered_column_at=None,
             created_at=datetime.fromisoformat(first_event.created_at) if first_event.created_at else datetime.now(UTC),
             updated_at=datetime.fromisoformat(first_event.created_at) if first_event.created_at else datetime.now(UTC),
             pr_id=first_event.pr_id or None,
@@ -737,10 +708,6 @@ class WorkItem:
         """Apply WorkflowAttachedEvent."""
         self.current_workflow_id = event.workflow_id
 
-    def _apply_work_item_column_updated(self, event: WorkItemColumnUpdatedEvent) -> None:
-        """Apply WorkItemColumnUpdated event."""
-        self.current_column = event.new_column
-
     def _apply_work_item_stage_updated(self, event: WorkItemStageUpdatedEvent) -> None:
         """Apply WorkItemStageUpdated event."""
         self.current_stage = event.new_stage
@@ -768,7 +735,6 @@ class WorkItem:
             WorkItemBlockedEvent: self._apply_work_item_blocked,
             WorkItemUnblockedEvent: self._apply_work_item_unblocked,
             WorkflowAttachedEvent: self._apply_workflow_attached,
-            WorkItemColumnUpdatedEvent: self._apply_work_item_column_updated,
             WorkItemStageUpdatedEvent: self._apply_work_item_stage_updated,
             WorkItemLabelsUpdatedEvent: self._apply_work_item_labels_updated,
             WorkItemPriorityUpdatedEvent: self._apply_work_item_priority_updated,

@@ -42,12 +42,15 @@ class InMemoryEventStore(IEventStore):
         self,
         config: "SimulationConfig | None" = None,
         clock: "Any | None" = None,
+        failed_event_store: "Any | None" = None,
     ):
         """
         Initialize the in-memory event store with thread-safe storage.
 
         Args:
             config: Optional SimulationConfig for fidelity-aware timing
+            clock: Optional clock for testing
+            failed_event_store: Optional failed event store (unused in simulation)
             clock: Optional SimulationClock for time manipulation
         """
         # Stream storage: stream_id -> list of events

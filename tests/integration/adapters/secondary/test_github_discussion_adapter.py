@@ -698,7 +698,7 @@ class TestGitHubDiscussionAdapterDiscussionNodeId:
         from codetoreum.ports.exceptions import ExternalServiceError
 
         graphql_client.execute.side_effect = ExternalServiceError(
-            "GitHub", "GraphQL errors: Could not resolve to a node with the global id of 'D_invalid'"
+            service="GitHub", message="GraphQL errors: Could not resolve to a node with the global id of 'D_invalid'"
         )
 
         with pytest.raises(ResourceNotFoundError):

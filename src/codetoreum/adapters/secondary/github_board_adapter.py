@@ -27,6 +27,7 @@ from codetoreum.infrastructure.http.github_graphql_client import (
 )
 from codetoreum.ports.exceptions import (
     AuthenticationError,
+    BoardStructureDriftError,
     ExternalServiceError,
     ResourceNotFoundError,
     ValidationError,
@@ -42,6 +43,7 @@ from codetoreum.ports.output.board_service import (
     WorkItemPosition,
 )
 from codetoreum.ports.output.event_emitter import IEventEmitter
+from codetoreum.ports.output.failed_event_store import IFailedEventStore
 from codetoreum.ports.output.monitoring import (
     MonitoringConfig,
     MonitoringState,
@@ -62,6 +64,7 @@ class GitHubBoardAdapter(IBoardService):
         graphql_client: GitHubGraphQLClient | None = None,
         webhook_enabled: bool = True,
         event_emitter: "IEventEmitter | None" = None,
+        failed_event_store: IFailedEventStore | None = None,
     ):
         """Initialize GitHub board adapter.
 
@@ -70,11 +73,13 @@ class GitHubBoardAdapter(IBoardService):
             graphql_client: GitHub GraphQL client for Projects v2 API
             webhook_enabled: If False, use polling fallback
             event_emitter: Optional event emitter (unused, for adapter factory compatibility)
+            failed_event_store: Failed event store for routing failures to DLQ (INV-20)
         """
         self._ticket_adapter = ticket_adapter
         self._graphql = graphql_client
         self._webhook_enabled = webhook_enabled
         self._event_emitter = event_emitter
+        self.failed_event_store = failed_event_store
 
         # Monitoring state
         self._monitoring: dict[str, MonitoringStatus] = {}
@@ -134,7 +139,9 @@ class GitHubBoardAdapter(IBoardService):
             for handler in self._event_handlers[event_type]:
                 try:
                     handler(event)
-                except Exception as e:
+                except (
+                    Exception
+                ) as e:  # justification: handler plugins can raise any exception; log and continue to allow other handlers to run
                     logger.error(
                         f"Event handler failed for {event_type}: {e}",
                         exc_info=True,
@@ -294,9 +301,11 @@ class GitHubBoardAdapter(IBoardService):
             return self._parse_board_response(project_id, board_id, board_node)
         except ExternalServiceError:
             raise
-        except Exception as e:
+        except (
+            Exception
+        ) as e:  # justification: convert unexpected parsing/request errors to ExternalServiceError for consistent failure routing
             msg = "GitHub"
-            raise ExternalServiceError(msg, f"Failed to fetch board: {e!s}")
+            raise ExternalServiceError(service=msg, message=f"Failed to fetch board: {e!s}")
 
     async def get_columns(self, board_id: str) -> list[BoardColumn]:
         """Get all columns for a board.
@@ -469,9 +478,9 @@ class GitHubBoardAdapter(IBoardService):
         timestamp = datetime.now(UTC).isoformat()
 
         # Suppress the event when the orchestrator is the mover — the orchestrator
-        # already emits WorkItemColumnUpdatedEvent via work_item_service.move_to_column().
-        # Emitting WorkItemColumnChangedEvent here would cause BoardColumnEventHandler to
-        # re-trigger and create a duplicate execution cycle.
+        # already emits WorkItemColumnChangedEvent via IBoardService.move_item_to_column().
+        # Emitting again here would cause BoardColumnEventHandler to re-trigger and create
+        # a duplicate execution cycle.
         if moved_by != MovedByType.ORCHESTRATOR:
             self.emit(
                 WorkItemColumnChangedEvent(
@@ -592,34 +601,112 @@ class GitHubBoardAdapter(IBoardService):
         Raises:
             ResourceNotFoundError: Board doesn't exist
             ExternalServiceError: GraphQL API error
+            BoardStructureDriftError: Unsafe drift detected
+
+        Events:
+            Emits 'board.reconciled' event with changes summary
+        """
+        return await self.reconcile_board_structure_to_config(board_id, config)
+
+    async def reconcile_board_structure_to_config(
+        self, board_id: str, config: BoardConfig
+    ) -> ReconciliationResult:
+        """Reconcile board structure to match configuration via Projects v2 API.
+
+        Creates missing columns, renames mismatched columns when unambiguous,
+        and raises BoardStructureDriftError for unsafe drift.
+
+        Args:
+            board_id: Board to reconcile
+            config: Board reconciliation configuration
+
+        Returns:
+            ReconciliationResult with summary of changes
+
+        Raises:
+            ResourceNotFoundError: Board doesn't exist
+            ValidationError: Invalid configuration
+            ExternalServiceError: GraphQL API error
+            BoardStructureDriftError: Unsafe drift detected (ambiguous column mapping)
 
         Events:
             Emits 'board.reconciled' event with changes summary
         """
         # Get current board state
-        board = await self.get_board("", board_id)
-        current_columns = {col.name for col in board.columns}
-        expected_columns = set(config.expected_columns)
+        board = await self.get_board(self._current_project_id or "", board_id)
+        project_id = board.project_id or ""
 
-        columns_added = list(expected_columns - current_columns)
-        columns_removed = list(current_columns - expected_columns)
+        # Build current and expected column maps
+        current_columns = {col.name: col for col in board.columns}
+        current_names = set(current_columns.keys())
+        expected_names = set(config.expected_columns)
 
-        # Create missing columns if auto_create_missing
-        if config.auto_create_missing and columns_added:
-            for column_name in columns_added:
-                await self._create_column(board_id, column_name)
+        # Detect exact adds and removes
+        columns_to_add = expected_names - current_names
+        columns_to_remove = current_names - expected_names
 
-        # Create reconciliation result
+        # Track changes
+        added_columns: list[str] = []
+        removed_columns: list[str] = []
+        renamed_columns: list[tuple[str, str]] = []
+        orphaned_items: list[str] = []
+
+        # Step 1: Detect potential renames (current → expected mapping)
+        # Only consider columns that contain work items and don't have exact matches
+        potential_renames: dict[str, str] = {}  # old_name -> new_name
+
+        if columns_to_add and columns_to_remove:
+            # Find unambiguous mappings: if removing column A and adding column B,
+            # and A contains items, consider B a rename of A (unambiguous if only one of each)
+            removable = {name for name in columns_to_remove if current_columns[name].work_item_ids}
+
+            if len(removable) == 1 and len(columns_to_add) == 1:
+                old_name = list(removable)[0]
+                new_name = list(columns_to_add)[0]
+
+                # This is an unambiguous rename
+                potential_renames[old_name] = new_name
+                columns_to_add.discard(new_name)
+                columns_to_remove.discard(old_name)
+                renamed_columns.append((old_name, new_name))
+
+        # Step 2: Handle column removals (after rename detection)
+        for col_name in columns_to_remove:
+            removed_columns.append(col_name)
+            col = current_columns[col_name]
+            orphaned_items.extend(col.work_item_ids)
+
+        # Step 3: Check for unsafe drift
+        # Unsafe drift: multiple removals with items, but only one addition
+        # (can't determine which removal maps to which addition)
+        remaining_removals = {
+            name for name in columns_to_remove if current_columns[name].work_item_ids
+        }
+
+        if len(remaining_removals) > 1 and len(columns_to_add) < len(remaining_removals):
+            drift_desc = f"Multiple columns with items being removed ({remaining_removals}) but insufficient additions ({columns_to_add})"
+            raise BoardStructureDriftError(board_id, drift_desc)
+
+        # Step 4: Create missing columns via Projects v2 API
+        if config.auto_create_missing and columns_to_add:
+            for col_name in columns_to_add:
+                await self._create_column_via_api(board_id, col_name)
+                added_columns.append(col_name)
+
+        # Step 5: Rename columns via GraphQL API (uses potential_renames detected in Step 1)
+        status_field_id = self._find_status_field_id(board)
+        if potential_renames and status_field_id:
+            for old_name, new_name in potential_renames.items():
+                await self._rename_column_via_api(board_id, status_field_id, old_name, new_name)
+
+        # Create result
         result = ReconciliationResult(
             board_id=board_id,
-            columns_added=columns_added,
-            columns_removed=columns_removed,
-            columns_renamed=[],
-            orphaned_items=[],
+            columns_added=tuple(added_columns),
+            columns_removed=tuple(removed_columns),
+            columns_renamed=tuple(renamed_columns),
+            orphaned_items=tuple(orphaned_items),
         )
-
-        # Extract project_id from board or use empty
-        project_id = board.project_id or ""
 
         # Emit event
         self.emit(
@@ -629,8 +716,8 @@ class GitHubBoardAdapter(IBoardService):
                 source="github",
                 project_id=project_id,
                 board_id=config.board_id,
-                columns_added=columns_added,
-                columns_removed=columns_removed,
+                columns_added=added_columns,
+                columns_removed=removed_columns,
                 items_moved=0,
             )
         )
@@ -770,7 +857,9 @@ class GitHubBoardAdapter(IBoardService):
                     "board_id": board_id,
                 },
             )
-        except Exception as e:
+        except (
+            Exception
+        ) as e:  # justification: unexpected errors during polling indicate critical state; log and disable polling to avoid cascade failures
             # Unexpected errors - log critically and stop polling
             logger.critical(
                 f"Unexpected error during board polling for {project_id}:{board_id}: {e}",
@@ -885,7 +974,7 @@ class GitHubBoardAdapter(IBoardService):
 
             if not status_field:
                 msg = "GitHub"
-                raise ExternalServiceError(msg, "Status field not found on board")
+                raise ExternalServiceError(service=msg, message="Status field not found on board")
 
             # Build column map with option IDs and cache them in adapter state
             columns_by_id: dict[str, str] = {}
@@ -947,7 +1036,7 @@ class GitHubBoardAdapter(IBoardService):
 
         except (KeyError, TypeError) as e:
             msg = "GitHub"
-            raise ExternalServiceError(msg, f"Invalid board response format: {e!s}")
+            raise ExternalServiceError(service=msg, message=f"Invalid board response format: {e!s}")
 
     def _find_status_field_id(self, board: ProjectBoard) -> str | None:
         """Find status field ID from board data.
@@ -988,31 +1077,183 @@ class GitHubBoardAdapter(IBoardService):
             return board_cache.get(column_name)
         return None
 
-    async def _create_column(self, board_id: str, column_name: str) -> None:
-        """Create a new column on the board.
+    async def _create_column_via_api(self, board_id: str, column_name: str) -> None:
+        """Create a new column on the board via Projects v2 GraphQL API.
 
-        NOT ON MVP CRITICAL PATH. This method is only needed for dynamic board
-        configuration (reconcile_board with auto_create_missing=True). In the MVP,
-        the board structure is pre-configured on GitHub and this method is not called.
-
-        Implementation requires a GitHub Projects v2 mutation to add a new option
-        to the Status field, which requires extracting the field ID and building
-        the proper GraphQL mutation.
+        Adds a new option to the Status field on the board.
 
         Args:
             board_id: Board to add column to
             column_name: Name of new column
 
         Raises:
-            NotImplementedError: Feature deferred beyond MVP scope
+            ValidationError: Cannot determine Status field ID
             ExternalServiceError: GraphQL mutation failed
         """
-        msg = (
-            "Column creation is not on the MVP critical path. "
-            "This feature is only needed for auto_create_missing=True in board reconciliation. "
-            "In the MVP, board structure is pre-configured and this method should not be called."
-        )
-        raise NotImplementedError(msg)
+        # Get the status field ID from cached state
+        status_field_id = self._status_field_id_cache.get(board_id)
+
+        if not status_field_id:
+            msg = f"Cannot determine Status field ID for board {board_id}; fetch board first"
+            raise ValidationError(msg)
+
+        # Mutation to add a new option to the Status field
+        mutation = """
+        mutation CreateProjectV2FieldOption(
+          $projectId: ID!
+          $fieldId: ID!
+          $name: String!
+        ) {
+          createProjectV2FieldOption(
+            input: {
+              projectId: $projectId
+              fieldId: $fieldId
+              name: $name
+            }
+          ) {
+            projectV2Field {
+              ... on ProjectV2SingleSelectField {
+                id
+                options {
+                  id
+                  name
+                }
+              }
+            }
+          }
+        }
+        """
+
+        try:
+            result = await self._graphql.execute(
+                mutation,
+                {
+                    "projectId": board_id,
+                    "fieldId": status_field_id,
+                    "name": column_name,
+                },
+            )
+
+            # Extract the new option ID and cache it
+            field = result.get("createProjectV2FieldOption", {}).get("projectV2Field")
+            if field:
+                options = field.get("options", [])
+                for option in options:
+                    if option.get("name") == column_name:
+                        option_id = option.get("id")
+                        if option_id:
+                            if board_id not in self._option_id_cache:
+                                self._option_id_cache[board_id] = {}
+                            self._option_id_cache[board_id][column_name] = option_id
+                        break
+
+            logger.info(
+                f"Created column '{column_name}' on board {board_id}",
+                extra={
+                    "board_id": board_id,
+                    "column_name": column_name,
+                    "status_field_id": status_field_id,
+                },
+            )
+        except ExternalServiceError:
+            raise
+        except Exception as e:
+            msg = f"Failed to create column '{column_name}' on board {board_id}: {e!s}"
+            raise ExternalServiceError(service="GitHub", message=msg)
+
+    async def _rename_column_via_api(
+        self,
+        board_id: str,
+        status_field_id: str,
+        old_name: str,
+        new_name: str,
+    ) -> None:
+        """Rename a column on the board via Projects v2 GraphQL API.
+
+        Updates the option name on the Status field.
+
+        Args:
+            board_id: Board containing the column
+            status_field_id: ID of the Status field
+            old_name: Current column name
+            new_name: New column name
+
+        Raises:
+            ValidationError: Cannot determine option ID
+            ExternalServiceError: GraphQL mutation failed
+        """
+        # Get the option ID for the column to rename
+        board_cache = self._option_id_cache.get(board_id, {})
+        option_id = board_cache.get(old_name)
+
+        if not option_id:
+            msg = f"Cannot find option ID for column '{old_name}' on board {board_id}"
+            raise ValidationError(msg)
+
+        # Mutation to update the option name
+        mutation = """
+        mutation UpdateProjectV2FieldOption(
+          $projectId: ID!
+          $fieldId: ID!
+          $optionId: String!
+          $name: String!
+        ) {
+          updateProjectV2FieldOption(
+            input: {
+              projectId: $projectId
+              fieldId: $fieldId
+              optionId: $optionId
+              name: $name
+            }
+          ) {
+            projectV2Field {
+              ... on ProjectV2SingleSelectField {
+                id
+                options {
+                  id
+                  name
+                }
+              }
+            }
+          }
+        }
+        """
+
+        try:
+            await self._graphql.execute(
+                mutation,
+                {
+                    "projectId": board_id,
+                    "fieldId": status_field_id,
+                    "optionId": option_id,
+                    "name": new_name,
+                },
+            )
+
+            # Update cache with new name
+            if board_id not in self._option_id_cache:
+                self._option_id_cache[board_id] = {}
+
+            # Remove old mapping and add new one
+            if old_name in self._option_id_cache[board_id]:
+                del self._option_id_cache[board_id][old_name]
+
+            self._option_id_cache[board_id][new_name] = option_id
+
+            logger.info(
+                f"Renamed column '{old_name}' to '{new_name}' on board {board_id}",
+                extra={
+                    "board_id": board_id,
+                    "old_name": old_name,
+                    "new_name": new_name,
+                    "option_id": option_id,
+                },
+            )
+        except ExternalServiceError:
+            raise
+        except Exception as e:
+            msg = f"Failed to rename column '{old_name}' to '{new_name}' on board {board_id}: {e!s}"
+            raise ExternalServiceError(service="GitHub", message=msg)
 
     def _extract_work_item_id(self, item_data: dict) -> str | None:
         """Extract work item ID from webhook item data.

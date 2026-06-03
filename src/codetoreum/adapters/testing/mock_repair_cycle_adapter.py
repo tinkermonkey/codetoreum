@@ -16,7 +16,7 @@ The mock adapter:
 import logging
 import threading
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.application.repair_cycle_ci_integration import (
@@ -2286,7 +2286,7 @@ class MockRepairCycleAdapter(MockEventEmitter, IRepairCycle):
                 return None
 
             # Search for container executions matching the requested test_type
-            container_history: dict[str, list[Any]] = self._container_adapter._command_history
+            container_history: dict[str, list[Any]] = cast("Any", self._container_adapter)._command_history
             for container_id, executions in container_history.items():
                 if not executions:
                     continue

@@ -5,6 +5,7 @@ Tests recovery mechanisms for:
 2. Agent execution failures (lock release failures)
 """
 
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -92,6 +93,7 @@ class TestAgentExecutionRecoveryService:
             stage_name=stage_name,
             project_id="proj-1",
             board_id=board_id,
+            started_at=datetime.now().isoformat(),
         )
         recovery_service._run_registry.get_active_run.return_value = run_info
 
@@ -127,6 +129,7 @@ class TestAgentExecutionRecoveryService:
             stage_name=stage_name,
             project_id="proj-1",
             board_id=board_id,
+            started_at=datetime.now().isoformat(),
         )
         recovery_service._run_registry.get_active_run.return_value = run_info
 
@@ -235,6 +238,7 @@ class TestAgentExecutionRecoveryService:
             stage_name=stage_name,
             project_id="proj-1",
             board_id=board_id,
+            started_at=datetime.now().isoformat(),
         )
         recovery_service._run_registry.get_active_run.return_value = run_info
 
@@ -270,6 +274,7 @@ class TestAgentExecutionRecoveryService:
             stage_name=stage_name,
             project_id="proj-1",
             board_id=board_id,
+            started_at=datetime.now().isoformat(),
         )
         recovery_service._run_registry.get_active_run.return_value = run_info
 
@@ -308,6 +313,7 @@ class TestAgentExecutionRecoveryService:
             stage_name=stage_name,
             project_id="proj-1",
             board_id=board_id,
+            started_at=datetime.now().isoformat(),
         )
         recovery_service._run_registry.get_active_run.return_value = run_info
 
@@ -351,6 +357,7 @@ class TestAgentExecutionRecoveryService:
             stage_name=stage_name,
             project_id="proj-1",
             board_id=board_id,
+            started_at=datetime.now().isoformat(),
         )
         recovery_service._run_registry.get_active_run.return_value = run_info
 

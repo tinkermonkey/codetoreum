@@ -78,6 +78,24 @@ Project config remains authoritative for workflow *structure* (which columns exi
 
 ---
 
+## Orchestration
+
+### INV-13 — Application is fully event-driven
+
+The application has no application-layer polling loops. All orchestration is driven by domain events emitted by adapters:
+
+- `WorkItemColumnChangedEvent` (from board adapter) triggers workflow evaluation
+- `AgentExecutionCompletedEvent` (from execution service) triggers auto-progression
+- Other domain events trigger state machines within application services
+
+Adapter-level polling (e.g., `GitHubBoardAdapter._poll_board_changes()`) is internal to the adapter, private to the hexagonal boundary, and does not cross into the application layer.
+
+Project lifecycle initialization (board reconciliation, repository registration) happens once at bootstrap via `ProjectLifecycleService`, not on a polling interval.
+
+**Violation cost**: application layer becomes reactive-fragile; polling drift interferes with event-driven code paths; multi-instance deployments face race conditions from concurrent polls.
+
+---
+
 ## Adapter design rules
 
 ### INV-15 — Coding agent adapters emit lifecycle and granular events

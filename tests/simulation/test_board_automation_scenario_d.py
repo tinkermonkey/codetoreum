@@ -25,8 +25,11 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
-    InMemoryLockService,
+from codetoreum.adapters.testing.in_memory_distributed_lock import (
+    InMemoryDistributedLock,
+)
+from codetoreum.adapters.testing.in_memory_queue_service import (
+    InMemoryQueueService,
 )
 from codetoreum.adapters.testing.in_memory_workflow_config_service import (
     InMemoryWorkflowConfigService,
@@ -113,7 +116,8 @@ class TestScenarioD_HumanIntervention:
         """
         # Create services
         board_service = MockBoardAdapter()
-        lock_service = InMemoryLockService()
+        distributed_lock = InMemoryDistributedLock()
+        queue_service = InMemoryQueueService()
         config_service = InMemoryWorkflowConfigService()
         event_bus = EventBus()
         agent_executor = MockAgentExecutor()
@@ -125,7 +129,8 @@ class TestScenarioD_HumanIntervention:
         # Create event handler
         event_handler = BoardColumnEventHandler(
             board_service=board_service,
-            lock_service=lock_service,
+            distributed_lock=distributed_lock,
+            pipeline_queue=queue_service,
             workflow_config=config_service,
             agent_executor=agent_executor,
             event_bus=event_bus,
@@ -218,7 +223,8 @@ class TestScenarioD_HumanIntervention:
 
         return {
             "board_service": board_service,
-            "lock_service": lock_service,
+            "distributed_lock": distributed_lock,
+            "queue_service": queue_service,
             "config_service": config_service,
             "event_bus": event_bus,
             "agent_executor": agent_executor,

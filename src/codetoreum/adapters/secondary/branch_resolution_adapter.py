@@ -216,7 +216,7 @@ class BranchResolutionAdapter(IBranchResolutionService):
                 str(e),
                 exc_info=True,
             )
-            raise ExternalServiceError("branch_resolution", f"Branch resolution failed: {e!s}") from e
+            raise ExternalServiceError(service="branch_resolution", message=f"Branch resolution failed: {e!s}") from e
 
     async def _strategy_exact_match(self, repo_path: str, issue_id: str) -> BranchResolution | None:
         """Strategy 1: Exact match on feature/issue-{issue_id}-* pattern.

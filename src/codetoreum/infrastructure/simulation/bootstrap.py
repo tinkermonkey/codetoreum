@@ -79,9 +79,6 @@ from codetoreum.adapters.primary.routers.simulation_ticketing import (
 from codetoreum.adapters.secondary.execution_service_agent_executor import (
     ExecutionServiceAgentExecutor,
 )
-from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
-    InMemoryLockService,
-)
 
 # Adapters
 from codetoreum.adapters.testing import (
@@ -186,7 +183,6 @@ from codetoreum.infrastructure.simulation.watchdogs import (
     ColumnProgressionWatchdog,
     ExecutionTimeoutWatchdog,
     SLAExpiryWatchdog,
-    StaleLockWatchdog,
 )
 from codetoreum.ports.input.agent_command import IAgentCommandPort
 from codetoreum.ports.input.agent_query import IAgentQueryPort
@@ -223,6 +219,7 @@ from codetoreum.ports.output.config_store import IConfigStore
 from codetoreum.ports.output.container import IContainer
 from codetoreum.ports.output.container_recovery import IAgentContainerRecoveryService
 from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
+from codetoreum.ports.output.distributed_lock import IDistributedLock
 from codetoreum.ports.output.encryption_service import IEncryptionService
 from codetoreum.ports.output.environment_repair_service import IEnvironmentRepairService
 from codetoreum.ports.output.event_emitter import IEventEmitter
@@ -233,7 +230,6 @@ from codetoreum.ports.output.identity_service import IIdentityService
 from codetoreum.ports.output.message_broker import IMessageBroker
 from codetoreum.ports.output.metrics import IMetrics
 from codetoreum.ports.output.notifier import INotifier
-from codetoreum.ports.output.pipeline_lock_service import IPipelineLockService
 from codetoreum.ports.output.pipeline_queue_service import IPipelineQueueService
 from codetoreum.ports.output.pr_review_cycle_service import IPRReviewCycle
 from codetoreum.ports.output.project_manager_service import IProjectManagerService
@@ -338,9 +334,9 @@ class SimulationAdapters:
     board: IBoardService
     repair_cycle: IRepairCycle
     project_manager: IProjectManagerService
-    lock_service: IPipelineLockService
     workflow_config: IWorkflowConfigService
     queue_service: IPipelineQueueService
+    lock_service: "IDistributedLock"
     event_emitter: IEventEmitter  # CapturingMockEventEmitter in simulation
     audit_store: IAuditStore | None  # InMemoryAuditStore in simulation, None in testing
 
@@ -452,15 +448,17 @@ class SimulationAdapters:
             raise TypeError(msg)
         return cast("MockProjectManagerAdapter", self.project_manager)
 
-    def lock_service_as_memory(self) -> InMemoryLockService:
-        """Get lock service as InMemoryLockService.
+    def lock_service_as_memory(self) -> "FileBackedDistributedLock":
+        """Get lock service as FileBackedDistributedLock.
 
-        Raises TypeError if lock_service is not InMemoryLockService.
+        Raises TypeError if lock_service is not FileBackedDistributedLock.
         """
-        if not isinstance(self.lock_service, InMemoryLockService):
-            msg = f"lock_service is {type(self.lock_service).__name__}, not InMemoryLockService"
+        from codetoreum.adapters.secondary.file_backed_distributed_lock import FileBackedDistributedLock
+
+        if not isinstance(self.lock_service, FileBackedDistributedLock):
+            msg = f"lock_service is {type(self.lock_service).__name__}, not FileBackedDistributedLock"
             raise TypeError(msg)
-        return cast("InMemoryLockService", self.lock_service)
+        return cast("FileBackedDistributedLock", self.lock_service)
 
     def workflow_config_as_memory(self) -> InMemoryWorkflowConfigService:
         """Get workflow config as InMemoryWorkflowConfigService.
@@ -842,11 +840,10 @@ class SimulationApplicationBootstrap:
         self._adapter_factory: AdapterFactory | None = None
         self._engine: SimulationEngine | None = None
         self._board_event_handler: BoardColumnEventHandler | None = None
-        self._stale_lock_watchdog: StaleLockWatchdog | None = None
         self._execution_timeout_watchdog: ExecutionTimeoutWatchdog | None = None
         self._sla_expiry_watchdog: SLAExpiryWatchdog | None = None
         self._column_progression_watchdog: ColumnProgressionWatchdog | None = None
-        self._queued_lock_service: InMemoryLockService | None = None
+        self._queued_lock_service: FileBackedDistributedLock | None = None
 
     @property
     def is_degraded(self) -> bool:
@@ -995,43 +992,6 @@ class SimulationApplicationBootstrap:
                     self._degraded_mode.mark_failed(BootstrapPhase.AUTO_ADVANCE, str(e))
                     # Continue without auto-advance rather than crashing the server
                     logger.info("Continuing server startup in degraded mode without auto-advance")
-
-            # Phase 6b: Register stale lock watchdog
-            # Must come after auto-advance starts so it can schedule callbacks with the clock
-            if self.adapters and self._engine:
-                try:
-                    logger.info("Phase 6b: Registering stale lock watchdog...")
-                    self._stale_lock_watchdog = StaleLockWatchdog(
-                        lock_service=self.adapters.lock_service,
-                        event_emitter=self.adapters.event_emitter,
-                        clock=self._engine.get_clock_for_testing(),
-                        stale_threshold_seconds=7200,  # 2 hours default
-                    )
-                    self._stale_lock_watchdog.start()
-
-                    # Wire the on_lock_acquired event handler to clear deduplication tracking
-                    # when locks are newly acquired after being recovered
-                    if self.infrastructure and self.infrastructure.event_bus:
-                        self.infrastructure.event_bus.subscribe(
-                            "lock.acquired",
-                            self._stale_lock_watchdog.on_lock_acquired,
-                        )
-
-                    logger.info("Stale lock watchdog registered and started")
-                except Exception as e:
-                    # Mark as degraded - stale lock detection is critical for deadlock prevention
-                    error_msg = f"Failed to register stale lock watchdog: {e}"
-                    logger.error(
-                        error_msg,
-                        exc_info=True,
-                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
-                    )
-                    self._degraded_mode.mark_failed(BootstrapPhase.STALE_LOCK_WATCHDOG, str(e))
-                    # Continue without watchdog rather than crashing the server
-                    logger.warning(
-                        "Continuing server startup in degraded mode without stale lock watchdog. "
-                        "Pipeline may deadlock if locks become stale."
-                    )
 
             # Phase 6c: Register execution timeout watchdog
             # Must come after auto-advance starts and ExecutionServiceAgentExecutor is initialized
@@ -1189,10 +1149,6 @@ class SimulationApplicationBootstrap:
             # Stop all watchdogs before cleaning up adapters/infrastructure
             # This prevents scheduled callbacks from firing during teardown and
             # attempting to access None references (adapters, lock_service, etc.)
-            if self._stale_lock_watchdog:
-                self._stale_lock_watchdog.stop()
-                logger.debug("Stale lock watchdog stopped")
-
             if self._execution_timeout_watchdog:
                 self._execution_timeout_watchdog.stop()
                 logger.debug("Execution timeout watchdog stopped")
@@ -1228,7 +1184,6 @@ class SimulationApplicationBootstrap:
             self.adapters = None
             self._adapter_factory = None
             self._engine = None
-            self._stale_lock_watchdog = None
             self._execution_timeout_watchdog = None
             self._sla_expiry_watchdog = None
             self._column_progression_watchdog = None
@@ -1880,12 +1835,6 @@ class SimulationApplicationBootstrap:
         # Multi-Project Orchestrator
         multi_project_orchestrator = MultiProjectOrchestrator(
             project_manager=self.adapters.project_manager,
-            workflow_orchestrator=workflow_orchestrator,
-            board_service=self.adapters.board,
-            event_emitter=self.adapters.event_emitter,
-            poll_interval_seconds=30,
-            # D-Q: surface in-flight workflow runs in each cycle log/event.
-            run_registry=self.adapters.run_registry,
         )
 
         logger.info(
@@ -2040,10 +1989,17 @@ class SimulationApplicationBootstrap:
             event_bus=self.infrastructure.event_bus,
             config_service=config_service_interface,
             logger=logger_interface,
+            board_service=self.adapters.board,
+            workflow_config_service=self.adapters.workflow_config,
             audit_query_port=None,  # Defer to simulation bootstrap to include with event_store
             disable_auth=True,  # ADR-003: Disable authentication in simulation
             cors_origins=["*"],  # Allow all origins in simulation mode (auth is disabled)
             container_recovery_service=self.services.container_recovery_service,
+            active_workflow_run_registry=self.adapters.run_registry,
+            distributed_lock=self.adapters.lock_service,
+            pipeline_queue=self.adapters.queue_service,
+            failed_event_store=self.infrastructure.failed_event_store,
+            orphan_scan_registry=None,  # Not yet implemented in simulation
         )
 
         # Mount simulation-only audit causal chain endpoint (never in production create_app)
@@ -2694,12 +2650,6 @@ class SimulationApplicationBootstrap:
         The executor → handler auto-progression path is now event-bus mediated
         (see INV-05 in `bootstrap/ARCHITECTURE.md` §6); the legacy
         `set_completion_handler` callback is no longer used.
-
-        NOTE: The handler requires IQueuedPipelineLockService (application-level interface
-        with 4-parameter try_acquire_lock), not the PORT interface IPipelineLockService
-        (which has 3 parameters). For simulation, the shared InMemoryLockService from
-        AdapterResolver implements the correct interface via the backward-compat alias
-        (application.pipeline_lock_service.IPipelineLockService = IQueuedPipelineLockService).
         """
         if not self.adapters or not self.infrastructure:
             logger.warning("Cannot register board column handler: components not ready")
@@ -2716,14 +2666,6 @@ class SimulationApplicationBootstrap:
         if self.services:
             recovery_service = self.services.agent_execution_recovery_service
 
-        # Use the shared lock service instance resolved by AdapterResolver
-        # The lock_service implements IQueuedPipelineLockService (with 4-parameter try_acquire_lock)
-        # via IPipelineLockService (backward compat alias). Store reference for tests.
-        if not isinstance(self.adapters.lock_service, InMemoryLockService):
-            msg = f"Expected InMemoryLockService, got {type(self.adapters.lock_service).__name__}"
-            logger.warning(msg)
-        self._queued_lock_service = self.adapters.lock_service
-
         work_item_svc = self.services.work_item_service if self.services else None
         if work_item_svc is None:
             logger.warning("Cannot register board column handler: work_item_service not ready")
@@ -2731,7 +2673,8 @@ class SimulationApplicationBootstrap:
 
         handler = BoardColumnEventHandler(
             board_service=self.adapters.board,
-            lock_service=self._queued_lock_service,
+            distributed_lock=self.adapters.lock_service,
+            pipeline_queue=self.adapters.queue_service,
             workflow_config=self.adapters.workflow_config,
             agent_executor=self.adapters.agent_executor,
             event_bus=self.infrastructure.event_bus,

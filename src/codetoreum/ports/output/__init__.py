@@ -44,6 +44,14 @@ from codetoreum.ports.output.discussion_adapter import (
     DiscussionThread,
     IDiscussionAdapter,
 )
+from codetoreum.ports.output.distributed_lock import (
+    AcquireResult,
+    AcquireStatus,
+    IDistributedLock,
+    LockHolder,
+    ReleaseReason,
+    ReleaseResult,
+)
 from codetoreum.ports.output.encryption_service import (
     DecryptionError,
     EncryptionError,
@@ -81,14 +89,12 @@ from codetoreum.ports.output.notifier import (
     NotificationResult,
     RichContent,
 )
-from codetoreum.ports.output.pipeline_lock_service import (
-    IPipelineLockService,
-    PipelineLock,
+from codetoreum.ports.output.pipeline_queue import (
+    EnqueueResult,
+    IPipelineQueue,
 )
-from codetoreum.ports.output.pipeline_queue_service import (
-    IPipelineQueueService,
-    PipelineQueueEntry,
-    QueueEntry,  # Backward compatibility alias
+from codetoreum.ports.output.pipeline_queue import (
+    QueueEntry as IPipelineQueueEntry,
 )
 from codetoreum.ports.output.pr_review_cycle_service import (
     IPRReviewCycle,
@@ -124,6 +130,15 @@ from codetoreum.ports.output.version_control_service import (
 )
 from codetoreum.ports.output.work_item_service import IWorkItemService
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
+from codetoreum.ports.output.workflow_orchestrator import (
+    CardMovedRequest,
+    IssueData,
+    IWorkflowOrchestrator,
+    ReviewCycleCompletedRequest,
+    StageCompletedRequest,
+    WorkflowAction,
+    WorkflowResult,
+)
 
 __all__ = [
     # Agent Executor
@@ -205,9 +220,17 @@ __all__ = [
     "NotificationPriority",
     "NotificationResult",
     "RichContent",
-    # Pipeline Lock Service
-    "IPipelineLockService",
-    "PipelineLock",
+    # Distributed Lock
+    "IDistributedLock",
+    "AcquireResult",
+    "AcquireStatus",
+    "LockHolder",
+    "ReleaseResult",
+    "ReleaseReason",
+    # Pipeline Queue
+    "IPipelineQueue",
+    "EnqueueResult",
+    "IPipelineQueueEntry",
     # Project Manager Service
     "IProjectManagerService",
     "ProjectConfig",
@@ -245,4 +268,12 @@ __all__ = [
     "IWorkItemService",
     # Workflow Config Service
     "IWorkflowConfigService",
+    # Workflow Orchestrator
+    "IWorkflowOrchestrator",
+    "CardMovedRequest",
+    "IssueData",
+    "ReviewCycleCompletedRequest",
+    "StageCompletedRequest",
+    "WorkflowAction",
+    "WorkflowResult",
 ]

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from codetoreum.adapters.secondary.git_repository_adapter import GitConfig, GitRepositoryAdapter
 from codetoreum.ports.exceptions import ResourceNotFoundError
+from codetoreum.ports.output.failed_event_store import IFailedEventStore
 from codetoreum.ports.output.version_control_service import IVersionControlService, Repository, VCSStatus
 
 logger = logging.getLogger(__name__)
@@ -28,9 +29,11 @@ class GitHubVersionControlAdapter(IVersionControlService):
     def __init__(
         self,
         git_config: GitConfig | None = None,
+        failed_event_store: IFailedEventStore | None = None,
     ) -> None:
         self._git_config = git_config or GitConfig()
         self._repository_adapter = GitRepositoryAdapter(self._git_config)
+        self.failed_event_store = failed_event_store
 
     async def clone_repository(self, url: str, target_path: str, branch: str | None = None) -> None:
         try:
@@ -168,7 +171,112 @@ class GitHubVersionControlAdapter(IVersionControlService):
             f"{owner}/{repo} {head}->{base}: {response.text[:300]}"
         )
         logger.error(msg)
-        raise ExternalServiceError("github", msg)
+        raise ExternalServiceError(service="github", message=msg)
+
+    async def update_pull_request_title(
+        self,
+        repo_path: str,
+        head: str,
+        base: str,
+        new_title: str,
+    ) -> bool:
+        """Update the title of an open PR if it exists and differs (idempotent).
+
+        Looks up an existing PR for head→base. If found and the title differs,
+        updates it via PATCH /repos/{owner}/{repo}/pulls/{number}. If the title
+        already matches, skips the API call and returns False (idempotent no-op).
+        If no PR exists, returns False silently.
+
+        Args:
+            repo_path: Local repository path.
+            head: Source branch name.
+            base: Target branch name.
+            new_title: The new PR title.
+
+        Returns:
+            bool: True if the title was updated, False if no update was needed
+            (PR already had the title or PR does not exist).
+
+        Raises:
+            AuthenticationError: Credentials missing or invalid.
+            ExternalServiceError: Provider rejected the request.
+        """
+        import os
+
+        import httpx
+
+        path = Path(repo_path)
+        result = await self._repository_adapter._run_git_command(
+            ["remote", "get-url", "origin"],
+            cwd=path,
+        )
+        origin_url = result.stdout.strip()
+
+        owner, repo = _parse_github_owner_repo(origin_url)
+        if not owner or not repo:
+            from codetoreum.ports.exceptions import RepositoryError
+
+            msg = f"Could not parse GitHub owner/repo from origin URL: {origin_url}"
+            raise RepositoryError(msg)
+
+        token = os.environ.get("GITHUB_TOKEN", "")
+        if not token:
+            from codetoreum.ports.exceptions import AuthenticationError
+
+            msg = "GITHUB_TOKEN not set; cannot update pull request"
+            raise AuthenticationError(msg)
+
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+
+        # Look up the existing PR
+        url = f"https://api.github.com/repos/{owner}/{repo}/pulls?" f"head={owner}:{head}&base={base}&state=open"
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=headers)
+
+        if response.status_code != 200:
+            logger.warning(f"Failed to list PRs for {head}->{base}: {response.status_code}")
+            return False
+
+        items = response.json()
+        if not isinstance(items, list) or not items:
+            logger.debug(f"No open PR found for {head} -> {base}")
+            return False
+
+        pr_data = items[0]
+        pr_number = pr_data.get("number")
+        current_title = pr_data.get("title", "")
+
+        # Check if title already matches (idempotent)
+        if current_title == new_title:
+            logger.debug(f"PR #{pr_number} already has title '{new_title}'; skipping update")
+            return False
+
+        # Update the PR title
+        update_url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}"
+        payload = {"title": new_title}
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.patch(update_url, headers=headers, json=payload)
+
+        if response.status_code == 200:
+            logger.info(
+                f"Updated PR #{pr_number} title from '{current_title}' to '{new_title}' "
+                f"({head} -> {base}) for {owner}/{repo}"
+            )
+            return True
+
+        from codetoreum.ports.exceptions import ExternalServiceError
+
+        msg = (
+            f"GitHub PR title update failed ({response.status_code}) for "
+            f"{owner}/{repo} PR #{pr_number}: {response.text[:300]}"
+        )
+        logger.error(msg)
+        raise ExternalServiceError(service="github", message=msg)
 
     async def _find_open_pull_request(
         self,

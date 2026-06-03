@@ -27,12 +27,15 @@ class ValidationError(PortError):
 class ExternalServiceError(PortError):
     """External service failure."""
 
-    def __init__(self, service: str, message: str):
+    def __init__(self, *, service: str, message: str):
         """
         Initialize ExternalServiceError.
 
-        Args: service: Name of external service
-            message: Error message
+        Args: service: Name of external service (keyword-only)
+            message: Error message (keyword-only)
+
+        Raises:
+            TypeError: If positional arguments are used instead of keyword arguments
         """
         super().__init__(f"{service} error: {message}")
         self.service = service
@@ -251,3 +254,24 @@ class ComponentNotFoundError(MetricsError):
 
 class ConfigurationError(PortError):
     """Raised when adapter or service configuration is invalid or incomplete."""
+
+
+class BoardStructureDriftError(PortError):
+    """Board structure has unsafe drift that cannot be auto-corrected.
+
+    Raised when board reconciliation detects structural changes that would
+    require manual intervention to resolve safely (e.g., renaming a column
+    that already contains work items with ambiguous mapping).
+    """
+
+    def __init__(self, board_id: str, drift_description: str):
+        """
+        Initialize BoardStructureDriftError.
+
+        Args:
+            board_id: ID of the board with drift
+            drift_description: Description of the detected drift
+        """
+        super().__init__(f"Board structure drift detected on board {board_id}: {drift_description}")
+        self.board_id = board_id
+        self.drift_description = drift_description

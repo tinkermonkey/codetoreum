@@ -23,6 +23,7 @@ from codetoreum.ports.exceptions import (
     ResourceNotFoundError,
 )
 from codetoreum.ports.output.event_store import IEventStore
+from codetoreum.ports.output.failed_event_store import IFailedEventStore
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +111,7 @@ class ElasticsearchEventStore(IEventStore):
         shutdown_drain_timeout_seconds: float = 10.0,
         bulk_refresh: bool | str = False,
         on_drop_callback: "Callable[[str, list[CodetoreumEvent], Exception], Awaitable[None]] | None" = None,
+        failed_event_store: IFailedEventStore | None = None,
     ):
         """
         Initialize Elasticsearch event store.
@@ -142,6 +144,7 @@ class ElasticsearchEventStore(IEventStore):
                 this to the dead letter queue so failed coding-agent telemetry isn't
                 silently lost under Elasticsearch pressure. Exceptions from the
                 callback are caught and logged but do not propagate.
+            failed_event_store: Failed event store for routing failures to DLQ (INV-20)
         """
         self.client = es_client
         self.index_prefix = index_prefix
@@ -150,6 +153,7 @@ class ElasticsearchEventStore(IEventStore):
         self.batch_size_limit = batch_size_limit
         self.shard_count = shard_count
         self.replica_count = replica_count
+        self.failed_event_store = failed_event_store
 
         # Async persistence configuration
         self._enable_async_persistence = enable_async_persistence
@@ -192,7 +196,9 @@ class ElasticsearchEventStore(IEventStore):
                 await self._create_index_template_if_not_exists()
                 self._initialized = True
                 logger.info(f"Elasticsearch event store initialized with prefix '{self.index_prefix}'")
-            except Exception as e:
+            except (
+                Exception
+            ) as e:  # justification: initialization failure is fatal; re-raise as EventStoreError to fail fast during bootstrap
                 msg = f"Failed to initialize event store: {e}"
                 raise EventStoreError(msg) from e
         else:
@@ -214,6 +220,38 @@ class ElasticsearchEventStore(IEventStore):
                 f"drain_timeout={self._shutdown_drain_timeout_seconds}s, "
                 f"refresh={self._bulk_refresh!r})"
             )
+
+    async def wait_for_async_queue(self, timeout_seconds: float | None = None) -> None:
+        """
+        Wait for the async persistence queue to drain.
+
+        This is useful in tests to ensure all enqueued events have been
+        persisted before reading them back. Has no effect if async persistence
+        is disabled.
+
+        Args:
+            timeout_seconds: Maximum time to wait. Defaults to
+                shutdown_drain_timeout_seconds if not specified.
+
+        Raises:
+            TimeoutError: If the queue doesn't drain within the timeout
+            EventStoreError: If the event store is not initialized
+        """
+        if not self._initialized:
+            raise EventStoreError("Event store not initialized")
+
+        if not self._enable_async_persistence or self._async_queue is None:
+            # Async persistence disabled, nothing to wait for
+            return
+
+        timeout = timeout_seconds if timeout_seconds is not None else self._shutdown_drain_timeout_seconds
+
+        try:
+            await asyncio.wait_for(self._async_queue.join(), timeout=timeout)
+        except TimeoutError:
+            pending = self._async_queue.qsize() if self._async_queue else 0
+            msg = f"Async persistence queue did not drain within {timeout}s " f"({pending} items still pending)"
+            raise TimeoutError(msg) from None
 
     async def append(
         self,

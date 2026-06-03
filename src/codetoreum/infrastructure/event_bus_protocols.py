@@ -45,12 +45,12 @@ class IDiscussionAdapter(EventEmitter, Protocol):
         ...
 
 
-class IPipelineLockService(EventEmitter, Protocol):
-    """Protocol for pipeline lock service implementations.
+class IDistributedLockEventEmitter(EventEmitter, Protocol):
+    """Protocol for distributed lock service implementations.
 
     This protocol is used for event bus wiring purposes and only requires
     the EventEmitter interface (on() method). The actual lock service methods
-    (try_acquire_lock, release_lock) are not used by event bus wiring.
+    are not used by event bus wiring.
     """
 
 

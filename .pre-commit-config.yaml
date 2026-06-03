@@ -48,3 +48,11 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-push]
+
+      - id: forbid-positional-external-service-error
+        name: forbid positional ExternalServiceError construction
+        description: Forbids positional construction of ExternalServiceError to enforce keyword-only args
+        language: system
+        entry: bash -c 'grep -r "ExternalServiceError([^)]*[\"'\'']" --include="*.py" . | grep -v "service=" | grep -v "message=" | grep -v "test_external_service_error.py" && exit 1 || exit 0'
+        types: [python]
+        pass_filenames: false

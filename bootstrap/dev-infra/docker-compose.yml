@@ -1,0 +1,73 @@
+version: "3.8"
+
+services:
+  # Exclusive Elasticsearch for Codetoreum development
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.10.0
+    container_name: codetoreum-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.security.authc.api_key.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      # Limit to Codetoreum indices only (enforced by cluster settings)
+      - action.bulk.max_allowed_size=100mb
+    ports:
+      - "9200:9200"
+    volumes:
+      - codetoreum-es-data:/usr/share/elasticsearch/data
+    networks:
+      - codetoreum-dev
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9200/_cluster/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    labels:
+      - "codetoreum.service=elasticsearch"
+      - "codetoreum.exclusive=true"
+
+  # Exclusive Redis for Codetoreum development
+  redis:
+    image: redis:7.2-alpine
+    container_name: codetoreum-redis
+    command:
+      - redis-server
+      - "--appendonly"
+      - "yes"
+      - "--databases"
+      - "1"  # Single database for Codetoreum
+      - "--maxmemory"
+      - "256mb"
+      - "--maxmemory-policy"
+      - "allkeys-lru"
+    ports:
+      - "6379:6379"
+    volumes:
+      - codetoreum-redis-data:/data
+    networks:
+      - codetoreum-dev
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    labels:
+      - "codetoreum.service=redis"
+      - "codetoreum.exclusive=true"
+
+volumes:
+  codetoreum-es-data:
+    driver: local
+    labels:
+      - "codetoreum.exclusive=true"
+  codetoreum-redis-data:
+    driver: local
+    labels:
+      - "codetoreum.exclusive=true"
+
+networks:
+  codetoreum-dev:
+    driver: bridge
+    labels:
+      - "codetoreum.exclusive=true"

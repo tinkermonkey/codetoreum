@@ -33,8 +33,11 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
-    InMemoryLockService,
+from codetoreum.adapters.testing.in_memory_distributed_lock import (
+    InMemoryDistributedLock,
+)
+from codetoreum.adapters.testing.in_memory_queue_service import (
+    InMemoryQueueService,
 )
 from codetoreum.adapters.testing.in_memory_workflow_config_service import (
     InMemoryWorkflowConfigService,
@@ -77,7 +80,8 @@ class TestScenarioC_ReviewRejectionLoop:
         """
         # Create services
         board_service = MockBoardAdapter()
-        lock_service = InMemoryLockService()
+        distributed_lock = InMemoryDistributedLock()
+        queue_service = InMemoryQueueService()
         config_service = InMemoryWorkflowConfigService()
         event_bus = EventBus()
         agent_executor = MockAgentExecutor()
@@ -89,7 +93,8 @@ class TestScenarioC_ReviewRejectionLoop:
         # Create event handler
         event_handler = BoardColumnEventHandler(
             board_service=board_service,
-            lock_service=lock_service,
+            distributed_lock=distributed_lock,
+            pipeline_queue=queue_service,
             workflow_config=config_service,
             agent_executor=agent_executor,
             event_bus=event_bus,
@@ -190,7 +195,8 @@ class TestScenarioC_ReviewRejectionLoop:
 
         return {
             "board_service": board_service,
-            "lock_service": lock_service,
+            "distributed_lock": distributed_lock,
+            "queue_service": queue_service,
             "config_service": config_service,
             "event_bus": event_bus,
             "agent_executor": agent_executor,
@@ -225,7 +231,8 @@ class TestScenarioC_ReviewRejectionLoop:
         ✓ senior_software_engineer triggered twice (initial code, then fixes)
         """
         board_service = setup["board_service"]
-        lock_service = setup["lock_service"]
+        distributed_lock = setup["distributed_lock"]
+        queue_service = setup["queue_service"]
         agent_executor = setup["agent_executor"]
         event_handler = setup["event_handler"]
 
@@ -247,7 +254,7 @@ class TestScenarioC_ReviewRejectionLoop:
         )
 
         # Verify lock acquired
-        queue_state = await lock_service.get_queue_state("proj-1", "board-1")
+        queue_state = await queue_service.get_queue_state("proj-1", "board-1")
         assert (
             queue_state.lock_holder == "work-item-100"
         ), "Expected lock holder to be 'work-item-100' when entering Development"
@@ -519,7 +526,8 @@ class TestScenarioC_ReviewRejectionLoop:
         ✓ Movement history shows complete rejection cycle pattern
         """
         board_service = setup["board_service"]
-        lock_service = setup["lock_service"]
+        distributed_lock = setup["distributed_lock"]
+        queue_service = setup["queue_service"]
         agent_executor = setup["agent_executor"]
         event_handler = setup["event_handler"]
 
@@ -539,7 +547,7 @@ class TestScenarioC_ReviewRejectionLoop:
         )
 
         # Verify lock acquired
-        queue_state = await lock_service.get_queue_state("proj-1", "board-1")
+        queue_state = await queue_service.get_queue_state("proj-1", "board-1")
         assert queue_state.lock_holder == "work-item-400"
 
         # Cycle 1: Dev → CR → Dev (first rejection)
@@ -641,7 +649,7 @@ class TestScenarioC_ReviewRejectionLoop:
         ), "Code reviewer should be triggered 3 times (all 3 review cycles)"
 
         # Verify lock maintained throughout
-        queue_state = await lock_service.get_queue_state("proj-1", "board-1")
+        queue_state = await queue_service.get_queue_state("proj-1", "board-1")
         # Lock may be in hand or released depending on cycle timing
         # But should never have been lost during Development phase
 

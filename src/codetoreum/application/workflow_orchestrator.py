@@ -5,20 +5,15 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from enum import Enum
 from typing import Any
 
 from codetoreum.domain.board_workflow_template import ColumnTemplate
 from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.domain.events.repair_cycle_events import RepairCycleCompletedEvent
-from codetoreum.domain.value_objects import ProjectConfig
 from codetoreum.domain.work_item import WorkItemPriority
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.observability.instrumentation import (
     instrument_async_function,
-)
-from codetoreum.ports.exceptions import (
-    ExternalServiceError,
 )
 from codetoreum.ports.exceptions import (
     TimeoutError as PortTimeoutError,
@@ -27,87 +22,16 @@ from codetoreum.ports.input.conversational_loop_service import IConversationalLo
 from codetoreum.ports.output import IBoardService, IEventStore, ITicketSystem
 from codetoreum.ports.output.board_service import MovedByType
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
-from codetoreum.ports.output.workflow_orchestrator import IWorkflowOrchestrator
+from codetoreum.ports.output.workflow_orchestrator import (
+    CardMovedRequest,
+    IWorkflowOrchestrator,
+    ReviewCycleCompletedRequest,
+    StageCompletedRequest,
+    WorkflowAction,
+    WorkflowResult,
+)
 
 logger = logging.getLogger(__name__)
-
-
-class WorkflowAction(Enum):
-    """Possible workflow actions."""
-
-    TASK_QUEUED = "task_queued"
-    AUTO_ADVANCE = "auto_advance"
-    ESCALATE = "escalate"
-    COMPLETE = "complete"
-    NO_ACTION = "no_action"
-
-
-@dataclass
-class WorkflowResult:
-    """Result of workflow orchestration action."""
-
-    success: bool
-    task_id: str | None
-    agent_name: str | None
-    action: WorkflowAction
-    next_column: str | None
-    reason: str
-    error: str | None = None
-
-
-@dataclass
-class CardMovedEvent:
-    """Event emitted when a card moves on GitHub Projects board."""
-
-    project: str
-    board: str
-    issue_number: int
-    from_column: str | None
-    to_column: str
-    issue_data: "IssueData"
-    timestamp: datetime
-
-
-@dataclass
-class IssueData:
-    """Issue information from GitHub."""
-
-    number: int
-    title: str
-    body: str
-    labels: list[str]
-    state: str
-    created_at: datetime
-    updated_at: datetime
-
-
-@dataclass
-class StageCompletedEvent:
-    """Event emitted when a pipeline stage completes."""
-
-    project: str
-    issue_number: int
-    stage_name: str
-    agent_name: str
-    success: bool
-    output: str
-    context: dict[str, Any]
-    timestamp: datetime
-
-
-@dataclass
-class ReviewCycleCompletedEvent:
-    """Event emitted when review cycle completes."""
-
-    project: str
-    issue_number: int
-    approved: bool
-    iteration: int
-    maker_agent: str
-    reviewer_agent: str
-    feedback: str | None
-    timestamp: datetime
-    context: dict[str, Any]
 
 
 @dataclass
@@ -357,7 +281,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
         name="workflow.handle_card_movement",
         attributes={"service": "workflow_orchestrator", "operation": "card_movement"},
     )
-    async def handle_card_movement(self, event: CardMovedEvent) -> WorkflowResult:
+    async def handle_card_movement(self, event: CardMovedRequest) -> WorkflowResult:
         """
         Handle card movement from GitHub Projects.
 
@@ -543,7 +467,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
         name="workflow.handle_stage_completion",
         attributes={"service": "workflow_orchestrator", "operation": "stage_completion"},
     )
-    async def handle_stage_completion(self, event: StageCompletedEvent) -> WorkflowResult:
+    async def handle_stage_completion(self, event: StageCompletedRequest) -> WorkflowResult:
         """
         Handle completion of a pipeline stage.
 
@@ -562,7 +486,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
         """
         logger.info(f"Handling stage completion: {event.stage_name} for issue #{event.issue_number}")
 
-        # StageCompletedEvent.context is guaranteed to be Dict[str, Any] by type contract
+        # StageCompletedRequest.context is guaranteed to be Dict[str, Any] by type contract
         board_name = event.context.get("board", "default")
         workflow_config = await self.config.get_workflow_config(event.project, board_name)
 
@@ -639,7 +563,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
         name="workflow.handle_review_cycle_completion",
         attributes={"service": "workflow_orchestrator", "operation": "review_completion"},
     )
-    async def handle_review_cycle_completion(self, event: ReviewCycleCompletedEvent) -> WorkflowResult:
+    async def handle_review_cycle_completion(self, event: ReviewCycleCompletedRequest) -> WorkflowResult:
         """
         Handle review cycle completion.
 
@@ -659,7 +583,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
             f"approved={event.approved}, iteration={event.iteration}"
         )
 
-        # ReviewCycleCompletedEvent.context is guaranteed to be Dict[str, Any] by type contract
+        # ReviewCycleCompletedRequest.context is guaranteed to be Dict[str, Any] by type contract
         board_name = event.context.get("board", "default")
 
         if event.approved:
@@ -804,7 +728,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
 
     def _build_task_context(
         self,
-        event: CardMovedEvent,
+        event: CardMovedRequest,
         column_config: ColumnConfig,
         workflow_config: WorkflowConfig,
     ) -> dict[str, Any]:
@@ -821,7 +745,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
             "review_required": column_config.review_required,
         }
 
-    async def _queue_review_task(self, event: StageCompletedEvent, column_config: ColumnConfig) -> WorkflowResult:
+    async def _queue_review_task(self, event: StageCompletedRequest, column_config: ColumnConfig) -> WorkflowResult:
         """Queue a review task."""
         if not column_config.reviewer_agent:
             return WorkflowResult(
@@ -859,7 +783,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
             reason="Review task queued",
         )
 
-    async def _queue_revision_task(self, event: ReviewCycleCompletedEvent) -> str:
+    async def _queue_revision_task(self, event: ReviewCycleCompletedRequest) -> str:
         """Queue a revision task for the maker."""
         task = Task(
             id=f"revision_{event.project}_{event.issue_number}_{int(time.time())}",
@@ -885,26 +809,19 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
         Subscribe workflow engine to adapter events.
 
         Subscribes to:
-        - workitem.column_changed: Handle column transitions
         - comment.needs_response: Handle discussion responses
-        - lock.released: Handle lock release and queue progression
         - review.status_changed: Handle review cycle completion
+        - repair_cycle.completed: Handle repair cycle completion
+
+        NOTE: WorkItemColumnChangedEvent and lock release events are now handled
+        by BoardColumnEventHandler (Phase 2 of lifecycle event handler registration).
+        These were vestigial polling-era wiring left in place during transition.
         """
         if not self.event_bus:
             return
 
-        # Subscribe to board events.
-        # NOTE: EventBus routes callbacks by event.event_type, which is the Python class name
-        # (e.g. "WorkItemColumnChangedEvent"), not the dot-notation constant from EventTypes.
-        # Using the class name here ensures this callback actually receives the event.
-        self.event_bus.subscribe("WorkItemColumnChangedEvent", self._handle_column_change)
-
         # Subscribe to discussion events
         self.event_bus.subscribe("CommentNeedsResponseEvent", self._handle_comment_needs_response)
-
-        # Subscribe to lock events
-        self.event_bus.subscribe("LockReleasedEvent", self._handle_lock_released)
-        self.event_bus.subscribe("PipelineLockReleasedEvent", self._handle_lock_released)
 
         # Subscribe to review events
         self.event_bus.subscribe("ReviewStatusChangedEvent", self._handle_review_status_changed)
@@ -1570,203 +1487,3 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
                 },
             )
 
-    @instrument_async_function(
-        name="workflow.orchestrate_project",
-        attributes={"service": "workflow_orchestrator", "operation": "orchestrate_project"},
-    )
-    async def orchestrate_project(self, project_name: str, workspace_path: str, config: ProjectConfig) -> int:
-        """Execute orchestration for a single project.
-
-        Coordinates all workflow activities for the project:
-        1. Polls project board for work items needing processing
-        2. Routes items to appropriate agents
-        3. Queues agent execution tasks
-
-        Args:
-            project_name: Name of the project
-            workspace_path: Local workspace path for the project
-            config: Project configuration (repo, branch, enabled status)
-
-        Returns:
-            int: Number of actions taken (tasks queued, etc.)
-
-        Raises:
-            ExternalServiceError: External service communication failure
-        """
-        actions_taken = 0
-        error_count = 0
-
-        # Check if project is enabled before proceeding
-        if not config.enabled:
-            logger.info(
-                f"Project {project_name} is disabled in configuration, skipping orchestration",
-                extra={"project_name": project_name},
-            )
-            return actions_taken
-
-        if not self.board_service:
-            logger.warning(
-                f"Board service not available, skipping orchestration for {project_name}",
-                extra={"error_id": "ERR_ORCHESTRATOR_NO_BOARD_SERVICE", "project_name": project_name},
-            )
-            return actions_taken
-
-        try:
-            # Get all boards for the project
-            all_boards = await self.board_service.get_all_boards()
-            logger.debug(f"Retrieved {len(all_boards)} boards for orchestration of {project_name}")
-
-            # Process each board for the project
-            for board in all_boards:
-                if board.project_id != project_name:
-                    continue
-
-                logger.debug(f"Processing board {board.name} for project {project_name}")
-
-                # Get all work items on this board
-                board_items = await self.board_service.get_board_items(project_id=project_name, board_id=board.id)
-                logger.debug(f"Found {len(board_items)} items on board {board.name}")
-
-                # Get workflow configuration
-                try:
-                    workflow_config = await self.config.get_workflow_config(project_name, board.name)
-                except (ValueError, ExternalServiceError, PortTimeoutError) as e:
-                    logger.error(
-                        f"Failed to load workflow config for board {board.name}, skipping all items on board: {e}",
-                        exc_info=True,
-                        extra={"error_id": "ERR_ORCHESTRATOR_CONFIG_LOAD", "board": board.name},
-                    )
-                    continue
-
-                # Process each work item
-                for item in board_items:
-                    try:
-                        # Validate work_item_id is numeric before any operations
-                        try:
-                            issue_number = int(item.work_item_id)
-                        except ValueError:
-                            logger.warning(
-                                f"Invalid work_item_id format (not numeric): {item.work_item_id}",
-                                exc_info=True,
-                                extra={
-                                    "error_id": "ERR_ORCHESTRATOR_INVALID_WORK_ITEM_ID",
-                                    "work_item_id": item.work_item_id,
-                                    "project": project_name,
-                                },
-                            )
-                            continue
-
-                        # Find the column configuration for this item's current column
-                        column_config = self._find_column_config(workflow_config, item.column_name)
-                        if not column_config:
-                            logger.debug(f"No column config for {item.column_name}, skipping {item.work_item_id}")
-                            continue
-
-                        # Check if work is already in progress for this agent
-                        workflow_state = await self.workflow_state.get_workflow_state(
-                            f"{project_name}:{item.work_item_id}"
-                        )
-                        if workflow_state.is_in_progress(column_config.name, column_config.agent):
-                            logger.debug(
-                                f"Work already in progress for {item.work_item_id}, agent {column_config.agent}"
-                            )
-                            continue
-
-                        # Validate agent can run
-                        try:
-                            agent_config = await self.config.get_agent_config(column_config.agent)
-                        except Exception as e:
-                            logger.warning(
-                                f"Failed to load agent config for {column_config.agent}: {e}",
-                                exc_info=True,
-                                extra={"error_id": "ERR_ORCHESTRATOR_AGENT_CONFIG_LOAD"},
-                            )
-                            continue
-
-                        validation_result = await self._validate_agent_can_run(
-                            project_name, column_config.agent, agent_config
-                        )
-                        if not validation_result.can_run:
-                            logger.debug(
-                                f"Agent {column_config.agent} cannot run: {validation_result.reason}",
-                                extra={"error_id": "ERR_ORCHESTRATOR_AGENT_VALIDATION"},
-                            )
-                            if validation_result.needs_dev_setup:
-                                await self._queue_dev_setup(project_name)
-                            continue
-
-                        # Build task context and enqueue
-                        task_context = {
-                            "project": project_name,
-                            "work_item_id": item.work_item_id,
-                            "workspace_path": workspace_path,
-                            "column": item.column_name,
-                            "board": board.name,
-                        }
-
-                        task = Task(
-                            id=f"orchestrate_{project_name}_{item.work_item_id}_{int(time.time())}",
-                            agent=column_config.agent,
-                            project=project_name,
-                            priority=WorkItemPriority.MEDIUM,
-                            context=task_context,
-                            created_at=datetime.now(UTC),
-                        )
-
-                        task_id = await self.task_queue.enqueue(task)
-                        logger.info(f"Enqueued task {task_id} for {item.work_item_id} via orchestrate_project")
-
-                        # Emit routing decision
-                        await self.decision_events.emit_routing_decision(
-                            RoutingDecision(
-                                project=project_name,
-                                issue_number=issue_number,
-                                board=board.name,
-                                column=item.column_name,
-                                selected_agent=column_config.agent,
-                                reason=f"Agent {column_config.agent} configured for column {item.column_name}",
-                                alternatives=[],
-                                workspace_type=workflow_config.workspace_type,
-                                timestamp=datetime.now(UTC),
-                            )
-                        )
-
-                        # Update workflow state
-                        workflow_state.mark_in_progress(column_config.name, column_config.agent)
-                        await self.workflow_state.update_workflow_state(
-                            f"{project_name}:{item.work_item_id}", workflow_state
-                        )
-
-                        actions_taken += 1
-
-                    except Exception as e:
-                        logger.error(
-                            f"Error processing work item {item.work_item_id} during orchestrate_project: {e}",
-                            exc_info=True,
-                            extra={
-                                "error_id": "ERR_ORCHESTRATOR_ITEM_PROCESSING",
-                                "work_item_id": item.work_item_id,
-                                "project": project_name,
-                                "error_type": type(e).__name__,
-                            },
-                        )
-                        error_count += 1
-                        continue
-
-            logger.info(
-                f"Orchestrated project {project_name}: {actions_taken} actions taken, {error_count} errors encountered",
-                extra={"actions": actions_taken, "errors": error_count},
-            )
-            return actions_taken
-
-        except Exception as e:
-            logger.error(
-                f"Error orchestrating project {project_name}: {e}",
-                exc_info=True,
-                extra={
-                    "error_id": "ERR_ORCHESTRATOR_PROJECT_ORCHESTRATION_FAILURE",
-                    "project_name": project_name,
-                    "error_type": type(e).__name__,
-                },
-            )
-            raise

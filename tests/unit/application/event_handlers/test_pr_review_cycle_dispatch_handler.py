@@ -1,5 +1,6 @@
 """Unit tests for PRReviewCycleDispatchHandler."""
 
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -143,6 +144,7 @@ class TestPRReviewCycleDispatchHandlerColumnChangeWithConfig:
             stage_name="review",
             project_id="proj-1",
             board_id="board-1",
+            started_at=datetime.now(UTC).isoformat(),
         )
         mock_registry.get_active_run = AsyncMock(return_value=active_run)
 
@@ -204,6 +206,7 @@ class TestPRReviewCycleDispatchHandlerColumnChangeWithConfig:
             stage_name="review",
             project_id="proj-1",
             board_id="board-1",
+            started_at=datetime.now(UTC).isoformat(),
         )
         mock_registry.get_active_run = AsyncMock(return_value=active_run)
 
@@ -261,6 +264,7 @@ class TestPRReviewCycleDispatchHandlerColumnChangeWithConfig:
             stage_name="review",
             project_id="proj-1",
             board_id="board-1",
+            started_at=datetime.now(UTC).isoformat(),
         )
         mock_registry.get_active_run = AsyncMock(return_value=active_run)
 
@@ -394,6 +398,7 @@ class TestPRReviewCycleDispatchHandlerErrorHandling:
             stage_name="review",
             project_id="proj-1",
             board_id="board-1",
+            started_at=datetime.now(UTC).isoformat(),
         )
         mock_registry.get_active_run = AsyncMock(return_value=active_run)
 
@@ -481,6 +486,7 @@ class TestPRReviewCycleDispatchHandlerErrorHandling:
             stage_name="review",
             project_id="proj-1",
             board_id="board-1",
+            started_at=datetime.now(UTC).isoformat(),
         )
         mock_registry.get_active_run = AsyncMock(return_value=active_run)
 

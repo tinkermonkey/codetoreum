@@ -31,17 +31,17 @@ from codetoreum.adapters.secondary import (
 from codetoreum.adapters.secondary.elasticsearch_project_manager_adapter import (
     ElasticsearchProjectManagerAdapter,
 )
+from codetoreum.adapters.secondary.file_backed_distributed_lock import (
+    FileBackedDistributedLock,
+)
 from codetoreum.adapters.secondary.github_version_control_adapter import (
     GitHubVersionControlAdapter,
-)
-from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
-    InMemoryLockService,
 )
 from codetoreum.adapters.secondary.local_key_encryption_adapter import (
     LocalKeyEncryptionAdapter,
 )
-from codetoreum.adapters.secondary.redis_pipeline_lock_service import (
-    RedisPipelineLockService,
+from codetoreum.adapters.secondary.redis_distributed_lock import (
+    RedisDistributedLock,
 )
 
 # Import testing adapters
@@ -54,6 +54,7 @@ from codetoreum.adapters.testing import (
     InMemoryCheckpointStore,
     InMemoryCodeReviewAdapter,
     InMemoryConfigStore,
+    InMemoryDistributedLock,
     InMemoryEventStore,
     InMemoryMessageBroker,
     InMemoryMetricsAdapter,
@@ -223,6 +224,7 @@ from codetoreum.infrastructure.adapters.registries import (
     ContainerRecoveryRegistry,
     ContainerRegistry,
     DiscussionAdapterRegistry,
+    DistributedLockRegistry,
     EncryptionRegistry,
     EnvironmentRepairRegistry,
     EventEmitterRegistry,
@@ -231,7 +233,6 @@ from codetoreum.infrastructure.adapters.registries import (
     MessageBrokerRegistry,
     MetricsAdapterRegistry,
     NotifierRegistry,
-    PipelineLockServiceRegistry,
     PipelineQueueServiceRegistry,
     ProjectManagerServiceRegistry,
     PRReviewCycleServiceRegistry,
@@ -269,6 +270,7 @@ from codetoreum.ports.output.config_store import IConfigStore
 from codetoreum.ports.output.container import IContainer
 from codetoreum.ports.output.container_recovery import IAgentContainerRecoveryService
 from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
+from codetoreum.ports.output.distributed_lock import IDistributedLock
 from codetoreum.ports.output.encryption_service import IEncryptionService
 from codetoreum.ports.output.environment_repair_service import IEnvironmentRepairService
 from codetoreum.ports.output.event_emitter import IEventEmitter
@@ -277,7 +279,6 @@ from codetoreum.ports.output.identity_service import IIdentityService
 from codetoreum.ports.output.message_broker import IMessageBroker
 from codetoreum.ports.output.metrics import IMetrics
 from codetoreum.ports.output.notifier import INotifier
-from codetoreum.ports.output.pipeline_lock_service import IPipelineLockService
 from codetoreum.ports.output.pipeline_queue_service import IPipelineQueueService
 from codetoreum.ports.output.pr_review_cycle_service import IPRReviewCycle
 from codetoreum.ports.output.project_manager_service import IProjectManagerService
@@ -348,7 +349,6 @@ class AdapterFactory:
         self._pr_review_cycle_registry = PRReviewCycleServiceRegistry()
         self._container_recovery_registry = ContainerRecoveryRegistry()
         self._encryption_registry = EncryptionRegistry()
-        self._pipeline_lock_registry = PipelineLockServiceRegistry()
         self._pipeline_queue_registry = PipelineQueueServiceRegistry()
         self._project_manager_registry = ProjectManagerServiceRegistry()
         self._workflow_config_registry = WorkflowConfigServiceRegistry()
@@ -363,6 +363,7 @@ class AdapterFactory:
         self._systemic_analysis_registry = SystemicAnalysisRegistry()
         self._environment_repair_registry = EnvironmentRepairRegistry()
         self._ci_pipeline_registry = CIPipelineServiceRegistry()
+        self._distributed_lock_registry = DistributedLockRegistry()
 
         # Dependency injection container
         self._dependencies: dict[str, Any] = {}
@@ -804,36 +805,6 @@ class AdapterFactory:
             ),
         )
 
-        # Pipeline Lock Service Adapters
-        self._pipeline_lock_registry.register(
-            name="in_memory",
-            adapter_type=InMemoryLockService,
-            description="In-memory pipeline lock service with position-based queue ordering",
-            version="1.0.0",
-            tags=["testing", "simulation", "mock", "production"],
-            config_schema=AdapterCredentialRequirement(
-                simulation_only=True,
-                description="Simulation-only adapter, no credentials required",
-            ),
-            set_as_default=True,
-        )
-        # Redis-backed pipeline lock service: lock state survives restart and
-        # coordinates across multiple Codetoreum instances. Requires a running
-        # Redis at REDIS_URL.
-        self._pipeline_lock_registry.register(
-            name="redis",
-            adapter_type=RedisPipelineLockService,
-            description="Redis-backed pipeline lock service with sorted-set queue ordering",
-            version="1.0.0",
-            tags=["production", "persistent", "multi_instance"],
-            config_schema=AdapterCredentialRequirement(
-                description=(
-                    "Requires a Redis client (redis.asyncio.Redis). The resolver injects "
-                    "one constructed from REDIS_URL. EventBus is injected for lock event emission."
-                ),
-            ),
-        )
-
         # Pipeline Queue Service Adapters
         self._pipeline_queue_registry.register(
             name="in_memory",
@@ -1173,6 +1144,42 @@ class AdapterFactory:
             ),
         )
 
+        # Distributed Lock Adapters
+        self._distributed_lock_registry.register(
+            name="in_memory",
+            adapter_type=InMemoryDistributedLock,
+            description="In-memory distributed lock for testing",
+            version="1.0.0",
+            tags=["testing", "simulation"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
+            set_as_default=True,
+        )
+        self._distributed_lock_registry.register(
+            name="file",
+            adapter_type=FileBackedDistributedLock,
+            description="File-backed distributed lock",
+            version="1.0.0",
+            tags=["production"],
+            config_schema=AdapterCredentialRequirement(
+                env_vars=("LOCK_FILE_PATH",),
+                description="Path to lock file directory",
+            ),
+        )
+        self._distributed_lock_registry.register(
+            name="redis",
+            adapter_type=RedisDistributedLock,
+            description="Redis-backed distributed lock",
+            version="1.0.0",
+            tags=["production"],
+            config_schema=AdapterCredentialRequirement(
+                env_vars=("REDIS_URL",),
+                description="Redis connection URL",
+            ),
+        )
+
     # Registry access methods
 
     @property
@@ -1259,11 +1266,6 @@ class AdapterFactory:
     def encryption_registry(self) -> EncryptionRegistry:
         """Get the encryption service registry."""
         return self._encryption_registry
-
-    @property
-    def pipeline_lock_registry(self) -> PipelineLockServiceRegistry:
-        """Get the pipeline lock service registry."""
-        return self._pipeline_lock_registry
 
     @property
     def pipeline_queue_registry(self) -> PipelineQueueServiceRegistry:
@@ -1361,7 +1363,6 @@ class AdapterFactory:
             "container_recovery": self._container_recovery_registry,
             "agent_executor": self._agent_executor_registry,
             "project_manager": self._project_manager_registry,
-            "lock_service": self._pipeline_lock_registry,
             "workflow_config": self._workflow_config_registry,
             "queue_service": self._pipeline_queue_registry,
             "event_emitter": self._event_emitter_registry,
@@ -1376,6 +1377,7 @@ class AdapterFactory:
             "systemic_analysis": self._systemic_analysis_registry,
             "environment_repair": self._environment_repair_registry,
             "ci_pipeline": self._ci_pipeline_registry,
+            "lock_service": self._distributed_lock_registry,
         }
 
         if slot_name not in registry_map:
@@ -1695,10 +1697,6 @@ class AdapterFactory:
         """Create an encryption service adapter instance."""
         return self._create_adapter(self._encryption_registry, adapter_name, "encryption service", **kwargs)
 
-    def create_pipeline_lock_service(self, adapter_name: str | None = None, **kwargs) -> IPipelineLockService:
-        """Create a pipeline lock service adapter instance."""
-        return self._create_adapter(self._pipeline_lock_registry, adapter_name, "pipeline lock service", **kwargs)
-
     def create_pipeline_queue_service(self, adapter_name: str | None = None, **kwargs) -> IPipelineQueueService:
         """Create a pipeline queue service adapter instance."""
         return self._create_adapter(self._pipeline_queue_registry, adapter_name, "pipeline queue service", **kwargs)
@@ -1769,6 +1767,10 @@ class AdapterFactory:
         """Create a CI pipeline service adapter instance."""
         return self._create_adapter(self._ci_pipeline_registry, adapter_name, "CI pipeline service", **kwargs)
 
+    def create_pipeline_lock_service(self, adapter_name: str | None = None, **kwargs) -> IDistributedLock:
+        """Create a distributed lock service adapter instance."""
+        return self._create_adapter(self._distributed_lock_registry, adapter_name, "Distributed lock service", **kwargs)
+
     # =========================================================================
     # Config builders for adapters requiring config objects
     # =========================================================================
@@ -1794,6 +1796,7 @@ class AdapterFactory:
             organization=org,
         )
 
+    def _build_git_config(self) -> GitConfig:
         """Build GitConfig from environment variables."""
         import os
 

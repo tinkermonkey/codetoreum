@@ -48,6 +48,7 @@ from codetoreum.adapters.primary.rest_api_adapter import RestAPIAdapter
 from codetoreum.adapters.primary.routers.agents import create_agents_router
 from codetoreum.adapters.primary.routers.audit import create_audit_router
 from codetoreum.adapters.primary.routers.config import create_config_router
+from codetoreum.adapters.primary.routers.diagnostics import create_diagnostics_router
 from codetoreum.adapters.primary.routers.events import create_events_router
 from codetoreum.adapters.primary.routers.executions import create_executions_router
 from codetoreum.adapters.primary.routers.metrics import create_metrics_router
@@ -90,7 +91,10 @@ from codetoreum.ports.input.workflow_definition_command import (
 from codetoreum.ports.input.workflow_query import IWorkflowQueryPort
 from codetoreum.ports.input.workflow_run_query import IWorkflowRunQueryPort
 from codetoreum.ports.input.workspace_query import IWorkspaceQueryPort
+from codetoreum.ports.output.board_service import IBoardService
 from codetoreum.ports.output.event_store import IEventStore
+from codetoreum.ports.output.multi_project_orchestrator import IMultiProjectOrchestrator
+from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 # Load environment variables from .env file
 load_dotenv()
@@ -180,6 +184,18 @@ async def lifespan(app: FastAPI):
             )
             # Continue startup despite poller failure - handlers will still work for direct events
 
+    # Run pipeline orchestrator startup orphan scan
+    if hasattr(app.state, "pipeline_orchestrator"):
+        try:
+            logger.info("Running pipeline orchestrator startup orphan recovery scan")
+            await app.state.pipeline_orchestrator.on_startup()
+            logger.info("Pipeline orchestrator orphan recovery scan completed")
+        except Exception:
+            logger.warning(
+                "Pipeline orchestrator orphan recovery scan failed (non-critical)",
+                exc_info=True,
+            )
+
     # Run container recovery on startup if available
     if hasattr(app.state, "container_recovery_service"):
         try:
@@ -268,6 +284,8 @@ def create_app(
     event_bus: IEventBus,
     config_service: IConfigurationService,
     logger: ILogger,
+    board_service: "IBoardService | None" = None,
+    workflow_config_service: "IWorkflowConfigService | None" = None,
     audit_query_port: IAuditQueryPort | None = None,
     auth_secret_key: str | None = None,
     disable_auth: bool = False,
@@ -276,6 +294,12 @@ def create_app(
     adapter_slot_info: dict[str, str] | None = None,
     event_store_poller: Any | None = None,
     issue_intake_port: IIssueIntakePort | None = None,
+    multi_project_orchestrator: IMultiProjectOrchestrator | None = None,
+    active_workflow_run_registry: Any | None = None,
+    distributed_lock: Any | None = None,
+    pipeline_queue: Any | None = None,
+    failed_event_store: Any | None = None,
+    orphan_scan_registry: Any | None = None,
 ) -> FastAPI:
     """
     Create and configure FastAPI application.
@@ -308,6 +332,13 @@ def create_app(
         container_recovery_service: Optional container recovery service for startup recovery
         adapter_slot_info: Optional dictionary mapping adapter slot names to implementation names
         event_store_poller: Optional event store poller for cross-process event distribution
+        issue_intake_port: Optional port for work item intake
+        multi_project_orchestrator: Optional multi-project orchestrator service
+        active_workflow_run_registry: Optional registry for tracking active workflow runs
+        distributed_lock: Optional distributed lock service
+        pipeline_queue: Optional pipeline queue service
+        failed_event_store: Optional store for failed events
+        orphan_scan_registry: Optional registry for orphan scan results
 
     Returns:
         Configured FastAPI application
@@ -355,7 +386,7 @@ def create_app(
     # Configure rate limiting
     limiter = Limiter(key_func=get_remote_address, default_limits=[rate_limit])
     app.state.limiter = limiter
-    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
     app.add_middleware(SlowAPIMiddleware)
 
     # Add security headers middleware
@@ -539,6 +570,18 @@ def create_app(
     )
     app.include_router(orchestrator_router)
 
+    # Include Projects administration router
+    if multi_project_orchestrator is not None:
+        from codetoreum.adapters.primary.routers.projects import (
+            create_projects_router,
+        )
+
+        projects_router = create_projects_router(
+            multi_project_orchestrator=multi_project_orchestrator,
+            auth_deps=auth_deps,
+        )
+        app.include_router(projects_router)
+
     # Include Scheduler router
     scheduler_router = create_scheduler_router(
         task_query_port=task_query_port,
@@ -594,9 +637,24 @@ def create_app(
     # Include Trigger router (dev/testing: manual column-change trigger)
     trigger_router = create_trigger_router(
         event_bus=event_bus,
+        board_service=board_service,
         auth_deps=auth_deps,
     )
     app.include_router(trigger_router)
+
+    # Include Diagnostics router (system maintenance operations)
+    diagnostics_router = create_diagnostics_router(
+        board_service=board_service,
+        workflow_config=workflow_config_service,
+        active_run_registry=active_workflow_run_registry,
+        distributed_lock=distributed_lock,
+        pipeline_queue=pipeline_queue,
+        failed_event_store=failed_event_store,
+        orphan_scan_registry=orphan_scan_registry,
+        event_store=event_store,
+        auth_deps=auth_deps,
+    )
+    app.include_router(diagnostics_router)
 
     # Include Audit router (if audit_query_port is provided)
     if audit_query_port is not None:
@@ -1187,8 +1245,6 @@ def create_development_app() -> FastAPI:
                 assigned_at=None,
                 current_workflow_id=None,
                 current_stage=None,
-                current_column=None,
-                entered_column_at=None,
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
                 completed_at=None,
@@ -1211,8 +1267,6 @@ def create_development_app() -> FastAPI:
                 assigned_at=datetime.now(UTC),
                 current_workflow_id=None,
                 current_stage=None,
-                current_column=None,
-                entered_column_at=None,
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
                 completed_at=None,
@@ -1242,8 +1296,6 @@ def create_development_app() -> FastAPI:
                 assigned_at=datetime.now(UTC),
                 current_workflow_id=None,
                 current_stage=None,
-                current_column=None,
-                entered_column_at=None,
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
                 completed_at=None,
@@ -1266,8 +1318,6 @@ def create_development_app() -> FastAPI:
                 assigned_at=datetime.now(UTC),
                 current_workflow_id=None,
                 current_stage=None,
-                current_column=None,
-                entered_column_at=None,
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
                 completed_at=None,
@@ -1290,8 +1340,6 @@ def create_development_app() -> FastAPI:
                 assigned_at=datetime.now(UTC),
                 current_workflow_id=None,
                 current_stage=None,
-                current_column=None,
-                entered_column_at=None,
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
                 completed_at=None,
@@ -1314,8 +1362,6 @@ def create_development_app() -> FastAPI:
                 assigned_at=datetime.now(UTC),
                 current_workflow_id=command.workflow_id,
                 current_stage=None,
-                current_column=None,
-                entered_column_at=None,
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
                 completed_at=None,
@@ -1338,32 +1384,6 @@ def create_development_app() -> FastAPI:
                 assigned_at=datetime.now(UTC),
                 current_workflow_id="wf-123",
                 current_stage=command.stage,
-                current_column=None,
-                entered_column_at=None,
-                created_at=datetime.now(UTC),
-                updated_at=datetime.now(UTC),
-                completed_at=None,
-            )
-
-        async def move_to_column(self, command):
-            from datetime import datetime
-
-            return WorkItem(
-                id=command.work_item_id,
-                project_id="proj-123",
-                title="Mock Work Item",
-                description="Mock description",
-                status=WorkItemStatus.IN_PROGRESS,
-                priority=WorkItemPriority.MEDIUM,
-                labels=[],
-                external_id=None,
-                external_url=None,
-                assigned_agent_id="agent-123",
-                assigned_at=datetime.now(UTC),
-                current_workflow_id=None,
-                current_stage=None,
-                current_column=command.column,
-                entered_column_at=None,
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
                 completed_at=None,
@@ -1389,8 +1409,6 @@ def create_development_app() -> FastAPI:
                 assigned_at=datetime.now(UTC),
                 current_workflow_id="wf-123",
                 current_stage="development",
-                current_column=None,
-                entered_column_at=None,
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
                 completed_at=None,
@@ -1413,8 +1431,6 @@ def create_development_app() -> FastAPI:
                 assigned_at=datetime.now(UTC),
                 current_workflow_id="wf-123",
                 current_stage="development",
-                current_column=None,
-                entered_column_at=None,
                 created_at=datetime.now(UTC),
                 updated_at=datetime.now(UTC),
                 completed_at=None,

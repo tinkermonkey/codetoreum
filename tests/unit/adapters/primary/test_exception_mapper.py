@@ -252,7 +252,7 @@ class TestPortExceptionMapping:
         assert "Request timed out" in http_exc.detail
 
     def test_external_service_error_maps_to_502(self):
-        exc = ExternalServiceError("GitHub", "API unavailable")
+        exc = ExternalServiceError(service="GitHub", message="API unavailable")
         http_exc = map_exception_to_http(exc)
 
         assert http_exc.status_code == status.HTTP_502_BAD_GATEWAY

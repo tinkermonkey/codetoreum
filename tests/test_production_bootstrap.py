@@ -1,9 +1,31 @@
 """Tests for ProductionApplicationBootstrap critical path enforcement."""
 
+import os
+
 import pytest
 
 from codetoreum.infrastructure.bootstrap import ProductionApplicationBootstrap
 from codetoreum.infrastructure.simulation.simulation_config import AdapterSelectionConfig
+
+
+def _infrastructure_available() -> bool:
+    """Check if required infrastructure services are available for testing."""
+    # For this test to run, we need Elasticsearch and Redis running locally
+    # This is typically only available in full integration test environments
+    import socket
+
+    def service_available(host: str, port: int) -> bool:
+        try:
+            socket.create_connection((host, port), timeout=0.5)
+            return True
+        except (TimeoutError, ConnectionRefusedError):
+            return False
+
+    # Check if Elasticsearch and Redis are available
+    es_available = service_available("localhost", 9200)
+    redis_available = service_available("localhost", 6380)
+
+    return es_available and redis_available
 
 
 @pytest.mark.asyncio
@@ -46,6 +68,252 @@ def test_get_adapter_slot_info_before_setup_raises() -> None:
 
     with pytest.raises(RuntimeError, match="get_adapter_slot_info.*before setup"):
         bootstrap.get_adapter_slot_info()
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(not _infrastructure_available(), reason="Requires Elasticsearch and Redis to be running locally")
+async def test_critical_adapters_have_failure_routes() -> None:
+    """Verify that Phase 3a validates critical adapters declare failure routes (INV-20).
+
+    This test requires live Elasticsearch and Redis services for infrastructure
+    exclusivity verification (Phase 1c). It verifies that critical adapters
+    are properly configured with failure routes via the DLQ.
+    """
+    # Use default production config (all real adapters)
+    bootstrap = ProductionApplicationBootstrap()
+
+    # setup() should pass Phase 3a validation that all critical adapters have failed_event_store
+    app = await bootstrap.setup()
+    assert app is not None
+
+    # Verify that at least the infrastructure's failed_event_store was created and is available
+    assert bootstrap.infrastructure is not None
+    assert bootstrap.infrastructure.failed_event_store is not None
+
+    # Verify critical adapters have non-None failure routes (exactly 5 critical adapters)
+    critical_adapters_with_failure_routes = [
+        adapter
+        for slot_name in ["board", "ticket", "version_control", "container", "code_review"]
+        if (adapter := bootstrap.adapters.__dict__.get(slot_name))
+        and getattr(adapter, "failed_event_store", None) is not None
+    ]
+    assert (
+        len(critical_adapters_with_failure_routes) == 5
+    ), "All 5 critical adapters should have non-None failure routes"
+
+    # Verify DLQ retry processor was started (Phase 5d-2)
+    # The failed_event_store should be a DeadLetterQueueFailedEventStoreAdapter
+    # wrapping a running DeadLetterQueue instance
+    from codetoreum.adapters.secondary.failed_event_store_adapter import (
+        DeadLetterQueueFailedEventStoreAdapter,
+    )
+
+    failed_event_store = bootstrap.infrastructure.failed_event_store
+    assert isinstance(
+        failed_event_store, DeadLetterQueueFailedEventStoreAdapter
+    ), "failed_event_store should be DeadLetterQueueFailedEventStoreAdapter in production"
+
+    # Check that the underlying DLQ's retry processor is running
+    dlq = failed_event_store._dead_letter_queue
+    assert dlq is not None, "DeadLetterQueue should be initialized"
+    assert dlq._running is True, "DLQ retry processor should be running (Phase 5d-2)"
+
+    await bootstrap.teardown()
+
+
+@pytest.mark.asyncio
+async def test_event_handler_types_declared() -> None:
+    """Verify event handler decorators declare correct event types with live event bus subscriptions.
+
+    This test verifies that:
+    1. The @event_handler decorators on all handlers declare the correct event types
+    2. The event bus has live subscribers for every event type each handler claims to handle
+
+    The mapping here must match the @event_handler decorators in
+    src/codetoreum/application/event_handlers/:
+    - BoardColumnEventHandler
+    - PRReviewCycleDispatchHandler
+    - PRReviewCycleEventHandler
+    - ReviewEventHandler
+    - WorkflowEventHandler (Lifecycle Event Handler Registration)
+    - ExecutionEventHandler (Lifecycle Event Handler Registration)
+    - BranchResolutionEventHandler (Lifecycle Event Handler Registration)
+    - RepairCycleEventHandler (Lifecycle Event Handler Registration)
+    - PipelineOrchestrator (Lock/Queue Coordination)
+    """
+    from unittest.mock import MagicMock
+
+    from codetoreum.application.event_handlers import (
+        BoardColumnEventHandler,
+        BranchResolutionEventHandler,
+        ExecutionEventHandler,
+        PRReviewCycleEventHandler,
+        RepairCycleEventHandler,
+        ReviewEventHandler,
+        WorkflowEventHandler,
+    )
+    from codetoreum.application.event_handlers.pipeline_orchestrator import (
+        PipelineOrchestrator,
+    )
+    from codetoreum.application.event_handlers.pr_review_cycle_dispatch_handler import (
+        PRReviewCycleDispatchHandler,
+    )
+    from codetoreum.infrastructure.event_bus import EventBus
+
+    # Create event bus instance to test live subscriptions
+    event_bus = EventBus()
+
+    # Minimal mock dependencies for handler instantiation
+    mock_services = {
+        "review_service": MagicMock(),
+        "ci_pipeline_service": MagicMock(),
+        "orchestrator": MagicMock(),
+        "execution_service": MagicMock(),
+    }
+
+    mock_adapters = {
+        "board": MagicMock(),
+        "pr_review_cycle": MagicMock(),
+        "workflow_config": MagicMock(),
+        "work_item_service": MagicMock(),
+        "run_registry": MagicMock(),
+        "distributed_lock": MagicMock(),
+        "pipeline_queue": MagicMock(),
+        "orphan_scan_registry": MagicMock(),
+        "event_emitter": MagicMock(),
+    }
+
+    # Instantiate all handlers and register with event bus
+    handlers = [
+        # Board column handler
+        BoardColumnEventHandler(
+            board_service=mock_adapters["board"],
+            workflow_config=mock_adapters["workflow_config"],
+            agent_executor=MagicMock(),
+            event_bus=event_bus,
+            work_item_service=MagicMock(),
+            distributed_lock=MagicMock(),
+            pipeline_queue=MagicMock(),
+        ),
+        # PR Review Cycle Dispatch Handler
+        PRReviewCycleDispatchHandler(
+            pr_review_cycle=mock_adapters["pr_review_cycle"],
+            workflow_config=mock_adapters["workflow_config"],
+            work_item_service=mock_adapters["work_item_service"],
+            active_workflow_run_registry=mock_adapters["run_registry"],
+        ),
+        # PR Review Cycle Event Handler
+        PRReviewCycleEventHandler(
+            board_service=mock_adapters["board"],
+        ),
+        # Review Event Handler
+        ReviewEventHandler(
+            review_service=mock_services["review_service"],
+            ci_pipeline_service=mock_services["ci_pipeline_service"],
+        ),
+        # Workflow Event Handler
+        WorkflowEventHandler(
+            orchestrator=mock_services["orchestrator"],
+        ),
+        # Execution Event Handler
+        ExecutionEventHandler(
+            execution_service=mock_services["execution_service"],
+        ),
+        # Branch Resolution Event Handler
+        BranchResolutionEventHandler(
+            event_bus=event_bus,
+        ),
+        # Repair Cycle Event Handler
+        RepairCycleEventHandler(
+            repair_cycle=MagicMock(),
+            workflow_config=mock_adapters["workflow_config"],
+            event_bus=event_bus,
+            ci_pipeline_service=mock_services["ci_pipeline_service"],
+        ),
+        # Pipeline Orchestrator
+        PipelineOrchestrator(
+            distributed_lock=mock_adapters["distributed_lock"],
+            pipeline_queue=mock_adapters["pipeline_queue"],
+            run_registry=mock_adapters["run_registry"],
+            event_emitter=mock_adapters["event_emitter"],
+            orphan_scan_registry=mock_adapters["orphan_scan_registry"],
+        ),
+    ]
+
+    # Register all handlers with the event bus
+    for handler in handlers:
+        event_bus.register_handler(handler)
+
+    # Expected event type mappings - must match @event_handler decorators
+    expected_handler_event_types = {
+        "BoardColumnEventHandler": {
+            "WorkItemColumnChangedEvent",
+            "AgentExecutionCompletedEvent",
+        },
+        "PRReviewCycleDispatchHandler": {"WorkItemColumnChangedEvent"},
+        "PRReviewCycleEventHandler": {
+            "PRReviewCycleApprovedEvent",
+            "PRReviewCycleIssuesFoundEvent",
+            "PRReviewCycleMaxCyclesReachedEvent",
+        },
+        "ReviewEventHandler": {
+            "ReviewCycleCreatedEvent",
+            "ReviewCycleIterationStartedEvent",
+            "ReviewCycleFeedbackSubmittedEvent",
+            "ReviewCycleApprovedEvent",
+            "ReviewCycleRejectedEvent",
+            "ReviewCycleEscalatedToHumanEvent",
+        },
+        "WorkflowEventHandler": {
+            "WorkItemCreatedEvent",
+            "ExecutionCompletedEvent",
+            "ExecutionFailedEvent",
+            "ReviewCycleApprovedEvent",
+            "ReviewCycleRejectedEvent",
+            "ReviewCycleEscalatedToHumanEvent",
+        },
+        "ExecutionEventHandler": {
+            "ExecutionInitializedEvent",
+            "ExecutionStartedEvent",
+            "ExecutionCompletedEvent",
+            "ExecutionFailedEvent",
+            "ExecutionTimedOutEvent",
+        },
+        "BranchResolutionEventHandler": {
+            "BranchResolvedEvent",
+            "BranchReusedEvent",
+            "BranchResolutionCreatedEvent",
+        },
+        "RepairCycleEventHandler": {"WorkItemColumnChangedEvent"},
+        "PipelineOrchestrator": {
+            "PipelineLockAcquiredEvent",
+            "PipelineLockReleasedEvent",
+        },
+    }
+
+    # Verify the mapping is not empty
+    assert len(expected_handler_event_types) > 0, "Handler event type mapping should not be empty"
+
+    # Verify each handler has at least one event type declared
+    for handler_name, event_types in expected_handler_event_types.items():
+        assert len(event_types) > 0, f"Handler {handler_name} should declare at least one event type"
+
+    # Verify that the event bus has live subscribers for all declared event types
+    for handler_name, expected_event_types in expected_handler_event_types.items():
+        for event_type in expected_event_types:
+            assert (
+                event_type in event_bus._handlers
+            ), f"Event bus should have subscribers for {event_type} (declared by {handler_name})"
+
+            # Verify at least one handler is subscribed to this event type
+            subscribers = event_bus._handlers[event_type]
+            assert len(subscribers) > 0, f"Event type {event_type} should have at least one subscriber"
+
+    # Verify the total number of registered handlers matches our expectations
+    total_registered_handlers = sum(len(handlers) for handlers in event_bus._handlers.values())
+    assert (
+        total_registered_handlers > 0
+    ), "Event bus should have registered handlers for the declared event types"
 
 
 @pytest.mark.asyncio
@@ -209,3 +477,75 @@ async def test_teardown_safe_when_not_setup() -> None:
 
     # Verify it's still safe to call again
     await bootstrap.teardown()
+
+
+@pytest.mark.asyncio
+async def test_board_reconciliation_runs_at_bootstrap() -> None:
+    """Verify that board reconciliation is invoked during bootstrap Phase 5c.
+
+    This test verifies that _reconcile_board_structures is called and:
+    1. Retrieves projects from config_store
+    2. Gets board workflow templates for each project
+    3. Calls reconcile_board on the board service for each template
+    4. Non-fatal - doesn't block bootstrap if reconciliation fails
+    """
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    # Create a bootstrap instance with minimal setup
+    bootstrap = ProductionApplicationBootstrap()
+
+    # Mock the adapters
+    mock_adapters = MagicMock()
+    mock_config_store = AsyncMock()
+    mock_workflow_config = AsyncMock()
+    mock_board_service = AsyncMock()
+
+    bootstrap.adapters = mock_adapters
+    bootstrap.adapters.config_store = mock_config_store
+    bootstrap.adapters.workflow_config = mock_workflow_config
+    bootstrap.adapters.board = mock_board_service
+
+    # Create mock project config
+    mock_project_config = MagicMock()
+    mock_project_config.id = "proj-1"
+    mock_config_store.list_projects = AsyncMock(return_value=[mock_project_config])
+
+    # Create mock board workflow template
+    from codetoreum.domain.board_workflow_template import BoardWorkflowTemplate, ColumnTemplate
+
+    mock_column_1 = MagicMock(spec=ColumnTemplate)
+    mock_column_1.name = "Backlog"
+
+    mock_column_2 = MagicMock(spec=ColumnTemplate)
+    mock_column_2.name = "In Progress"
+
+    mock_template = MagicMock(spec=BoardWorkflowTemplate)
+    mock_template.board_id = "board-1"
+    mock_template.columns = (mock_column_1, mock_column_2)
+
+    mock_workflow_config.list_board_workflow_templates = AsyncMock(return_value=[mock_template])
+
+    # Mock reconciliation result
+    from codetoreum.ports.output.board_service import ReconciliationResult
+
+    mock_result = MagicMock(spec=ReconciliationResult)
+    mock_result.columns_added = []
+    mock_result.columns_removed = []
+    mock_result.columns_renamed = []
+    mock_board_service.reconcile_board = AsyncMock(return_value=mock_result)
+
+    # Call the reconciliation method
+    await bootstrap._reconcile_board_structures()
+
+    # Verify the flow
+    mock_config_store.list_projects.assert_called_once()
+    mock_workflow_config.list_board_workflow_templates.assert_called_once_with("proj-1")
+    mock_board_service.reconcile_board.assert_called_once()
+
+    # Verify reconcile_board was called with the correct board_id and column config
+    call_args = mock_board_service.reconcile_board.call_args
+    assert call_args is not None
+    board_id, board_config = call_args[0]
+    assert board_id == "board-1"
+    assert board_config.board_id == "board-1"
+    assert board_config.expected_columns == ("Backlog", "In Progress")

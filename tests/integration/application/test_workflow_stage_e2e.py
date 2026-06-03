@@ -18,12 +18,12 @@ from codetoreum.adapters.testing.in_memory_config_store import InMemoryConfigSto
 from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
 from codetoreum.application.configuration_service import ConfigurationService
 from codetoreum.application.event_handlers.board_event_handler import BoardColumnEventHandler
-from codetoreum.application.pipeline_lock_service import LockStatus
 from codetoreum.domain.board_workflow_template import BoardWorkflowTemplate, ColumnTemplate, ColumnType
 from codetoreum.domain.events.board_events import WorkItemColumnChangedEvent
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.ports.input.config_command import UpdatePipelineConfigCommand
 from codetoreum.ports.output.config_store import ProjectConfig
+from codetoreum.ports.output.distributed_lock import AcquireStatus
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
 
@@ -172,8 +172,8 @@ class TestWorkflowStageE2E:
         mock_board_service.get_item_position.return_value = MagicMock(position=1, column_name="In Progress")
 
         mock_lock_service = AsyncMock()
-        mock_lock_service.try_acquire_lock.return_value = MagicMock(
-            status=LockStatus.ACQUIRED, queue_position=0, queue_length=0
+        mock_lock_service.try_acquire.return_value = MagicMock(
+            status=AcquireStatus.ACQUIRED, lock_key="proj-1:board-1", holder_id="issue-123", acquired_at=datetime.now()
         )
 
         mock_agent_executor = AsyncMock()
@@ -182,12 +182,13 @@ class TestWorkflowStageE2E:
 
         handler = BoardColumnEventHandler(
             board_service=mock_board_service,
-            lock_service=mock_lock_service,
+            distributed_lock=mock_lock_service,
             workflow_config=mock_workflow_config_service,
             agent_executor=mock_agent_executor,
             event_bus=event_bus,
             event_store=event_store,
             work_item_service=AsyncMock(),
+            pipeline_queue=AsyncMock(),
         )
 
         # 3. Simulate work item moving to "In Progress"

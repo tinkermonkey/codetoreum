@@ -23,7 +23,7 @@ from codetoreum.infrastructure.event_bus_protocols import (
     IBoardService,
     ICodeReviewService,
     IDiscussionAdapter,
-    IPipelineLockService,
+    IDistributedLockEventEmitter,
 )
 from codetoreum.ports.output.branch_resolution_service import IBranchResolutionService
 
@@ -81,7 +81,7 @@ class EventBusWiring:
         self._wired_adapters.add("discussion_adapter")
         logger.info("Wired discussion adapter to event bus")
 
-    def wire_lock_service(self, lock_service: IPipelineLockService) -> None:
+    def wire_lock_service(self, lock_service: IDistributedLockEventEmitter) -> None:
         """
         Wire a lock service to the event bus.
 
@@ -144,7 +144,7 @@ class EventBusWiring:
         self,
         board_service: IBoardService | None = None,
         discussion_adapter: IDiscussionAdapter | None = None,
-        lock_service: IPipelineLockService | None = None,
+        lock_service: IDistributedLockEventEmitter | None = None,
         review_service: ICodeReviewService | None = None,
         branch_resolution_service: IBranchResolutionService | None = None,
     ) -> None:
@@ -232,7 +232,7 @@ def wire_adapters_to_event_bus(
     event_bus: EventBus,
     board_service: IBoardService | None = None,
     discussion_adapter: IDiscussionAdapter | None = None,
-    lock_service: IPipelineLockService | None = None,
+    lock_service: IDistributedLockEventEmitter | None = None,
     review_service: ICodeReviewService | None = None,
     branch_resolution_service: IBranchResolutionService | None = None,
 ) -> EventBusWiring:

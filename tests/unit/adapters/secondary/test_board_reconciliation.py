@@ -152,3 +152,65 @@ class TestBoardReconciliationIdempotency:
 
         assert item1_exists
         assert item2_exists
+
+    async def test_reconcile_detects_unambiguous_rename(self, mock_board_adapter):
+        """Test that reconciliation detects and reports unambiguous column renames."""
+        adapter = mock_board_adapter
+
+        # Add item to a column that will be removed
+        adapter.seed_item_to_column("board-1", "Review", "item-1")
+
+        # Reconcile with renamed column: "Review" → "Testing"
+        config = BoardConfig("board-1", expected_columns=["Backlog", "In Progress", "Testing", "Done"])
+        result = await adapter.reconcile_board("board-1", config)
+
+        # Should detect the rename
+        assert len(result.columns_renamed) == 1
+        assert result.columns_renamed[0] == ("Review", "Testing")
+
+        # Items should not be marked as orphaned (they're preserved via rename)
+        assert len(result.orphaned_items) == 0
+
+    async def test_reconcile_reports_removed_columns_excluding_renames(self, mock_board_adapter):
+        """Test that removed_columns excludes columns that are renamed."""
+        adapter = mock_board_adapter
+
+        # Add item to a column that will be removed
+        adapter.seed_item_to_column("board-1", "Review", "item-1")
+
+        # Reconcile with renamed column: "Review" → "Testing"
+        config = BoardConfig("board-1", expected_columns=["Backlog", "In Progress", "Testing", "Done"])
+        result = await adapter.reconcile_board("board-1", config)
+
+        # "Review" should not be in removed_columns (it's renamed, not removed)
+        assert "Review" not in result.columns_removed
+
+    async def test_reconcile_reports_orphaned_items_excluding_renamed_columns(self, mock_board_adapter):
+        """Test that orphaned_items excludes items in renamed columns."""
+        adapter = mock_board_adapter
+
+        # Add item to a column that will be removed
+        adapter.seed_item_to_column("board-1", "Review", "item-1")
+
+        # Reconcile with renamed column: "Review" → "Testing"
+        config = BoardConfig("board-1", expected_columns=["Backlog", "In Progress", "Testing", "Done"])
+        result = await adapter.reconcile_board("board-1", config)
+
+        # "item-1" should not be in orphaned_items (it's preserved via rename)
+        assert "item-1" not in result.orphaned_items
+
+    async def test_reconcile_detects_unsafe_drift(self, mock_board_adapter):
+        """Test that reconciliation raises BoardStructureDriftError for unsafe drift."""
+        adapter = mock_board_adapter
+
+        # Add items to multiple columns that will be removed
+        adapter.seed_item_to_column("board-1", "Review", "item-1")
+        adapter.seed_item_to_column("board-1", "In Progress", "item-2")
+
+        # Remove both columns without adding any: unsafe drift
+        config = BoardConfig("board-1", expected_columns=["Backlog", "Done"])
+
+        from codetoreum.ports.exceptions import BoardStructureDriftError
+
+        with pytest.raises(BoardStructureDriftError):
+            await adapter.reconcile_board("board-1", config)

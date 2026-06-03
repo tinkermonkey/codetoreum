@@ -11,7 +11,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-from codetoreum.application.pipeline_lock_service import IQueuedPipelineLockService
 from codetoreum.infrastructure.adapters.registry_base import AdapterRegistry
 from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
 from codetoreum.ports.output.agent_executor import IAgentExecutor
@@ -23,6 +22,7 @@ from codetoreum.ports.output.config_store import IConfigStore
 from codetoreum.ports.output.container import IContainer
 from codetoreum.ports.output.container_recovery import IAgentContainerRecoveryService
 from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
+from codetoreum.ports.output.distributed_lock import IDistributedLock
 from codetoreum.ports.output.encryption_service import IEncryptionService
 from codetoreum.ports.output.environment_repair_service import IEnvironmentRepairService
 from codetoreum.ports.output.event_emitter import IEventEmitter
@@ -31,7 +31,6 @@ from codetoreum.ports.output.identity_service import IIdentityService
 from codetoreum.ports.output.message_broker import IMessageBroker
 from codetoreum.ports.output.metrics import IMetrics
 from codetoreum.ports.output.notifier import INotifier
-from codetoreum.ports.output.pipeline_lock_service import IPipelineLockService
 from codetoreum.ports.output.pipeline_queue_service import IPipelineQueueService
 from codetoreum.ports.output.pr_review_cycle_service import IPRReviewCycle
 from codetoreum.ports.output.project_manager_service import IProjectManagerService
@@ -503,34 +502,6 @@ class EncryptionRegistry(AdapterRegistry[IEncryptionService]):
         return _validate_adapter_implements_interface(adapter_type, self._port_interface)
 
 
-class PipelineLockServiceRegistry(AdapterRegistry[IPipelineLockService]):
-    """Registry for IPipelineLockService adapter implementations.
-
-    This registry accepts adapters that implement either:
-    - IPipelineLockService (port interface, 3-parameter lock methods)
-    - IQueuedPipelineLockService (application interface, 4-parameter lock methods with position-based queue)
-    """
-
-    def __init__(self):
-        """Initialize the pipeline lock service registry."""
-        super().__init__(IPipelineLockService)
-
-    def _is_valid_adapter(self, adapter_type: type[IPipelineLockService]) -> bool:
-        """Validate that an adapter implements IPipelineLockService or IQueuedPipelineLockService."""
-        # Check if implements port interface
-        try:
-            if _validate_adapter_implements_interface(adapter_type, self._port_interface):
-                return True
-        except ValueError:
-            # Fall through to check IQueuedPipelineLockService alternative
-            pass
-        # Also accept adapters that implement IQueuedPipelineLockService (application interface)
-        try:
-            return _validate_adapter_implements_interface(adapter_type, IQueuedPipelineLockService)
-        except ValueError:
-            return False
-
-
 class PipelineQueueServiceRegistry(AdapterRegistry[IPipelineQueueService]):
     """Registry for IPipelineQueueService adapter implementations."""
 
@@ -708,4 +679,16 @@ class PRReviewCycleServiceRegistry(AdapterRegistry[IPRReviewCycle]):
 
     def _is_valid_adapter(self, adapter_type: type[IPRReviewCycle]) -> bool:
         """Validate that an adapter implements IPRReviewCycle."""
+        return _validate_adapter_implements_interface(adapter_type, self._port_interface)
+
+
+class DistributedLockRegistry(AdapterRegistry[IDistributedLock]):
+    """Registry for IDistributedLock adapter implementations."""
+
+    def __init__(self):
+        """Initialize the distributed lock registry."""
+        super().__init__(IDistributedLock)
+
+    def _is_valid_adapter(self, adapter_type: type[IDistributedLock]) -> bool:
+        """Validate that an adapter implements IDistributedLock."""
         return _validate_adapter_implements_interface(adapter_type, self._port_interface)

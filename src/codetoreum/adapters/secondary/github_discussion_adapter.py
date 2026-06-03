@@ -227,10 +227,10 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
                     raise ResourceNotFoundError(msg, work_item_id)
                 if response.status_code == 403:
                     msg = "GitHub"
-                    raise ExternalServiceError(msg, "Rate limit exceeded")
+                    raise ExternalServiceError(service=msg, message="Rate limit exceeded")
                 if response.status_code >= 400:
                     msg = "GitHub"
-                    raise ExternalServiceError(msg, f"API error: {response.status_code}")
+                    raise ExternalServiceError(service=msg, message=f"API error: {response.status_code}")
 
                 page_data = response.json()
                 if not page_data:
@@ -262,12 +262,14 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             )
 
         except (httpx.RequestError, httpx.HTTPError) as e:
-            raise ExternalServiceError("GitHub", f"API request failed: {e!s}")
+            raise ExternalServiceError(service="GitHub", message=f"API request failed: {e!s}")
 
     async def _get_discussion_thread(self, discussion_id: str) -> DiscussionThread:
         """Retrieve all comments on a GitHub Discussion via GraphQL API."""
         if self._graphql_client is None:
-            raise ExternalServiceError("GitHub", "GraphQL client required to fetch GitHub Discussion threads")
+            raise ExternalServiceError(
+                service="GitHub", message="GraphQL client required to fetch GitHub Discussion threads"
+            )
 
         query = """
         query GetDiscussionComments($id: ID!, $after: String) {
@@ -395,10 +397,10 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
                 raise ResourceNotFoundError(msg, work_item_id)
             if response.status_code == 403:
                 msg = "GitHub"
-                raise ExternalServiceError(msg, "Rate limit exceeded")
+                raise ExternalServiceError(service=msg, message="Rate limit exceeded")
             if response.status_code >= 400:
                 msg = "GitHub"
-                raise ExternalServiceError(msg, f"API error: {response.status_code}")
+                raise ExternalServiceError(service=msg, message=f"API error: {response.status_code}")
 
             data = response.json()
             comment = Comment(
@@ -411,7 +413,7 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             )
 
         except (httpx.RequestError, httpx.HTTPError) as e:
-            raise ExternalServiceError("GitHub", f"API request failed: {e!s}")
+            raise ExternalServiceError(service="GitHub", message=f"API request failed: {e!s}")
 
         self._emit_comment_posted(work_item_id, comment)
         return comment
@@ -419,7 +421,9 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
     async def _add_discussion_comment(self, discussion_id: str, content: str) -> Comment:
         """Post a comment to a GitHub Discussion via GraphQL API."""
         if self._graphql_client is None:
-            raise ExternalServiceError("GitHub", "GraphQL client required to post comments on GitHub Discussions")
+            raise ExternalServiceError(
+                service="GitHub", message="GraphQL client required to post comments on GitHub Discussions"
+            )
 
         mutation = """
         mutation AddDiscussionComment($discussionId: ID!, $body: String!) {

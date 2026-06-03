@@ -170,7 +170,7 @@ class TestGetBoard:
     @pytest.mark.asyncio
     async def test_get_board_api_error(self, board_adapter, mock_graphql_client):
         """Test API error handling."""
-        mock_graphql_client.execute.side_effect = ExternalServiceError("GitHub", "API error")
+        mock_graphql_client.execute.side_effect = ExternalServiceError(service="GitHub", message="API error")
 
         with pytest.raises(ExternalServiceError):
             await board_adapter.get_board("proj-123", "board-456")
@@ -373,7 +373,9 @@ class TestErrorHandling:
     @pytest.mark.asyncio
     async def test_graphql_error_handling(self, board_adapter, mock_graphql_client):
         """Test GraphQL error handling."""
-        mock_graphql_client.execute.side_effect = ExternalServiceError("GitHub", "GraphQL error: Rate limit exceeded")
+        mock_graphql_client.execute.side_effect = ExternalServiceError(
+            service="GitHub", message="GraphQL error: Rate limit exceeded"
+        )
 
         with pytest.raises(ExternalServiceError):
             await board_adapter.get_board("proj-123", "board-456")

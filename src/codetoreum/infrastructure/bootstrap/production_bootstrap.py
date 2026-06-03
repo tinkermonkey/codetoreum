@@ -47,6 +47,9 @@ from codetoreum.adapters.primary.input_port_adapters.mock import (
 from codetoreum.adapters.secondary.failed_event_store_adapter import (
     DeadLetterQueueFailedEventStoreAdapter,
 )
+from codetoreum.adapters.secondary.pipeline_queue_service_adapter import (
+    PipelineQueueServiceAdapter,
+)
 from codetoreum.application.agent_execution_recovery_service import (
     AgentExecutionRecoveryService,
 )
@@ -62,14 +65,29 @@ from codetoreum.application.conversational_loop_orchestrator import (
 from codetoreum.application.event_handlers.board_event_handler import (
     BoardColumnEventHandler,
 )
+from codetoreum.application.event_handlers.branch_resolution_event_handler import (
+    BranchResolutionEventHandler,
+)
+from codetoreum.application.event_handlers.execution_event_handler import (
+    ExecutionEventHandler,
+)
+from codetoreum.application.event_handlers.pipeline_orchestrator import (
+    PipelineOrchestrator,
+)
 from codetoreum.application.event_handlers.pr_review_cycle_dispatch_handler import (
     PRReviewCycleDispatchHandler,
 )
 from codetoreum.application.event_handlers.pr_review_cycle_event_handler import (
     PRReviewCycleEventHandler,
 )
+from codetoreum.application.event_handlers.repair_cycle_event_handler import (
+    RepairCycleEventHandler,
+)
 from codetoreum.application.event_handlers.review_event_handler import (
     ReviewEventHandler,
+)
+from codetoreum.application.event_handlers.workflow_event_handler import (
+    WorkflowEventHandler,
 )
 from codetoreum.application.execution_service import ExecutionService
 from codetoreum.application.feedback_processor import FeedbackProcessor
@@ -95,6 +113,7 @@ from codetoreum.infrastructure.bootstrap.codetoreum_board_setup import (
     CODETOREUM_BOARD_ID,
 )
 from codetoreum.infrastructure.dead_letter_queue import DeadLetterQueue
+from codetoreum.infrastructure.dlq_retry import create_dlq_retry_handler
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.event_store_poller import EventStorePoller
@@ -364,6 +383,26 @@ class ProductionApplicationBootstrap:
             )
             self._credentials = credentials
             logger.info("Phase 1b: Credentials loaded from environment.")
+
+            # Phase 1c: Verify infrastructure exclusivity (INV-21)
+            logger.info("Phase 1c: Verifying infrastructure exclusivity...")
+            import sys
+
+            from codetoreum.infrastructure.bootstrap.infra_exclusivity import (
+                InfraExclusivityError,
+                verify_infra_exclusivity,
+            )
+
+            es_url = _cred_os.environ.get("ELASTICSEARCH_URL", "http://localhost:9200")
+            redis_url = _cred_os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+
+            try:
+                await verify_infra_exclusivity(es_url, redis_url, credentials.github_token)
+            except InfraExclusivityError as e:
+                logger.error(f"Infrastructure exclusivity check failed: {e}")
+                sys.exit(e.exit_code)
+            logger.info("Phase 1c: Infrastructure exclusivity verified.")
+
             # AdapterFactoryConfig defaults to PRODUCTION mode, which is what we need
             self._adapter_factory = AdapterFactory()
 
@@ -386,6 +425,7 @@ class ProductionApplicationBootstrap:
                 logger=logger,
                 engine=engine_stub,  # type: ignore  # Minimal engine for non-critical mocks
                 config=None,  # type: ignore  # No simulation config in production
+                failed_event_store=self.infrastructure.failed_event_store,  # INV-20: Failure routing
             )
 
             resolver = AdapterResolver(self.config, self._adapter_factory, adapter_deps, credentials=credentials)
@@ -403,6 +443,10 @@ class ProductionApplicationBootstrap:
             # Phase 3: Critical path enforcement
             logger.info("Phase 3: Validating no mocks on critical execution paths...")
             self._validate_no_mocks_on_critical_path()
+
+            # Phase 3a: Verify critical adapters have failure routes (INV-20)
+            logger.info("Phase 3a: Verifying critical adapters declare failure routes (INV-20)...")
+            self._validate_critical_failure_routes()
 
             # Phase 3b: Verify event_emitter is not a test capture adapter
             logger.info("Phase 3b: Verifying production event_emitter is not test-only...")
@@ -506,20 +550,8 @@ class ProductionApplicationBootstrap:
 
             # Phase 4e: Detect orphaned workflow runs left over from a crashed
             # or SIGTERM-killed previous instance. The Redis-backed
-            # IActiveWorkflowRunRegistry preserved ActiveRunInfo across the
-            # restart, but the in-process WorkflowOrchestrator state is gone.
-            # For each persisted run, check the event store for a terminal
-            # workflow event; if none exists and the started event is older
-            # than the stale threshold, emit WorkflowOrphanedEvent so audit
-            # consumers and downstream handlers can reconcile.
-            logger.info("Phase 4e: Running orphan workflow-run detection...")
-            try:
-                await self._detect_orphaned_workflow_runs()
-            except Exception:
-                logger.exception(
-                    "Phase 4e orphan detection failed; continuing bootstrap "
-                    "(orphan runs will not be cleaned up this cycle)",
-                )
+            # Orphan detection has moved to PipelineOrchestrator.on_startup()
+            # which runs via the FastAPI lifespan, not in bootstrap
 
             # Log non-critical slots with mock implementations
             self._log_non_critical_slots()
@@ -540,24 +572,56 @@ class ProductionApplicationBootstrap:
             logger.info("Phase 5c: Loading project bootstrap configurations...")
             await self._load_bootstrap_projects()
 
-            # Phase 5d removed: WorkItemService is now constructor-injected into
+            # Phase 5d: Reconcile board structures
+            logger.info("Phase 5d: Reconciling board structures for all projects...")
+            await self._reconcile_board_structures()
+
+            # Phase 5d-1 removed: WorkItemService is now constructor-injected into
             # the executor in _create_services (see "WorkItemService must be
             # constructed BEFORE the executor" block). No post-hoc swap is
             # required. The phase ordering log line is retained for parity with
             # log-grep checkpoints in the deficiency log; the architectural
             # seam it documented is gone.
-            logger.info("Phase 5d: WorkItemService is constructor-injected into executor (no swap needed)")
+            logger.info("Phase 5d-1: WorkItemService is constructor-injected into executor (no swap needed)")
 
-            # Phase 5e: Start multi-project orchestrator poll loop
-            # MPO is the sole orchestration entry point. It polls all enabled projects
-            # every 30s, reconciles boards, and delegates per-project work to
-            # WorkflowOrchestrator. Starting it here (after Phase 5d) ensures WorkItemService
-            # is fully wired before the first poll cycle runs.
-            logger.info("Phase 5e: Starting multi-project orchestrator poll loop...")
-            import asyncio as _asyncio
+            # Phase 5d-2: Start DLQ retry processor
+            # The failed event store retry processor handles retrying failed events
+            # that were routed to the dead letter queue due to transient failures.
+            # This is critical for INV-20 failure routing enforcement.
+            logger.info("Phase 5d-2: Starting DLQ retry processor...")
+            try:
+                from codetoreum.adapters.secondary.failed_event_store_adapter import (
+                    DeadLetterQueueFailedEventStoreAdapter,
+                )
 
-            _asyncio.ensure_future(self.services.multi_project_orchestrator.start())
-            logger.info("Phase 5e: Multi-project orchestrator poll loop started (background task)")
+                if isinstance(self.infrastructure.failed_event_store, DeadLetterQueueFailedEventStoreAdapter):
+                    # Create retry handler that republishes failed events to the event bus
+                    dlq_retry_handler = await create_dlq_retry_handler(self.infrastructure.event_bus)
+                    await self.infrastructure.failed_event_store.start_retry_processor(dlq_retry_handler)
+                    logger.info("Phase 5d-2: DLQ retry processor started")
+            except Exception as e:
+                # justification: DLQ startup failure is a fatal condition - system cannot recover from
+                # unprocessed failed events (INV-20 violation). Log at ERROR level and raise to fail fast.
+                logger.error(
+                    f"Failed to start DLQ retry processor - system cannot guarantee failure routing: {e}",
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                )
+                raise RuntimeError("DLQ retry processor startup failed - cannot guarantee INV-20 compliance") from e
+
+            # Phase 5e: Initialize all projects
+            # One-time initialization of enabled projects on bootstrap.
+            # Reconciles all project boards so the event-driven system can detect changes.
+            # Polling is now adapter-internal (e.g., GitHubBoardAdapter), not application-layer.
+            logger.info("Phase 5e: Initializing all projects...")
+            from codetoreum.application.project_lifecycle_service import ProjectLifecycleService
+
+            lifecycle_service = ProjectLifecycleService(
+                project_manager=self.adapters.project_manager,
+                board_service=self.adapters.board,
+            )
+            await lifecycle_service.initialize_all_projects()
+            logger.info("Phase 5e: Project initialization completed")
 
             # Phase 6: Create ports
             logger.info("Phase 6: Creating 17 input port implementations...")
@@ -707,211 +771,7 @@ class ProductionApplicationBootstrap:
     # enough to never false-positive a slow in-flight run.
     _ORPHAN_STALE_THRESHOLD_SECONDS: int = 5 * 60
 
-    async def _detect_orphaned_workflow_runs(self) -> None:
-        """Scan the active-workflow-run registry for entries left over from
-        a crashed instance and emit ``WorkflowOrphanedEvent`` for each.
-
-        Algorithm (per-run, narrow false-positive surface):
-
-        1. Pull every ``(work_item_id, ActiveRunInfo)`` from the registry.
-        2. For each, read the run's event stream (stream_id == ``run_id``)
-           from the event store.
-        3. If the stream is empty, the run never made it past
-           ``WorkflowStartedEvent`` recording — skip (resolver may not have
-           appended yet, or the registry entry is from a partial write).
-        4. If a terminal event (workflow.completed | workflow.failed |
-           workflow.cancelled) is present, the run actually finished — clear
-           the registry entry and move on. Not an orphan.
-        5. Otherwise, if the latest event is older than the stale threshold
-           (default 5 min), emit ``WorkflowOrphanedEvent`` on the event bus
-           and clear the registry entry. The downstream Phase 4d subscriber
-           and ES sink will pick up the orphan event.
-
-        All failures are logged and swallowed; orphan detection is best-effort
-        and must not block bootstrap. INV-11: no retry/circuit-breaker logic.
-        """
-        if not self.adapters or not self.adapters.run_registry:
-            logger.info("Phase 4e: skipped (no run_registry adapter resolved)")
-            return
-        if not self.adapters.event_store:
-            logger.info("Phase 4e: skipped (no event_store adapter resolved)")
-            return
-        if not self.infrastructure or not self.infrastructure.event_bus:
-            logger.info("Phase 4e: skipped (no event_bus available)")
-            return
-
-        from datetime import UTC, datetime, timedelta
-
-        from codetoreum.domain.events.workflow_events import WorkflowOrphanedEvent
-
-        _TERMINAL_TYPES = {"workflow.completed", "workflow.failed", "workflow.cancelled"}
-        now = datetime.now(UTC)
-        stale_cutoff = now - timedelta(seconds=self._ORPHAN_STALE_THRESHOLD_SECONDS)
-
-        try:
-            entries = await self.adapters.run_registry.get_all_runs()
-        except Exception:
-            logger.exception("Phase 4e: failed to list active runs from registry")
-            return
-
-        logger.info(
-            "Phase 4e: scanning %d persisted active workflow run(s) for orphans",
-            len(entries),
-        )
-
-        emitted = 0
-        cleared_completed = 0
-        skipped_fresh = 0
-
-        for work_item_id, run_info in entries:
-            try:
-                events = await self.adapters.event_store.get_events(run_info.run_id)
-            except Exception:
-                logger.exception(
-                    "Phase 4e: failed to read event stream for run_id=%s; " "leaving registry entry untouched",
-                    run_info.run_id,
-                )
-                continue
-
-            if not events:
-                # Nothing landed in ES for this run yet. Don't emit an orphan
-                # event from a half-written record; clear the stale registry
-                # entry so we don't keep re-checking it.
-                logger.warning(
-                    "Phase 4e: registry has run_id=%s for work_item_id=%s "
-                    "but event stream is empty — clearing stale entry",
-                    run_info.run_id,
-                    work_item_id,
-                )
-                try:
-                    await self.adapters.run_registry.clear_run(work_item_id)
-                except Exception:
-                    logger.exception(
-                        "Phase 4e: failed to clear empty-stream registry entry " "for work_item_id=%s",
-                        work_item_id,
-                    )
-                continue
-
-            # Find latest event timestamp and check for terminal type.
-            terminal_seen = False
-            latest_ts: datetime | None = None
-            for ev in events:
-                ev_type = getattr(ev, "event_type", None) or getattr(ev, "type", "")
-                if ev_type in _TERMINAL_TYPES:
-                    terminal_seen = True
-                ts_str = getattr(ev, "timestamp", "") or ""
-                if ts_str:
-                    try:
-                        ts = datetime.fromisoformat(ts_str)
-                        if ts.tzinfo is None:
-                            ts = ts.replace(tzinfo=UTC)
-                        if latest_ts is None or ts > latest_ts:
-                            latest_ts = ts
-                    except ValueError:
-                        continue
-
-            if terminal_seen:
-                # Run actually completed; registry just wasn't cleared.
-                try:
-                    await self.adapters.run_registry.clear_run(work_item_id)
-                    cleared_completed += 1
-                except Exception:
-                    logger.exception(
-                        "Phase 4e: failed to clear completed-run registry entry " "for work_item_id=%s",
-                        work_item_id,
-                    )
-                continue
-
-            if latest_ts is None or latest_ts > stale_cutoff:
-                # Either we couldn't parse a timestamp (be conservative, skip)
-                # or the run is younger than the stale threshold — could still
-                # be in-flight on another instance / pre-orphan.
-                skipped_fresh += 1
-                continue
-
-            # Genuine orphan: stream exists, no terminal event, latest event
-            # is older than the stale threshold.
-            try:
-                orphan_event = WorkflowOrphanedEvent(
-                    type="workflow.orphaned",
-                    timestamp=now.isoformat(),
-                    source="production_bootstrap.phase_4e",
-                    workflow_id=run_info.run_id,
-                    work_item_id=work_item_id,
-                    project_id=run_info.project_id,
-                    board_id=run_info.board_id,
-                    stage_name=run_info.stage_name,
-                    detected_at=now.isoformat(),
-                    reason=(
-                        f"No terminal workflow event in stream; latest event at "
-                        f"{latest_ts.isoformat()} is older than stale threshold "
-                        f"({self._ORPHAN_STALE_THRESHOLD_SECONDS}s)."
-                    ),
-                )
-                await self.infrastructure.event_bus.publish(orphan_event)
-                emitted += 1
-                logger.warning(
-                    "Phase 4e: emitted WorkflowOrphanedEvent for run_id=%s " "work_item_id=%s stage=%s",
-                    run_info.run_id,
-                    work_item_id,
-                    run_info.stage_name,
-                )
-            except Exception:
-                logger.exception(
-                    "Phase 4e: failed to emit WorkflowOrphanedEvent for run_id=%s",
-                    run_info.run_id,
-                )
-                continue
-
-            # Clear the registry entry so subsequent bootstraps don't re-emit.
-            try:
-                await self.adapters.run_registry.clear_run(work_item_id)
-            except Exception:
-                logger.exception(
-                    "Phase 4e: failed to clear orphaned-run registry entry " "for work_item_id=%s",
-                    work_item_id,
-                )
-
-            # Release the pipeline lock held by the orphaned work item.
-            # Without this, the lock stays pinned to a dead run until its TTL
-            # expires (>1h), blocking every subsequent work item on that board
-            # behind a phantom holder. The lock service handles the queue
-            # hand-off (pops the next queued WI and grants it the lock).
-            if self.adapters.lock_service is not None:
-                try:
-                    release_result = await self.adapters.lock_service.release_lock(
-                        project_id=run_info.project_id,
-                        board_id=run_info.board_id,
-                        work_item_id=work_item_id,
-                    )
-                    logger.info(
-                        "Phase 4e: released orphaned pipeline lock for work_item_id=%s " "(next_queued=%s)",
-                        work_item_id,
-                        release_result.next_work_item_id,
-                    )
-                except ValueError:
-                    # Lock not held, or held by a different work item — both
-                    # benign for orphan recovery; nothing to release.
-                    logger.info(
-                        "Phase 4e: no orphan lock to release for work_item_id=%s "
-                        "(lock not held or held by another work item)",
-                        work_item_id,
-                    )
-                except Exception:
-                    logger.exception(
-                        "Phase 4e: failed to release orphan pipeline lock " "for work_item_id=%s",
-                        work_item_id,
-                    )
-
-        logger.info(
-            "Phase 4e: orphan detection complete " "(scanned=%d emitted=%d cleared_completed=%d skipped_fresh=%d)",
-            len(entries),
-            emitted,
-            cleared_completed,
-            skipped_fresh,
-        )
-
-    # =========================================================================
+# =========================================================================
     # Phase 3: Critical Path Enforcement
     # =========================================================================
 
@@ -1005,6 +865,51 @@ class ProductionApplicationBootstrap:
             raise RuntimeError(message)
 
         logger.debug(f"Production event_emitter verified: {type(self.adapters.event_emitter).__name__}")
+
+    def _validate_critical_failure_routes(self) -> None:
+        """
+        Validate that all critical adapters declare a failure route (INV-20).
+
+        Critical adapters must accept an IFailedEventStore parameter and route
+        final failures to it. This check ensures no critical adapter can silently
+        drop errors without recording them in the dead letter queue.
+
+        Raises:
+            RuntimeError: If any critical adapter lacks a failure route
+        """
+        if not self.adapters:
+            message = "Adapters must be resolved before validation"
+            raise RuntimeError(message)
+
+        missing_routes = []
+
+        # Check critical slot adapters
+        for slot_name in CRITICAL_ADAPTER_SLOTS:
+            adapter = self.adapters.__dict__.get(slot_name)
+            if adapter and getattr(adapter, "failed_event_store", None) is None:
+                missing_routes.append(
+                    f"{slot_name}: {type(adapter).__name__} failed_event_store is None (no failure route)"
+                )
+
+        # Check event store adapter (also critical per INV-20)
+        event_store = self.adapters.event_store if self.adapters else None
+        if event_store and getattr(event_store, "failed_event_store", None) is None:
+            missing_routes.append(
+                f"event_store: {type(event_store).__name__} failed_event_store is None (no failure route)"
+            )
+
+        if missing_routes:
+            error_msg = "Critical adapters missing failure routes (INV-20):\n" + "\n".join(
+                f"  - {route}" for route in missing_routes
+            )
+            logger.error(
+                error_msg,
+                exc_info=False,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+            )
+            raise RuntimeError(error_msg)
+
+        logger.info(f"Critical failure route validation passed ({len(CRITICAL_ADAPTER_SLOTS) + 1} adapters)")
 
     def _log_non_critical_slots(self) -> None:
         """Log warnings for non-critical slots with mock implementations."""
@@ -1250,14 +1155,10 @@ class ProductionApplicationBootstrap:
         )
 
         # Multi-Project Orchestrator
+        # Now provides admin query methods only (list_enabled_projects, get_project_status).
+        # Lifecycle initialization moved to ProjectLifecycleService.
         multi_project_orchestrator = MultiProjectOrchestrator(
             project_manager=self.adapters.project_manager,
-            workflow_orchestrator=workflow_orchestrator,
-            board_service=self.adapters.board,
-            event_emitter=self.adapters.event_emitter,
-            poll_interval_seconds=30,
-            # D-Q: surface in-flight workflow runs in each poll cycle log/event.
-            run_registry=self.adapters.run_registry,
         )
 
         logger.info("Created all 11 application services with production adapters")
@@ -1465,6 +1366,95 @@ class ProductionApplicationBootstrap:
             raise RuntimeError(message) from e
 
     # =========================================================================
+    # Phase 5d: Reconcile Board Structures
+    # =========================================================================
+
+    async def _reconcile_board_structures(self) -> None:
+        """
+        Reconcile board structures with expected configuration for all projects.
+
+        Creates missing columns and validates board state is consistent.
+        Non-fatal - failures are logged but don't block bootstrap.
+        """
+        if not self.adapters or not self.adapters.config_store or not self.adapters.workflow_config:
+            logger.warning("Cannot reconcile boards: adapters not initialized")
+            return
+
+        try:
+            project_configs = await self.adapters.config_store.list_projects()
+
+            for project_config in project_configs:
+                try:
+                    # Get all board workflow templates for this project
+                    templates = await self.adapters.workflow_config.list_board_workflow_templates(
+                        project_config.id
+                    )
+
+                    if not templates:
+                        logger.debug(f"Project {project_config.id} has no board templates")
+                        continue
+
+                    # Reconcile each board template
+                    for template in templates:
+                        try:
+                            # Extract expected column names from template
+                            expected_columns = tuple(col.name for col in template.columns)
+
+                            # Create BoardConfig from template
+                            from codetoreum.ports.output.board_service import BoardConfig
+
+                            board_config = BoardConfig(
+                                board_id=template.board_id,
+                                expected_columns=expected_columns,
+                                auto_create_missing=True,
+                            )
+
+                            # Reconcile the board
+                            result = await self.adapters.board.reconcile_board(
+                                board_config.board_id,
+                                board_config,
+                            )
+
+                            if result.columns_added or result.columns_removed or result.columns_renamed:
+                                logger.info(
+                                    f"Reconciled board {board_config.board_id} for project {project_config.id}: "
+                                    f"added={result.columns_added}, removed={result.columns_removed}, "
+                                    f"renamed={result.columns_renamed}",
+                                    extra={
+                                        "board_id": board_config.board_id,
+                                        "project_id": project_config.id,
+                                        "columns_added": len(result.columns_added),
+                                        "columns_removed": len(result.columns_removed),
+                                    },
+                                )
+                            else:
+                                logger.debug(f"Board {board_config.board_id} is in sync")
+                        except Exception as e:
+                            logger.warning(
+                                f"Failed to reconcile board for project {project_config.id}: {e}",
+                                exc_info=True,
+                                extra={
+                                    "error_id": "ERR_BOOTSTRAP_BOARD_RECONCILE_FAILURE",
+                                    "project_id": project_config.id,
+                                },
+                            )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to reconcile boards for project {project_config.id}: {e}",
+                        exc_info=True,
+                        extra={
+                            "error_id": "ERR_BOOTSTRAP_PROJECT_BOARD_RECONCILE_FAILURE",
+                            "project_id": project_config.id,
+                        },
+                    )
+        except Exception as e:
+            logger.warning(
+                f"Failed to list projects for board reconciliation: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_BOOTSTRAP_LIST_PROJECTS_FAILURE"},
+            )
+
+    # =========================================================================
     # Phase 7: Create FastAPI Application and Register Event Handlers
     # =========================================================================
 
@@ -1549,6 +1539,8 @@ class ProductionApplicationBootstrap:
             event_bus=self.infrastructure.event_bus,
             config_service=config_service_interface,
             logger=logger_interface,
+            board_service=self.adapters.board,
+            workflow_config_service=self.adapters.workflow_config,
             audit_query_port=self.ports.audit_query,
             auth_secret_key=_os.getenv("CODETOREUM_SECRET_KEY"),
             disable_auth=False,  # Production auth enabled
@@ -1557,30 +1549,47 @@ class ProductionApplicationBootstrap:
             adapter_slot_info=self._slot_info,
             event_store_poller=event_store_poller,
             issue_intake_port=issue_intake_service,
+            multi_project_orchestrator=self.services.multi_project_orchestrator,
+            active_workflow_run_registry=self.adapters.run_registry,
+            distributed_lock=self.adapters.lock_service,
+            pipeline_queue=self.adapters.queue_service,
+            failed_event_store=self.infrastructure.failed_event_store,
+            orphan_scan_registry=None,
         )
 
         logger.info("Created FastAPI application with all ports wired")
 
         # Register event handlers
-        self._register_board_column_handler()
+        self._register_board_column_handler(app)
         self._register_conversational_loop_orchestrator()
         self._register_pr_review_cycle_handlers()
         self._register_review_event_handler()
+        self._register_workflow_event_handler()
+        self._register_execution_event_handler()
+        self._register_branch_resolution_event_handler()
+        self._register_repair_cycle_event_handler()
 
         return app
 
-    def _register_board_column_handler(self) -> None:
-        """Register board column event handler for agent execution and auto-progression."""
+    def _register_board_column_handler(self, app: FastAPI) -> None:
+        """Register board column event handler for agent execution and auto-progression.
+
+        Args:
+            app: FastAPI application instance for storing pipeline orchestrator state
+        """
         if not self.adapters or not self.infrastructure or not self.services:
             logger.warning("Cannot register board column handler: components not ready")
             return
 
+        event_bus = self.infrastructure.event_bus
+
         handler = BoardColumnEventHandler(
             board_service=self.adapters.board,
-            lock_service=self.adapters.lock_service,
+            distributed_lock=self.adapters.lock_service,
+            pipeline_queue=self.adapters.queue_service,
             workflow_config=self.adapters.workflow_config,
             agent_executor=self.adapters.agent_executor,
-            event_bus=self.infrastructure.event_bus,
+            event_bus=event_bus,
             event_store=self.adapters.event_store,
             run_registry=self.adapters.run_registry,
             event_emitter=self.adapters.event_emitter,
@@ -1589,17 +1598,28 @@ class ProductionApplicationBootstrap:
         )
 
         self.infrastructure.event_bus.register_handler(handler)
-        # `register_handler` subscribes BoardColumnEventHandler to both
-        # WorkItemColumnChangedEvent and AgentExecutionCompletedEvent. The
-        # latter replaces the legacy `set_completion_handler` callback wiring:
-        # ExecutionServiceAgentExecutor publishes AgentExecutionCompletedEvent
-        # on the event bus when it finishes processing a work item, and the
-        # handler runs auto-progression in its handle_agent_execution_completed
-        # bridge. See INV-05 in `bootstrap/ARCHITECTURE.md` §6.
         logger.info(
             "Registered BoardColumnEventHandler with event bus "
             "(WorkItemColumnChangedEvent + AgentExecutionCompletedEvent)"
         )
+
+        # Register PipelineOrchestrator to coordinate lock and queue events
+        # PipelineOrchestrator expects IPipelineQueue, but we have IPipelineQueueService
+        # Use an adapter to bridge the two interfaces
+        pipeline_queue_adapter = PipelineQueueServiceAdapter(self.adapters.queue_service)
+        orchestrator = PipelineOrchestrator(
+            distributed_lock=self.adapters.lock_service,
+            pipeline_queue=pipeline_queue_adapter,
+            run_registry=self.adapters.run_registry,
+            event_emitter=self.adapters.event_emitter,
+            workflow_orchestrator=self.services.workflow_orchestrator,
+        )
+
+        self.infrastructure.event_bus.register_handler(orchestrator)
+        logger.info("Registered PipelineOrchestrator with event bus")
+
+        # Store orchestrator in app.state so the FastAPI lifespan can call on_startup
+        app.state.pipeline_orchestrator = orchestrator
 
     def _register_conversational_loop_orchestrator(self) -> None:
         """Register conversational loop orchestrator to handle column changes."""
@@ -1655,6 +1675,57 @@ class ProductionApplicationBootstrap:
         self.infrastructure.event_bus.register_handler(handler)
         logger.info("Registered ReviewEventHandler with event bus")
 
+    def _register_workflow_event_handler(self) -> None:
+        """Register workflow event handler for orchestration events."""
+        if not self.infrastructure or not self.services:
+            logger.warning("Cannot register workflow event handler: components not ready")
+            return
+
+        handler = WorkflowEventHandler(
+            orchestrator=self.services.workflow_orchestrator,
+        )
+        self.infrastructure.event_bus.register_handler(handler)
+        logger.info("Registered WorkflowEventHandler with event bus")
+
+    def _register_execution_event_handler(self) -> None:
+        """Register execution event handler for execution lifecycle events."""
+        if not self.infrastructure or not self.services:
+            logger.warning("Cannot register execution event handler: components not ready")
+            return
+
+        handler = ExecutionEventHandler(
+            execution_service=self.services.execution_service,
+        )
+        self.infrastructure.event_bus.register_handler(handler)
+        logger.info("Registered ExecutionEventHandler with event bus")
+
+    def _register_branch_resolution_event_handler(self) -> None:
+        """Register branch resolution event handler for branch tracking and audit."""
+        if not self.infrastructure:
+            logger.warning("Cannot register branch resolution event handler: components not ready")
+            return
+
+        handler = BranchResolutionEventHandler(
+            event_bus=self.infrastructure.event_bus,
+        )
+        self.infrastructure.event_bus.register_handler(handler)
+        logger.info("Registered BranchResolutionEventHandler with event bus")
+
+    def _register_repair_cycle_event_handler(self) -> None:
+        """Register repair cycle event handler for test-fix-validate automation."""
+        if not self.adapters or not self.infrastructure:
+            logger.warning("Cannot register repair cycle event handler: components not ready")
+            return
+
+        handler = RepairCycleEventHandler(
+            repair_cycle=self.adapters.repair_cycle,
+            workflow_config=self.adapters.workflow_config,
+            event_bus=self.infrastructure.event_bus,
+            ci_pipeline_service=self.adapters.ci_pipeline,
+        )
+        self.infrastructure.event_bus.register_handler(handler)
+        logger.info("Registered RepairCycleEventHandler with event bus")
+
     # =========================================================================
     # Teardown
     # =========================================================================
@@ -1694,18 +1765,6 @@ class ProductionApplicationBootstrap:
                     )
                     # Continue with other cleanup even if scheduler stop fails
 
-            # Stop multi-project orchestrator poll loop
-            if self.services and self.services.multi_project_orchestrator:
-                logger.info("Stopping multi-project orchestrator poll loop...")
-                try:
-                    await self.services.multi_project_orchestrator.stop()
-                except Exception as e:
-                    logger.error(
-                        f"Error stopping multi-project orchestrator: {e}",
-                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
-                        exc_info=True,
-                    )
-                    # Continue with other cleanup even if orchestrator stop fails
 
             # Close event store (closes Elasticsearch client for production deployments)
             if self.adapters and self.adapters.event_store:
