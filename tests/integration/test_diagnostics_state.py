@@ -138,8 +138,9 @@ async def test_diagnostics_state_partial_failure_with_active_runs(test_app):
     and that the subsystem_errors field captures failures. We inject a failure
     by mocking a subsystem method after the app is created.
     """
-    from fastapi.testclient import TestClient
     from unittest.mock import AsyncMock
+
+    from fastapi.testclient import TestClient
 
     client = TestClient(test_app.app)
 

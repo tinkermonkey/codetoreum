@@ -481,7 +481,6 @@ def create_diagnostics_router(
             except (StreamNotFoundError, ResourceNotFoundError):
                 # Stream doesn't exist, this is a "not found" condition - allow fallback
                 logger.debug("Stream %s not found, trying correlation_id lookup", event_id)
-                pass
             except EventStoreError as e:
                 # Infrastructure failure, propagate as 500
                 logger.warning("Event store infrastructure error when querying stream_id '%s': %s", event_id, e, exc_info=True)

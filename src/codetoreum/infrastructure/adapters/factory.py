@@ -31,14 +31,14 @@ from codetoreum.adapters.secondary import (
 from codetoreum.adapters.secondary.elasticsearch_project_manager_adapter import (
     ElasticsearchProjectManagerAdapter,
 )
+from codetoreum.adapters.secondary.file_backed_distributed_lock import (
+    FileBackedDistributedLock,
+)
 from codetoreum.adapters.secondary.github_version_control_adapter import (
     GitHubVersionControlAdapter,
 )
 from codetoreum.adapters.secondary.local_key_encryption_adapter import (
     LocalKeyEncryptionAdapter,
-)
-from codetoreum.adapters.secondary.file_backed_distributed_lock import (
-    FileBackedDistributedLock,
 )
 from codetoreum.adapters.secondary.redis_distributed_lock import (
     RedisDistributedLock,
@@ -270,6 +270,7 @@ from codetoreum.ports.output.config_store import IConfigStore
 from codetoreum.ports.output.container import IContainer
 from codetoreum.ports.output.container_recovery import IAgentContainerRecoveryService
 from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
+from codetoreum.ports.output.distributed_lock import IDistributedLock
 from codetoreum.ports.output.encryption_service import IEncryptionService
 from codetoreum.ports.output.environment_repair_service import IEnvironmentRepairService
 from codetoreum.ports.output.event_emitter import IEventEmitter
@@ -1766,7 +1767,7 @@ class AdapterFactory:
         """Create a CI pipeline service adapter instance."""
         return self._create_adapter(self._ci_pipeline_registry, adapter_name, "CI pipeline service", **kwargs)
 
-    def create_pipeline_lock_service(self, adapter_name: str | None = None, **kwargs) -> "IDistributedLock":
+    def create_pipeline_lock_service(self, adapter_name: str | None = None, **kwargs) -> IDistributedLock:
         """Create a distributed lock service adapter instance."""
         return self._create_adapter(self._distributed_lock_registry, adapter_name, "Distributed lock service", **kwargs)
 
