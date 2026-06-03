@@ -83,6 +83,7 @@ class ProjectLifecycleService:
 
         Raises:
             ExternalServiceError: Board reconciliation failed
+            ResourceNotFoundError: Project configuration not found
         """
         if self._board_service is None:
             logger.debug(
@@ -93,22 +94,30 @@ class ProjectLifecycleService:
 
         try:
             project_config = await self._project_manager.get_project_config(project_name)
-            metadata = getattr(project_config, "metadata", {})
-            github_project_id = metadata.get("github_project_id") if hasattr(metadata, "get") else None
-        except Exception:
-            github_project_id = None
-
-        if not github_project_id:
-            logger.debug(
-                f"Skipping board reconciliation for {project_name}: no github_project_id in project metadata",
-                extra={"project_name": project_name},
+        except ResourceNotFoundError as e:
+            logger.warning(
+                f"Cannot reconcile boards for {project_name}: project configuration not found",
+                exc_info=True,
+                extra={
+                    "error_id": "ERR_PROJECT_CONFIG_NOT_FOUND",
+                    "project_name": project_name,
+                },
             )
-            return
+            raise
+        except ExternalServiceError as e:
+            logger.error(
+                f"Cannot reconcile boards for {project_name}: failed to load project configuration - {e}",
+                exc_info=True,
+                extra={
+                    "error_id": "ERR_PROJECT_CONFIG_SERVICE_ERROR",
+                    "project_name": project_name,
+                    "service": e.service,
+                },
+            )
+            raise
 
         logger.debug(
-            f"Reconciling boards for project {project_name} (node_id={github_project_id})",
+            f"Reconciling boards for project {project_name}",
             extra={"project_name": project_name},
         )
-        await self._board_service.reconcile_board(
-            github_project_id, BoardConfig(board_id=project_name, expected_columns=())
-        )
+        await self._board_service.reconcile_board(project_name, BoardConfig(board_id=project_name, expected_columns=()))
