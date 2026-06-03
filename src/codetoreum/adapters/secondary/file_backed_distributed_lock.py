@@ -169,6 +169,18 @@ class FileBackedDistributedLock(IDistributedLock):
             logger.error(f"Failed to write lock entry to {self._file_path}", exc_info=True)
             raise
 
+    def _is_expired(self, expires_at: datetime, now: datetime) -> bool:
+        """Check if a lock has expired.
+
+        Args:
+            expires_at: The expiration time of the lock.
+            now: The current time.
+
+        Returns:
+            True if the lock has expired, False otherwise.
+        """
+        return now >= expires_at
+
     async def try_acquire(
         self,
         lock_key: str,
@@ -195,20 +207,26 @@ class FileBackedDistributedLock(IDistributedLock):
 
         async with self._lock:
             if lock_key in self._locks:
-                current_holder_id, _, _, _, _ = self._locks[lock_key]
-                if current_holder_id == holder_id:
+                current_holder_id, _, _, lock_expires_at, _ = self._locks[lock_key]
+
+                # Reclaim expired locks
+                if self._is_expired(lock_expires_at, now):
+                    del self._locks[lock_key]
+                else:
+                    # Lock is still valid, check holder
+                    if current_holder_id == holder_id:
+                        return AcquireResult(
+                            status=AcquireStatus.ALREADY_HELD_BY_SELF,
+                            lock_key=lock_key,
+                            holder_id=holder_id,
+                            acquired_at=None,
+                        )
                     return AcquireResult(
-                        status=AcquireStatus.ALREADY_HELD_BY_SELF,
+                        status=AcquireStatus.ALREADY_HELD_BY_OTHER,
                         lock_key=lock_key,
-                        holder_id=holder_id,
+                        holder_id=current_holder_id,
                         acquired_at=None,
                     )
-                return AcquireResult(
-                    status=AcquireStatus.ALREADY_HELD_BY_OTHER,
-                    lock_key=lock_key,
-                    holder_id=current_holder_id,
-                    acquired_at=None,
-                )
 
             # Acquire the lock
             self._locks[lock_key] = (holder_id, now, ttl_seconds, expires_at, holder_metadata)
@@ -245,7 +263,7 @@ class FileBackedDistributedLock(IDistributedLock):
         Returns:
             ReleaseResult with released=True on success.
         """
-        datetime.now(UTC)
+        now = datetime.now(UTC)
 
         async with self._lock:
             if lock_key not in self._locks:
@@ -255,7 +273,18 @@ class FileBackedDistributedLock(IDistributedLock):
                     lock_key=lock_key,
                 )
 
-            current_holder_id, _, _, _, _ = self._locks[lock_key]
+            current_holder_id, _, _, lock_expires_at, _ = self._locks[lock_key]
+
+            # Check if lock has expired
+            if self._is_expired(lock_expires_at, now):
+                # Expired lock is treated as not held
+                del self._locks[lock_key]
+                return ReleaseResult(
+                    released=False,
+                    reason=ReleaseReason.NOT_HELD,
+                    lock_key=lock_key,
+                )
+
             if current_holder_id != holder_id:
                 return ReleaseResult(
                     released=False,
@@ -289,11 +318,19 @@ class FileBackedDistributedLock(IDistributedLock):
         Returns:
             LockHolder if locked, None otherwise.
         """
+        now = datetime.now(UTC)
+
         async with self._lock:
             if lock_key not in self._locks:
                 return None
 
             holder_id, acquired_at, ttl_seconds, expires_at, holder_metadata = self._locks[lock_key]
+
+            # Check if lock has expired and reclaim it
+            if self._is_expired(expires_at, now):
+                del self._locks[lock_key]
+                return None
+
             return LockHolder(
                 lock_key=lock_key,
                 holder_id=holder_id,
@@ -309,19 +346,32 @@ class FileBackedDistributedLock(IDistributedLock):
         Returns:
             List of LockHolder objects.
         """
+        now = datetime.now(UTC)
+
         async with self._lock:
             holders = []
+            expired_keys = []
+
             for lock_key, (holder_id, acquired_at, ttl_seconds, expires_at, holder_metadata) in self._locks.items():
-                holders.append(
-                    LockHolder(
-                        lock_key=lock_key,
-                        holder_id=holder_id,
-                        acquired_at=acquired_at,
-                        ttl_seconds=ttl_seconds,
-                        expires_at=expires_at,
-                        holder_metadata=MappingProxyType(holder_metadata),
+                # Check if lock has expired
+                if self._is_expired(expires_at, now):
+                    expired_keys.append(lock_key)
+                else:
+                    holders.append(
+                        LockHolder(
+                            lock_key=lock_key,
+                            holder_id=holder_id,
+                            acquired_at=acquired_at,
+                            ttl_seconds=ttl_seconds,
+                            expires_at=expires_at,
+                            holder_metadata=MappingProxyType(holder_metadata),
+                        )
                     )
-                )
+
+            # Clean up expired locks
+            for key in expired_keys:
+                del self._locks[key]
+
             return holders
 
     async def renew(
@@ -347,7 +397,13 @@ class FileBackedDistributedLock(IDistributedLock):
             if lock_key not in self._locks:
                 return False
 
-            current_holder_id, acquired_at, _, _, holder_metadata = self._locks[lock_key]
+            current_holder_id, acquired_at, _, lock_expires_at, holder_metadata = self._locks[lock_key]
+
+            # Check if lock has expired and reclaim it
+            if self._is_expired(lock_expires_at, now):
+                del self._locks[lock_key]
+                return False
+
             if current_holder_id != holder_id:
                 return False
 
