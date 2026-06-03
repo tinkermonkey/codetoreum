@@ -1550,6 +1550,11 @@ class ProductionApplicationBootstrap:
             event_store_poller=event_store_poller,
             issue_intake_port=issue_intake_service,
             multi_project_orchestrator=self.services.multi_project_orchestrator,
+            active_workflow_run_registry=self.adapters.run_registry,
+            distributed_lock=self.adapters.lock_service,
+            pipeline_queue=self.adapters.queue_service,
+            failed_event_store=self.infrastructure.failed_event_store,
+            orphan_scan_registry=None,
         )
 
         logger.info("Created FastAPI application with all ports wired")
@@ -1606,7 +1611,7 @@ class ProductionApplicationBootstrap:
             distributed_lock=self.adapters.lock_service,
             pipeline_queue=pipeline_queue_adapter,
             run_registry=self.adapters.run_registry,
-            event_emitter=self.infrastructure.event_emitter,
+            event_emitter=self.adapters.event_emitter,
             workflow_orchestrator=self.services.workflow_orchestrator,
         )
 
