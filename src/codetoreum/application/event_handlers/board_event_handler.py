@@ -1011,7 +1011,7 @@ class BoardColumnEventHandler(EventHandler):
             try:
                 await self.board_service.get_board(project_id, board_id)
             except Exception as e:
-                logger.debug(f"Could not set board context for {board_id}: {e}")
+                logger.error(f"Could not set board context for {board_id}: {e}", exc_info=True)
 
         # Resolve the work item's external_id (if any) so we can match
         # against board adapters that key by the external system's id.
@@ -1024,7 +1024,7 @@ class BoardColumnEventHandler(EventHandler):
                 wi = await get_wi(work_item_id)
                 external_id = getattr(wi, "external_id", None)
             except Exception as e:
-                logger.debug(f"Could not load external_id for {work_item_id}: {e}")
+                logger.error(f"Could not load external_id for {work_item_id}: {e}", exc_info=True)
 
         for column in config.columns:
             try:
@@ -1033,5 +1033,5 @@ class BoardColumnEventHandler(EventHandler):
                     if item.work_item_id == work_item_id or (external_id and item.work_item_id == external_id):
                         return item
             except Exception as e:
-                logger.debug(f"Error scanning column '{column.name}' for {work_item_id}: {e}")
+                logger.error(f"Error scanning column '{column.name}' for {work_item_id}: {e}", exc_info=True)
         return None

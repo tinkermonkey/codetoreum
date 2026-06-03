@@ -4,6 +4,8 @@ Provides endpoints for project management operations such as querying
 project status and listing enabled projects.
 """
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
@@ -12,6 +14,8 @@ from codetoreum.ports.output.multi_project_orchestrator import (
     IMultiProjectOrchestrator,
     ProjectStatus,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def create_projects_router(
@@ -55,10 +59,11 @@ def create_projects_router(
             projects = await multi_project_orchestrator.list_enabled_projects()
             return projects
         except Exception as e:
+            logger.error("Failed to list projects", exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to list projects: {e!s}",
-            )
+            ) from e
 
     @router.get(
         "/{project_name}",
@@ -96,9 +101,10 @@ def create_projects_router(
                 detail=f"Project '{project_name}' not found",
             )
         except Exception as e:
+            logger.error(f"Failed to get project status for {project_name}", exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to get project status: {e!s}",
-            )
+            ) from e
 
     return router
