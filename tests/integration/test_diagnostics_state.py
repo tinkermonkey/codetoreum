@@ -158,6 +158,7 @@ async def test_diagnostics_state_partial_failure_with_active_runs(test_app):
 
         # Subsystem error should be captured
         assert isinstance(data["subsystem_errors"], list)
+        assert "active_workflow_run_registry" in data["subsystem_errors"]
         # Verify structure is still complete
         assert "active_runs" in data
         assert "pipeline_locks" in data

@@ -499,21 +499,21 @@ def create_diagnostics_router(
                 except EventStoreError as e:
                     # Infrastructure failure
                     logger.warning("Event store infrastructure error when querying correlation_id '%s': %s", event_id, e, exc_info=True)
-                    # If both lookups failed with infrastructure errors, return 500
-                    if stream_lookup_failed_with_infrastructure_error:
-                        raise HTTPException(
-                            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                            detail="Event store temporarily unavailable",
-                        ) from e
-                    # Otherwise this specific lookup failed but we can still return 404
+                    # If correlation_id lookup fails with infrastructure error and no events found,
+                    # we can't confirm the event doesn't exist, so return 500
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="Event store temporarily unavailable",
+                    ) from e
                 except Exception as e:
                     # Unknown error, treat as infrastructure failure
                     logger.warning("Unexpected error querying correlation_id '%s': %s", event_id, e, exc_info=True)
-                    if stream_lookup_failed_with_infrastructure_error:
-                        raise HTTPException(
-                            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                            detail="Event store temporarily unavailable",
-                        ) from e
+                    # If correlation_id lookup fails with unknown error and no events found,
+                    # we can't confirm the event doesn't exist, so return 500
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="Event store temporarily unavailable",
+                    ) from e
 
             if not events:
                 raise HTTPException(

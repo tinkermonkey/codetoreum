@@ -1995,6 +1995,11 @@ class SimulationApplicationBootstrap:
             disable_auth=True,  # ADR-003: Disable authentication in simulation
             cors_origins=["*"],  # Allow all origins in simulation mode (auth is disabled)
             container_recovery_service=self.services.container_recovery_service,
+            active_workflow_run_registry=self.adapters.run_registry,
+            distributed_lock=self.adapters.lock_service,
+            pipeline_queue=self.adapters.queue_service,
+            failed_event_store=self.infrastructure.failed_event_store,
+            orphan_scan_registry=None,  # Not yet implemented in simulation
         )
 
         # Mount simulation-only audit causal chain endpoint (never in production create_app)
