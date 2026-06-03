@@ -37,11 +37,13 @@ async def test_diagnostics_state_endpoint_basic(test_app):
     assert "failed_event_stats" in data
     assert "last_orphan_scan" in data
     assert "timestamp" in data
+    assert "subsystem_errors" in data
 
     # Check types
     assert isinstance(data["active_runs"], list)
     assert isinstance(data["pipeline_locks"], list)
     assert isinstance(data["pipeline_queues"], list)
+    assert isinstance(data["subsystem_errors"], list)
 
 
 @pytest.mark.asyncio
@@ -97,6 +99,7 @@ async def test_diagnostics_state_response_shape(test_app):
     assert "failed_event_stats" in data
     assert "last_orphan_scan" in data
     assert "timestamp" in data
+    assert "subsystem_errors" in data
 
     # Verify types
     assert isinstance(data["active_runs"], list)
@@ -105,6 +108,7 @@ async def test_diagnostics_state_response_shape(test_app):
     assert data["failed_event_stats"] is None or isinstance(data["failed_event_stats"], dict)
     assert data["last_orphan_scan"] is None or isinstance(data["last_orphan_scan"], dict)
     assert isinstance(data["timestamp"], str)
+    assert isinstance(data["subsystem_errors"], list)
 
     # Verify failed_event_stats structure if present
     if data["failed_event_stats"]:

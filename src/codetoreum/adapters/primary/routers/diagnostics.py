@@ -112,6 +112,10 @@ class DiagnosticsStateResponse(BaseModel):
     failed_event_stats: FailedEventStats | None = None
     last_orphan_scan: OrphanScanResultInfo | None = None
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    subsystem_errors: list[str] = Field(
+        default_factory=list,
+        description="List of subsystems that failed to retrieve data. Presence indicates incomplete response.",
+    )
 
 
 class TriggerStatus(str, Enum):
@@ -272,7 +276,7 @@ def create_diagnostics_router(
         observability interface for system state during debugging and analysis.
 
         **Returns:**
-        - 200 OK: Diagnostics state snapshot
+        - 200 OK: Diagnostics state snapshot (subsystem_errors field indicates incomplete data)
         """
         try:
             active_runs: list[ActiveRunInfo] = []
@@ -280,6 +284,7 @@ def create_diagnostics_router(
             pipeline_queues: list[PipelineQueueState] = []
             failed_event_stats: FailedEventStats | None = None
             last_orphan_scan: OrphanScanResultInfo | None = None
+            subsystem_errors: list[str] = []
 
             # Get active workflow runs
             if active_run_registry:
@@ -298,6 +303,7 @@ def create_diagnostics_router(
                     ]
                 except Exception as e:
                     logger.warning(f"Failed to get active runs: {e!s}", exc_info=True)
+                    subsystem_errors.append("active_workflow_run_registry")
 
             # Get pipeline locks
             if distributed_lock:
@@ -316,6 +322,7 @@ def create_diagnostics_router(
                     ]
                 except Exception as e:
                     logger.warning(f"Failed to get lock holders: {e!s}", exc_info=True)
+                    subsystem_errors.append("distributed_lock")
 
             # Get pipeline queues
             if pipeline_queue:
@@ -372,6 +379,7 @@ def create_diagnostics_router(
                             logger.warning(f"Failed to read queue {queue_key}: {e!s}", exc_info=True)
                 except Exception as e:
                     logger.warning(f"Failed to get queue states: {e!s}", exc_info=True)
+                    subsystem_errors.append("pipeline_queue")
 
             # Get failed event stats
             if failed_event_store:
@@ -390,6 +398,7 @@ def create_diagnostics_router(
                     )
                 except Exception as e:
                     logger.warning(f"Failed to get failed event stats: {e!s}", exc_info=True)
+                    subsystem_errors.append("failed_event_store")
 
             # Get last orphan scan result
             if orphan_scan_registry:
@@ -406,6 +415,7 @@ def create_diagnostics_router(
                         )
                 except Exception as e:
                     logger.warning(f"Failed to get orphan scan results: {e!s}", exc_info=True)
+                    subsystem_errors.append("orphan_scan_registry")
 
             return DiagnosticsStateResponse(
                 active_runs=active_runs,
@@ -413,6 +423,7 @@ def create_diagnostics_router(
                 pipeline_queues=pipeline_queues,
                 failed_event_stats=failed_event_stats,
                 last_orphan_scan=last_orphan_scan,
+                subsystem_errors=subsystem_errors,
             )
 
         except Exception as e:
@@ -464,7 +475,8 @@ def create_diagnostics_router(
                     stream_id=event_id,
                     from_version=0,
                 )
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Failed to get events by stream_id '{event_id}': {e!s}", exc_info=True)
                 # If event_id is not found as a stream_id, try querying by event ID
                 # This handles the case where event_id is a correlation_id
                 events = []
@@ -473,8 +485,8 @@ def create_diagnostics_router(
                 # Try to find by correlation_id if available
                 try:
                     events = await event_store.get_events_by_correlation_id(event_id)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Failed to get events by correlation_id '{event_id}': {e!s}", exc_info=True)
 
             if not events:
                 raise HTTPException(
