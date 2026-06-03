@@ -180,6 +180,7 @@ async def test_event_handler_types_declared() -> None:
         "distributed_lock": MagicMock(),
         "pipeline_queue": MagicMock(),
         "orphan_scan_registry": MagicMock(),
+        "event_emitter": MagicMock(),
     }
 
     # Instantiate all handlers and register with event bus
@@ -234,6 +235,7 @@ async def test_event_handler_types_declared() -> None:
             distributed_lock=mock_adapters["distributed_lock"],
             pipeline_queue=mock_adapters["pipeline_queue"],
             run_registry=mock_adapters["run_registry"],
+            event_emitter=mock_adapters["event_emitter"],
             orphan_scan_registry=mock_adapters["orphan_scan_registry"],
         ),
     ]

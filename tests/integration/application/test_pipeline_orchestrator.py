@@ -392,6 +392,152 @@ class TestPipelineOrchestratorErrorHandling:
         # Restore
         pipeline_queue.contains = original_contains
 
+    async def test_lock_released_emits_alert_on_lock_acquisition_failure(
+        self,
+        distributed_lock,
+        pipeline_queue,
+        run_registry,
+        event_emitter,
+    ):
+        """Test on_lock_released emits LockStuckEvent if lock acquisition fails for next item."""
+        orchestrator = PipelineOrchestrator(
+            distributed_lock=distributed_lock,
+            pipeline_queue=pipeline_queue,
+            run_registry=run_registry,
+            event_emitter=event_emitter,
+        )
+
+        project_id = "project-1"
+        board_id = "board-1"
+        lock_key = f"{project_id}:{board_id}"
+        queue_key = lock_key
+        work_item_id = "item-1"
+        next_item_id = "item-2"
+
+        # Setup: item-1 holds lock
+        await distributed_lock.try_acquire(lock_key, work_item_id)
+
+        # Enqueue item-2
+        await pipeline_queue.enqueue(
+            queue_key,
+            QueueEntry(
+                work_item_id=next_item_id,
+                stage_name="Development",
+                board_position=0,
+                enqueued_at=datetime.now(UTC),
+                metadata={"project_id": project_id, "board_id": board_id},
+            ),
+        )
+
+        # Mock distributed_lock to raise error on try_acquire
+        original_try_acquire = distributed_lock.try_acquire
+
+        async def mock_try_acquire_raises(*args, **kwargs):
+            raise RuntimeError("Lock service error")
+
+        distributed_lock.try_acquire = mock_try_acquire_raises
+
+        # Release the lock for item-1
+        await distributed_lock.release(lock_key, work_item_id)
+
+        # Trigger lock release event
+        event = PipelineLockReleasedEvent(
+            type="lock.released",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="test",
+            project_id=project_id,
+            board_id=board_id,
+            work_item_id=work_item_id,
+        )
+
+        # Should not raise despite error
+        await orchestrator.on_lock_released(event)
+
+        # Verify LockStuckEvent was emitted with the next item's ID
+        event_emitter.emit.assert_called_once()
+        emitted_event = event_emitter.emit.call_args[0][0]
+        assert isinstance(emitted_event, LockStuckEvent)
+        assert emitted_event.work_item_id == next_item_id
+
+        # Restore
+        distributed_lock.try_acquire = original_try_acquire
+
+    async def test_lock_released_emits_alert_on_queue_removal_failure_after_acquire(
+        self,
+        distributed_lock,
+        pipeline_queue,
+        run_registry,
+        event_emitter,
+    ):
+        """Test on_lock_released emits LockStuckEvent if queue removal fails after successful lock grant."""
+        orchestrator = PipelineOrchestrator(
+            distributed_lock=distributed_lock,
+            pipeline_queue=pipeline_queue,
+            run_registry=run_registry,
+            event_emitter=event_emitter,
+        )
+
+        project_id = "project-1"
+        board_id = "board-1"
+        lock_key = f"{project_id}:{board_id}"
+        queue_key = lock_key
+        work_item_id = "item-1"
+        next_item_id = "item-2"
+
+        # Setup: item-1 holds lock
+        await distributed_lock.try_acquire(lock_key, work_item_id)
+
+        # Enqueue item-2
+        await pipeline_queue.enqueue(
+            queue_key,
+            QueueEntry(
+                work_item_id=next_item_id,
+                stage_name="Development",
+                board_position=0,
+                enqueued_at=datetime.now(UTC),
+                metadata={"project_id": project_id, "board_id": board_id},
+            ),
+        )
+
+        # Mock queue to raise error on remove (called after successful lock grant)
+        original_remove = pipeline_queue.remove
+        remove_called = False
+
+        async def mock_remove_raises(*args):
+            nonlocal remove_called
+            remove_called = True
+            raise RuntimeError("Queue service error")
+
+        pipeline_queue.remove = mock_remove_raises
+
+        # Release the lock for item-1
+        await distributed_lock.release(lock_key, work_item_id)
+
+        # Trigger lock release event
+        event = PipelineLockReleasedEvent(
+            type="lock.released",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="test",
+            project_id=project_id,
+            board_id=board_id,
+            work_item_id=work_item_id,
+        )
+
+        # Should not raise despite queue removal error
+        await orchestrator.on_lock_released(event)
+
+        # Verify remove was called (lock was granted, then removal failed)
+        assert remove_called
+
+        # Verify LockStuckEvent was emitted
+        event_emitter.emit.assert_called_once()
+        emitted_event = event_emitter.emit.call_args[0][0]
+        assert isinstance(emitted_event, LockStuckEvent)
+        assert emitted_event.work_item_id == next_item_id
+
+        # Restore
+        pipeline_queue.remove = original_remove
+
 
 @pytest.mark.asyncio
 class TestPipelineOrchestratorConcurrency:

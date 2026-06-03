@@ -78,6 +78,16 @@ def event_bus():
     return bus
 
 
+@pytest.fixture
+def event_emitter():
+    """Mock event emitter."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    emitter = MagicMock()
+    emitter.emit = AsyncMock()
+    return emitter
+
+
 @pytest.mark.asyncio
 class TestPipelineCoordinationIntegration:
     """Integration tests for pipeline coordination with Redis."""
@@ -87,12 +97,14 @@ class TestPipelineCoordinationIntegration:
         redis_lock,
         redis_queue,
         run_registry,
+        event_emitter,
     ):
         """Test: WI enters trigger column → lock acquired."""
         orchestrator = PipelineOrchestrator(
             distributed_lock=redis_lock,
             pipeline_queue=redis_queue,
             run_registry=run_registry,
+            event_emitter=event_emitter,
         )
 
         project_id = "project-1"
@@ -129,12 +141,14 @@ class TestPipelineCoordinationIntegration:
         redis_lock,
         redis_queue,
         run_registry,
+        event_emitter,
     ):
         """Test: Multiple WIs queue when lock is held."""
         orchestrator = PipelineOrchestrator(
             distributed_lock=redis_lock,
             pipeline_queue=redis_queue,
             run_registry=run_registry,
+            event_emitter=event_emitter,
         )
 
         project_id = "project-1"
@@ -201,12 +215,14 @@ class TestPipelineCoordinationIntegration:
         redis_lock,
         redis_queue,
         run_registry,
+        event_emitter,
     ):
         """Test: WI exits → next queued WI gets lock."""
         orchestrator = PipelineOrchestrator(
             distributed_lock=redis_lock,
             pipeline_queue=redis_queue,
             run_registry=run_registry,
+            event_emitter=event_emitter,
         )
 
         project_id = "project-1"
@@ -275,12 +291,14 @@ class TestPipelineCoordinationIntegration:
         redis_lock,
         redis_queue,
         run_registry,
+        event_emitter,
     ):
         """Test complete pipeline flow: 3 items, sequential execution."""
         orchestrator = PipelineOrchestrator(
             distributed_lock=redis_lock,
             pipeline_queue=redis_queue,
             run_registry=run_registry,
+            event_emitter=event_emitter,
         )
 
         project_id = "project-1"
@@ -366,12 +384,14 @@ class TestPipelineCoordinationIntegration:
         redis_lock,
         redis_queue,
         run_registry,
+        event_emitter,
     ):
         """Test concurrent item arrivals are handled correctly."""
         orchestrator = PipelineOrchestrator(
             distributed_lock=redis_lock,
             pipeline_queue=redis_queue,
             run_registry=run_registry,
+            event_emitter=event_emitter,
         )
 
         project_id = "project-1"

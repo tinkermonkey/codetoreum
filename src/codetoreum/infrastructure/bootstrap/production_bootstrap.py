@@ -1606,6 +1606,7 @@ class ProductionApplicationBootstrap:
             distributed_lock=self.adapters.lock_service,
             pipeline_queue=pipeline_queue_adapter,
             run_registry=self.adapters.run_registry,
+            event_emitter=self.infrastructure.event_emitter,
             workflow_orchestrator=self.services.workflow_orchestrator,
         )
 
