@@ -853,6 +853,7 @@ class TestPipelineOrchestratorIdempotency:
         """Test that handle() logs a warning for unexpected event types."""
         import logging
         from dataclasses import dataclass
+
         from codetoreum.domain.events.adapter_events import CodetoreumEvent
 
         caplog.set_level(logging.WARNING)
@@ -868,7 +869,6 @@ class TestPipelineOrchestratorIdempotency:
         @dataclass(frozen=True)
         class UnexpectedEvent(CodetoreumEvent):
             """An event type that PipelineOrchestrator doesn't handle."""
-            pass
 
         event = UnexpectedEvent(
             type="unexpected.event",
