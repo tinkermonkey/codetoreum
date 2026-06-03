@@ -162,6 +162,48 @@ class TestRedisExclusivity:
         assert result.exit_code == EXIT_CODE_REDIS_SHARED
         assert "Failed to verify Redis exclusivity" in result.error_message
 
+    @pytest.mark.asyncio
+    async def test_redis_multipage_scan_aggregates_all_keys(self) -> None:
+        """Verify Redis exclusivity check correctly handles multi-page SCAN results.
+
+        The SCAN implementation uses a while loop to iterate through cursor-based
+        pagination. This test ensures all keys from multiple pages are aggregated
+        and the exclusivity check processes them all correctly.
+        """
+        mock_redis = AsyncMock()
+        # SCAN returns multiple pages: first with cursor 42, second with cursor 0 (done)
+        mock_redis.scan.side_effect = [
+            (42, ["codetoreum:lock:1"]),   # first page, more to come
+            (0, ["codetoreum:event:2"]),   # final page
+        ]
+        mock_redis.close = AsyncMock()
+
+        with patch("redis.asyncio.from_url", return_value=mock_redis):
+            result = await check_redis_exclusivity("redis://localhost:6379/0")
+
+        assert result.passed is True
+        # Verify SCAN was called multiple times (once per page)
+        assert mock_redis.scan.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_redis_multipage_scan_detects_non_codetoreum_keys(self) -> None:
+        """Verify multi-page SCAN correctly detects non-Codetoreum keys across pages."""
+        mock_redis = AsyncMock()
+        # Non-Codetoreum keys spread across multiple pages
+        mock_redis.scan.side_effect = [
+            (42, ["codetoreum:lock:1", "other:key:1"]),  # first page with mixed keys
+            (0, ["codetoreum:event:2", "cache:data:3"]),  # final page with more mixed keys
+        ]
+        mock_redis.close = AsyncMock()
+
+        with patch("redis.asyncio.from_url", return_value=mock_redis):
+            result = await check_redis_exclusivity("redis://localhost:6379/0")
+
+        assert result.passed is False
+        assert result.exit_code == EXIT_CODE_REDIS_SHARED
+        # Should detect 2 non-Codetoreum keys across both pages
+        assert "2 non-Codetoreum keys" in result.error_message
+
 
 class TestDockerCapacity:
     """Tests for Docker daemon capacity check."""

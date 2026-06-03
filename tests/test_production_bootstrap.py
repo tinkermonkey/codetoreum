@@ -140,7 +140,7 @@ async def test_event_handler_types_declared() -> None:
     - BranchResolutionEventHandler (Lifecycle Event Handler Registration)
     - RepairCycleEventHandler (Lifecycle Event Handler Registration)
     """
-    from unittest.mock import AsyncMock, MagicMock
+    from unittest.mock import MagicMock
 
     from codetoreum.application.event_handlers import (
         BoardColumnEventHandler,
@@ -174,13 +174,6 @@ async def test_event_handler_types_declared() -> None:
         "work_item_service": MagicMock(),
         "run_registry": MagicMock(),
     }
-
-    # Helper to create mock async functions
-    async def async_mock(*args, **kwargs):
-        return MagicMock()
-
-    for key in mock_adapters:
-        mock_adapters[key].get_event_types = MagicMock(return_value=[])
 
     # Instantiate all handlers and register with event bus
     handlers = [
