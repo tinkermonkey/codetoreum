@@ -401,3 +401,108 @@ class TestRedisPipelineQueue(TestPipelineQueueContract):
         event_bus.publish.assert_called_once()
         event = event_bus.publish.call_args[0][0]
         assert event.board_id == "board-456"
+
+    @pytest.mark.asyncio
+    async def test_peek_handles_missing_metadata_gracefully(self):
+        """Test that peek() handles missing metadata by emitting corruption event."""
+        from codetoreum.domain.events.queue_events import QueueMetadataCorruptionEvent
+
+        redis = MockRedis()
+        event_bus = AsyncMock(spec=EventBus)
+        queue = RedisPipelineQueue(redis_client=redis, event_bus=event_bus)
+
+        now = datetime.now(UTC)
+        entry = QueueEntry("item-1", "In Progress", 0, now, {"board_id": "board-456"})
+
+        # Enqueue normally
+        await queue.enqueue("queue-1", entry)
+
+        # Clear the event bus calls
+        event_bus.reset_mock()
+
+        # Manually corrupt the metadata by removing it
+        meta_key = f"codetoreum:queue:meta:queue-1"
+        redis._hashes[meta_key] = {}
+
+        # peek() should handle the missing metadata and emit a corruption event
+        result = await queue.peek("queue-1")
+
+        # Should return a partial entry (not None)
+        assert result is not None
+        assert result.work_item_id == "item-1"
+        assert result.stage_name == ""  # Empty fallback
+        assert result.board_position == 0
+
+        # Should emit QueueMetadataCorruptionEvent
+        event_bus.publish.assert_called_once()
+        published_event = event_bus.publish.call_args[0][0]
+        assert isinstance(published_event, QueueMetadataCorruptionEvent)
+        assert published_event.work_item_id == "item-1"
+        assert "not found" in published_event.error_details
+
+    @pytest.mark.asyncio
+    async def test_peek_handles_corrupt_json_metadata(self):
+        """Test that peek() handles unparseable JSON metadata gracefully."""
+        from codetoreum.domain.events.queue_events import QueueMetadataCorruptionEvent
+
+        redis = MockRedis()
+        event_bus = AsyncMock(spec=EventBus)
+        queue = RedisPipelineQueue(redis_client=redis, event_bus=event_bus)
+
+        now = datetime.now(UTC)
+        entry = QueueEntry("item-1", "In Progress", 0, now, {"board_id": "board-456"})
+
+        # Enqueue normally
+        await queue.enqueue("queue-1", entry)
+
+        # Clear the event bus calls
+        event_bus.reset_mock()
+
+        # Manually corrupt the metadata JSON
+        # Note: MockRedis stores hashes with bytes keys when set via hset
+        meta_key = f"codetoreum:queue:meta:queue-1"
+        redis._hashes[meta_key][b"item-1"] = b"{ invalid json"
+
+        # peek() should handle the corrupted JSON
+        result = await queue.peek("queue-1")
+
+        # Should return a partial entry (not None)
+        assert result is not None
+        assert result.work_item_id == "item-1"
+        assert result.stage_name == ""  # Empty fallback
+        assert result.board_position == 0
+
+        # Should emit QueueMetadataCorruptionEvent
+        event_bus.publish.assert_called_once()
+        published_event = event_bus.publish.call_args[0][0]
+        assert isinstance(published_event, QueueMetadataCorruptionEvent)
+        assert published_event.work_item_id == "item-1"
+        assert "JSON" in published_event.error_details or "decode" in published_event.error_details
+
+    @pytest.mark.asyncio
+    async def test_peek_with_corruption_does_not_return_none(self):
+        """Test that peek() never returns None when items exist, even with corruption."""
+        redis = MockRedis()
+        event_bus = AsyncMock(spec=EventBus)
+        queue = RedisPipelineQueue(redis_client=redis, event_bus=event_bus)
+
+        now = datetime.now(UTC)
+        entry = QueueEntry("item-1", "In Progress", 0, now, {})
+
+        # Enqueue an item
+        await queue.enqueue("queue-1", entry)
+
+        # Corrupt the metadata
+        meta_key = f"codetoreum:queue:meta:queue-1"
+        redis._hashes[meta_key][b"item-1"] = b"corrupted"
+
+        # peek() should NOT return None - the queue is not blocked
+        result = await queue.peek("queue-1")
+
+        # Item must not return None, preventing silent pipeline blockage
+        assert result is not None
+        assert result.work_item_id == "item-1"
+
+        # The queue still has the item (not removed)
+        length = await queue.length("queue-1")
+        assert length == 1

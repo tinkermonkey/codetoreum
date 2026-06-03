@@ -341,6 +341,88 @@ class TaskDispatchFailedEvent(CodetoreumEvent):
 
 
 @dataclass(frozen=True)
+class QueueMetadataCorruptionEvent(CodetoreumEvent):
+    """Emitted when queue metadata is missing or corrupted.
+
+    **Immutability**: This is an immutable event (frozen dataclass). All fields
+    are read-only after construction to maintain event sourcing audit trail
+    integrity. Events represent immutable facts—attempting to modify any field
+    will raise `FrozenInstanceError`. This immutability is essential because
+    events are the permanent record of state changes in the system and must
+    never be altered once created.
+
+    Alerts about corrupted queue entries that remain in storage but have missing
+    or unparseable metadata. This indicates a data integrity issue that requires
+    investigation and potential manual remediation.
+
+    Attributes:
+        type (str): Fixed to "queue.metadata_corruption"
+        queue_name (str): Name of the queue (typically "project_id:board_id")
+        work_item_id (str): ID of the work item with corrupted metadata
+        error_details (str): Description of what went wrong (missing, JSON parse error, etc.)
+        project_id (str): ID of the project containing the queue
+
+    Example:
+        >>> event = QueueMetadataCorruptionEvent(
+        ...     type="queue.metadata_corruption",
+        ...     timestamp="2025-01-14T10:30:00+00:00",
+        ...     source="redis_pipeline_queue",
+        ...     queue_name="proj-1:board-1",
+        ...     work_item_id="item-1",
+        ...     error_details="JSON decode error: Expecting value",
+        ...     project_id="proj-1"
+        ... )
+        >>> event.error_details = "other"  # ❌ Raises FrozenInstanceError
+    """
+
+    queue_name: str = ""
+    work_item_id: str = ""
+    error_details: str = ""
+    project_id: str | None = None
+
+    def __post_init__(self) -> None:
+        """Validate event after initialization."""
+        super().__post_init__()
+        if not self.queue_name:
+            msg = "queue_name is required"
+            raise ValueError(msg)
+        if not self.work_item_id:
+            msg = "work_item_id is required"
+            raise ValueError(msg)
+        if not self.error_details:
+            msg = "error_details is required"
+            raise ValueError(msg)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to dictionary."""
+        d = super().to_dict()
+        d.update(
+            {
+                "queue_name": self.queue_name,
+                "work_item_id": self.work_item_id,
+                "error_details": self.error_details,
+                "project_id": self.project_id,
+            }
+        )
+        return d
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "QueueMetadataCorruptionEvent":
+        """Deserialize from dictionary."""
+        return cls(
+            type=data.get("type", "queue.metadata_corruption"),
+            timestamp=data.get("timestamp", ""),
+            source=data.get("source", ""),
+            correlation_id=data.get("correlation_id"),
+            event_id=data.get("event_id") or str(uuid4()),
+            queue_name=data.get("queue_name", ""),
+            work_item_id=data.get("work_item_id", ""),
+            error_details=data.get("error_details", ""),
+            project_id=data.get("project_id"),
+        )
+
+
+@dataclass(frozen=True)
 class WorkItemDeadLetterQueuedEvent(CodetoreumEvent):
     """Emitted when a work item is queued to the dead letter queue.
 

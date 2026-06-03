@@ -171,6 +171,7 @@ from .queue_events import (
     QueueItemAddedEvent,
     QueueItemRemovedEvent,
     QueuePositionChangedEvent,
+    QueueMetadataCorruptionEvent,
     TaskDispatchFailedEvent,
     WorkItemDeadLetterQueuedEvent,
 )
@@ -398,6 +399,7 @@ __all__ = [
     "QueueItemAddedEvent",
     "QueueItemRemovedEvent",
     "QueuePositionChangedEvent",
+    "QueueMetadataCorruptionEvent",
     "TaskDispatchFailedEvent",
     "WorkItemDeadLetterQueuedEvent",
     # Repository events
