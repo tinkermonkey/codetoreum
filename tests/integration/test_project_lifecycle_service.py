@@ -229,7 +229,7 @@ async def test_reconcile_project_boards_success(caplog):
     assert len(board_service.reconcile_calls) == 1
     board_id, board_config = board_service.reconcile_calls[0]
     assert board_id == "PVT_kwDOANYYRs4AbZKf"
-    assert board_config.board_id == "api-service"
+    assert board_config.board_id == "PVT_kwDOANYYRs4AbZKf"
 
 
 @pytest.mark.asyncio

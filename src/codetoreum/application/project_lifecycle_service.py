@@ -116,7 +116,7 @@ class ProjectLifecycleService:
             )
             raise
 
-        github_project_id = getattr(project_config, "github_project_id", None)
+        github_project_id = project_config.github_project_id
         if not github_project_id:
             logger.debug(
                 f"Skipping board reconciliation for {project_name}: no github_project_id in project configuration",
@@ -128,4 +128,4 @@ class ProjectLifecycleService:
             f"Reconciling boards for project {project_name} (node_id={github_project_id})",
             extra={"project_name": project_name},
         )
-        await self._board_service.reconcile_board(github_project_id, BoardConfig(board_id=project_name, expected_columns=()))
+        await self._board_service.reconcile_board(github_project_id, BoardConfig(board_id=github_project_id, expected_columns=()))
