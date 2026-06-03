@@ -34,9 +34,6 @@ from codetoreum.adapters.secondary.elasticsearch_project_manager_adapter import 
 from codetoreum.adapters.secondary.github_version_control_adapter import (
     GitHubVersionControlAdapter,
 )
-from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
-    InMemoryLockService,
-)
 from codetoreum.adapters.secondary.local_key_encryption_adapter import (
     LocalKeyEncryptionAdapter,
 )
@@ -209,7 +206,6 @@ except ImportError:
     )
     BasicPRReviewCycleAdapter = None  # type: ignore
 
-from codetoreum.application.pipeline_lock_service import IPipelineLockService
 from codetoreum.infrastructure.adapters.registries import (
     ActiveWorkflowRunRegistryRegistry,
     AgentExecutorRegistry,
@@ -229,7 +225,6 @@ from codetoreum.infrastructure.adapters.registries import (
     MessageBrokerRegistry,
     MetricsAdapterRegistry,
     NotifierRegistry,
-    PipelineLockServiceRegistry,
     PipelineQueueServiceRegistry,
     ProjectManagerServiceRegistry,
     PRReviewCycleServiceRegistry,
@@ -346,7 +341,6 @@ class AdapterFactory:
         self._container_recovery_registry = ContainerRecoveryRegistry()
         self._encryption_registry = EncryptionRegistry()
         self._pipeline_queue_registry = PipelineQueueServiceRegistry()
-        self._pipeline_lock_service_registry = PipelineLockServiceRegistry()
         self._project_manager_registry = ProjectManagerServiceRegistry()
         self._workflow_config_registry = WorkflowConfigServiceRegistry()
         self._event_emitter_registry = EventEmitterRegistry()
@@ -806,20 +800,6 @@ class AdapterFactory:
             name="in_memory",
             adapter_type=InMemoryQueueService,
             description="In-memory queue service for testing",
-            version="1.0.0",
-            tags=["testing", "simulation", "mock"],
-            config_schema=AdapterCredentialRequirement(
-                simulation_only=True,
-                description="Simulation-only adapter, no credentials required",
-            ),
-            set_as_default=True,
-        )
-
-        # Pipeline Lock Service Adapters
-        self._pipeline_lock_service_registry.register(
-            name="in_memory",
-            adapter_type=InMemoryLockService,
-            description="In-memory pipeline lock service for testing",
             version="1.0.0",
             tags=["testing", "simulation", "mock"],
             config_schema=AdapterCredentialRequirement(
@@ -1339,7 +1319,6 @@ class AdapterFactory:
             "project_manager": self._project_manager_registry,
             "workflow_config": self._workflow_config_registry,
             "queue_service": self._pipeline_queue_registry,
-            "lock_service": self._pipeline_lock_service_registry,
             "event_emitter": self._event_emitter_registry,
             "message_broker": self._message_broker_registry,
             "identity_service": self._identity_service_registry,
@@ -1674,10 +1653,6 @@ class AdapterFactory:
     def create_pipeline_queue_service(self, adapter_name: str | None = None, **kwargs) -> IPipelineQueueService:
         """Create a pipeline queue service adapter instance."""
         return self._create_adapter(self._pipeline_queue_registry, adapter_name, "pipeline queue service", **kwargs)
-
-    def create_pipeline_lock_service(self, adapter_name: str | None = None, **kwargs) -> IPipelineLockService:
-        """Create a pipeline lock service adapter instance."""
-        return self._create_adapter(self._pipeline_lock_service_registry, adapter_name, "pipeline lock service", **kwargs)
 
     def create_project_manager_service(self, adapter_name: str | None = None, **kwargs) -> IProjectManagerService:
         """Create a project manager service adapter instance."""

@@ -11,7 +11,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-from codetoreum.application.pipeline_lock_service import IPipelineLockService
 from codetoreum.infrastructure.adapters.registry_base import AdapterRegistry
 from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
 from codetoreum.ports.output.agent_executor import IAgentExecutor
@@ -679,16 +678,4 @@ class PRReviewCycleServiceRegistry(AdapterRegistry[IPRReviewCycle]):
 
     def _is_valid_adapter(self, adapter_type: type[IPRReviewCycle]) -> bool:
         """Validate that an adapter implements IPRReviewCycle."""
-        return _validate_adapter_implements_interface(adapter_type, self._port_interface)
-
-
-class PipelineLockServiceRegistry(AdapterRegistry[IPipelineLockService]):
-    """Registry for IPipelineLockService adapter implementations."""
-
-    def __init__(self):
-        """Initialize the pipeline lock service registry."""
-        super().__init__(IPipelineLockService)
-
-    def _is_valid_adapter(self, adapter_type: type[IPipelineLockService]) -> bool:
-        """Validate that an adapter implements IPipelineLockService."""
         return _validate_adapter_implements_interface(adapter_type, self._port_interface)

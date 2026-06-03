@@ -142,7 +142,6 @@ from codetoreum.application.event_handlers.review_event_handler import (
 from codetoreum.application.execution_service import ExecutionService
 from codetoreum.application.feedback_processor import FeedbackProcessor
 from codetoreum.application.multi_project_orchestrator import MultiProjectOrchestrator
-from codetoreum.application.pipeline_lock_service import IPipelineLockService
 from codetoreum.application.pipeline_manager import PipelineManager
 from codetoreum.application.prompt_building import DefaultPromptBuilder
 from codetoreum.application.review_service import ReviewService
@@ -220,6 +219,7 @@ from codetoreum.ports.output.config_store import IConfigStore
 from codetoreum.ports.output.container import IContainer
 from codetoreum.ports.output.container_recovery import IAgentContainerRecoveryService
 from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
+from codetoreum.ports.output.distributed_lock import IDistributedLock
 from codetoreum.ports.output.encryption_service import IEncryptionService
 from codetoreum.ports.output.environment_repair_service import IEnvironmentRepairService
 from codetoreum.ports.output.event_emitter import IEventEmitter
@@ -336,7 +336,7 @@ class SimulationAdapters:
     project_manager: IProjectManagerService
     workflow_config: IWorkflowConfigService
     queue_service: IPipelineQueueService
-    lock_service: IPipelineLockService
+    lock_service: "IDistributedLock"
     event_emitter: IEventEmitter  # CapturingMockEventEmitter in simulation
     audit_store: IAuditStore | None  # InMemoryAuditStore in simulation, None in testing
 
@@ -2645,12 +2645,6 @@ class SimulationApplicationBootstrap:
         The executor → handler auto-progression path is now event-bus mediated
         (see INV-05 in `bootstrap/ARCHITECTURE.md` §6); the legacy
         `set_completion_handler` callback is no longer used.
-
-        NOTE: The handler requires IQueuedPipelineLockService (application-level interface
-        with 4-parameter try_acquire_lock), not the PORT interface IPipelineLockService
-        (which has 3 parameters). For simulation, the shared InMemoryLockService from
-        AdapterResolver implements the correct interface via the backward-compat alias
-        (application.pipeline_lock_service.IPipelineLockService = IQueuedPipelineLockService).
         """
         if not self.adapters or not self.infrastructure:
             logger.warning("Cannot register board column handler: components not ready")
@@ -2674,7 +2668,8 @@ class SimulationApplicationBootstrap:
 
         handler = BoardColumnEventHandler(
             board_service=self.adapters.board,
-            lock_service=self.adapters.lock_service,
+            distributed_lock=self.adapters.distributed_lock,
+            pipeline_queue=self.adapters.pipeline_queue,
             workflow_config=self.adapters.workflow_config,
             agent_executor=self.adapters.agent_executor,
             event_bus=self.infrastructure.event_bus,
