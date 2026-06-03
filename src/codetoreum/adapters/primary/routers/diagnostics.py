@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
-from codetoreum.ports.exceptions import EventStoreError, StreamNotFoundError
+from codetoreum.ports.exceptions import EventStoreError, ResourceNotFoundError, StreamNotFoundError
 from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
 from codetoreum.ports.output.board_service import BoardConfig, IBoardService, ReconciliationResult
 from codetoreum.ports.output.distributed_lock import IDistributedLock
@@ -472,25 +472,30 @@ def create_diagnostics_router(
             # Query event store for events matching this event_id
             # Events are stored with aggregate_id, so we look for events with this as aggregate_id
             events: list = []
-            stream_lookup_failed_with_infrastructure_error = False
 
             try:
                 events = await event_store.get_events(
                     stream_id=event_id,
                     from_version=0,
                 )
-            except StreamNotFoundError:
+            except (StreamNotFoundError, ResourceNotFoundError):
                 # Stream doesn't exist, this is a "not found" condition - allow fallback
                 logger.debug("Stream %s not found, trying correlation_id lookup", event_id)
                 pass
             except EventStoreError as e:
                 # Infrastructure failure, propagate as 500
                 logger.warning("Event store infrastructure error when querying stream_id '%s': %s", event_id, e, exc_info=True)
-                stream_lookup_failed_with_infrastructure_error = True
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Event store temporarily unavailable",
+                ) from e
             except Exception as e:
                 # Unknown error, treat as infrastructure failure
                 logger.warning("Unexpected error querying stream_id '%s': %s", event_id, e, exc_info=True)
-                stream_lookup_failed_with_infrastructure_error = True
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Event store temporarily unavailable",
+                ) from e
 
             if not events:
                 # Try to find by correlation_id if available
