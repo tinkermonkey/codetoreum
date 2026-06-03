@@ -37,6 +37,12 @@ from codetoreum.adapters.secondary.github_version_control_adapter import (
 from codetoreum.adapters.secondary.local_key_encryption_adapter import (
     LocalKeyEncryptionAdapter,
 )
+from codetoreum.adapters.secondary.file_backed_distributed_lock import (
+    FileBackedDistributedLock,
+)
+from codetoreum.adapters.secondary.redis_distributed_lock import (
+    RedisDistributedLock,
+)
 
 # Import testing adapters
 from codetoreum.adapters.testing import (
@@ -48,6 +54,7 @@ from codetoreum.adapters.testing import (
     InMemoryCheckpointStore,
     InMemoryCodeReviewAdapter,
     InMemoryConfigStore,
+    InMemoryDistributedLock,
     InMemoryEventStore,
     InMemoryMessageBroker,
     InMemoryMetricsAdapter,
@@ -217,6 +224,7 @@ from codetoreum.infrastructure.adapters.registries import (
     ContainerRecoveryRegistry,
     ContainerRegistry,
     DiscussionAdapterRegistry,
+    DistributedLockRegistry,
     EncryptionRegistry,
     EnvironmentRepairRegistry,
     EventEmitterRegistry,
@@ -354,6 +362,7 @@ class AdapterFactory:
         self._systemic_analysis_registry = SystemicAnalysisRegistry()
         self._environment_repair_registry = EnvironmentRepairRegistry()
         self._ci_pipeline_registry = CIPipelineServiceRegistry()
+        self._distributed_lock_registry = DistributedLockRegistry()
 
         # Dependency injection container
         self._dependencies: dict[str, Any] = {}
@@ -1134,6 +1143,42 @@ class AdapterFactory:
             ),
         )
 
+        # Distributed Lock Adapters
+        self._distributed_lock_registry.register(
+            name="in_memory",
+            adapter_type=InMemoryDistributedLock,
+            description="In-memory distributed lock for testing",
+            version="1.0.0",
+            tags=["testing", "simulation"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
+            set_as_default=True,
+        )
+        self._distributed_lock_registry.register(
+            name="file",
+            adapter_type=FileBackedDistributedLock,
+            description="File-backed distributed lock",
+            version="1.0.0",
+            tags=["production"],
+            config_schema=AdapterCredentialRequirement(
+                env_vars=("LOCK_FILE_PATH",),
+                description="Path to lock file directory",
+            ),
+        )
+        self._distributed_lock_registry.register(
+            name="redis",
+            adapter_type=RedisDistributedLock,
+            description="Redis-backed distributed lock",
+            version="1.0.0",
+            tags=["production"],
+            config_schema=AdapterCredentialRequirement(
+                env_vars=("REDIS_URL",),
+                description="Redis connection URL",
+            ),
+        )
+
     # Registry access methods
 
     @property
@@ -1331,6 +1376,7 @@ class AdapterFactory:
             "systemic_analysis": self._systemic_analysis_registry,
             "environment_repair": self._environment_repair_registry,
             "ci_pipeline": self._ci_pipeline_registry,
+            "lock_service": self._distributed_lock_registry,
         }
 
         if slot_name not in registry_map:
@@ -1719,6 +1765,10 @@ class AdapterFactory:
     def create_ci_pipeline_service(self, adapter_name: str | None = None, **kwargs) -> ICIPipelineService:
         """Create a CI pipeline service adapter instance."""
         return self._create_adapter(self._ci_pipeline_registry, adapter_name, "CI pipeline service", **kwargs)
+
+    def create_pipeline_lock_service(self, adapter_name: str | None = None, **kwargs) -> "IDistributedLock":
+        """Create a distributed lock service adapter instance."""
+        return self._create_adapter(self._distributed_lock_registry, adapter_name, "Distributed lock service", **kwargs)
 
     # =========================================================================
     # Config builders for adapters requiring config objects

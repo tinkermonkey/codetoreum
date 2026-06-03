@@ -28,8 +28,11 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
-    InMemoryLockService,
+from codetoreum.adapters.testing.in_memory_distributed_lock import (
+    InMemoryDistributedLock,
+)
+from codetoreum.adapters.testing.in_memory_queue_service import (
+    InMemoryQueueService,
 )
 from codetoreum.adapters.testing.in_memory_workflow_config_service import (
     InMemoryWorkflowConfigService,
@@ -74,7 +77,8 @@ class TestScenarioB_LockContention:
         """
         # Create services
         board_service = MockBoardAdapter()
-        lock_service = InMemoryLockService()
+        distributed_lock = InMemoryDistributedLock()
+        queue_service = InMemoryQueueService()
         config_service = InMemoryWorkflowConfigService()
         event_bus = EventBus()
         agent_executor = MockAgentExecutor()
@@ -86,7 +90,8 @@ class TestScenarioB_LockContention:
         # Create event handler
         event_handler = BoardColumnEventHandler(
             board_service=board_service,
-            lock_service=lock_service,
+            distributed_lock=distributed_lock,
+            pipeline_queue=queue_service,
             workflow_config=config_service,
             agent_executor=agent_executor,
             event_bus=event_bus,
@@ -161,7 +166,8 @@ class TestScenarioB_LockContention:
 
         return {
             "board_service": board_service,
-            "lock_service": lock_service,
+            "distributed_lock": distributed_lock,
+            "queue_service": queue_service,
             "config_service": config_service,
             "event_bus": event_bus,
             "agent_executor": agent_executor,
@@ -189,7 +195,8 @@ class TestScenarioB_LockContention:
         ✓ Next queued work item moves to position 0
         """
         board_service = setup["board_service"]
-        lock_service = setup["lock_service"]
+        distributed_lock = setup["distributed_lock"]
+        queue_service = setup["queue_service"]
         agent_executor = setup["agent_executor"]
         event_handler = setup["event_handler"]
 
@@ -208,7 +215,7 @@ class TestScenarioB_LockContention:
             )
         )
 
-        queue_state = await lock_service.get_queue_state("proj-1", "board-1")
+        queue_state = await queue_service.get_queue_state("proj-1", "board-1")
         assert (
             queue_state.lock_holder == "work-item-100"
         ), f"Expected lock holder to be 'work-item-100', got '{queue_state.lock_holder}'"
@@ -236,7 +243,7 @@ class TestScenarioB_LockContention:
             )
         )
 
-        queue_state = await lock_service.get_queue_state("proj-1", "board-1")
+        queue_state = await queue_service.get_queue_state("proj-1", "board-1")
         assert queue_state.lock_holder == "work-item-100", "Lock holder should still be work-item-100"
         assert len(queue_state.queue) == 1, f"Expected 1 item in queue, got {len(queue_state.queue)}"
         assert (
@@ -258,7 +265,7 @@ class TestScenarioB_LockContention:
             )
         )
 
-        queue_state = await lock_service.get_queue_state("proj-1", "board-1")
+        queue_state = await queue_service.get_queue_state("proj-1", "board-1")
         assert len(queue_state.queue) == 2, f"Expected 2 items in queue, got {len(queue_state.queue)}"
         assert (
             queue_state.queue[0].work_item_id == "work-item-101"
@@ -283,7 +290,7 @@ class TestScenarioB_LockContention:
         )
 
         # Verify lock released and granted to #101
-        queue_state = await lock_service.get_queue_state("proj-1", "board-1")
+        queue_state = await queue_service.get_queue_state("proj-1", "board-1")
         assert (
             queue_state.lock_holder == "work-item-101"
         ), f"Expected lock holder to be 'work-item-101' after #100 completion, got '{queue_state.lock_holder}'"
@@ -299,7 +306,7 @@ class TestScenarioB_LockContention:
 
         # Step 5: #102 still waiting
         board_service.assert_item_in_column("work-item-102", "Development")
-        queue_state = await lock_service.get_queue_state("proj-1", "board-1")
+        queue_state = await queue_service.get_queue_state("proj-1", "board-1")
         assert queue_state.lock_holder == "work-item-101", "Lock holder should still be work-item-101"
         assert len(queue_state.queue) == 1, "Queue should have exactly 1 waiting item (#102)"
 
@@ -315,7 +322,8 @@ class TestScenarioB_LockContention:
         ✓ Queue reordering causes different work item to acquire lock next
         """
         board_service = setup["board_service"]
-        lock_service = setup["lock_service"]
+        distributed_lock = setup["distributed_lock"]
+        queue_service = setup["queue_service"]
         agent_executor = setup["agent_executor"]
         event_handler = setup["event_handler"]
 
@@ -357,7 +365,7 @@ class TestScenarioB_LockContention:
         )
 
         # Verify initial queue order
-        queue_state = await lock_service.get_queue_state("proj-1", "board-1")
+        queue_state = await queue_service.get_queue_state("proj-1", "board-1")
         assert queue_state.lock_holder == "work-item-100", "Lock holder should be work-item-100"
         assert queue_state.queue[0].work_item_id == "work-item-101", "First queue item should be work-item-101"
         assert queue_state.queue[1].work_item_id == "work-item-102", "Second queue item should be work-item-102"
@@ -366,7 +374,7 @@ class TestScenarioB_LockContention:
         # This updates the board positions directly, which would normally come from
         # a board UI reordering action. The lock service then reorders its queue based
         # on these new board positions.
-        await lock_service.update_queue_positions(
+        await queue_service.update_queue_positions(
             "proj-1",
             "board-1",
             {
@@ -376,7 +384,7 @@ class TestScenarioB_LockContention:
         )
 
         # Verify queue reordered
-        queue_state = await lock_service.get_queue_state("proj-1", "board-1")
+        queue_state = await queue_service.get_queue_state("proj-1", "board-1")
         assert queue_state.lock_holder == "work-item-100", "Lock holder should still be work-item-100"
         assert (
             queue_state.queue[0].work_item_id == "work-item-102"
@@ -401,7 +409,7 @@ class TestScenarioB_LockContention:
         )
 
         # Verify new lock state after event handler processes release
-        queue_state = await lock_service.get_queue_state("proj-1", "board-1")
+        queue_state = await queue_service.get_queue_state("proj-1", "board-1")
         assert (
             queue_state.lock_holder == "work-item-102"
         ), f"After reorder and lock release, lock holder should be 'work-item-102', got '{queue_state.lock_holder}'"

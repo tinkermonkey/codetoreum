@@ -22,6 +22,7 @@ from codetoreum.ports.output.config_store import IConfigStore
 from codetoreum.ports.output.container import IContainer
 from codetoreum.ports.output.container_recovery import IAgentContainerRecoveryService
 from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
+from codetoreum.ports.output.distributed_lock import IDistributedLock
 from codetoreum.ports.output.encryption_service import IEncryptionService
 from codetoreum.ports.output.environment_repair_service import IEnvironmentRepairService
 from codetoreum.ports.output.event_emitter import IEventEmitter
@@ -678,4 +679,16 @@ class PRReviewCycleServiceRegistry(AdapterRegistry[IPRReviewCycle]):
 
     def _is_valid_adapter(self, adapter_type: type[IPRReviewCycle]) -> bool:
         """Validate that an adapter implements IPRReviewCycle."""
+        return _validate_adapter_implements_interface(adapter_type, self._port_interface)
+
+
+class DistributedLockRegistry(AdapterRegistry[IDistributedLock]):
+    """Registry for IDistributedLock adapter implementations."""
+
+    def __init__(self):
+        """Initialize the distributed lock registry."""
+        super().__init__(IDistributedLock)
+
+    def _is_valid_adapter(self, adapter_type: type[IDistributedLock]) -> bool:
+        """Validate that an adapter implements IDistributedLock."""
         return _validate_adapter_implements_interface(adapter_type, self._port_interface)

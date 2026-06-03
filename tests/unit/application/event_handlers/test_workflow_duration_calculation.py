@@ -33,7 +33,8 @@ class TestWorkflowDurationCalculation:
         workflow_config = AsyncMock()
         agent_executor = AsyncMock()
         work_item_service = AsyncMock()
-        lock_service = AsyncMock()
+        distributed_lock = AsyncMock()
+        pipeline_queue = AsyncMock()
 
         handler = BoardColumnEventHandler(
             event_store=event_store,
@@ -43,7 +44,8 @@ class TestWorkflowDurationCalculation:
             workflow_config=workflow_config,
             agent_executor=agent_executor,
             work_item_service=work_item_service,
-            lock_service=lock_service,
+            distributed_lock=distributed_lock,
+            pipeline_queue=pipeline_queue,
         )
 
         # Set up an active run that started 5 minutes ago
@@ -95,7 +97,8 @@ class TestWorkflowDurationCalculation:
             workflow_config=AsyncMock(),
             agent_executor=AsyncMock(),
             work_item_service=AsyncMock(),
-            lock_service=AsyncMock(),
+            distributed_lock=AsyncMock(),
+            pipeline_queue=AsyncMock(),
         )
 
         work_item_id = "wi-test"
@@ -139,7 +142,8 @@ class TestWorkflowDurationCalculation:
             workflow_config=AsyncMock(),
             agent_executor=AsyncMock(),
             work_item_service=AsyncMock(),
-            lock_service=AsyncMock(),
+            distributed_lock=AsyncMock(),
+            pipeline_queue=AsyncMock(),
         )
 
         work_item_id = "wi-short"
@@ -181,7 +185,8 @@ class TestWorkflowDurationCalculation:
             workflow_config=AsyncMock(),
             agent_executor=AsyncMock(),
             work_item_service=AsyncMock(),
-            lock_service=AsyncMock(),
+            distributed_lock=AsyncMock(),
+            pipeline_queue=AsyncMock(),
         )
 
         # Try to complete a workflow with no active run
