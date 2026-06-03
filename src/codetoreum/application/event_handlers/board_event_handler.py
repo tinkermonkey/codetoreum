@@ -8,7 +8,6 @@ Subscribes to workitem.column_changed events and orchestrates:
 
 import logging
 from datetime import UTC, datetime
-from types import MappingProxyType
 from uuid import uuid4
 
 from codetoreum.application.agent_execution_recovery_service import (

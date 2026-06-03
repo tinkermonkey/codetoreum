@@ -71,7 +71,7 @@ def run_registry():
 @pytest.fixture
 def event_bus():
     """Mock event bus."""
-    from unittest.mock import MagicMock, AsyncMock
+    from unittest.mock import AsyncMock, MagicMock
 
     bus = MagicMock(spec=EventBus)
     bus.publish = AsyncMock()

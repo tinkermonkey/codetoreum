@@ -26,7 +26,7 @@ from codetoreum.ports.output.pipeline_queue import QueueEntry
 @pytest.fixture
 def event_bus():
     """Mock event bus for capturing emitted events."""
-    from unittest.mock import MagicMock, AsyncMock
+    from unittest.mock import AsyncMock, MagicMock
 
     bus = MagicMock(spec=EventBus)
     bus.publish = AsyncMock()
