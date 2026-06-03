@@ -390,3 +390,68 @@ async def test_initialize_all_projects_with_no_config_error(caplog):
 
     # Should log the error and continue
     assert "Project initialization failed" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_initialize_all_projects_catches_unexpected_exceptions_per_project(caplog):
+    """Test that unexpected exceptions (TypeError, KeyError, etc.) are caught and logged.
+
+    Verifies the fix for issue #931: initialize_all_projects() should continue
+    processing remaining projects even when encountering unexpected exceptions,
+    not just ExternalServiceError and ResourceNotFoundError.
+    """
+    config1 = ProjectConfig(
+        repo_url="https://github.com/acme/api-service.git",
+        branch="main",
+        enabled=True,
+        org="acme",
+        github_project_id="PVT_kwDOANYYRs4AbZKf",
+    )
+    config2 = ProjectConfig(
+        repo_url="https://github.com/acme/web-app.git",
+        branch="main",
+        enabled=True,
+        org="acme",
+        github_project_id="PVT_kwDOANYYRs4AbZKg",
+    )
+
+    # Mock board service that raises TypeError for first project, succeeds for second
+    board_service = MagicMock(spec=IBoardService)
+    board_service.reconcile_board = AsyncMock(side_effect=[TypeError("Unexpected type error"), None])
+
+    project_manager = MockProjectManagerService(
+        enabled_projects=["api-service", "web-app"],
+        configs={"api-service": config1, "web-app": config2},
+    )
+    service = ProjectLifecycleService(project_manager, board_service)
+
+    with caplog.at_level(logging.WARNING):
+        # Should not raise - catches all exceptions
+        await service.initialize_all_projects()
+
+    # Verify that the error was logged
+    assert "Board reconciliation failed for api-service" in caplog.text
+    assert "Unexpected type error" in caplog.text
+
+    # Verify that processing continued to the second project
+    assert board_service.reconcile_board.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_initialize_all_projects_catches_unexpected_exceptions_during_get_enabled(caplog):
+    """Test that unexpected exceptions during get_enabled_projects are caught.
+
+    Verifies that exceptions other than ExternalServiceError/ResourceNotFoundError
+    are properly handled at the outer level as well.
+    """
+    # Simulate an unexpected exception during get_enabled_projects
+    project_manager = MockProjectManagerService(get_enabled_error=RuntimeError("Unexpected runtime error"))
+    service = ProjectLifecycleService(project_manager)
+
+    with caplog.at_level(logging.WARNING):
+        # Should not raise - catches all exceptions
+        await service.initialize_all_projects()
+
+    # Verify that the error was logged
+    assert "Project initialization failed" in caplog.text
+    assert "Unexpected runtime error" in caplog.text

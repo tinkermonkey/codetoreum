@@ -56,7 +56,7 @@ class ProjectLifecycleService:
             for project_name in enabled_projects:
                 try:
                     await self._reconcile_project_boards(project_name)
-                except (ExternalServiceError, ResourceNotFoundError) as e:
+                except Exception as e:
                     logger.warning(
                         f"Board reconciliation failed for {project_name}: {e}",
                         exc_info=True,
@@ -67,7 +67,7 @@ class ProjectLifecycleService:
                     )
                     # Continue with other projects
 
-        except (ExternalServiceError, ResourceNotFoundError) as e:
+        except Exception as e:
             logger.warning(
                 f"Project initialization failed: {e}",
                 exc_info=True,
