@@ -21,6 +21,8 @@ from codetoreum.application.workflow_orchestrator import (
     WorkflowOrchestrator,
     WorkflowState,
 )
+from codetoreum.domain.value_objects import ProjectConfig
+from codetoreum.domain.work_item import WorkItemPriority
 from codetoreum.ports.output.workflow_orchestrator import (
     CardMovedRequest,
     IssueData,
@@ -28,8 +30,6 @@ from codetoreum.ports.output.workflow_orchestrator import (
     StageCompletedRequest,
     WorkflowAction,
 )
-from codetoreum.domain.value_objects import ProjectConfig
-from codetoreum.domain.work_item import WorkItemPriority
 
 # Mock implementations for testing
 
