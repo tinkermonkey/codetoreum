@@ -418,20 +418,6 @@ class BoardColumnEventHandler(EventHandler):
         # Complete workflow run lifecycle tracking
         await self._complete_workflow_run(work_item_id, column_config.name)
 
-        # If there's a next item in queue, trigger its agent
-        if next_work_item_id:
-            # Find the pipeline trigger column (where agent was originally triggered)
-            trigger_column = next(
-                (col for col in workflow_config.columns if col.is_pipeline_trigger),
-                None
-            )
-            if trigger_column and trigger_column.agent_id:
-                await self._trigger_agent(
-                    work_item_id=next_work_item_id,
-                    column_config=trigger_column,
-                    board_id=board_id,
-                )
-
         # PipelineOrchestrator subscribes to PipelineLockReleasedEvent and
         # orchestrates granting the lock to the next queued item
 
@@ -637,7 +623,7 @@ class BoardColumnEventHandler(EventHandler):
         Returns:
             True if agent should be triggered, False otherwise
         """
-        return (
+        return bool(
             column_config.agent_id
             and getattr(column_config, "execution_type", "task_queue") != "conversational"
             and not column_config.pr_review_cycle_config
