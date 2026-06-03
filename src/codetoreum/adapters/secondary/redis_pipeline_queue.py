@@ -127,6 +127,56 @@ class RedisPipelineQueue(IPipelineQueue):
             already_present=False,
         )
 
+    async def _handle_corrupt_metadata(
+        self,
+        queue_key: str,
+        work_item_id: str,
+        score: float,
+        error_msg: str,
+        exc_info: bool = False,
+    ) -> QueueEntry:
+        """Handle corrupt or missing metadata by emitting an event and returning a fallback entry.
+
+        Args:
+            queue_key: The queue identifier
+            work_item_id: The work item ID with corrupt metadata
+            score: The position score from the sorted set
+            error_msg: Description of the corruption
+            exc_info: Whether to include exception traceback in log
+
+        Returns:
+            A QueueEntry with default metadata values
+        """
+        logger.error(
+            f"Queue metadata corruption for {work_item_id} in {queue_key}: {error_msg}",
+            exc_info=exc_info,
+        )
+        if self._event_bus:
+            try:
+                project_id = queue_key.split(":")[0] if ":" in queue_key else ""
+                event = QueueMetadataCorruptionEvent(
+                    type="queue.metadata_corruption",
+                    timestamp=datetime.now(UTC).isoformat(),
+                    source="redis_pipeline_queue",
+                    queue_name=queue_key,
+                    work_item_id=work_item_id,
+                    error_details=error_msg,
+                    project_id=project_id if project_id else None,
+                )
+                await self._event_bus.publish(event)
+            except Exception:
+                logger.error(
+                    f"Failed to publish QueueMetadataCorruptionEvent for {work_item_id}",
+                    exc_info=True,
+                )
+        return QueueEntry(
+            work_item_id=work_item_id,
+            stage_name="",
+            board_position=int(score),
+            enqueued_at=datetime.now(UTC),
+            metadata=MappingProxyType({}),
+        )
+
     async def peek(self, queue_key: str) -> QueueEntry | None:
         """Return the head entry without removing. None if empty.
 
@@ -150,34 +200,8 @@ class RedisPipelineQueue(IPipelineQueue):
         raw_meta = await self._redis.hget(meta_key, work_item_id)
         if raw_meta is None:
             error_msg = "Metadata hash not found"
-            logger.error(
-                f"Queue metadata corruption for {work_item_id} in {queue_key}: {error_msg}",
-                exc_info=False,
-            )
-            if self._event_bus:
-                try:
-                    project_id = queue_key.split(":")[0] if ":" in queue_key else ""
-                    event = QueueMetadataCorruptionEvent(
-                        type="queue.metadata_corruption",
-                        timestamp=datetime.now(UTC).isoformat(),
-                        source="redis_pipeline_queue",
-                        queue_name=queue_key,
-                        work_item_id=work_item_id,
-                        error_details=error_msg,
-                        project_id=project_id if project_id else None,
-                    )
-                    await self._event_bus.publish(event)
-                except Exception:
-                    logger.error(
-                        f"Failed to publish QueueMetadataCorruptionEvent for {work_item_id}",
-                        exc_info=True,
-                    )
-            return QueueEntry(
-                work_item_id=work_item_id,
-                stage_name="",
-                board_position=int(score),
-                enqueued_at=datetime.now(UTC),
-                metadata=MappingProxyType({}),
+            return await self._handle_corrupt_metadata(
+                queue_key, work_item_id, score, error_msg, exc_info=False
             )
 
         meta_dict = {}
@@ -186,34 +210,8 @@ class RedisPipelineQueue(IPipelineQueue):
             meta_dict = json.loads(meta_str)
         except Exception as e:
             error_msg = f"Failed to parse metadata: {type(e).__name__}: {str(e)}"
-            logger.error(
-                f"Queue metadata corruption for {work_item_id} in {queue_key}: {error_msg}",
-                exc_info=True,
-            )
-            if self._event_bus:
-                try:
-                    project_id = queue_key.split(":")[0] if ":" in queue_key else ""
-                    event = QueueMetadataCorruptionEvent(
-                        type="queue.metadata_corruption",
-                        timestamp=datetime.now(UTC).isoformat(),
-                        source="redis_pipeline_queue",
-                        queue_name=queue_key,
-                        work_item_id=work_item_id,
-                        error_details=error_msg,
-                        project_id=project_id if project_id else None,
-                    )
-                    await self._event_bus.publish(event)
-                except Exception:
-                    logger.error(
-                        f"Failed to publish QueueMetadataCorruptionEvent for {work_item_id}",
-                        exc_info=True,
-                    )
-            return QueueEntry(
-                work_item_id=work_item_id,
-                stage_name="",
-                board_position=int(score),
-                enqueued_at=datetime.now(UTC),
-                metadata=MappingProxyType({}),
+            return await self._handle_corrupt_metadata(
+                queue_key, work_item_id, score, error_msg, exc_info=True
             )
 
         metadata = {k: v for k, v in meta_dict.items() if k not in ("stage_name", "enqueued_at")}

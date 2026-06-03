@@ -74,10 +74,11 @@ class PipelineQueueServiceAdapter(IPipelineQueue):
         )
 
     async def pop(self, queue_key: str) -> QueueEntry | None:
-        """Atomically remove and return the head entry.
+        """Remove and return the head entry. None if empty or removal fails.
 
-        Delegates to IPipelineQueueService to get the next waiting item,
-        then removes it from the queue.
+        Note: This delegates to two separate service calls (get_next_waiting_item,
+        then remove_from_queue) and is not atomic. In concurrent scenarios,
+        another caller may remove the item between these calls.
         """
         try:
             project_id, board_id = self._parse_queue_key(queue_key)
@@ -89,7 +90,9 @@ class PipelineQueueServiceAdapter(IPipelineQueue):
         if entry is None:
             return None
 
-        await self._queue_service.remove_from_queue(entry.work_item_id)
+        removed = await self._queue_service.remove_from_queue(entry.work_item_id)
+        if not removed:
+            return None
 
         return QueueEntry(
             work_item_id=entry.work_item_id,
