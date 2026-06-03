@@ -47,13 +47,13 @@ class StaleLockWatchdog:
     - Time-aware: Uses clock.now() exclusively for comparisons
     - Fail-safe: Errors logged but don't stop future checks
     - Event-driven: Emits StaleLockDetectedEvent for audit trail
-    - Force-release: Calls lock_service.release_lock() to clean up
+    - Force-release: Calls lock_service.release() to clean up
     - Deduplication: Tracks detected stale locks to emit events once per recovery
 
     Deduplication Design:
     Prevents duplicate StaleLockDetectedEvent emissions for the same lock.
     When a lock is detected as stale and recovered, it's marked in
-    _recovered_locks. If release_lock() fails (transient error), the event
+    _recovered_locks. If release() fails (transient error), the event
     is still emitted but the lock isn't recovered - the next tick will retry
     and re-emit. Once successfully recovered, future ticks skip the lock
     until it's re-acquired (cleared when a new lock.acquired event is
@@ -66,7 +66,7 @@ class StaleLockWatchdog:
         _clock: SimulationClock for time access and callback scheduling
         _stale_threshold: Age (timedelta) beyond which locks are stale
         _check_interval: Frequency (timedelta) of stale lock checks
-        _recovered_locks: Set of "project_id:board_id" keys already recovered
+        _recovered_locks: Set of lock_key strings already recovered
         _stopped: Flag to prevent future checks
     """
 
@@ -182,80 +182,84 @@ class StaleLockWatchdog:
     async def _check_stale_locks(self) -> None:
         """Scan all locks and force-release any that are stale.
 
-        Gets all current lock states from the lock service, checks each held lock's age
+        Gets all current lock holders from the lock service, checks each held lock's age
         against the stale threshold, and for stale ones:
         1. Emits StaleLockDetectedEvent with timestamp for audit trail
-        2. Force-releases the lock via lock_service.release_lock()
+        2. Force-releases the lock via lock_service.release()
         3. Tracks detection to avoid duplicate event emission
         4. Logs the stale lock at warning level
 
         Uses clock.now() exclusively for time comparisons, ensuring the watchdog
         pauses when auto-advance pauses and works with simulated time.
 
-        Deduplication: If emit() succeeds but release_lock() fails (transient error),
+        Deduplication: If emit() succeeds but release() fails (transient error),
         the event was emitted but the lock wasn't recovered. The lock will be
         detected again on the next tick and will re-emit. Once successfully released,
-        the key is added to _recovered_locks and future ticks skip it.
+        the lock_key is added to _recovered_locks and future ticks skip it.
 
         Raises:
             Any exception from event emission or lock release (caught and logged by _tick())
         """
         now = self._clock.now()
 
-        # Get all lock states from the port interface method
-        all_states = await self._lock_service.get_all_lock_states()
+        # Get all lock holders from the port interface
+        all_holders = await self._lock_service.get_all_holders()
 
-        for key, state in all_states.items():
-            # Only check locks that are currently held
-            if state.lock_holder and state.lock_acquired_at:
-                age = now - state.lock_acquired_at
-                if age > self._stale_threshold:
-                    # Skip if already recovered
-                    if key in self._recovered_locks:
-                        continue
+        for holder in all_holders:
+            age = now - holder.acquired_at
+            if age > self._stale_threshold:
+                # Skip if already recovered
+                if holder.lock_key in self._recovered_locks:
+                    continue
 
-                    # Parse composite key to get project_id and board_id
-                    project_id, board_id = key.split(":", 1)
+                # Parse composite key to get project_id and board_id
+                project_id, board_id = holder.lock_key.split(":", 1)
 
-                    self._logger.warning(
-                        "Stale lock detected: %s held by %s for %s",
-                        key,
-                        state.lock_holder,
-                        age,
+                self._logger.warning(
+                    "Stale lock detected: %s held by %s for %s",
+                    holder.lock_key,
+                    holder.holder_id,
+                    age,
+                )
+
+                # Emit domain event with lock acquisition time for audit trail
+                stale_event = StaleLockDetectedEvent(
+                    type="lock.stale_detected",
+                    timestamp=now.isoformat(),
+                    source="stale_lock_watchdog",
+                    project_id=project_id,
+                    board_id=board_id,
+                    work_item_id=holder.holder_id,
+                    lock_acquired_at=holder.acquired_at.isoformat(),
+                )
+                self._event_emitter.emit(stale_event)
+
+                # Force-release the stale lock
+                try:
+                    result = await self._lock_service.release(
+                        holder.lock_key,
+                        holder.holder_id,
                     )
-
-                    # Emit domain event with lock acquisition time for audit trail
-                    stale_event = StaleLockDetectedEvent(
-                        type="lock.stale_detected",
-                        timestamp=now.isoformat(),
-                        source="stale_lock_watchdog",
-                        project_id=project_id,
-                        board_id=board_id,
-                        work_item_id=state.lock_holder,
-                        lock_acquired_at=state.lock_acquired_at.isoformat(),
-                    )
-                    self._event_emitter.emit(stale_event)
-
-                    # Force-release the stale lock
-                    try:
-                        await self._lock_service.release_lock(
-                            project_id,
-                            board_id,
-                            state.lock_holder,
-                        )
-                        # Mark as recovered only after successful release
-                        self._recovered_locks.add(key)
+                    # Mark as recovered only after successful release
+                    if result.released:
+                        self._recovered_locks.add(holder.lock_key)
                         self._logger.info(
                             "Stale lock force-released: %s (was held for %s)",
-                            key,
+                            holder.lock_key,
                             age,
                         )
-                    except Exception:
-                        self._logger.error(
-                            "Failed to force-release stale lock %s",
-                            key,
-                            exc_info=True,
+                    else:
+                        self._logger.warning(
+                            "Failed to force-release stale lock %s: %s",
+                            holder.lock_key,
+                            result.reason,
                         )
+                except Exception:
+                    self._logger.error(
+                        "Failed to force-release stale lock %s",
+                        holder.lock_key,
+                        exc_info=True,
+                    )
 
 
 class ExecutionTimeoutWatchdog:
