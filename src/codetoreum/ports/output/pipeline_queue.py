@@ -29,6 +29,11 @@ class QueueEntry:
     metadata: MappingProxyType[str, str]  # Immutable view of metadata dict. Codetoreum stashes
                                            # project_id, board_id, etc.
 
+    def __post_init__(self) -> None:
+        """Ensure metadata is wrapped in MappingProxyType for immutability."""
+        if not isinstance(self.metadata, MappingProxyType):
+            object.__setattr__(self, "metadata", MappingProxyType(self.metadata))
+
 
 @dataclass(frozen=True)
 class EnqueueResult:

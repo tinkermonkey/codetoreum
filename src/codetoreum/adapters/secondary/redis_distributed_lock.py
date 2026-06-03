@@ -1,7 +1,11 @@
 """RedisDistributedLock — production distributed lock primitive.
 
-Uses Redis SET NX EX for atomic acquire/release. Emits PipelineLockAcquiredEvent
-and PipelineLockReleasedEvent via an injected event bus.
+Uses Redis SET NX EX for atomic acquire/release. Per the IDistributedLock port
+contract, callers are responsible for emitting PipelineLockAcquiredEvent and
+PipelineLockReleasedEvent. This adapter retains internal event emission for
+backward compatibility and diagnostics, which may result in duplicate events
+if callers follow the contract — consider deduplication at the event bus level
+or removal of adapter-level emission in a future refactor.
 """
 
 import logging

@@ -1,6 +1,7 @@
 """In-memory implementation of IDistributedLock for testing."""
 
 from datetime import UTC, datetime, timedelta
+from types import MappingProxyType
 
 from codetoreum.ports.output.distributed_lock import (
     AcquireResult,
@@ -108,7 +109,7 @@ class InMemoryDistributedLock(IDistributedLock):
             acquired_at=acquired_at,
             ttl_seconds=lock_data["ttl_seconds"],
             expires_at=expires_at,
-            holder_metadata=lock_data.get("holder_metadata", {}),
+            holder_metadata=MappingProxyType(lock_data.get("holder_metadata", {})),
         )
 
     async def get_all_holders(self) -> list[LockHolder]:
@@ -125,7 +126,7 @@ class InMemoryDistributedLock(IDistributedLock):
                     acquired_at=acquired_at,
                     ttl_seconds=lock_data["ttl_seconds"],
                     expires_at=expires_at,
-                    holder_metadata=lock_data.get("holder_metadata", {}),
+                    holder_metadata=MappingProxyType(lock_data.get("holder_metadata", {})),
                 )
             )
         return holders

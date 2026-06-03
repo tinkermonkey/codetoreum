@@ -310,7 +310,7 @@ def create_diagnostics_router(
                             acquired_at=holder.acquired_at,
                             ttl_seconds=holder.ttl_seconds,
                             expires_at=holder.expires_at,
-                            holder_metadata=holder.holder_metadata or {},
+                            holder_metadata=dict(holder.holder_metadata) if holder.holder_metadata else {},
                         )
                         for holder in holders
                     ]
@@ -361,7 +361,7 @@ def create_diagnostics_router(
                                             stage_name=entry.stage_name,
                                             board_position=entry.board_position,
                                             enqueued_at=entry.enqueued_at,
-                                            metadata=entry.metadata or {},
+                                            metadata=dict(entry.metadata) if entry.metadata else {},
                                         )
                                         for entry in entries
                                     ],

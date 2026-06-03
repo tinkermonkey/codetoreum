@@ -216,7 +216,7 @@ class FileBackedPipelineQueue(IPipelineQueue):
                 "stage_name": entry.stage_name,
                 "board_position": entry.board_position,
                 "enqueued_at": entry.enqueued_at.isoformat(),
-                "metadata": entry.metadata,
+                "metadata": dict(entry.metadata),
             }
             self._append_entry(file_entry)
 
