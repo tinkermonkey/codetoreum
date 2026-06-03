@@ -4,16 +4,20 @@ Subscribes to PipelineLockAcquiredEvent and PipelineLockReleasedEvent to:
 1. Maintain the "lock holder is not in queue" invariant
 2. Auto-trigger the next queued work item on lock release
 3. Detect and release orphaned locks on startup
+4. Emit alert events (LockStuckEvent) when invariants are violated
 
 This replaces the queue-handoff orchestration that was embedded in the old
 RedisPipelineLockService.
 """
 
 import logging
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 from codetoreum.domain.events import CodetoreumEvent
 from codetoreum.domain.events.lock_events import (
+    LockStuckEvent,
     PipelineLockAcquiredEvent,
     PipelineLockReleasedEvent,
 )
@@ -22,6 +26,7 @@ from codetoreum.ports.output.active_workflow_run_registry import (
     IActiveWorkflowRunRegistry,
 )
 from codetoreum.ports.output.distributed_lock import IDistributedLock
+from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.orphan_scan_registry import IOrphanScanRegistry
 from codetoreum.ports.output.pipeline_queue import IPipelineQueue
 
@@ -48,6 +53,7 @@ class PipelineOrchestrator(EventHandler):
         distributed_lock: IDistributedLock,
         pipeline_queue: IPipelineQueue,
         run_registry: IActiveWorkflowRunRegistry,
+        event_emitter: IEventEmitter,
         orphan_scan_registry: IOrphanScanRegistry | None = None,
         workflow_orchestrator: "IWorkflowOrchestrator | None" = None,
     ):
@@ -57,12 +63,14 @@ class PipelineOrchestrator(EventHandler):
             distributed_lock: IDistributedLock port for lock operations
             pipeline_queue: IPipelineQueue port for queue operations
             run_registry: IActiveWorkflowRunRegistry for tracking active runs
+            event_emitter: IEventEmitter for emitting alert events (e.g., LockStuckEvent)
             orphan_scan_registry: Optional registry to track orphan scan results
             workflow_orchestrator: Optional IWorkflowOrchestrator to trigger next WI
         """
         self.distributed_lock = distributed_lock
         self.pipeline_queue = pipeline_queue
         self.run_registry = run_registry
+        self.event_emitter = event_emitter
         self.orphan_scan_registry = orphan_scan_registry
         self.workflow_orchestrator = workflow_orchestrator
 
@@ -85,19 +93,41 @@ class PipelineOrchestrator(EventHandler):
         Maintains the "lock holder is not in queue" invariant:
         - Remove the holder from the queue if present
         - Trigger workflow run setup and agent execution if needed
+
+        If queue removal fails after lock acquisition, emits LockStuckEvent
+        to alert operators, but does not re-raise (the lock is legitimately held
+        and must proceed).
         """
         lock_key = f"{event.project_id}:{event.board_id}"
         queue_key = lock_key  # Same key per spec
 
         try:
-            # Remove holder from queue if present (idempotent)
+            # Check if holder is in queue
             in_queue = await self.pipeline_queue.contains(queue_key, event.work_item_id)
             if in_queue:
-                await self.pipeline_queue.remove(queue_key, event.work_item_id)
-                logger.info(
-                    f"Removed {event.work_item_id} from queue (now holds lock)",
-                    extra={"work_item_id": event.work_item_id},
-                )
+                try:
+                    # Remove holder from queue (idempotent)
+                    await self.pipeline_queue.remove(queue_key, event.work_item_id)
+                    logger.info(
+                        f"Removed {event.work_item_id} from queue (now holds lock)",
+                        extra={"work_item_id": event.work_item_id},
+                    )
+                except Exception as remove_err:
+                    # CRITICAL: Queue removal failed - work item holds lock but remains in queue.
+                    # This violates the "lock holder is not in queue" invariant.
+                    logger.critical(
+                        f"Queue removal failed for {event.work_item_id} after lock acquire: {remove_err}",
+                        exc_info=True,
+                        extra={"work_item_id": event.work_item_id},
+                    )
+                    self._emit_lock_stuck_alert(
+                        event.project_id,
+                        event.board_id,
+                        event.work_item_id,
+                        f"Queue removal failed after lock acquisition: {remove_err}",
+                    )
+                    # Do NOT re-raise - the lock is legitimately held; the item must proceed.
+                    # The alert event signals operator intervention needed.
 
             # Work item now holds the lock. Workflow execution will be triggered
             # by the next orchestration cycle (MultiProjectOrchestrator polls every 30s).
@@ -111,28 +141,44 @@ class PipelineOrchestrator(EventHandler):
                 },
             )
 
-        except Exception:
+        except Exception as e:
             logger.error(
-                f"Error handling lock acquisition for {event.work_item_id}",
+                f"Error handling lock acquisition for {event.work_item_id}: {e}",
                 exc_info=True,
+                extra={"work_item_id": event.work_item_id},
             )
 
     async def on_lock_released(self, event: PipelineLockReleasedEvent) -> None:
         """Handle lock release.
 
         Grants the lock to the next queued work item.
+
+        When lock acquisition succeeds, removes the next item from queue
+        (maintaining the "lock holder is not in queue" invariant).
+
+        If lock acquisition fails, emits LockStuckEvent to alert operators
+        and stops (subsequent items will be blocked until the stuck item
+        is manually resolved).
         """
         lock_key = f"{event.project_id}:{event.board_id}"
         queue_key = lock_key
 
+        # First, try to peek at next item
         try:
-            # Get next queued item
             next_entry = await self.pipeline_queue.peek(queue_key)
             if next_entry is None:
                 logger.info(f"No queued items after {event.work_item_id} released lock")
                 return
+        except Exception as peek_err:
+            logger.error(
+                f"Error peeking at queue after {event.work_item_id} released lock: {peek_err}",
+                exc_info=True,
+                extra={"work_item_id": event.work_item_id},
+            )
+            return
 
-            # Try to acquire lock for next item
+        # Try to acquire lock for next item
+        try:
             result = await self.distributed_lock.try_acquire(
                 lock_key=lock_key,
                 holder_id=next_entry.work_item_id,
@@ -141,21 +187,81 @@ class PipelineOrchestrator(EventHandler):
             )
 
             if result.status.value == "acquired":
-                # Lock granted; next handler will trigger the workflow
+                # Lock granted; remove from queue to maintain invariant
                 logger.info(
                     f"Granted lock to next queued item {next_entry.work_item_id}",
                     extra={"work_item_id": next_entry.work_item_id},
                 )
+                try:
+                    await self.pipeline_queue.remove(queue_key, next_entry.work_item_id)
+                except Exception as remove_err:
+                    # CRITICAL: Lock granted but queue removal failed.
+                    # Item holds lock but remains in queue - invariant broken.
+                    logger.critical(
+                        f"Queue removal failed for {next_entry.work_item_id} after lock granted: {remove_err}",
+                        exc_info=True,
+                        extra={"work_item_id": next_entry.work_item_id},
+                    )
+                    self._emit_lock_stuck_alert(
+                        event.project_id,
+                        event.board_id,
+                        next_entry.work_item_id,
+                        f"Lock granted but queue removal failed: {remove_err}",
+                    )
+                    # Note: Do not re-raise. Lock is held; item must proceed despite queue inconsistency.
             else:
-                # Lock held by someone else (race condition)
+                # Lock held by someone else (race condition) - not an invariant violation
                 logger.warning(
                     f"Failed to grant lock to {next_entry.work_item_id}: {result.status.value}",
                     extra={"work_item_id": next_entry.work_item_id},
                 )
 
-        except Exception:
+        except Exception as acquire_err:
+            # CRITICAL: Lock acquisition failed for next queued item.
+            # Item remains in queue without the lock - subsequent items blocked.
+            logger.critical(
+                f"Lock acquisition failed for queued item {next_entry.work_item_id}: {acquire_err}",
+                exc_info=True,
+                extra={"work_item_id": next_entry.work_item_id},
+            )
+            self._emit_lock_stuck_alert(
+                event.project_id,
+                event.board_id,
+                next_entry.work_item_id,
+                f"Lock acquisition failed for queued item: {acquire_err}",
+            )
+            # Stop processing - do not continue queue progression until this is resolved
+
+    def _emit_lock_stuck_alert(
+        self,
+        project_id: str,
+        board_id: str,
+        work_item_id: str,
+        reason: str,
+    ) -> None:
+        """Emit a LockStuckEvent to alert operators of an invariant violation.
+
+        Args:
+            project_id: ID of the project
+            board_id: ID of the board
+            work_item_id: ID of the stuck work item
+            reason: Human-readable explanation of why the lock is stuck
+        """
+        try:
+            stuck_event = LockStuckEvent(
+                type="lock.stuck",
+                timestamp=datetime.now(UTC).isoformat(),
+                source="pipeline_orchestrator",
+                event_id=str(uuid4()),
+                project_id=project_id,
+                board_id=board_id,
+                work_item_id=work_item_id,
+                reason=reason,
+            )
+            self.event_emitter.emit(stuck_event)
+        except Exception as e:
             logger.error(
-                f"Error handling lock release for {event.work_item_id}",
+                f"Failed to emit LockStuckEvent for {work_item_id}: {e}",
                 exc_info=True,
             )
 

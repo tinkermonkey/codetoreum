@@ -25,11 +25,13 @@ from codetoreum.application.event_handlers.pipeline_orchestrator import (
     PipelineOrchestrator,
 )
 from codetoreum.domain.events.lock_events import (
+    LockStuckEvent,
     PipelineLockAcquiredEvent,
     PipelineLockReleasedEvent,
 )
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.ports.output.distributed_lock import AcquireStatus
+from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.pipeline_queue import QueueEntry
 
 
@@ -65,6 +67,16 @@ def orphan_scan_registry():
     return InMemoryOrphanScanRegistry()
 
 
+@pytest.fixture
+def event_emitter():
+    """Mock event emitter for capturing alert events."""
+    emitter = MagicMock(spec=IEventEmitter)
+    emitter.emit = MagicMock()
+    emitter.on = MagicMock()
+    emitter.off = MagicMock()
+    return emitter
+
+
 @pytest.mark.asyncio
 class TestPipelineOrchestratorLockAcquisition:
     """Tests for lock acquisition and queue handling."""
@@ -74,6 +86,7 @@ class TestPipelineOrchestratorLockAcquisition:
         distributed_lock,
         pipeline_queue,
         run_registry,
+        event_emitter,
         event_bus,
     ):
         """Test that on_lock_acquired removes holder from queue if present."""
@@ -81,6 +94,7 @@ class TestPipelineOrchestratorLockAcquisition:
             distributed_lock=distributed_lock,
             pipeline_queue=pipeline_queue,
             run_registry=run_registry,
+            event_emitter=event_emitter,
         )
 
         project_id = "project-1"
@@ -120,12 +134,14 @@ class TestPipelineOrchestratorLockAcquisition:
         distributed_lock,
         pipeline_queue,
         run_registry,
+        event_emitter,
     ):
         """Test on_lock_acquired is idempotent when item not in queue."""
         orchestrator = PipelineOrchestrator(
             distributed_lock=distributed_lock,
             pipeline_queue=pipeline_queue,
             run_registry=run_registry,
+            event_emitter=event_emitter,
         )
 
         project_id = "project-1"
@@ -150,17 +166,90 @@ class TestPipelineOrchestratorLockAcquisition:
 class TestPipelineOrchestratorLockRelease:
     """Tests for lock release and next-item granting."""
 
+    async def test_lock_released_grants_lock_to_next_item(
+        self,
+        distributed_lock,
+        pipeline_queue,
+        run_registry,
+        event_emitter,
+    ):
+        """Test that on_lock_released successfully grants lock to and removes next item from queue."""
+        orchestrator = PipelineOrchestrator(
+            distributed_lock=distributed_lock,
+            pipeline_queue=pipeline_queue,
+            run_registry=run_registry,
+            event_emitter=event_emitter,
+        )
+
+        project_id = "project-1"
+        board_id = "board-1"
+        lock_key = f"{project_id}:{board_id}"
+        queue_key = lock_key
+
+        # Setup: item-1 holds lock
+        await distributed_lock.try_acquire(lock_key, "item-1")
+
+        # Enqueue item-2 and item-3
+        await pipeline_queue.enqueue(
+            queue_key,
+            QueueEntry(
+                work_item_id="item-2",
+                stage_name="Development",
+                board_position=0,
+                enqueued_at=datetime.now(UTC),
+                metadata={"project_id": project_id, "board_id": board_id},
+            ),
+        )
+        await pipeline_queue.enqueue(
+            queue_key,
+            QueueEntry(
+                work_item_id="item-3",
+                stage_name="Development",
+                board_position=1,
+                enqueued_at=datetime.now(UTC),
+                metadata={"project_id": project_id, "board_id": board_id},
+            ),
+        )
+
+        # Verify item-2 is in queue
+        assert await pipeline_queue.contains(queue_key, "item-2")
+
+        # Release the lock for item-1
+        await distributed_lock.release(lock_key, "item-1")
+
+        # Trigger lock release event for item-1
+        event = PipelineLockReleasedEvent(
+            type="lock.released",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="test",
+            project_id=project_id,
+            board_id=board_id,
+            work_item_id="item-1",
+        )
+        await orchestrator.on_lock_released(event)
+
+        # Verify item-2 got the lock and was removed from queue
+        holder = await distributed_lock.get_holder(lock_key)
+        assert holder is not None
+        assert holder.holder_id == "item-2"
+        assert not await pipeline_queue.contains(queue_key, "item-2")
+
+        # Verify item-3 is still in queue
+        assert await pipeline_queue.contains(queue_key, "item-3")
+
     async def test_lock_released_error_handling_does_not_block(
         self,
         distributed_lock,
         pipeline_queue,
         run_registry,
+        event_emitter,
     ):
         """Test that lock release errors are logged but handled gracefully."""
         orchestrator = PipelineOrchestrator(
             distributed_lock=distributed_lock,
             pipeline_queue=pipeline_queue,
             run_registry=run_registry,
+            event_emitter=event_emitter,
         )
 
         project_id = "project-1"
@@ -203,17 +292,81 @@ class TestPipelineOrchestratorLockRelease:
 class TestPipelineOrchestratorErrorHandling:
     """Tests for error handling in critical operations."""
 
+    async def test_lock_acquired_emits_alert_on_queue_removal_failure(
+        self,
+        distributed_lock,
+        pipeline_queue,
+        run_registry,
+        event_emitter,
+    ):
+        """Test on_lock_acquired emits LockStuckEvent if queue removal fails."""
+        orchestrator = PipelineOrchestrator(
+            distributed_lock=distributed_lock,
+            pipeline_queue=pipeline_queue,
+            run_registry=run_registry,
+            event_emitter=event_emitter,
+        )
+
+        project_id = "project-1"
+        board_id = "board-1"
+        lock_key = f"{project_id}:{board_id}"
+        queue_key = lock_key
+        work_item_id = "item-1"
+
+        # Enqueue the item
+        await pipeline_queue.enqueue(
+            queue_key,
+            QueueEntry(
+                work_item_id=work_item_id,
+                stage_name="Development",
+                board_position=0,
+                enqueued_at=datetime.now(UTC),
+                metadata={"project_id": project_id, "board_id": board_id},
+            ),
+        )
+
+        # Mock queue to raise error on remove
+        original_remove = pipeline_queue.remove
+
+        async def mock_remove_raises(*args):
+            raise RuntimeError("Queue service error")
+
+        pipeline_queue.remove = mock_remove_raises
+
+        event = PipelineLockAcquiredEvent(
+            type="lock.acquired",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="test",
+            project_id=project_id,
+            board_id=board_id,
+            work_item_id=work_item_id,
+        )
+
+        # Should not raise despite error
+        await orchestrator.on_lock_acquired(event)
+
+        # Verify LockStuckEvent was emitted
+        event_emitter.emit.assert_called_once()
+        emitted_event = event_emitter.emit.call_args[0][0]
+        assert isinstance(emitted_event, LockStuckEvent)
+        assert emitted_event.work_item_id == work_item_id
+
+        # Restore
+        pipeline_queue.remove = original_remove
+
     async def test_lock_acquired_handles_queue_error_gracefully(
         self,
         distributed_lock,
         pipeline_queue,
         run_registry,
+        event_emitter,
     ):
         """Test on_lock_acquired logs errors but continues."""
         orchestrator = PipelineOrchestrator(
             distributed_lock=distributed_lock,
             pipeline_queue=pipeline_queue,
             run_registry=run_registry,
+            event_emitter=event_emitter,
         )
 
         # Mock queue to raise error on contains
@@ -249,12 +402,14 @@ class TestPipelineOrchestratorConcurrency:
         distributed_lock,
         pipeline_queue,
         run_registry,
+        event_emitter,
     ):
         """Test concurrent lock acquisition events are handled safely."""
         orchestrator = PipelineOrchestrator(
             distributed_lock=distributed_lock,
             pipeline_queue=pipeline_queue,
             run_registry=run_registry,
+            event_emitter=event_emitter,
         )
 
         project_id = "project-1"
@@ -277,3 +432,134 @@ class TestPipelineOrchestratorConcurrency:
         await asyncio.gather(*[orchestrator.on_lock_acquired(e) for e in events])
 
         # All should complete without error
+
+
+@pytest.mark.asyncio
+class TestPipelineOrchestratorOrphanRecovery:
+    """Tests for orphan lock detection and recovery on startup."""
+
+    async def test_on_startup_releases_orphaned_locks(
+        self,
+        distributed_lock,
+        pipeline_queue,
+        run_registry,
+        orphan_scan_registry,
+        event_emitter,
+    ):
+        """Test that on_startup detects and releases orphaned locks."""
+        orchestrator = PipelineOrchestrator(
+            distributed_lock=distributed_lock,
+            pipeline_queue=pipeline_queue,
+            run_registry=run_registry,
+            event_emitter=event_emitter,
+            orphan_scan_registry=orphan_scan_registry,
+        )
+
+        project_id = "project-1"
+        board_id = "board-1"
+        lock_key = f"{project_id}:{board_id}"
+
+        # Create locks that have no active runs (orphaned)
+        await distributed_lock.try_acquire(lock_key, "item-1", ttl_seconds=7200)
+        await distributed_lock.try_acquire(f"{project_id}:board-2", "item-2", ttl_seconds=7200)
+
+        # Verify locks are held
+        assert (await distributed_lock.get_holder(lock_key)) is not None
+        assert (await distributed_lock.get_holder(f"{project_id}:board-2")) is not None
+
+        # Run startup scan
+        await orchestrator.on_startup()
+
+        # Verify orphaned locks were released
+        assert (await distributed_lock.get_holder(lock_key)) is None
+        assert (await distributed_lock.get_holder(f"{project_id}:board-2")) is None
+
+        # Verify scan was recorded
+        scan_result = await orphan_scan_registry.get_last_scan()
+        assert scan_result is not None
+        assert scan_result.orphaned_locks_found == 2
+        assert scan_result.orphaned_locks_released == 2
+
+    async def test_on_startup_preserves_active_locks(
+        self,
+        distributed_lock,
+        pipeline_queue,
+        run_registry,
+        orphan_scan_registry,
+        event_emitter,
+    ):
+        """Test that on_startup preserves locks with active runs."""
+        orchestrator = PipelineOrchestrator(
+            distributed_lock=distributed_lock,
+            pipeline_queue=pipeline_queue,
+            run_registry=run_registry,
+            event_emitter=event_emitter,
+            orphan_scan_registry=orphan_scan_registry,
+        )
+
+        project_id = "project-1"
+        board_id = "board-1"
+        lock_key = f"{project_id}:{board_id}"
+        work_item_id = "item-1"
+
+        # Create a lock and register an active run for it
+        await distributed_lock.try_acquire(lock_key, work_item_id)
+        await run_registry.set_active_run(
+            work_item_id=work_item_id,
+            run_id="run-1",
+            stage_name="Development",
+            project_id=project_id,
+            board_id=board_id,
+            started_at=datetime.now(UTC).isoformat(),
+        )
+
+        # Run startup scan
+        await orchestrator.on_startup()
+
+        # Verify lock is still held (not released)
+        holder = await distributed_lock.get_holder(lock_key)
+        assert holder is not None
+        assert holder.holder_id == work_item_id
+
+        # Verify scan was recorded with no orphans
+        scan_result = await orphan_scan_registry.get_last_scan()
+        assert scan_result is not None
+        assert scan_result.orphaned_locks_found == 0
+        assert scan_result.orphaned_locks_released == 0
+
+    async def test_on_startup_handles_errors_gracefully(
+        self,
+        distributed_lock,
+        pipeline_queue,
+        run_registry,
+        orphan_scan_registry,
+        event_emitter,
+    ):
+        """Test that on_startup handles errors and records them."""
+        orchestrator = PipelineOrchestrator(
+            distributed_lock=distributed_lock,
+            pipeline_queue=pipeline_queue,
+            run_registry=run_registry,
+            event_emitter=event_emitter,
+            orphan_scan_registry=orphan_scan_registry,
+        )
+
+        # Mock distributed_lock to raise an error
+        original_get_all = distributed_lock.get_all_holders
+
+        async def mock_get_all_raises(*args):
+            raise RuntimeError("Lock service error")
+
+        distributed_lock.get_all_holders = mock_get_all_raises
+
+        # Should not raise
+        await orchestrator.on_startup()
+
+        # Verify error was recorded
+        scan_result = await orphan_scan_registry.get_last_scan()
+        assert scan_result is not None
+        assert scan_result.errors is not None
+        assert len(scan_result.errors) > 0
+
+        # Restore
+        distributed_lock.get_all_holders = original_get_all
