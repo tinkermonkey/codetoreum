@@ -92,7 +92,6 @@ class PipelineOrchestrator(EventHandler):
 
         Maintains the "lock holder is not in queue" invariant:
         - Remove the holder from the queue if present
-        - Trigger workflow run setup and agent execution if needed
 
         If queue removal fails after lock acquisition, emits LockStuckEvent
         to alert operators, but does not re-raise (the lock is legitimately held
@@ -120,7 +119,7 @@ class PipelineOrchestrator(EventHandler):
                         exc_info=True,
                         extra={"work_item_id": event.work_item_id},
                     )
-                    self._emit_lock_stuck_alert(
+                    await self._emit_lock_stuck_alert(
                         event.project_id,
                         event.board_id,
                         event.work_item_id,
@@ -129,8 +128,7 @@ class PipelineOrchestrator(EventHandler):
                     # Do NOT re-raise - the lock is legitimately held; the item must proceed.
                     # The alert event signals operator intervention needed.
 
-            # Work item now holds the lock. Workflow execution will be triggered
-            # by the next orchestration cycle (MultiProjectOrchestrator polls every 30s).
+            # Work item now holds the lock and is ready for processing.
             # The lock ensures mutual exclusion during execution.
             logger.info(
                 f"Lock acquired for {event.work_item_id} on board {event.board_id}",
@@ -202,7 +200,7 @@ class PipelineOrchestrator(EventHandler):
                         exc_info=True,
                         extra={"work_item_id": next_entry.work_item_id},
                     )
-                    self._emit_lock_stuck_alert(
+                    await self._emit_lock_stuck_alert(
                         event.project_id,
                         event.board_id,
                         next_entry.work_item_id,
@@ -224,7 +222,7 @@ class PipelineOrchestrator(EventHandler):
                 exc_info=True,
                 extra={"work_item_id": next_entry.work_item_id},
             )
-            self._emit_lock_stuck_alert(
+            await self._emit_lock_stuck_alert(
                 event.project_id,
                 event.board_id,
                 next_entry.work_item_id,
@@ -232,7 +230,7 @@ class PipelineOrchestrator(EventHandler):
             )
             # Stop processing - do not continue queue progression until this is resolved
 
-    def _emit_lock_stuck_alert(
+    async def _emit_lock_stuck_alert(
         self,
         project_id: str,
         board_id: str,
