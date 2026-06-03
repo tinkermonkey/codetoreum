@@ -82,8 +82,8 @@ class ProjectLifecycleService:
             project_name: Name of the project
 
         Raises:
-            ExternalServiceError: Board reconciliation failed
-            ResourceNotFoundError: Project configuration not found
+            ExternalServiceError: Failed to load project configuration or reconcile board
+            ResourceNotFoundError: Project configuration not found or board not found
         """
         if self._board_service is None:
             logger.debug(
@@ -93,8 +93,8 @@ class ProjectLifecycleService:
             return
 
         try:
-            project_config = await self._project_manager.get_project_config(project_name)
-        except ResourceNotFoundError as e:
+            _ = await self._project_manager.get_project_config(project_name)
+        except ResourceNotFoundError:
             logger.warning(
                 f"Cannot reconcile boards for {project_name}: project configuration not found",
                 exc_info=True,
