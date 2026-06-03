@@ -130,6 +130,15 @@ from codetoreum.ports.output.version_control_service import (
 )
 from codetoreum.ports.output.work_item_service import IWorkItemService
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
+from codetoreum.ports.output.workflow_orchestrator import (
+    CardMovedEvent,
+    IssueData,
+    IWorkflowOrchestrator,
+    ReviewCycleCompletedEvent,
+    StageCompletedEvent,
+    WorkflowAction,
+    WorkflowResult,
+)
 
 __all__ = [
     # Agent Executor
@@ -259,4 +268,12 @@ __all__ = [
     "IWorkItemService",
     # Workflow Config Service
     "IWorkflowConfigService",
+    # Workflow Orchestrator
+    "IWorkflowOrchestrator",
+    "CardMovedEvent",
+    "IssueData",
+    "ReviewCycleCompletedEvent",
+    "StageCompletedEvent",
+    "WorkflowAction",
+    "WorkflowResult",
 ]

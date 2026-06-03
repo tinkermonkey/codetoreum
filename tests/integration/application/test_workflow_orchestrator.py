@@ -7,24 +7,26 @@ import pytest
 from codetoreum.adapters.testing import InMemoryEventStore, InMemoryTicketAdapter
 from codetoreum.application.workflow_orchestrator import (
     AgentConfig,
-    CardMovedEvent,
     ColumnConfig,
     FeedbackEvent,
     IDecisionEvents,
     IProjectConfiguration,
     IProjectsAPI,
-    IssueData,
     ITaskQueue,
     IWorkflowStateManager,
     ProgressionDecision,
-    ReviewCycleCompletedEvent,
     RoutingDecision,
-    StageCompletedEvent,
     Task,
-    WorkflowAction,
     WorkflowConfig,
     WorkflowOrchestrator,
     WorkflowState,
+)
+from codetoreum.ports.output.workflow_orchestrator import (
+    CardMovedEvent,
+    IssueData,
+    ReviewCycleCompletedEvent,
+    StageCompletedEvent,
+    WorkflowAction,
 )
 from codetoreum.domain.value_objects import ProjectConfig
 from codetoreum.domain.work_item import WorkItemPriority

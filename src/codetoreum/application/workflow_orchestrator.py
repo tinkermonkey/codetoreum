@@ -5,7 +5,6 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from enum import Enum
 from typing import Any
 
 from codetoreum.domain.board_workflow_template import ColumnTemplate
@@ -23,87 +22,16 @@ from codetoreum.ports.input.conversational_loop_service import IConversationalLo
 from codetoreum.ports.output import IBoardService, IEventStore, ITicketSystem
 from codetoreum.ports.output.board_service import MovedByType
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
-from codetoreum.ports.output.workflow_orchestrator import IWorkflowOrchestrator
+from codetoreum.ports.output.workflow_orchestrator import (
+    CardMovedEvent,
+    IWorkflowOrchestrator,
+    ReviewCycleCompletedEvent,
+    StageCompletedEvent,
+    WorkflowAction,
+    WorkflowResult,
+)
 
 logger = logging.getLogger(__name__)
-
-
-class WorkflowAction(Enum):
-    """Possible workflow actions."""
-
-    TASK_QUEUED = "task_queued"
-    AUTO_ADVANCE = "auto_advance"
-    ESCALATE = "escalate"
-    COMPLETE = "complete"
-    NO_ACTION = "no_action"
-
-
-@dataclass
-class WorkflowResult:
-    """Result of workflow orchestration action."""
-
-    success: bool
-    task_id: str | None
-    agent_name: str | None
-    action: WorkflowAction
-    next_column: str | None
-    reason: str
-    error: str | None = None
-
-
-@dataclass
-class CardMovedEvent:
-    """Event emitted when a card moves on GitHub Projects board."""
-
-    project: str
-    board: str
-    issue_number: int
-    from_column: str | None
-    to_column: str
-    issue_data: "IssueData"
-    timestamp: datetime
-
-
-@dataclass
-class IssueData:
-    """Issue information from GitHub."""
-
-    number: int
-    title: str
-    body: str
-    labels: list[str]
-    state: str
-    created_at: datetime
-    updated_at: datetime
-
-
-@dataclass
-class StageCompletedEvent:
-    """Event emitted when a pipeline stage completes."""
-
-    project: str
-    issue_number: int
-    stage_name: str
-    agent_name: str
-    success: bool
-    output: str
-    context: dict[str, Any]
-    timestamp: datetime
-
-
-@dataclass
-class ReviewCycleCompletedEvent:
-    """Event emitted when review cycle completes."""
-
-    project: str
-    issue_number: int
-    approved: bool
-    iteration: int
-    maker_agent: str
-    reviewer_agent: str
-    feedback: str | None
-    timestamp: datetime
-    context: dict[str, Any]
 
 
 @dataclass

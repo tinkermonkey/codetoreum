@@ -6,15 +6,88 @@ agent execution.
 """
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from datetime import datetime
+from enum import Enum
+from typing import Any
 
-if TYPE_CHECKING:
-    from codetoreum.application.workflow_orchestrator import (
-        CardMovedEvent,
-        ReviewCycleCompletedEvent,
-        StageCompletedEvent,
-        WorkflowResult,
-    )
+
+class WorkflowAction(Enum):
+    """Possible workflow actions."""
+
+    TASK_QUEUED = "task_queued"
+    AUTO_ADVANCE = "auto_advance"
+    ESCALATE = "escalate"
+    COMPLETE = "complete"
+    NO_ACTION = "no_action"
+
+
+@dataclass
+class WorkflowResult:
+    """Result of workflow orchestration action."""
+
+    success: bool
+    task_id: str | None
+    agent_name: str | None
+    action: WorkflowAction
+    next_column: str | None
+    reason: str
+    error: str | None = None
+
+
+@dataclass
+class CardMovedEvent:
+    """Event emitted when a card moves on GitHub Projects board."""
+
+    project: str
+    board: str
+    issue_number: int
+    from_column: str | None
+    to_column: str
+    issue_data: "IssueData"
+    timestamp: datetime
+
+
+@dataclass
+class IssueData:
+    """Issue information from GitHub."""
+
+    number: int
+    title: str
+    body: str
+    labels: list[str]
+    state: str
+    created_at: datetime
+    updated_at: datetime
+
+
+@dataclass
+class StageCompletedEvent:
+    """Event emitted when a pipeline stage completes."""
+
+    project: str
+    issue_number: int
+    stage_name: str
+    agent_name: str
+    success: bool
+    output: str
+    context: dict[str, Any]
+    timestamp: datetime
+
+
+@dataclass
+class ReviewCycleCompletedEvent:
+    """Event emitted when review cycle completes."""
+
+    project: str
+    issue_number: int
+    approved: bool
+    iteration: int
+    maker_agent: str
+    reviewer_agent: str
+    feedback: str | None
+    timestamp: datetime
+    context: dict[str, Any]
 
 
 class IWorkflowOrchestrator(ABC):
@@ -32,7 +105,7 @@ class IWorkflowOrchestrator(ABC):
     """
 
     @abstractmethod
-    async def handle_card_movement(self, event: "CardMovedEvent") -> "WorkflowResult":
+    async def handle_card_movement(self, event: CardMovedEvent) -> WorkflowResult:
         """Handle card movement from GitHub Projects board.
 
         Args:
@@ -43,7 +116,7 @@ class IWorkflowOrchestrator(ABC):
         """
 
     @abstractmethod
-    async def handle_stage_completion(self, event: "StageCompletedEvent") -> "WorkflowResult":
+    async def handle_stage_completion(self, event: StageCompletedEvent) -> WorkflowResult:
         """Handle completion of a pipeline stage.
 
         Args:
@@ -54,7 +127,7 @@ class IWorkflowOrchestrator(ABC):
         """
 
     @abstractmethod
-    async def handle_review_cycle_completion(self, event: "ReviewCycleCompletedEvent") -> "WorkflowResult":
+    async def handle_review_cycle_completion(self, event: ReviewCycleCompletedEvent) -> WorkflowResult:
         """Handle review cycle completion.
 
         Args:
