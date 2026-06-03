@@ -1220,7 +1220,7 @@ class GitHubBoardAdapter(IBoardService):
         """
 
         try:
-            result = await self._graphql.execute(
+            await self._graphql.execute(
                 mutation,
                 {
                     "projectId": board_id,
