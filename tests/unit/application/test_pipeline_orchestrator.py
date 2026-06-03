@@ -22,6 +22,7 @@ from codetoreum.domain.events.lock_events import (
     PipelineLockAcquiredEvent,
     PipelineLockReleasedEvent,
 )
+from codetoreum.ports.output.active_workflow_run_registry import ActiveRunInfo
 from codetoreum.ports.output.distributed_lock import AcquireStatus, IDistributedLock
 from codetoreum.ports.output.pipeline_queue import IPipelineQueue, QueueEntry
 
@@ -432,6 +433,62 @@ class TestPipelineOrchestratorQueueGrant:
         assert isinstance(emitted_event, LockStuckEvent)
         assert emitted_event.work_item_id == next_item_id
 
+    async def test_on_lock_released_when_lock_already_held_by_other_item(
+        self,
+        mock_lock,
+        mock_queue,
+        mock_run_registry,
+        mock_event_emitter,
+    ):
+        """Test that on_lock_released handles race condition when lock already held by another item."""
+        orchestrator = PipelineOrchestrator(
+            distributed_lock=mock_lock,
+            pipeline_queue=mock_queue,
+            run_registry=mock_run_registry,
+            event_emitter=mock_event_emitter,
+        )
+
+        project_id = "project-1"
+        board_id = "board-1"
+        lock_key = f"{project_id}:{board_id}"
+        next_item_id = "item-2"
+
+        # Setup: next item is peeked from queue
+        next_entry = QueueEntry(
+            work_item_id=next_item_id,
+            stage_name="Development",
+            board_position=0,
+            enqueued_at=datetime.now(UTC),
+            metadata=MappingProxyType({"project_id": project_id, "board_id": board_id}),
+        )
+        mock_queue.peek.return_value = next_entry
+
+        # Setup: lock acquisition fails because another item already holds it (race condition)
+        from codetoreum.ports.output.distributed_lock import AcquireResult
+        mock_lock.try_acquire.return_value = AcquireResult(
+            status=AcquireStatus.ALREADY_HELD_BY_OTHER,
+            lock_key=lock_key,
+            holder_id="some-other-item",
+            acquired_at=datetime.now(UTC),
+        )
+
+        event = PipelineLockReleasedEvent(
+            type="lock.released",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="test",
+            project_id=project_id,
+            board_id=board_id,
+            work_item_id="item-1",
+        )
+
+        await orchestrator.on_lock_released(event)
+
+        # Verify queue.remove was NOT called (item stays in queue)
+        mock_queue.remove.assert_not_called()
+
+        # Verify no alert was emitted (this is expected behavior, not an error)
+        mock_event_emitter.emit.assert_not_called()
+
 
 @pytest.mark.asyncio
 class TestPipelineOrchestratorReleaseCycle:
@@ -469,7 +526,16 @@ class TestPipelineOrchestratorReleaseCycle:
             metadata=MappingProxyType({"project_id": project_id, "board_id": board_id}),
         )
 
-        mock_queue.peek.side_effect = [item2_entry, None]  # item-2 on first call, None on second
+        # Second release cycle: item-2 -> item-3
+        item3_entry = QueueEntry(
+            work_item_id="item-3",
+            stage_name="Development",
+            board_position=1,
+            enqueued_at=datetime.now(UTC),
+            metadata=MappingProxyType({"project_id": project_id, "board_id": board_id}),
+        )
+
+        mock_queue.peek.side_effect = [item2_entry, item3_entry, None]
         mock_lock.try_acquire.return_value = AcquireResult(
             status=AcquireStatus.ACQUIRED,
             lock_key=lock_key,
@@ -477,6 +543,7 @@ class TestPipelineOrchestratorReleaseCycle:
             acquired_at=datetime.now(UTC),
         )
 
+        # First release: item-1 -> item-2
         event1 = PipelineLockReleasedEvent(
             type="lock.released",
             timestamp=datetime.now(UTC).isoformat(),
@@ -491,6 +558,40 @@ class TestPipelineOrchestratorReleaseCycle:
         # Verify item-2 got the lock
         assert mock_lock.try_acquire.call_count == 1
         assert mock_queue.remove.call_count == 1
+        lock_call_1 = mock_lock.try_acquire.call_args
+        assert lock_call_1[1]["holder_id"] == "item-2"
+
+        # Reset mock call counts for second cycle
+        mock_lock.reset_mock()
+        mock_queue.reset_mock()
+
+        # Update try_acquire for second cycle (item-2 -> item-3)
+        mock_lock.try_acquire.return_value = AcquireResult(
+            status=AcquireStatus.ACQUIRED,
+            lock_key=lock_key,
+            holder_id="item-3",
+            acquired_at=datetime.now(UTC),
+        )
+        # Re-setup peek side_effect after reset
+        mock_queue.peek.side_effect = [item3_entry, None]
+
+        # Second release: item-2 -> item-3
+        event2 = PipelineLockReleasedEvent(
+            type="lock.released",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="test",
+            project_id=project_id,
+            board_id=board_id,
+            work_item_id="item-2",
+        )
+
+        await orchestrator.on_lock_released(event2)
+
+        # Verify item-3 got the lock
+        assert mock_lock.try_acquire.call_count == 1
+        assert mock_queue.remove.call_count == 1
+        lock_call_2 = mock_lock.try_acquire.call_args
+        assert lock_call_2[1]["holder_id"] == "item-3"
 
     async def test_duplicate_release_events_handled_safely(
         self,
@@ -619,10 +720,14 @@ class TestPipelineOrchestratorOrphanRecovery:
         )
 
         mock_lock.get_all_holders.return_value = [lock1]
-        mock_run_registry.get_active_run.return_value = {
-            "work_item_id": "item-1",
-            "run_id": "run-1",
-        }  # Active run exists
+        mock_run_registry.get_active_run.return_value = ActiveRunInfo(
+            work_item_id="item-1",
+            run_id="run-1",
+            stage_name="Development",
+            project_id="project-1",
+            board_id="board-1",
+            started_at=datetime.now(UTC).isoformat(),
+        )
 
         await orchestrator.on_startup()
 
@@ -704,14 +809,14 @@ class TestPipelineOrchestratorIdempotency:
         # Should complete without error
         mock_queue.remove.assert_not_called()
 
-    async def test_event_type_dispatch_handles_unexpected_events(
+    async def test_handle_dispatches_to_on_lock_acquired(
         self,
         mock_lock,
         mock_queue,
         mock_run_registry,
         mock_event_emitter,
     ):
-        """Test that handle() method correctly dispatches events."""
+        """Test that handle() method correctly dispatches PipelineLockAcquiredEvent."""
         orchestrator = PipelineOrchestrator(
             distributed_lock=mock_lock,
             pipeline_queue=mock_queue,
@@ -736,3 +841,47 @@ class TestPipelineOrchestratorIdempotency:
 
         # Verify correct handler was called
         mock_queue.contains.assert_called()
+
+    async def test_handle_logs_warning_for_unexpected_event_types(
+        self,
+        mock_lock,
+        mock_queue,
+        mock_run_registry,
+        mock_event_emitter,
+        caplog,
+    ):
+        """Test that handle() logs a warning for unexpected event types."""
+        import logging
+        from dataclasses import dataclass
+        from codetoreum.domain.events.adapter_events import CodetoreumEvent
+
+        caplog.set_level(logging.WARNING)
+
+        orchestrator = PipelineOrchestrator(
+            distributed_lock=mock_lock,
+            pipeline_queue=mock_queue,
+            run_registry=mock_run_registry,
+            event_emitter=mock_event_emitter,
+        )
+
+        # Create an unexpected event (not PipelineLockAcquiredEvent or PipelineLockReleasedEvent)
+        @dataclass(frozen=True)
+        class UnexpectedEvent(CodetoreumEvent):
+            """An event type that PipelineOrchestrator doesn't handle."""
+            pass
+
+        event = UnexpectedEvent(
+            type="unexpected.event",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="test",
+        )
+
+        # Call handle() with unexpected event
+        await orchestrator.handle(event)
+
+        # Verify warning was logged with message about unexpected event type
+        assert any(
+            "unexpected event type" in record.message.lower()
+            for record in caplog.records
+            if record.levelno == logging.WARNING
+        )
