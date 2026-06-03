@@ -47,14 +47,11 @@ from codetoreum.adapters.primary.input_port_adapters.mock import (
 from codetoreum.adapters.secondary.failed_event_store_adapter import (
     DeadLetterQueueFailedEventStoreAdapter,
 )
-from codetoreum.adapters.secondary.redis_distributed_lock import (
-    RedisDistributedLock,
-)
-from codetoreum.adapters.secondary.redis_pipeline_queue import (
-    RedisPipelineQueue,
-)
 from codetoreum.application.agent_execution_recovery_service import (
     AgentExecutionRecoveryService,
+)
+from codetoreum.adapters.secondary.pipeline_queue_service_adapter import (
+    PipelineQueueServiceAdapter,
 )
 from codetoreum.application.agent_scheduler import (
     AgentScheduler,
@@ -1558,7 +1555,7 @@ class ProductionApplicationBootstrap:
         logger.info("Created FastAPI application with all ports wired")
 
         # Register event handlers
-        self._register_board_column_handler()
+        self._register_board_column_handler(app)
         self._register_conversational_loop_orchestrator()
         self._register_pr_review_cycle_handlers()
         self._register_review_event_handler()
@@ -1569,30 +1566,22 @@ class ProductionApplicationBootstrap:
 
         return app
 
-    def _register_board_column_handler(self) -> None:
-        """Register board column event handler for agent execution and auto-progression."""
+    def _register_board_column_handler(self, app: FastAPI) -> None:
+        """Register board column event handler for agent execution and auto-progression.
+
+        Args:
+            app: FastAPI application instance for storing pipeline orchestrator state
+        """
         if not self.adapters or not self.infrastructure or not self.services:
             logger.warning("Cannot register board column handler: components not ready")
             return
 
-        # Create distributed lock and pipeline queue adapters (Phase 5 decomposition)
-        redis_client = self.adapters.redis_client
         event_bus = self.infrastructure.event_bus
-
-        distributed_lock = RedisDistributedLock(
-            redis_client=redis_client,
-            event_bus=event_bus,
-        )
-
-        pipeline_queue = RedisPipelineQueue(
-            redis_client=redis_client,
-            event_bus=event_bus,
-        )
 
         handler = BoardColumnEventHandler(
             board_service=self.adapters.board,
-            distributed_lock=distributed_lock,
-            pipeline_queue=pipeline_queue,
+            distributed_lock=self.adapters.lock_service,
+            pipeline_queue=self.adapters.queue_service,
             workflow_config=self.adapters.workflow_config,
             agent_executor=self.adapters.agent_executor,
             event_bus=event_bus,
@@ -1610,9 +1599,12 @@ class ProductionApplicationBootstrap:
         )
 
         # Register PipelineOrchestrator to coordinate lock and queue events
+        # PipelineOrchestrator expects IPipelineQueue, but we have IPipelineQueueService
+        # Use an adapter to bridge the two interfaces
+        pipeline_queue_adapter = PipelineQueueServiceAdapter(self.adapters.queue_service)
         orchestrator = PipelineOrchestrator(
-            distributed_lock=distributed_lock,
-            pipeline_queue=pipeline_queue,
+            distributed_lock=self.adapters.lock_service,
+            pipeline_queue=pipeline_queue_adapter,
             run_registry=self.adapters.run_registry,
             workflow_orchestrator=self.services.workflow_orchestrator,
         )
@@ -1621,8 +1613,7 @@ class ProductionApplicationBootstrap:
         logger.info("Registered PipelineOrchestrator with event bus")
 
         # Store orchestrator in app.state so the FastAPI lifespan can call on_startup
-        if self.app:
-            self.app.state.pipeline_orchestrator = orchestrator
+        app.state.pipeline_orchestrator = orchestrator
 
     def _register_conversational_loop_orchestrator(self) -> None:
         """Register conversational loop orchestrator to handle column changes."""
