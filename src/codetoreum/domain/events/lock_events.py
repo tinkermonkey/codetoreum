@@ -645,14 +645,19 @@ class WorkItemDequeuedEvent(CodetoreumEvent):
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "WorkItemDequeuedEvent":
-        """Deserialize from dictionary."""
+        """Deserialize from dictionary.
+
+        Raises:
+            KeyError: If required fields (work_item_id, board_id, reason)
+                     are missing.
+        """
         return cls(
             type=data.get("type", "workitem.dequeued"),
             timestamp=data.get("timestamp", ""),
             source=data.get("source", ""),
             correlation_id=data.get("correlation_id"),
             event_id=data.get("event_id") or str(uuid4()),
-            work_item_id=data.get("work_item_id", ""),
-            board_id=data.get("board_id", ""),
-            reason=data.get("reason", "popped"),
+            work_item_id=data["work_item_id"],
+            board_id=data["board_id"],
+            reason=data["reason"],
         )

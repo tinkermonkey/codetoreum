@@ -184,7 +184,7 @@ class RedisDistributedLock(IDistributedLock):
                 holder_id=existing_holder_id,
                 acquired_at=None,
             )
-        except Exception:
+        except (UnicodeDecodeError, AttributeError):
             logger.warning(
                 f"Failed to parse existing lock holder for {lock_key}",
                 exc_info=True,

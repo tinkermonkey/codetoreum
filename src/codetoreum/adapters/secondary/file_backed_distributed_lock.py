@@ -428,4 +428,4 @@ class FileBackedDistributedLock(IDistributedLock):
             if hasattr(self, "_lock_file_path") and self._lock_file_path.exists():
                 self._lock_file_path.unlink()
         except Exception:
-            pass
+            logger.warning("Failed to clean up lock file on shutdown", exc_info=True)

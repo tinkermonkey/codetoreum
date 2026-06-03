@@ -249,7 +249,7 @@ class RedisPipelineQueue(IPipelineQueue):
                     entry_metadata = entry_metadata.decode("utf-8")
                 entry_data = json_lib.loads(entry_metadata)
             except Exception:
-                logger.warning(f"Failed to parse metadata for {work_item_id}")
+                logger.warning(f"Failed to parse metadata for {work_item_id}", exc_info=True)
 
         # Remove from sorted set and metadata
         await self._redis.zrem(zset_key, work_item_id)

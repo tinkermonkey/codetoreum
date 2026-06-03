@@ -354,7 +354,7 @@ def create_diagnostics_router(
                                 if event.event_data and "queue_key" in event.event_data:
                                     queue_keys.add(str(event.event_data["queue_key"]))
                         except Exception as e:
-                            logger.debug("Failed to query WorkItemQueuedEvent from event store: %s", e, exc_info=True)
+                            logger.warning("Failed to query WorkItemQueuedEvent from event store: %s", e, exc_info=True)
 
                     for queue_key in queue_keys:
                         try:

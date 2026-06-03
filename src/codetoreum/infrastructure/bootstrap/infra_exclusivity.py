@@ -123,6 +123,7 @@ async def check_elasticsearch_exclusivity(es_url: str) -> InfraExclusivityCheckR
         return InfraExclusivityCheckResult(check_name="elasticsearch", passed=True)
 
     except Exception as e:
+        logger.error("Failed to verify Elasticsearch exclusivity: %s", e, exc_info=True)
         return InfraExclusivityCheckResult(
             check_name="elasticsearch",
             passed=False,
@@ -191,6 +192,7 @@ async def check_redis_exclusivity(redis_url: str, key_prefix: str = "codetoreum:
         return InfraExclusivityCheckResult(check_name="redis", passed=True)
 
     except Exception as e:
+        logger.error("Failed to verify Redis exclusivity: %s", e, exc_info=True)
         return InfraExclusivityCheckResult(
             check_name="redis",
             passed=False,
@@ -261,6 +263,7 @@ def check_docker_capacity(agent_count: int = 1, max_parallel_work_items: int = 5
         return InfraExclusivityCheckResult(check_name="docker", passed=True)
 
     except Exception as e:
+        logger.error("Failed to verify Docker capacity: %s", e, exc_info=True)
         return InfraExclusivityCheckResult(
             check_name="docker",
             passed=False,
@@ -351,6 +354,7 @@ async def check_github_rate_limit(github_token: str) -> InfraExclusivityCheckRes
         return InfraExclusivityCheckResult(check_name="github", passed=True)
 
     except Exception as e:
+        logger.error("Failed to verify GitHub credentials: %s", e, exc_info=True)
         return InfraExclusivityCheckResult(
             check_name="github",
             passed=False,
