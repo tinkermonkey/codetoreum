@@ -243,6 +243,7 @@ class BoardColumnEventHandler(EventHandler):
                 # pipeline trigger column), the active run must still be registered so the
                 # executor's run_registry.get_active_run() succeeds.
                 existing_run = None
+                run_check_failed = False
                 if self.run_registry:
                     try:
                         existing_run = await self.run_registry.get_active_run(work_item_id)
@@ -252,6 +253,10 @@ class BoardColumnEventHandler(EventHandler):
                             exc_info=True,
                             extra={"error_id": "ERR_BOARD_EVENT_EXISTING_RUN_CHECK_FAILURE"},
                         )
+                        run_check_failed = True
+
+                if run_check_failed:
+                    return
 
                 if existing_run is None:
                     await self._start_workflow_run(work_item_id, project_id, board_id, column_config, config)
@@ -568,13 +573,22 @@ class BoardColumnEventHandler(EventHandler):
         )
         try:
             await self.event_store.append(workflow_run_id, [event])
-            await self.run_registry.clear_run(work_item_id)
-            logger.debug(f"Workflow run {workflow_run_id} completed for {work_item_id} ({duration:.1f}s)")
         except Exception as e:
             logger.error(
                 f"Failed to persist workflow run completion for {work_item_id}: {e}",
                 exc_info=True,
                 extra={"error_id": "ERR_BOARD_EVENT_WORKFLOW_RUN_COMPLETE_FAILURE"},
+            )
+            return
+
+        try:
+            await self.run_registry.clear_run(work_item_id)
+            logger.debug(f"Workflow run {workflow_run_id} completed for {work_item_id} ({duration:.1f}s)")
+        except Exception as e:
+            logger.error(
+                f"Failed to clear workflow run from registry for {work_item_id}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_BOARD_EVENT_WORKFLOW_RUN_CLEAR_FAILURE"},
             )
 
     async def _fail_workflow_run(
@@ -605,13 +619,22 @@ class BoardColumnEventHandler(EventHandler):
         )
         try:
             await self.event_store.append(workflow_run_id, [event])
-            await self.run_registry.clear_run(work_item_id)
-            logger.debug(f"Workflow run {workflow_run_id} failed for {work_item_id}: {reason}")
         except Exception as e:
             logger.error(
                 f"Failed to persist workflow run failure for {work_item_id}: {e}",
                 exc_info=True,
                 extra={"error_id": "ERR_BOARD_EVENT_WORKFLOW_RUN_FAIL_FAILURE"},
+            )
+            return
+
+        try:
+            await self.run_registry.clear_run(work_item_id)
+            logger.debug(f"Workflow run {workflow_run_id} failed for {work_item_id}: {reason}")
+        except Exception as e:
+            logger.error(
+                f"Failed to clear workflow run from registry for {work_item_id}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_BOARD_EVENT_WORKFLOW_RUN_CLEAR_FAILURE"},
             )
 
     def _should_trigger_agent(self, column_config: ColumnTemplate) -> bool:

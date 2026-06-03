@@ -207,6 +207,7 @@ def sample_workflow_config():
                 is_exit_column=False,
                 position=1,
                 auto_progress_on_completion=False,
+                on_failure_column="Backlog",
             ),
             ColumnTemplate(
                 name="Review",
@@ -216,6 +217,7 @@ def sample_workflow_config():
                 is_exit_column=False,
                 position=2,
                 auto_progress_on_completion=True,
+                on_failure_column="Backlog",
             ),
             ColumnTemplate(
                 name="Done",
@@ -437,24 +439,14 @@ class TestExistingRunCheckErrorHandling:
         self,
         handler,
         mock_run_registry,
+        mock_event_store,
         sample_workflow_config,
-        mock_agent_executor,
         caplog,
     ):
-        """Should log errors with exc_info when checking existing run."""
-        # Set up run registry to fail on the first call, then succeed on subsequent calls
+        """Should log errors with exc_info when checking existing run and not proceed."""
+        # Set up run registry to fail on the existing_run check
         test_error = Exception("Redis connection failed")
-        mock_run_registry.get_active_run.side_effect = [
-            test_error,  # Fails on the existing_run check
-            MagicMock(  # Succeeds on the _trigger_agent call
-                run_id="run-1",
-                work_item_id="item-1",
-                stage_name="Review",
-                project_id="proj-1",
-                board_id="board-1",
-                started_at=datetime.now(UTC).isoformat(),
-            ),
-        ]
+        mock_run_registry.get_active_run.side_effect = test_error
 
         handler.workflow_config.get_board_workflow_template = AsyncMock(
             return_value=sample_workflow_config
@@ -476,12 +468,16 @@ class TestExistingRunCheckErrorHandling:
         with caplog.at_level(logging.ERROR):
             await handler.handle_column_change(event)
 
-        # Verify error was logged at ERROR level (not DEBUG)
+        # Verify error was logged at ERROR level with exc_info
         assert any(
             "Failed to check existing run for item-1" in record.message
             and record.levelname == "ERROR"
             for record in caplog.records
         )
+
+        # Verify that no workflow was started (early return prevents _start_workflow_run)
+        # The event_store.append should not be called for a new workflow
+        mock_event_store.append.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_existing_run_none_starts_new_workflow(
@@ -572,7 +568,6 @@ class TestAgentExecutionCompletion:
         handler.workflow_config.get_board_workflow_template = AsyncMock(
             return_value=sample_workflow_config
         )
-        handler.board_service.move_item_to_column = AsyncMock()
 
         event = AgentExecutionCompletedEvent(
             type="agent.execution_completed",
@@ -585,9 +580,12 @@ class TestAgentExecutionCompletion:
 
         await handler.handle(event)
 
-        # Handler should process failure routing (checking would require
-        # setting up more mock state, but the call should at least attempt routing)
-        assert handler.board_service.move_item_to_column.called or True
+        # Verify that the item was moved to the failure column
+        handler.board_service.move_item_to_column.assert_called_once()
+        call_args = handler.board_service.move_item_to_column.call_args
+        assert call_args[0][0] == "item-1"  # work_item_id
+        assert call_args[0][1] == "Backlog"  # on_failure_column from fixture
+        assert call_args[0][2] == MovedByType.ORCHESTRATOR
 
 
 class TestErrorRecovery:
