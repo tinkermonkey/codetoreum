@@ -246,8 +246,12 @@ class BoardColumnEventHandler(EventHandler):
                 if self.run_registry:
                     try:
                         existing_run = await self.run_registry.get_active_run(work_item_id)
-                    except Exception:
-                        logger.debug(f"Failed to check existing run for {work_item_id}")
+                    except Exception as e:
+                        logger.error(
+                            f"Failed to check existing run for {work_item_id}: {e}",
+                            exc_info=True,
+                            extra={"error_id": "ERR_BOARD_EVENT_EXISTING_RUN_CHECK_FAILURE"},
+                        )
 
                 if existing_run is None:
                     await self._start_workflow_run(work_item_id, project_id, board_id, column_config, config)
@@ -564,6 +568,7 @@ class BoardColumnEventHandler(EventHandler):
         )
         try:
             await self.event_store.append(workflow_run_id, [event])
+            await self.run_registry.clear_run(work_item_id)
             logger.debug(f"Workflow run {workflow_run_id} completed for {work_item_id} ({duration:.1f}s)")
         except Exception as e:
             logger.error(
