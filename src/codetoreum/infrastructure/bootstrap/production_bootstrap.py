@@ -47,11 +47,11 @@ from codetoreum.adapters.primary.input_port_adapters.mock import (
 from codetoreum.adapters.secondary.failed_event_store_adapter import (
     DeadLetterQueueFailedEventStoreAdapter,
 )
-from codetoreum.application.agent_execution_recovery_service import (
-    AgentExecutionRecoveryService,
-)
 from codetoreum.adapters.secondary.pipeline_queue_service_adapter import (
     PipelineQueueServiceAdapter,
+)
+from codetoreum.application.agent_execution_recovery_service import (
+    AgentExecutionRecoveryService,
 )
 from codetoreum.application.agent_scheduler import (
     AgentScheduler,

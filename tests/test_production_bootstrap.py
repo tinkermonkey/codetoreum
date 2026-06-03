@@ -139,6 +139,7 @@ async def test_event_handler_types_declared() -> None:
     - ExecutionEventHandler (Lifecycle Event Handler Registration)
     - BranchResolutionEventHandler (Lifecycle Event Handler Registration)
     - RepairCycleEventHandler (Lifecycle Event Handler Registration)
+    - PipelineOrchestrator (Lock/Queue Coordination)
     """
     from unittest.mock import MagicMock
 
@@ -150,6 +151,9 @@ async def test_event_handler_types_declared() -> None:
         RepairCycleEventHandler,
         ReviewEventHandler,
         WorkflowEventHandler,
+    )
+    from codetoreum.application.event_handlers.pipeline_orchestrator import (
+        PipelineOrchestrator,
     )
     from codetoreum.application.event_handlers.pr_review_cycle_dispatch_handler import (
         PRReviewCycleDispatchHandler,
@@ -173,6 +177,9 @@ async def test_event_handler_types_declared() -> None:
         "workflow_config": MagicMock(),
         "work_item_service": MagicMock(),
         "run_registry": MagicMock(),
+        "distributed_lock": MagicMock(),
+        "pipeline_queue": MagicMock(),
+        "orphan_scan_registry": MagicMock(),
     }
 
     # Instantiate all handlers and register with event bus
@@ -222,6 +229,13 @@ async def test_event_handler_types_declared() -> None:
             event_bus=event_bus,
             ci_pipeline_service=mock_services["ci_pipeline_service"],
         ),
+        # Pipeline Orchestrator
+        PipelineOrchestrator(
+            distributed_lock=mock_adapters["distributed_lock"],
+            pipeline_queue=mock_adapters["pipeline_queue"],
+            run_registry=mock_adapters["run_registry"],
+            orphan_scan_registry=mock_adapters["orphan_scan_registry"],
+        ),
     ]
 
     # Register all handlers with the event bus
@@ -269,6 +283,10 @@ async def test_event_handler_types_declared() -> None:
             "BranchResolutionCreatedEvent",
         },
         "RepairCycleEventHandler": {"WorkItemColumnChangedEvent"},
+        "PipelineOrchestrator": {
+            "PipelineLockAcquiredEvent",
+            "PipelineLockReleasedEvent",
+        },
     }
 
     # Verify the mapping is not empty
