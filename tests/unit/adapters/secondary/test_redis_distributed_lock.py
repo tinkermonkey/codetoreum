@@ -8,6 +8,7 @@ Tests the Redis-backed distributed lock adapter, including:
 - Contract compliance via TestDistributedLockContract
 """
 
+import asyncio
 import json
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -332,3 +333,84 @@ class TestRedisDistributedLock(TestDistributedLockContract):
         assert event.project_id == "proj-123"
         assert event.work_item_id == holder_id  # work_item_id comes from holder_id parameter, not metadata
         assert event.board_id == "board-789"
+
+    async def test_acquired_at_preserved_after_renewal(self):
+        """Test that acquired_at timestamp stays accurate even after lock renewal.
+
+        This verifies the fix for: "acquired_at estimates from TTL are inaccurate after renewal".
+        When a lock is renewed with renew(), the TTL extends but the original acquired_at
+        should remain unchanged.
+        """
+        redis = MockRedis()
+        lock = RedisDistributedLock(redis_client=redis)
+
+        lock_key = "test:lock"
+        holder_id = "test-holder"
+        ttl_seconds = 3600
+
+        # Acquire lock
+        result1 = await lock.try_acquire(lock_key, holder_id, ttl_seconds=ttl_seconds)
+        acquired_time = result1.acquired_at
+
+        # Get holder immediately after acquisition
+        holder1 = await lock.get_holder(lock_key)
+        assert holder1 is not None
+        assert holder1.acquired_at == acquired_time
+
+        # Wait a bit (simulate some time passing), then renew the lock
+        await asyncio.sleep(0.1)
+        renew_result = await lock.renew(lock_key, holder_id, ttl_seconds=7200)
+        assert renew_result is True
+
+        # Get holder after renewal - acquired_at should still be the original time
+        holder2 = await lock.get_holder(lock_key)
+        assert holder2 is not None
+        # The acquired_at should be the same as before renewal
+        assert holder2.acquired_at == acquired_time, (
+            f"acquired_at changed after renewal: "
+            f"before={acquired_time}, after={holder2.acquired_at}"
+        )
+
+    async def test_get_all_holders_continues_on_per_key_error(self):
+        """Test that get_all_holders continues scanning even if one lock retrieval fails.
+
+        This verifies the fix for: "get_all_holders has no per-key error handling".
+        A Redis hiccup on one key should not prevent scanning of other keys.
+        """
+        redis = MockRedis()
+        lock = RedisDistributedLock(redis_client=redis)
+
+        # Set up three locks
+        lock_key_1 = "test:lock:1"
+        lock_key_2 = "test:lock:2"
+        lock_key_3 = "test:lock:3"
+        holder_id_1 = "holder-1"
+        holder_id_2 = "holder-2"
+        holder_id_3 = "holder-3"
+
+        await lock.try_acquire(lock_key_1, holder_id_1, ttl_seconds=3600)
+        await lock.try_acquire(lock_key_2, holder_id_2, ttl_seconds=3600)
+        await lock.try_acquire(lock_key_3, holder_id_3, ttl_seconds=3600)
+
+        # Simulate a retrieval error on lock_key_2 by patching get_holder
+        original_get_holder = lock.get_holder
+        call_count = 0
+
+        async def failing_get_holder(key):
+            nonlocal call_count
+            call_count += 1
+            if key == lock_key_2:
+                # Simulate a transient error on lock_key_2
+                raise RuntimeError("Simulated Redis error on lock_key_2")
+            return await original_get_holder(key)
+
+        lock.get_holder = failing_get_holder
+
+        # get_all_holders should not raise, but should skip the failed key
+        all_holders = await lock.get_all_holders()
+
+        # Should have returned 2 holders (1 and 3), skipping the failed one (2)
+        assert len(all_holders) == 2
+        holder_ids = {h.holder_id for h in all_holders}
+        assert holder_ids == {holder_id_1, holder_id_3}
+        assert holder_id_2 not in holder_ids

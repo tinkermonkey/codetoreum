@@ -74,14 +74,17 @@ class RedisDistributedLock(IDistributedLock):
         Stores holder metadata, emits event, and returns AcquireResult.
         Extracted to eliminate duplication in try_acquire retry path.
         """
-        # Store holder metadata in sibling hash
-        if holder_metadata:
-            await self._redis.hset(
-                holder_data_key,
-                mapping=holder_metadata,
-            )
-            # Set same TTL on metadata hash
-            await self._redis.expire(holder_data_key, ttl_seconds)
+        # Store holder metadata in sibling hash, including acquired_at timestamp
+        # This ensures we can later retrieve the actual acquisition time even after renewal
+        metadata_to_store = holder_metadata.copy() if holder_metadata else {}
+        metadata_to_store["acquired_at"] = now.isoformat()
+
+        await self._redis.hset(
+            holder_data_key,
+            mapping=metadata_to_store,
+        )
+        # Set same TTL on metadata hash
+        await self._redis.expire(holder_data_key, ttl_seconds)
 
         # Emit event via event bus if available
         if self._event_bus:
@@ -299,14 +302,28 @@ class RedisDistributedLock(IDistributedLock):
         # Get metadata
         metadata = await self._redis.hgetall(holder_data_key)
         metadata_dict = {}
+        acquired_at_str = None
         for k, v in metadata.items():
             k_str = k.decode("utf-8") if isinstance(k, bytes) else str(k)
             v_str = v.decode("utf-8") if isinstance(v, bytes) else str(v)
-            metadata_dict[k_str] = v_str
+            # Store acquired_at separately and exclude from returned metadata
+            if k_str == "acquired_at":
+                acquired_at_str = v_str
+            else:
+                metadata_dict[k_str] = v_str
 
-        # Estimate acquired_at and expires_at
+        # Retrieve actual acquired_at from metadata (stored during acquisition)
+        # Fall back to estimation if not present (for locks acquired before this fix)
         expires_at = datetime.now(UTC) + timedelta(seconds=ttl)
-        acquired_at = expires_at - timedelta(seconds=self._lock_ttl_seconds)
+        if acquired_at_str:
+            try:
+                acquired_at = datetime.fromisoformat(acquired_at_str)
+            except (ValueError, TypeError):
+                # Fall back to estimation if metadata is corrupted
+                acquired_at = expires_at - timedelta(seconds=self._lock_ttl_seconds)
+        else:
+            # Fall back to estimation for locks acquired before this fix
+            acquired_at = expires_at - timedelta(seconds=self._lock_ttl_seconds)
 
         return LockHolder(
             lock_key=lock_key,
@@ -318,7 +335,11 @@ class RedisDistributedLock(IDistributedLock):
         )
 
     async def get_all_holders(self) -> list[LockHolder]:
-        """Return all currently held locks across all keys."""
+        """Return all currently held locks across all keys.
+
+        Uses per-key error handling to continue scanning even if one lock
+        retrieval fails. A single Redis hiccup on one key won't fail the entire scan.
+        """
         cursor = 0
         pattern = f"{self._key_prefix}:*"
         holders = []
@@ -340,9 +361,17 @@ class RedisDistributedLock(IDistributedLock):
                 else:
                     continue
 
-                holder = await self.get_holder(lock_key)
-                if holder is not None:
-                    holders.append(holder)
+                # Per-key error handling: skip locks with retrieval errors
+                try:
+                    holder = await self.get_holder(lock_key)
+                    if holder is not None:
+                        holders.append(holder)
+                except Exception:
+                    logger.warning(
+                        f"Failed to retrieve holder data for lock key {lock_key}, skipping",
+                        exc_info=True,
+                    )
+                    continue
 
             if cursor == 0:
                 break
