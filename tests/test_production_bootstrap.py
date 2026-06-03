@@ -121,11 +121,13 @@ async def test_critical_adapters_have_failure_routes() -> None:
     await bootstrap.teardown()
 
 
-def test_event_handler_types_declared() -> None:
-    """Verify event handler decorators declare correct event types.
+@pytest.mark.asyncio
+async def test_event_handler_types_declared() -> None:
+    """Verify event handler decorators declare correct event types with live event bus subscriptions.
 
-    This test verifies that the @event_handler decorators on all handlers
-    match the expected event types they should subscribe to.
+    This test verifies that:
+    1. The @event_handler decorators on all handlers declare the correct event types
+    2. The event bus has live subscribers for every event type each handler claims to handle
 
     The mapping here must match the @event_handler decorators in
     src/codetoreum/application/event_handlers/:
@@ -138,55 +140,167 @@ def test_event_handler_types_declared() -> None:
     - BranchResolutionEventHandler (Lifecycle Event Handler Registration)
     - RepairCycleEventHandler (Lifecycle Event Handler Registration)
     """
+    from unittest.mock import AsyncMock, MagicMock
+
+    from codetoreum.application.event_handlers import (
+        BoardColumnEventHandler,
+        BranchResolutionEventHandler,
+        ExecutionEventHandler,
+        PRReviewCycleEventHandler,
+        RepairCycleEventHandler,
+        ReviewEventHandler,
+        WorkflowEventHandler,
+    )
+    from codetoreum.application.event_handlers.pr_review_cycle_dispatch_handler import (
+        PRReviewCycleDispatchHandler,
+    )
+    from codetoreum.infrastructure.event_bus import EventBus
+
+    # Create event bus instance to test live subscriptions
+    event_bus = EventBus()
+
+    # Minimal mock dependencies for handler instantiation
+    mock_services = {
+        "review_service": MagicMock(),
+        "ci_pipeline_service": MagicMock(),
+        "orchestrator": MagicMock(),
+        "execution_service": MagicMock(),
+    }
+
+    mock_adapters = {
+        "board": MagicMock(),
+        "pr_review_cycle": MagicMock(),
+        "workflow_config": MagicMock(),
+        "work_item_service": MagicMock(),
+        "run_registry": MagicMock(),
+    }
+
+    # Helper to create mock async functions
+    async def async_mock(*args, **kwargs):
+        return MagicMock()
+
+    for key in mock_adapters:
+        mock_adapters[key].get_event_types = MagicMock(return_value=[])
+
+    # Instantiate all handlers and register with event bus
+    handlers = [
+        # Board column handler
+        BoardColumnEventHandler(
+            board_service=mock_adapters["board"],
+            workflow_config=mock_adapters["workflow_config"],
+            agent_executor=MagicMock(),
+            event_bus=event_bus,
+            work_item_service=MagicMock(),
+            distributed_lock=MagicMock(),
+            pipeline_queue=MagicMock(),
+        ),
+        # PR Review Cycle Dispatch Handler
+        PRReviewCycleDispatchHandler(
+            pr_review_cycle=mock_adapters["pr_review_cycle"],
+            workflow_config=mock_adapters["workflow_config"],
+            work_item_service=mock_adapters["work_item_service"],
+            active_workflow_run_registry=mock_adapters["run_registry"],
+        ),
+        # PR Review Cycle Event Handler
+        PRReviewCycleEventHandler(
+            board_service=mock_adapters["board"],
+        ),
+        # Review Event Handler
+        ReviewEventHandler(
+            review_service=mock_services["review_service"],
+            ci_pipeline_service=mock_services["ci_pipeline_service"],
+        ),
+        # Workflow Event Handler
+        WorkflowEventHandler(
+            orchestrator=mock_services["orchestrator"],
+        ),
+        # Execution Event Handler
+        ExecutionEventHandler(
+            execution_service=mock_services["execution_service"],
+        ),
+        # Branch Resolution Event Handler
+        BranchResolutionEventHandler(
+            event_bus=event_bus,
+        ),
+        # Repair Cycle Event Handler
+        RepairCycleEventHandler(
+            repair_cycle=MagicMock(),
+            workflow_config=mock_adapters["workflow_config"],
+            event_bus=event_bus,
+            ci_pipeline_service=mock_services["ci_pipeline_service"],
+        ),
+    ]
+
+    # Register all handlers with the event bus
+    for handler in handlers:
+        event_bus.register_handler(handler)
+
     # Expected event type mappings - must match @event_handler decorators
-    handler_event_types = {
-        "BoardColumnEventHandler": [
+    expected_handler_event_types = {
+        "BoardColumnEventHandler": {
             "WorkItemColumnChangedEvent",
             "AgentExecutionCompletedEvent",
-        ],
-        "PRReviewCycleDispatchHandler": ["WorkItemColumnChangedEvent"],
-        "PRReviewCycleEventHandler": [
+        },
+        "PRReviewCycleDispatchHandler": {"WorkItemColumnChangedEvent"},
+        "PRReviewCycleEventHandler": {
             "PRReviewCycleApprovedEvent",
             "PRReviewCycleIssuesFoundEvent",
             "PRReviewCycleMaxCyclesReachedEvent",
-        ],
-        "ReviewEventHandler": [
+        },
+        "ReviewEventHandler": {
             "ReviewCycleCreatedEvent",
             "ReviewCycleIterationStartedEvent",
             "ReviewCycleFeedbackSubmittedEvent",
             "ReviewCycleApprovedEvent",
             "ReviewCycleRejectedEvent",
             "ReviewCycleEscalatedToHumanEvent",
-        ],
-        "WorkflowEventHandler": [
+        },
+        "WorkflowEventHandler": {
             "WorkItemCreatedEvent",
             "ExecutionCompletedEvent",
             "ExecutionFailedEvent",
             "ReviewCycleApprovedEvent",
             "ReviewCycleRejectedEvent",
             "ReviewCycleEscalatedToHumanEvent",
-        ],
-        "ExecutionEventHandler": [
+        },
+        "ExecutionEventHandler": {
             "ExecutionInitializedEvent",
             "ExecutionStartedEvent",
             "ExecutionCompletedEvent",
             "ExecutionFailedEvent",
             "ExecutionTimedOutEvent",
-        ],
-        "BranchResolutionEventHandler": [
+        },
+        "BranchResolutionEventHandler": {
             "BranchResolvedEvent",
             "BranchReusedEvent",
             "BranchResolutionCreatedEvent",
-        ],
-        "RepairCycleEventHandler": ["WorkItemColumnChangedEvent"],
+        },
+        "RepairCycleEventHandler": {"WorkItemColumnChangedEvent"},
     }
 
     # Verify the mapping is not empty
-    assert len(handler_event_types) > 0, "Handler event type mapping should not be empty"
+    assert len(expected_handler_event_types) > 0, "Handler event type mapping should not be empty"
 
-    # Verify each handler has at least one event type
-    for handler_name, event_types in handler_event_types.items():
+    # Verify each handler has at least one event type declared
+    for handler_name, event_types in expected_handler_event_types.items():
         assert len(event_types) > 0, f"Handler {handler_name} should declare at least one event type"
+
+    # Verify that the event bus has live subscribers for all declared event types
+    for handler_name, expected_event_types in expected_handler_event_types.items():
+        for event_type in expected_event_types:
+            assert (
+                event_type in event_bus._handlers
+            ), f"Event bus should have subscribers for {event_type} (declared by {handler_name})"
+
+            # Verify at least one handler is subscribed to this event type
+            subscribers = event_bus._handlers[event_type]
+            assert len(subscribers) > 0, f"Event type {event_type} should have at least one subscriber"
+
+    # Verify the total number of registered handlers matches our expectations
+    total_registered_handlers = sum(len(handlers) for handlers in event_bus._handlers.values())
+    assert (
+        total_registered_handlers > 0
+    ), "Event bus should have registered handlers for the declared event types"
 
 
 @pytest.mark.asyncio

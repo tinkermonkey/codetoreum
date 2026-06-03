@@ -162,8 +162,14 @@ async def check_redis_exclusivity(redis_url: str, key_prefix: str = "codetoreum:
     try:
         redis_client = aioredis.from_url(redis_url, decode_responses=True)
 
-        # Get all keys in the database
-        all_keys = await redis_client.keys("*")
+        # Scan all keys in the database (non-blocking cursor-based iteration)
+        all_keys = []
+        cursor = 0
+        while True:
+            cursor, keys = await redis_client.scan(cursor, match="*", count=100)
+            all_keys.extend(keys)
+            if cursor == 0:
+                break
 
         # Check for non-Codetoreum keys
         non_codetoreum_keys = [k for k in all_keys if not k.startswith(key_prefix)]

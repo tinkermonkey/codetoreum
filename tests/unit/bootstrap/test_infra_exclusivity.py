@@ -92,7 +92,8 @@ class TestRedisExclusivity:
     async def test_redis_exclusive_instance_passes(self) -> None:
         """Verify Redis exclusivity check passes with only codetoreum: keys."""
         mock_redis = AsyncMock()
-        mock_redis.keys.return_value = ["codetoreum:lock:1", "codetoreum:event:2"]
+        # SCAN returns (cursor, keys). Cursor 0 means iteration complete.
+        mock_redis.scan.return_value = (0, ["codetoreum:lock:1", "codetoreum:event:2"])
         mock_redis.close = AsyncMock()
 
         with patch("redis.asyncio.from_url", return_value=mock_redis):
@@ -106,11 +107,15 @@ class TestRedisExclusivity:
     async def test_redis_shared_instance_fails(self) -> None:
         """Verify Redis exclusivity check fails when other keys exist."""
         mock_redis = AsyncMock()
-        mock_redis.keys.return_value = [
-            "codetoreum:lock:1",
-            "switchyard:queue:1",  # Non-Codetoreum key
-            "cache:data:2",  # Another non-Codetoreum key
-        ]
+        # SCAN returns (cursor, keys). Include non-Codetoreum keys.
+        mock_redis.scan.return_value = (
+            0,
+            [
+                "codetoreum:lock:1",
+                "switchyard:queue:1",  # Non-Codetoreum key
+                "cache:data:2",  # Another non-Codetoreum key
+            ],
+        )
         mock_redis.close = AsyncMock()
 
         with patch("redis.asyncio.from_url", return_value=mock_redis):
@@ -126,7 +131,8 @@ class TestRedisExclusivity:
     async def test_redis_empty_instance_passes(self) -> None:
         """Verify Redis exclusivity check passes with no keys."""
         mock_redis = AsyncMock()
-        mock_redis.keys.return_value = []
+        # SCAN with no keys
+        mock_redis.scan.return_value = (0, [])
         mock_redis.close = AsyncMock()
 
         with patch("redis.asyncio.from_url", return_value=mock_redis):
@@ -138,7 +144,7 @@ class TestRedisExclusivity:
     async def test_redis_custom_prefix_passes(self) -> None:
         """Verify Redis exclusivity check respects custom key prefix."""
         mock_redis = AsyncMock()
-        mock_redis.keys.return_value = ["custom:key:1", "custom:key:2"]
+        mock_redis.scan.return_value = (0, ["custom:key:1", "custom:key:2"])
         mock_redis.close = AsyncMock()
 
         with patch("redis.asyncio.from_url", return_value=mock_redis):
@@ -424,7 +430,7 @@ class TestVerifyInfraExclusivity:
         mock_es.close = AsyncMock()
 
         mock_redis = AsyncMock()
-        mock_redis.keys.return_value = ["codetoreum:lock:1"]
+        mock_redis.scan.return_value = (0, ["codetoreum:lock:1"])
         mock_redis.close = AsyncMock()
 
         mock_github_client = AsyncMock()
@@ -469,7 +475,7 @@ class TestVerifyInfraExclusivity:
         mock_es.close = AsyncMock()
 
         mock_redis = AsyncMock()
-        mock_redis.keys.return_value = ["codetoreum:lock:1"]
+        mock_redis.scan.return_value = (0, ["codetoreum:lock:1"])
         mock_redis.close = AsyncMock()
 
         mock_github_client = AsyncMock()
@@ -513,7 +519,7 @@ class TestVerifyInfraExclusivity:
         mock_es.close = AsyncMock()
 
         mock_redis = AsyncMock()
-        mock_redis.keys.return_value = ["codetoreum:lock:1", "other-service:key:1"]
+        mock_redis.scan.return_value = (0, ["codetoreum:lock:1", "other-service:key:1"])
         mock_redis.close = AsyncMock()
 
         mock_github_client = AsyncMock()
@@ -589,7 +595,7 @@ class TestVerifyInfraExclusivity:
         mock_es.close = AsyncMock()
 
         mock_redis = AsyncMock()
-        mock_redis.keys.return_value = ["other-service:key:1"]  # Redis also fails
+        mock_redis.scan.return_value = (0, ["other-service:key:1"])  # Redis also fails
         mock_redis.close = AsyncMock()
 
         mock_github_client = AsyncMock()
