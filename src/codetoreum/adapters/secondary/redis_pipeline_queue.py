@@ -7,6 +7,7 @@ for metadata storage. Emits WorkItemQueuedEvent and WorkItemDequeuedEvent.
 import json
 import logging
 from datetime import UTC, datetime
+from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 import redis.asyncio as aioredis
@@ -149,12 +150,13 @@ class RedisPipelineQueue(IPipelineQueue):
             )
             return None
 
+        metadata = {k: v for k, v in meta_dict.items() if k not in ("stage_name", "enqueued_at")}
         return QueueEntry(
             work_item_id=work_item_id,
             stage_name=meta_dict.get("stage_name", ""),
             board_position=int(score),
             enqueued_at=datetime.fromisoformat(meta_dict.get("enqueued_at", datetime.now(UTC).isoformat())),
-            metadata={k: v for k, v in meta_dict.items() if k not in ("stage_name", "enqueued_at")},
+            metadata=MappingProxyType(metadata),
         )
 
     async def pop(self, queue_key: str) -> QueueEntry | None:
@@ -207,12 +209,13 @@ class RedisPipelineQueue(IPipelineQueue):
                     exc_info=True,
                 )
 
+        metadata = {k: v for k, v in meta_dict.items() if k not in ("stage_name", "enqueued_at")}
         return QueueEntry(
             work_item_id=work_item_id,
             stage_name=meta_dict.get("stage_name", ""),
             board_position=int(score),
             enqueued_at=datetime.fromisoformat(meta_dict.get("enqueued_at", datetime.now(UTC).isoformat())),
-            metadata={k: v for k, v in meta_dict.items() if k not in ("stage_name", "enqueued_at")},
+            metadata=MappingProxyType(metadata),
         )
 
     async def contains(self, queue_key: str, work_item_id: str) -> bool:
@@ -297,12 +300,13 @@ class RedisPipelineQueue(IPipelineQueue):
                         exc_info=True,
                     )
 
+            metadata = {k: v for k, v in meta_dict.items() if k not in ("stage_name", "enqueued_at")}
             entry = QueueEntry(
                 work_item_id=work_item_id,
                 stage_name=meta_dict.get("stage_name", ""),
                 board_position=int(score),
                 enqueued_at=datetime.fromisoformat(meta_dict.get("enqueued_at", datetime.now(UTC).isoformat())),
-                metadata={k: v for k, v in meta_dict.items() if k not in ("stage_name", "enqueued_at")},
+                metadata=MappingProxyType(metadata),
             )
             result.append(entry)
 

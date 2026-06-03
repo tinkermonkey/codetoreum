@@ -6,6 +6,7 @@ and PipelineLockReleasedEvent via an injected event bus.
 
 import logging
 from datetime import UTC, datetime, timedelta
+from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 import redis.asyncio as aioredis
@@ -309,7 +310,7 @@ class RedisDistributedLock(IDistributedLock):
             acquired_at=acquired_at,
             ttl_seconds=ttl,
             expires_at=expires_at,
-            holder_metadata=metadata_dict,
+            holder_metadata=MappingProxyType(metadata_dict),
         )
 
     async def get_all_holders(self) -> list[LockHolder]:

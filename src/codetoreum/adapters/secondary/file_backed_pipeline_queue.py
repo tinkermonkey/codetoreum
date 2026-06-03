@@ -13,6 +13,7 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
+from types import MappingProxyType
 
 from codetoreum.ports.output.pipeline_queue import (
     EnqueueResult,
@@ -139,7 +140,7 @@ class FileBackedPipelineQueue(IPipelineQueue):
                                 stage_name=stage_name,
                                 board_position=board_position,
                                 enqueued_at=enqueued_at,
-                                metadata=metadata,
+                                metadata=MappingProxyType(metadata),
                             )
                             self._queues[queue_key].append(queue_entry)
 

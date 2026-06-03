@@ -3,16 +3,13 @@
 IDistributedLock is a dumb distributed lock primitive that knows nothing about
 queues, work items, or downstream orchestration. It has a key and a holder;
 operations are atomic at the storage layer.
-
-The adapter emits PipelineLockAcquiredEvent on every successful acquire and
-PipelineLockReleasedEvent on every successful release. Callers and subscribers
-MUST treat these events as the only public signal of state change.
 """
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+from types import MappingProxyType
 
 
 class AcquireStatus(Enum):
@@ -53,7 +50,7 @@ class LockHolder:
     acquired_at: datetime
     ttl_seconds: int
     expires_at: datetime
-    holder_metadata: dict[str, str]  # Empty dict if none provided at acquire time
+    holder_metadata: MappingProxyType[str, str]  # Immutable view of metadata dict
 
 
 class IDistributedLock(ABC):
@@ -66,10 +63,10 @@ class IDistributedLock(ABC):
     Production implementation: RedisDistributedLock (SET NX EX).
     Local-dev / harness: FileBackedDistributedLock (JSONL + fsync).
 
-    The adapter emits PipelineLockAcquiredEvent on every successful acquire
-    and PipelineLockReleasedEvent on every successful release. Callers and
-    subscribers MUST treat these events as the only public signal of state
-    change — no other side effects are emitted from the adapter.
+    Callers are responsible for emitting domain events (PipelineLockAcquiredEvent,
+    PipelineLockReleasedEvent) based on returned AcquireResult and ReleaseResult
+    status codes. This separation lets callers inject context (project_id, board_id)
+    that the lock primitive itself lacks.
     """
 
     @abstractmethod
@@ -99,10 +96,7 @@ class IDistributedLock(ABC):
 
         Returns:
             AcquireResult with status ∈ {ACQUIRED, ALREADY_HELD_BY_OTHER, ALREADY_HELD_BY_SELF}.
-
-        Emits:
-            PipelineLockAcquiredEvent on ACQUIRED. Not on ALREADY_HELD_BY_* —
-            those are no-op transitions.
+            Callers MUST emit PipelineLockAcquiredEvent when status == ACQUIRED.
         """
 
     @abstractmethod
@@ -118,8 +112,7 @@ class IDistributedLock(ABC):
         Calling release when the lock is held by a different holder returns
         ReleaseResult(released=False, reason="held_by_other") with no error.
 
-        Emits:
-            PipelineLockReleasedEvent on successful release. Not on no-op cases.
+        Callers MUST emit PipelineLockReleasedEvent when released == True.
         """
 
     @abstractmethod

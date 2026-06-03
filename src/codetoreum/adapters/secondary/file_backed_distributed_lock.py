@@ -13,6 +13,7 @@ import logging
 import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import MappingProxyType
 
 from codetoreum.ports.output.distributed_lock import (
     AcquireResult,
@@ -299,7 +300,7 @@ class FileBackedDistributedLock(IDistributedLock):
                 acquired_at=acquired_at,
                 ttl_seconds=ttl_seconds,
                 expires_at=expires_at,
-                holder_metadata=holder_metadata,
+                holder_metadata=MappingProxyType(holder_metadata),
             )
 
     async def get_all_holders(self) -> list[LockHolder]:
@@ -318,7 +319,7 @@ class FileBackedDistributedLock(IDistributedLock):
                         acquired_at=acquired_at,
                         ttl_seconds=ttl_seconds,
                         expires_at=expires_at,
-                        holder_metadata=holder_metadata,
+                        holder_metadata=MappingProxyType(holder_metadata),
                     )
                 )
             return holders

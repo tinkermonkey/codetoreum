@@ -7,14 +7,16 @@ operations are atomic at the storage layer.
 Production implementation: RedisPipelineQueue (sorted set + sibling metadata hash).
 Local-dev / harness: FileBackedPipelineQueue (JSONL + fsync).
 
-The adapter emits WorkItemQueuedEvent on fresh enqueues and WorkItemDequeuedEvent
-on pop/remove. These events are used by metrics and diagnostics; the orchestrator's
-primary trigger for state transitions is the lock's events.
+Callers are responsible for emitting domain events (WorkItemQueuedEvent,
+WorkItemDequeuedEvent) based on returned EnqueueResult status and pop/remove
+operation results. This separation lets callers inject context (project_id, board_id)
+that the queue primitive itself lacks.
 """
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
+from types import MappingProxyType
 
 
 @dataclass(frozen=True)
@@ -24,8 +26,8 @@ class QueueEntry:
     stage_name: str
     board_position: int  # Position on the external board at enqueue time
     enqueued_at: datetime
-    metadata: dict[str, str]  # Opaque; surfaces in events. Codetoreum stashes
-                               # project_id, board_id, etc.
+    metadata: MappingProxyType[str, str]  # Immutable view of metadata dict. Codetoreum stashes
+                                           # project_id, board_id, etc.
 
 
 @dataclass(frozen=True)
@@ -45,10 +47,10 @@ class IPipelineQueue(ABC):
     metadata hash).
     Local-dev / harness: FileBackedPipelineQueue (JSONL + fsync).
 
-    The adapter emits WorkItemQueuedEvent on fresh enqueues and
-    WorkItemDequeuedEvent on pop/remove. These events are used by metrics
-    and diagnostics; the orchestrator's primary trigger for state transitions
-    is the lock's events (PipelineLockAcquiredEvent / PipelineLockReleasedEvent).
+    Callers are responsible for emitting domain events (WorkItemQueuedEvent,
+    WorkItemDequeuedEvent). The orchestrator's primary trigger for state
+    transitions is the lock's events (PipelineLockAcquiredEvent /
+    PipelineLockReleasedEvent).
     """
 
     @abstractmethod
@@ -75,9 +77,7 @@ class IPipelineQueue(ABC):
 
         Returns:
             EnqueueResult { position: int, already_present: bool }.
-
-        Emits:
-            WorkItemQueuedEvent on a fresh enqueue. Not on idempotent no-op.
+            Callers MUST emit WorkItemQueuedEvent when already_present == False.
         """
 
     @abstractmethod
@@ -88,8 +88,7 @@ class IPipelineQueue(ABC):
     async def pop(self, queue_key: str) -> QueueEntry | None:
         """Atomically remove and return the head entry. None if empty.
 
-        Emits:
-            WorkItemDequeuedEvent on success.
+        Callers MUST emit WorkItemDequeuedEvent when an entry is successfully popped.
         """
 
     @abstractmethod
@@ -107,8 +106,7 @@ class IPipelineQueue(ABC):
 
         Returns True if removed, False if not present (idempotent).
 
-        Emits:
-            WorkItemDequeuedEvent on successful removal.
+        Callers MUST emit WorkItemDequeuedEvent when True is returned.
         """
 
     @abstractmethod

@@ -5,9 +5,16 @@ a single project, handling card movements, stage transitions, and
 agent execution.
 """
 
-from __future__ import annotations
-
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from codetoreum.application.workflow_orchestrator import (
+        CardMovedEvent,
+        ReviewCycleCompletedEvent,
+        StageCompletedEvent,
+        WorkflowResult,
+    )
 
 
 class IWorkflowOrchestrator(ABC):
@@ -25,7 +32,7 @@ class IWorkflowOrchestrator(ABC):
     """
 
     @abstractmethod
-    async def handle_card_movement(self, event: CardMovedEvent) -> WorkflowResult:
+    async def handle_card_movement(self, event: "CardMovedEvent") -> "WorkflowResult":
         """Handle card movement from GitHub Projects board.
 
         Args:
@@ -36,7 +43,7 @@ class IWorkflowOrchestrator(ABC):
         """
 
     @abstractmethod
-    async def handle_stage_completion(self, event: StageCompletedEvent) -> WorkflowResult:
+    async def handle_stage_completion(self, event: "StageCompletedEvent") -> "WorkflowResult":
         """Handle completion of a pipeline stage.
 
         Args:
@@ -47,7 +54,7 @@ class IWorkflowOrchestrator(ABC):
         """
 
     @abstractmethod
-    async def handle_review_cycle_completion(self, event: ReviewCycleCompletedEvent) -> WorkflowResult:
+    async def handle_review_cycle_completion(self, event: "ReviewCycleCompletedEvent") -> "WorkflowResult":
         """Handle review cycle completion.
 
         Args:
