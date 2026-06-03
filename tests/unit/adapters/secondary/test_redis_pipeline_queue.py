@@ -421,7 +421,7 @@ class TestRedisPipelineQueue(TestPipelineQueueContract):
         event_bus.reset_mock()
 
         # Manually corrupt the metadata by removing it
-        meta_key = f"codetoreum:queue:meta:queue-1"
+        meta_key = "codetoreum:queue:meta:queue-1"
         redis._hashes[meta_key] = {}
 
         # peek() should handle the missing metadata and emit a corruption event
@@ -460,7 +460,7 @@ class TestRedisPipelineQueue(TestPipelineQueueContract):
 
         # Manually corrupt the metadata JSON
         # Note: MockRedis stores hashes with bytes keys when set via hset
-        meta_key = f"codetoreum:queue:meta:queue-1"
+        meta_key = "codetoreum:queue:meta:queue-1"
         redis._hashes[meta_key][b"item-1"] = b"{ invalid json"
 
         # peek() should handle the corrupted JSON
@@ -493,7 +493,7 @@ class TestRedisPipelineQueue(TestPipelineQueueContract):
         await queue.enqueue("queue-1", entry)
 
         # Corrupt the metadata
-        meta_key = f"codetoreum:queue:meta:queue-1"
+        meta_key = "codetoreum:queue:meta:queue-1"
         redis._hashes[meta_key][b"item-1"] = b"corrupted"
 
         # peek() should NOT return None - the queue is not blocked

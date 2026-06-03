@@ -1,7 +1,6 @@
 """Adapter translating IPipelineQueueService to IPipelineQueue interface."""
 
 import logging
-from datetime import UTC, datetime
 from types import MappingProxyType
 
 from codetoreum.ports.output.pipeline_queue import (

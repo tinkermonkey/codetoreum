@@ -153,7 +153,7 @@ class RedisPipelineQueue(IPipelineQueue):
         )
         if self._event_bus:
             try:
-                project_id = queue_key.split(":")[0] if ":" in queue_key else ""
+                project_id = queue_key.split(":", maxsplit=1)[0] if ":" in queue_key else ""
                 event = QueueMetadataCorruptionEvent(
                     type="queue.metadata_corruption",
                     timestamp=datetime.now(UTC).isoformat(),
@@ -209,7 +209,7 @@ class RedisPipelineQueue(IPipelineQueue):
             meta_str = raw_meta.decode("utf-8") if isinstance(raw_meta, bytes) else raw_meta
             meta_dict = json.loads(meta_str)
         except Exception as e:
-            error_msg = f"Failed to parse metadata: {type(e).__name__}: {str(e)}"
+            error_msg = f"Failed to parse metadata: {type(e).__name__}: {e!s}"
             return await self._handle_corrupt_metadata(
                 queue_key, work_item_id, score, error_msg, exc_info=True
             )
