@@ -6,11 +6,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from codetoreum.application.event_handlers.board_event_handler import (
-    BoardColumnEventHandler,
-)
 from codetoreum.application.agent_execution_recovery_service import (
     AgentExecutionRecoveryService,
+)
+from codetoreum.application.event_handlers.board_event_handler import (
+    BoardColumnEventHandler,
 )
 from codetoreum.domain.board_workflow_template import (
     BoardWorkflowTemplate,
@@ -18,9 +18,11 @@ from codetoreum.domain.board_workflow_template import (
     ColumnType,
 )
 from codetoreum.domain.events import (
-    WorkItemColumnChangedEvent,
     AgentExecutionCompletedEvent,
+    WorkItemColumnChangedEvent,
 )
+from codetoreum.infrastructure.event_bus import EventBus
+from codetoreum.ports.exceptions import ResourceNotFoundError
 from codetoreum.ports.output.board_service import (
     MovedByType,
     WorkItemPosition,
@@ -28,11 +30,9 @@ from codetoreum.ports.output.board_service import (
 from codetoreum.ports.output.distributed_lock import (
     AcquireResult,
     AcquireStatus,
-    ReleaseResult,
     ReleaseReason,
+    ReleaseResult,
 )
-from codetoreum.infrastructure.event_bus import EventBus
-from codetoreum.ports.exceptions import ResourceNotFoundError
 
 
 @pytest.fixture
