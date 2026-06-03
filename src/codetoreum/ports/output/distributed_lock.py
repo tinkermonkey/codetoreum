@@ -75,7 +75,7 @@ class IDistributedLock(ABC):
         lock_key: str,
         holder_id: str,
         ttl_seconds: int = 7200,
-        holder_metadata: dict[str, str] | None = None,
+        holder_metadata: dict[str, str] | MappingProxyType[str, str] | None = None,
     ) -> AcquireResult:
         """Attempt to acquire the lock for the given holder.
 

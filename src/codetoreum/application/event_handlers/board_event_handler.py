@@ -8,6 +8,7 @@ Subscribes to workitem.column_changed events and orchestrates:
 
 import logging
 from datetime import UTC, datetime
+from types import MappingProxyType
 from uuid import uuid4
 
 from codetoreum.application.agent_execution_recovery_service import (
@@ -340,7 +341,7 @@ class BoardColumnEventHandler(EventHandler):
                     stage_name=column_config.name,
                     board_position=position.position,
                     enqueued_at=datetime.now(UTC),
-                    metadata={"project_id": project_id, "board_id": board_id},
+                    metadata=MappingProxyType({"project_id": project_id, "board_id": board_id}),
                 )
                 await self.pipeline_queue.enqueue(queue_key=lock_key, entry=queue_entry)
                 queue_length = await self.pipeline_queue.length(lock_key)
