@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from codetoreum.adapters.primary.simple_auth_dependencies import SimpleAuthDependencies
+from codetoreum.ports.exceptions import EventStoreError, StreamNotFoundError
 from codetoreum.ports.output.active_workflow_run_registry import IActiveWorkflowRunRegistry
 from codetoreum.ports.output.board_service import BoardConfig, IBoardService, ReconciliationResult
 from codetoreum.ports.output.distributed_lock import IDistributedLock
@@ -302,7 +303,7 @@ def create_diagnostics_router(
                         for work_item_id, run_info in runs
                     ]
                 except Exception as e:
-                    logger.warning(f"Failed to get active runs: {e!s}", exc_info=True)
+                    logger.warning("Failed to get active runs: %s", e, exc_info=True)
                     subsystem_errors.append("active_workflow_run_registry")
 
             # Get pipeline locks
@@ -321,7 +322,7 @@ def create_diagnostics_router(
                         for holder in holders
                     ]
                 except Exception as e:
-                    logger.warning(f"Failed to get lock holders: {e!s}", exc_info=True)
+                    logger.warning("Failed to get lock holders: %s", e, exc_info=True)
                     subsystem_errors.append("distributed_lock")
 
             # Get pipeline queues
@@ -353,7 +354,7 @@ def create_diagnostics_router(
                                 if event.event_data and "queue_key" in event.event_data:
                                     queue_keys.add(str(event.event_data["queue_key"]))
                         except Exception as e:
-                            logger.debug(f"Failed to query WorkItemQueuedEvent from event store: {e!s}", exc_info=True)
+                            logger.debug("Failed to query WorkItemQueuedEvent from event store: %s", e, exc_info=True)
 
                     for queue_key in queue_keys:
                         try:
@@ -376,9 +377,9 @@ def create_diagnostics_router(
                                 )
                             )
                         except Exception as e:
-                            logger.warning(f"Failed to read queue {queue_key}: {e!s}", exc_info=True)
+                            logger.warning("Failed to read queue %s: %s", queue_key, e, exc_info=True)
                 except Exception as e:
-                    logger.warning(f"Failed to get queue states: {e!s}", exc_info=True)
+                    logger.warning("Failed to get queue states: %s", e, exc_info=True)
                     subsystem_errors.append("pipeline_queue")
 
             # Get failed event stats
@@ -397,7 +398,7 @@ def create_diagnostics_router(
                         failure_reasons=stats.failure_reasons,
                     )
                 except Exception as e:
-                    logger.warning(f"Failed to get failed event stats: {e!s}", exc_info=True)
+                    logger.warning("Failed to get failed event stats: %s", e, exc_info=True)
                     subsystem_errors.append("failed_event_store")
 
             # Get last orphan scan result
@@ -414,7 +415,7 @@ def create_diagnostics_router(
                             errors=last_scan.errors or [],
                         )
                 except Exception as e:
-                    logger.warning(f"Failed to get orphan scan results: {e!s}", exc_info=True)
+                    logger.warning("Failed to get orphan scan results: %s", e, exc_info=True)
                     subsystem_errors.append("orphan_scan_registry")
 
             return DiagnosticsStateResponse(
@@ -427,7 +428,7 @@ def create_diagnostics_router(
             )
 
         except Exception as e:
-            logger.error(f"Diagnostics state query failed: {e!s}", exc_info=True)
+            logger.error("Diagnostics state query failed: %s", e, exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to retrieve diagnostics state: {e!s}",
@@ -470,23 +471,49 @@ def create_diagnostics_router(
         try:
             # Query event store for events matching this event_id
             # Events are stored with aggregate_id, so we look for events with this as aggregate_id
+            events: list = []
+            stream_lookup_failed_with_infrastructure_error = False
+
             try:
                 events = await event_store.get_events(
                     stream_id=event_id,
                     from_version=0,
                 )
+            except StreamNotFoundError:
+                # Stream doesn't exist, this is a "not found" condition - allow fallback
+                logger.debug("Stream %s not found, trying correlation_id lookup", event_id)
+                pass
+            except EventStoreError as e:
+                # Infrastructure failure, propagate as 500
+                logger.warning("Event store infrastructure error when querying stream_id '%s': %s", event_id, e, exc_info=True)
+                stream_lookup_failed_with_infrastructure_error = True
             except Exception as e:
-                logger.warning(f"Failed to get events by stream_id '{event_id}': {e!s}", exc_info=True)
-                # If event_id is not found as a stream_id, try querying by event ID
-                # This handles the case where event_id is a correlation_id
-                events = []
+                # Unknown error, treat as infrastructure failure
+                logger.warning("Unexpected error querying stream_id '%s': %s", event_id, e, exc_info=True)
+                stream_lookup_failed_with_infrastructure_error = True
 
             if not events:
                 # Try to find by correlation_id if available
                 try:
                     events = await event_store.get_events_by_correlation_id(event_id)
+                except EventStoreError as e:
+                    # Infrastructure failure
+                    logger.warning("Event store infrastructure error when querying correlation_id '%s': %s", event_id, e, exc_info=True)
+                    # If both lookups failed with infrastructure errors, return 500
+                    if stream_lookup_failed_with_infrastructure_error:
+                        raise HTTPException(
+                            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail="Event store temporarily unavailable",
+                        ) from e
+                    # Otherwise this specific lookup failed but we can still return 404
                 except Exception as e:
-                    logger.warning(f"Failed to get events by correlation_id '{event_id}': {e!s}", exc_info=True)
+                    # Unknown error, treat as infrastructure failure
+                    logger.warning("Unexpected error querying correlation_id '%s': %s", event_id, e, exc_info=True)
+                    if stream_lookup_failed_with_infrastructure_error:
+                        raise HTTPException(
+                            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail="Event store temporarily unavailable",
+                        ) from e
 
             if not events:
                 raise HTTPException(
@@ -520,7 +547,7 @@ def create_diagnostics_router(
                             if pos is not None:
                                 queue_position = pos
                         except Exception as e:
-                            logger.warning(f"Failed to get queue position for {first_event.aggregate_id}: {e!s}", exc_info=True)
+                            logger.warning("Failed to get queue position for %s: %s", first_event.aggregate_id, e, exc_info=True)
 
             if "WorkflowStartedEvent" in event_types or "ExecutionStartedEvent" in event_types:
                 status_value = TriggerStatus.IN_PROGRESS
@@ -560,7 +587,7 @@ def create_diagnostics_router(
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"Trigger lifecycle query failed: {e!s}", exc_info=True)
+            logger.error("Trigger lifecycle query failed: %s", e, exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to retrieve trigger lifecycle: {e!s}",
