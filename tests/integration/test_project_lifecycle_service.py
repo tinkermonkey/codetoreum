@@ -394,11 +394,11 @@ async def test_initialize_all_projects_with_no_config_error(caplog):
 
 @pytest.mark.asyncio
 async def test_initialize_all_projects_catches_unexpected_exceptions_per_project(caplog):
-    """Test that unexpected exceptions (TypeError, KeyError, etc.) are caught and logged.
+    """Test that unexpected exceptions are caught and logged per project.
 
-    Verifies the fix for issue #931: initialize_all_projects() should continue
-    processing remaining projects even when encountering unexpected exceptions,
-    not just ExternalServiceError and ResourceNotFoundError.
+    initialize_all_projects() should continue processing remaining projects
+    even when encountering unexpected exceptions, not just ExternalServiceError
+    and ResourceNotFoundError.
     """
     config1 = ProjectConfig(
         repo_url="https://github.com/acme/api-service.git",
@@ -439,11 +439,7 @@ async def test_initialize_all_projects_catches_unexpected_exceptions_per_project
 
 @pytest.mark.asyncio
 async def test_initialize_all_projects_catches_unexpected_exceptions_during_get_enabled(caplog):
-    """Test that unexpected exceptions during get_enabled_projects are caught.
-
-    Verifies that exceptions other than ExternalServiceError/ResourceNotFoundError
-    are properly handled at the outer level as well.
-    """
+    """Test that unexpected exceptions during get_enabled_projects are caught at the outer level."""
     # Simulate an unexpected exception during get_enabled_projects
     project_manager = MockProjectManagerService(get_enabled_error=RuntimeError("Unexpected runtime error"))
     service = ProjectLifecycleService(project_manager)
