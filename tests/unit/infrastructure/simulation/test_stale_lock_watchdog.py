@@ -12,8 +12,8 @@ from codetoreum.infrastructure.simulation.watchdogs import StaleLockWatchdog
 from codetoreum.ports.output.distributed_lock import (
     IDistributedLock,
     LockHolder,
-    ReleaseResult,
     ReleaseReason,
+    ReleaseResult,
 )
 
 
