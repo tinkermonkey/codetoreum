@@ -74,8 +74,8 @@ class TestHandlerRegistration:
         """
         Discover all handler registrations in ProductionApplicationBootstrap.
 
-        This searches for method calls to handler registration in the bootstrap
-        and extracts the handler class names.
+        This searches for register_handler() calls and extracts the variable names,
+        then traces back to find the handler class names from their assignments.
 
         Returns:
             Set of registered handler class names
@@ -95,33 +95,26 @@ class TestHandlerRegistration:
         with open(bootstrap_file) as f:
             content = f.read()
 
-        # Find all handler instantiations in the bootstrap file
-        # Look for patterns like: handler = WorkflowEventHandler(...) or orchestrator = PipelineOrchestrator(...)
-        handlers = set()
+        registered_handlers = set()
 
-        # Pattern 1: handler = ClassName(...) - match any class with 'Handler' suffix
-        pattern = r"handler\s*=\s*(\w+Handler)\s*\("
-        for match in re.finditer(pattern, content):
-            handler_class = match.group(1)
-            handlers.add(handler_class)
+        # Step 1: Find all register_handler() calls and extract variable names
+        # Pattern: event_bus.register_handler(variable_name)
+        register_pattern = r"event_bus\.register_handler\((\w+)\)"
+        registered_vars = set()
+        for match in re.finditer(register_pattern, content):
+            var_name = match.group(1)
+            registered_vars.add(var_name)
 
-        # Pattern 2: orchestrator = ClassName(...) or other orchestrator/handler variables
-        pattern = r"(?:handler|orchestrator)\s*=\s*(\w+)\s*\("
-        for match in re.finditer(pattern, content):
-            handler_class = match.group(1)
-            # Skip if it's not a class name pattern (should start with capital letter)
-            if handler_class and handler_class[0].isupper():
-                handlers.add(handler_class)
+        # Step 2: For each registered variable, find its assignment and extract class name
+        # Pattern: variable_name = ClassName(...)
+        for var_name in registered_vars:
+            # Look for the assignment of this variable to a class instantiation
+            assignment_pattern = rf"{var_name}\s*=\s*(\w+)\s*\("
+            for match in re.finditer(assignment_pattern, content):
+                class_name = match.group(1)
+                registered_handlers.add(class_name)
 
-        # Pattern 3: *_handler = ClassName(...) or *_handlers = ClassName(...)
-        pattern = r"(\w+(?:_handler|_handlers))\s*=\s*(\w+)\s*\("
-        for match in re.finditer(pattern, content):
-            handler_class = match.group(2)
-            # Skip if it's not a class name pattern (should start with capital letter)
-            if handler_class and handler_class[0].isupper():
-                handlers.add(handler_class)
-
-        return handlers
+        return registered_handlers
 
     def test_all_event_handlers_are_registered(self) -> None:
         """

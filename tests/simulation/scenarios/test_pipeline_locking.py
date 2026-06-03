@@ -5,9 +5,8 @@ IDistributedLock and IPipelineQueue ports.
 """
 
 import asyncio
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from types import MappingProxyType
-from unittest.mock import AsyncMock
 
 import pytest
 
@@ -17,16 +16,6 @@ from codetoreum.adapters.testing import (
 )
 from codetoreum.ports.output.distributed_lock import AcquireStatus
 from codetoreum.ports.output.pipeline_queue import QueueEntry
-
-
-@pytest.fixture
-def event_bus():
-    """Mock event bus for capturing emitted events."""
-    bus = AsyncMock()
-    bus.emit = AsyncMock()
-    bus.publish = AsyncMock()
-    bus.subscribe = AsyncMock()
-    return bus
 
 
 @pytest.fixture
