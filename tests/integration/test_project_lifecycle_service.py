@@ -138,6 +138,7 @@ async def test_initialize_all_projects_with_single_project(caplog):
         branch="main",
         enabled=True,
         org="acme",
+        github_project_id="PVT_kwDOANYYRs4AbZKf",
     )
     project_manager = MockProjectManagerService(
         enabled_projects=["api-service"],
@@ -151,7 +152,7 @@ async def test_initialize_all_projects_with_single_project(caplog):
 
     assert "Initializing 1 projects" in caplog.text
     assert len(board_service.reconcile_calls) == 1
-    assert board_service.reconcile_calls[0][0] == "api-service"
+    assert board_service.reconcile_calls[0][0] == "PVT_kwDOANYYRs4AbZKf"
 
 
 @pytest.mark.asyncio
@@ -162,12 +163,14 @@ async def test_initialize_all_projects_with_multiple_projects(caplog):
         branch="main",
         enabled=True,
         org="acme",
+        github_project_id="PVT_kwDOANYYRs4AbZKf",
     )
     config2 = ProjectConfig(
         repo_url="https://github.com/acme/web-app.git",
         branch="main",
         enabled=True,
         org="acme",
+        github_project_id="PVT_kwDOANYYRs4AbZKg",
     )
     project_manager = MockProjectManagerService(
         enabled_projects=["api-service", "web-app"],
@@ -191,6 +194,7 @@ async def test_initialize_all_projects_without_board_service(caplog):
         branch="main",
         enabled=True,
         org="acme",
+        github_project_id="PVT_kwDOANYYRs4AbZKf",
     )
     project_manager = MockProjectManagerService(
         enabled_projects=["api-service"],
@@ -212,6 +216,7 @@ async def test_reconcile_project_boards_success(caplog):
         branch="main",
         enabled=True,
         org="acme",
+        github_project_id="PVT_kwDOANYYRs4AbZKf",
     )
     project_manager = MockProjectManagerService(configs={"api-service": config})
     board_service = MockBoardService()
@@ -223,7 +228,7 @@ async def test_reconcile_project_boards_success(caplog):
     assert "Reconciling boards for project api-service" in caplog.text
     assert len(board_service.reconcile_calls) == 1
     board_id, board_config = board_service.reconcile_calls[0]
-    assert board_id == "api-service"
+    assert board_id == "PVT_kwDOANYYRs4AbZKf"
     assert board_config.board_id == "api-service"
 
 
@@ -239,6 +244,27 @@ async def test_reconcile_project_boards_config_not_found(caplog):
             await service._reconcile_project_boards("missing-project")
 
     assert "project configuration not found" in caplog.text
+    assert len(board_service.reconcile_calls) == 0
+
+
+@pytest.mark.asyncio
+async def test_reconcile_project_boards_no_github_project_id(caplog):
+    """Test board reconciliation skipped when github_project_id is missing."""
+    config = ProjectConfig(
+        repo_url="https://github.com/acme/api-service.git",
+        branch="main",
+        enabled=True,
+        org="acme",
+        github_project_id=None,
+    )
+    project_manager = MockProjectManagerService(configs={"api-service": config})
+    board_service = MockBoardService()
+    service = ProjectLifecycleService(project_manager, board_service)
+
+    with caplog.at_level(logging.DEBUG):
+        await service._reconcile_project_boards("api-service")
+
+    assert "no github_project_id in project configuration" in caplog.text
     assert len(board_service.reconcile_calls) == 0
 
 
@@ -267,12 +293,14 @@ async def test_initialize_all_projects_continues_on_per_project_error(caplog):
         branch="main",
         enabled=True,
         org="acme",
+        github_project_id="PVT_kwDOANYYRs4AbZKf",
     )
     config2 = ProjectConfig(
         repo_url="https://github.com/acme/web-app.git",
         branch="main",
         enabled=True,
         org="acme",
+        github_project_id="PVT_kwDOANYYRs4AbZKg",
     )
 
     def get_config_side_effect(project_name: str) -> ProjectConfig:
@@ -294,7 +322,7 @@ async def test_initialize_all_projects_continues_on_per_project_error(caplog):
     assert "Board reconciliation failed for api-service" in caplog.text
     # Should still reconcile web-app
     assert len(board_service.reconcile_calls) == 1
-    assert board_service.reconcile_calls[0][0] == "web-app"
+    assert board_service.reconcile_calls[0][0] == "PVT_kwDOANYYRs4AbZKg"
 
 
 @pytest.mark.asyncio
@@ -314,6 +342,7 @@ async def test_initialize_all_projects_error_logged_no_silent_exceptions(caplog)
     # Should log the error, not silently swallow it
     assert "Board reconciliation failed for api-service" in caplog.text
     assert "Database connection failed" in caplog.text
+    assert len(board_service.reconcile_calls) == 0
 
 
 @pytest.mark.asyncio
@@ -324,6 +353,7 @@ async def test_reconcile_board_service_error_during_reconciliation(caplog):
         branch="main",
         enabled=True,
         org="acme",
+        github_project_id="PVT_kwDOANYYRs4AbZKf",
     )
     project_manager = MockProjectManagerService(configs={"api-service": config})
     board_error = ExternalServiceError(service="board_service", message="Failed to reconcile board")

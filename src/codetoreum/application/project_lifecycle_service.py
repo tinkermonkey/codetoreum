@@ -93,7 +93,7 @@ class ProjectLifecycleService:
             return
 
         try:
-            _ = await self._project_manager.get_project_config(project_name)
+            project_config = await self._project_manager.get_project_config(project_name)
         except ResourceNotFoundError:
             logger.warning(
                 f"Cannot reconcile boards for {project_name}: project configuration not found",
@@ -116,8 +116,16 @@ class ProjectLifecycleService:
             )
             raise
 
+        github_project_id = getattr(project_config, "github_project_id", None)
+        if not github_project_id:
+            logger.debug(
+                f"Skipping board reconciliation for {project_name}: no github_project_id in project configuration",
+                extra={"project_name": project_name},
+            )
+            return
+
         logger.debug(
-            f"Reconciling boards for project {project_name}",
+            f"Reconciling boards for project {project_name} (node_id={github_project_id})",
             extra={"project_name": project_name},
         )
-        await self._board_service.reconcile_board(project_name, BoardConfig(board_id=project_name, expected_columns=()))
+        await self._board_service.reconcile_board(github_project_id, BoardConfig(board_id=project_name, expected_columns=()))

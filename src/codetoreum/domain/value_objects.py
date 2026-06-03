@@ -63,13 +63,18 @@ class ProjectConfig:
         org: Organization or namespace identifier for the project.
              Used for namespacing pipeline locks, queue state, and other
              per-project resources to maintain isolation.
+        github_project_id: GitHub Projects v2 node ID for board reconciliation.
+                          Required for board reconciliation with GitHub Projects v2.
+                          If not provided, board reconciliation is skipped.
+                          Example: "PVT_kwDOANYYRs4AbZKf"
 
     Example:
         >>> config = ProjectConfig(
         ...     repo_url="https://github.com/acme/api-service.git",
         ...     branch="main",
         ...     enabled=True,
-        ...     org="acme-org"
+        ...     org="acme-org",
+        ...     github_project_id="PVT_kwDOANYYRs4AbZKf"
         ... )
     """
 
@@ -77,6 +82,7 @@ class ProjectConfig:
     branch: str
     enabled: bool
     org: str
+    github_project_id: str | None = None
 
     def __post_init__(self) -> None:
         """Validate project configuration."""
