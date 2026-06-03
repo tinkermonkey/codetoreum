@@ -131,11 +131,11 @@ from codetoreum.ports.output.version_control_service import (
 from codetoreum.ports.output.work_item_service import IWorkItemService
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 from codetoreum.ports.output.workflow_orchestrator import (
-    CardMovedEvent,
+    CardMovedRequest,
     IssueData,
     IWorkflowOrchestrator,
-    ReviewCycleCompletedEvent,
-    StageCompletedEvent,
+    ReviewCycleCompletedRequest,
+    StageCompletedRequest,
     WorkflowAction,
     WorkflowResult,
 )
@@ -270,10 +270,10 @@ __all__ = [
     "IWorkflowConfigService",
     # Workflow Orchestrator
     "IWorkflowOrchestrator",
-    "CardMovedEvent",
+    "CardMovedRequest",
     "IssueData",
-    "ReviewCycleCompletedEvent",
-    "StageCompletedEvent",
+    "ReviewCycleCompletedRequest",
+    "StageCompletedRequest",
     "WorkflowAction",
     "WorkflowResult",
 ]

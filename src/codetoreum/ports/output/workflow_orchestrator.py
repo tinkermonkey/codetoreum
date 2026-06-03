@@ -36,19 +36,6 @@ class WorkflowResult:
 
 
 @dataclass
-class CardMovedEvent:
-    """Event emitted when a card moves on GitHub Projects board."""
-
-    project: str
-    board: str
-    issue_number: int
-    from_column: str | None
-    to_column: str
-    issue_data: "IssueData"
-    timestamp: datetime
-
-
-@dataclass
 class IssueData:
     """Issue information from GitHub."""
 
@@ -62,8 +49,21 @@ class IssueData:
 
 
 @dataclass
-class StageCompletedEvent:
-    """Event emitted when a pipeline stage completes."""
+class CardMovedRequest:
+    """Data passed to the orchestrator when a card moves on GitHub Projects board."""
+
+    project: str
+    board: str
+    issue_number: int
+    from_column: str | None
+    to_column: str
+    issue_data: IssueData
+    timestamp: datetime
+
+
+@dataclass
+class StageCompletedRequest:
+    """Data passed to the orchestrator when a pipeline stage completes."""
 
     project: str
     issue_number: int
@@ -76,8 +76,8 @@ class StageCompletedEvent:
 
 
 @dataclass
-class ReviewCycleCompletedEvent:
-    """Event emitted when review cycle completes."""
+class ReviewCycleCompletedRequest:
+    """Data passed to the orchestrator when review cycle completes."""
 
     project: str
     issue_number: int
@@ -105,33 +105,33 @@ class IWorkflowOrchestrator(ABC):
     """
 
     @abstractmethod
-    async def handle_card_movement(self, event: CardMovedEvent) -> WorkflowResult:
+    async def handle_card_movement(self, event: CardMovedRequest) -> WorkflowResult:
         """Handle card movement from GitHub Projects board.
 
         Args:
-            event: Card movement event with source and target column information.
+            event: Card movement request with source and target column information.
 
         Returns:
             WorkflowResult indicating the orchestration action taken.
         """
 
     @abstractmethod
-    async def handle_stage_completion(self, event: StageCompletedEvent) -> WorkflowResult:
+    async def handle_stage_completion(self, event: StageCompletedRequest) -> WorkflowResult:
         """Handle completion of a pipeline stage.
 
         Args:
-            event: Stage completion event with results and context.
+            event: Stage completion request with results and context.
 
         Returns:
             WorkflowResult indicating the next orchestration action.
         """
 
     @abstractmethod
-    async def handle_review_cycle_completion(self, event: ReviewCycleCompletedEvent) -> WorkflowResult:
+    async def handle_review_cycle_completion(self, event: ReviewCycleCompletedRequest) -> WorkflowResult:
         """Handle review cycle completion.
 
         Args:
-            event: Review cycle completion event with approval status.
+            event: Review cycle completion request with approval status.
 
         Returns:
             WorkflowResult indicating whether to progress the workflow.

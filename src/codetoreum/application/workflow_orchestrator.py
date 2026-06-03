@@ -23,10 +23,10 @@ from codetoreum.ports.output import IBoardService, IEventStore, ITicketSystem
 from codetoreum.ports.output.board_service import MovedByType
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 from codetoreum.ports.output.workflow_orchestrator import (
-    CardMovedEvent,
+    CardMovedRequest,
     IWorkflowOrchestrator,
-    ReviewCycleCompletedEvent,
-    StageCompletedEvent,
+    ReviewCycleCompletedRequest,
+    StageCompletedRequest,
     WorkflowAction,
     WorkflowResult,
 )
@@ -281,7 +281,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
         name="workflow.handle_card_movement",
         attributes={"service": "workflow_orchestrator", "operation": "card_movement"},
     )
-    async def handle_card_movement(self, event: CardMovedEvent) -> WorkflowResult:
+    async def handle_card_movement(self, event: CardMovedRequest) -> WorkflowResult:
         """
         Handle card movement from GitHub Projects.
 
@@ -467,7 +467,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
         name="workflow.handle_stage_completion",
         attributes={"service": "workflow_orchestrator", "operation": "stage_completion"},
     )
-    async def handle_stage_completion(self, event: StageCompletedEvent) -> WorkflowResult:
+    async def handle_stage_completion(self, event: StageCompletedRequest) -> WorkflowResult:
         """
         Handle completion of a pipeline stage.
 
@@ -486,7 +486,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
         """
         logger.info(f"Handling stage completion: {event.stage_name} for issue #{event.issue_number}")
 
-        # StageCompletedEvent.context is guaranteed to be Dict[str, Any] by type contract
+        # StageCompletedRequest.context is guaranteed to be Dict[str, Any] by type contract
         board_name = event.context.get("board", "default")
         workflow_config = await self.config.get_workflow_config(event.project, board_name)
 
@@ -563,7 +563,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
         name="workflow.handle_review_cycle_completion",
         attributes={"service": "workflow_orchestrator", "operation": "review_completion"},
     )
-    async def handle_review_cycle_completion(self, event: ReviewCycleCompletedEvent) -> WorkflowResult:
+    async def handle_review_cycle_completion(self, event: ReviewCycleCompletedRequest) -> WorkflowResult:
         """
         Handle review cycle completion.
 
@@ -583,7 +583,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
             f"approved={event.approved}, iteration={event.iteration}"
         )
 
-        # ReviewCycleCompletedEvent.context is guaranteed to be Dict[str, Any] by type contract
+        # ReviewCycleCompletedRequest.context is guaranteed to be Dict[str, Any] by type contract
         board_name = event.context.get("board", "default")
 
         if event.approved:
@@ -728,7 +728,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
 
     def _build_task_context(
         self,
-        event: CardMovedEvent,
+        event: CardMovedRequest,
         column_config: ColumnConfig,
         workflow_config: WorkflowConfig,
     ) -> dict[str, Any]:
@@ -745,7 +745,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
             "review_required": column_config.review_required,
         }
 
-    async def _queue_review_task(self, event: StageCompletedEvent, column_config: ColumnConfig) -> WorkflowResult:
+    async def _queue_review_task(self, event: StageCompletedRequest, column_config: ColumnConfig) -> WorkflowResult:
         """Queue a review task."""
         if not column_config.reviewer_agent:
             return WorkflowResult(
@@ -783,7 +783,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
             reason="Review task queued",
         )
 
-    async def _queue_revision_task(self, event: ReviewCycleCompletedEvent) -> str:
+    async def _queue_revision_task(self, event: ReviewCycleCompletedRequest) -> str:
         """Queue a revision task for the maker."""
         task = Task(
             id=f"revision_{event.project}_{event.issue_number}_{int(time.time())}",
