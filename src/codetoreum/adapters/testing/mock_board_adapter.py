@@ -606,32 +606,86 @@ class MockBoardAdapter(IBoardService):
         board = await self.get_board(self.current_project, board_id)
 
         async with self._lock:
+            from codetoreum.ports.exceptions import BoardStructureDriftError
+
             columns_added: list[str] = []
             columns_removed: list[str] = []
             columns_renamed: list[tuple[str, str]] = []
             orphaned_items: list[str] = []
 
-            # Check for missing columns
-            existing_names = {col.name for col in board.columns}
-            for expected_col in config.expected_columns:
-                if expected_col not in existing_names:
-                    if config.auto_create_missing:
-                        # Add new column
-                        new_col = BoardColumn(
-                            id=f"col-{len(board.columns)}",
-                            name=expected_col,
-                            position=len(board.columns),
-                            work_item_ids=(),
-                        )
-                        new_columns = list(board.columns)
-                        new_columns.append(new_col)
-                        object.__setattr__(board, "columns", tuple(new_columns))
-                        columns_added.append(expected_col)
+            # Track current and expected states
+            current_columns = {col.name: col for col in board.columns}
+            current_names = set(current_columns.keys())
+            expected_names = set(config.expected_columns)
 
-            # Check for extra columns
-            for col in board.columns:
-                if col.name not in config.expected_columns:
-                    columns_removed.append(col.name)
+            # Detect exact adds and removes
+            columns_to_add = expected_names - current_names
+            columns_to_remove = current_names - expected_names
+
+            # Step 1: Detect potential renames (current → expected mapping)
+            potential_renames: dict[str, str] = {}  # old_name -> new_name
+
+            if columns_to_add and columns_to_remove:
+                # Find unambiguous mappings: if removing column A and adding column B,
+                # and A contains items, consider B a rename of A (unambiguous if only one of each)
+                removable = {name for name in columns_to_remove if current_columns[name].work_item_ids}
+
+                if len(removable) == 1 and len(columns_to_add) == 1:
+                    old_name = list(removable)[0]
+                    new_name = list(columns_to_add)[0]
+
+                    # This is an unambiguous rename
+                    potential_renames[old_name] = new_name
+                    columns_to_add.discard(new_name)
+                    columns_to_remove.discard(old_name)
+                    columns_renamed.append((old_name, new_name))
+
+            # Step 2: Handle column removals (after rename detection)
+            for col_name in columns_to_remove:
+                columns_removed.append(col_name)
+                col = current_columns[col_name]
+                orphaned_items.extend(col.work_item_ids)
+
+            # Step 3: Check for unsafe drift
+            remaining_removals = {
+                name for name in columns_to_remove if current_columns[name].work_item_ids
+            }
+
+            if len(remaining_removals) > 1 and len(columns_to_add) < len(remaining_removals):
+                drift_desc = f"Multiple columns with items being removed ({remaining_removals}) but insufficient additions ({columns_to_add})"
+                raise BoardStructureDriftError(board_id, drift_desc)
+
+            # Step 4: Create missing columns
+            for expected_col in columns_to_add:
+                if config.auto_create_missing:
+                    # Add new column
+                    new_col = BoardColumn(
+                        id=f"col-{len(board.columns)}",
+                        name=expected_col,
+                        position=len(board.columns),
+                        work_item_ids=(),
+                    )
+                    new_columns = list(board.columns)
+                    new_columns.append(new_col)
+                    object.__setattr__(board, "columns", tuple(new_columns))
+                    columns_added.append(expected_col)
+
+            # Step 5: Rename columns (update board columns for renamed columns)
+            for old_name, new_name in potential_renames.items():
+                new_columns = []
+                for col in board.columns:
+                    if col.name == old_name:
+                        # Rename the column
+                        renamed_col = BoardColumn(
+                            id=col.id,
+                            name=new_name,
+                            position=col.position,
+                            work_item_ids=col.work_item_ids,
+                        )
+                        new_columns.append(renamed_col)
+                    else:
+                        new_columns.append(col)
+                object.__setattr__(board, "columns", tuple(new_columns))
 
             result = ReconciliationResult(
                 board_id=board_id,

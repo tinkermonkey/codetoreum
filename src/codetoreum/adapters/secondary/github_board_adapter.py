@@ -644,7 +644,6 @@ class GitHubBoardAdapter(IBoardService):
         # Detect exact adds and removes
         columns_to_add = expected_names - current_names
         columns_to_remove = current_names - expected_names
-        columns_to_keep = expected_names & current_names
 
         # Track changes
         added_columns: list[str] = []
@@ -652,13 +651,7 @@ class GitHubBoardAdapter(IBoardService):
         renamed_columns: list[tuple[str, str]] = []
         orphaned_items: list[str] = []
 
-        # Step 1: Handle column removals
-        for col_name in columns_to_remove:
-            removed_columns.append(col_name)
-            col = current_columns[col_name]
-            orphaned_items.extend(col.work_item_ids)
-
-        # Step 2: Detect potential renames (current → expected mapping)
+        # Step 1: Detect potential renames (current → expected mapping)
         # Only consider columns that contain work items and don't have exact matches
         potential_renames: dict[str, str] = {}  # old_name -> new_name
 
@@ -677,6 +670,12 @@ class GitHubBoardAdapter(IBoardService):
                 columns_to_remove.discard(old_name)
                 renamed_columns.append((old_name, new_name))
 
+        # Step 2: Handle column removals (after rename detection)
+        for col_name in columns_to_remove:
+            removed_columns.append(col_name)
+            col = current_columns[col_name]
+            orphaned_items.extend(col.work_item_ids)
+
         # Step 3: Check for unsafe drift
         # Unsafe drift: multiple removals with items, but only one addition
         # (can't determine which removal maps to which addition)
@@ -694,10 +693,10 @@ class GitHubBoardAdapter(IBoardService):
                 await self._create_column_via_api(board_id, col_name)
                 added_columns.append(col_name)
 
-        # Step 5: Rename columns via GraphQL API
+        # Step 5: Rename columns via GraphQL API (uses potential_renames detected in Step 1)
         status_field_id = self._find_status_field_id(board)
         if potential_renames and status_field_id:
-            for old_name, new_name in potential_renames:
+            for old_name, new_name in potential_renames.items():
                 await self._rename_column_via_api(board_id, status_field_id, old_name, new_name)
 
         # Create result
@@ -1136,7 +1135,7 @@ class GitHubBoardAdapter(IBoardService):
             )
 
             # Extract the new option ID and cache it
-            field = result.get("projectV2Field")
+            field = result.get("createProjectV2FieldOption", {}).get("projectV2Field")
             if field:
                 options = field.get("options", [])
                 for option in options:
