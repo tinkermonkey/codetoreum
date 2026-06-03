@@ -119,7 +119,7 @@ class PipelineOrchestrator(EventHandler):
                         exc_info=True,
                         extra={"work_item_id": event.work_item_id},
                     )
-                    await self._emit_lock_stuck_alert(
+                    self._emit_lock_stuck_alert(
                         event.project_id,
                         event.board_id,
                         event.work_item_id,
@@ -200,7 +200,7 @@ class PipelineOrchestrator(EventHandler):
                         exc_info=True,
                         extra={"work_item_id": next_entry.work_item_id},
                     )
-                    await self._emit_lock_stuck_alert(
+                    self._emit_lock_stuck_alert(
                         event.project_id,
                         event.board_id,
                         next_entry.work_item_id,
@@ -222,7 +222,7 @@ class PipelineOrchestrator(EventHandler):
                 exc_info=True,
                 extra={"work_item_id": next_entry.work_item_id},
             )
-            await self._emit_lock_stuck_alert(
+            self._emit_lock_stuck_alert(
                 event.project_id,
                 event.board_id,
                 next_entry.work_item_id,
@@ -230,7 +230,7 @@ class PipelineOrchestrator(EventHandler):
             )
             # Stop processing - do not continue queue progression until this is resolved
 
-    async def _emit_lock_stuck_alert(
+    def _emit_lock_stuck_alert(
         self,
         project_id: str,
         board_id: str,
