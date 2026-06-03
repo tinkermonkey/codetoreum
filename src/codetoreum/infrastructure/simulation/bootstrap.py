@@ -2668,8 +2668,8 @@ class SimulationApplicationBootstrap:
 
         handler = BoardColumnEventHandler(
             board_service=self.adapters.board,
-            distributed_lock=self.adapters.distributed_lock,
-            pipeline_queue=self.adapters.pipeline_queue,
+            distributed_lock=self.adapters.lock_service,
+            pipeline_queue=self.adapters.queue_service,
             workflow_config=self.adapters.workflow_config,
             agent_executor=self.adapters.agent_executor,
             event_bus=self.infrastructure.event_bus,

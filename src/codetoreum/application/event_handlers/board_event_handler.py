@@ -342,27 +342,15 @@ class BoardColumnEventHandler(EventHandler):
             # Start workflow run lifecycle tracking (only on first acquisition)
             await self._start_workflow_run(work_item_id, project_id, board_id, column_config, workflow_config)
 
-            # Trigger agent if column has one, is NOT a conversational column, and is NOT a PR review cycle column.
-            # Conversational columns are handled by WorkflowOrchestrator via
-            # ConversationalLoopOrchestrator — dispatching the executor here would
-            # cause a double-dispatch failure. PR review cycle columns are driven by
-            # PRReviewCycleDispatchHandler; dispatching here would cause double-dispatch.
-            if (
-                column_config.agent_id
-                and getattr(column_config, "execution_type", "task_queue") != "conversational"
-                and not column_config.pr_review_cycle_config
-            ):
+            # Trigger agent if eligible
+            if self._should_trigger_agent(column_config):
                 await self._trigger_agent(work_item_id, column_config, board_id)
 
         elif lock_result.status.value == "already_held_by_self":
             logger.info(f"Lock already held by {work_item_id} (re-entry)")
 
-            # Trigger agent if column has one
-            if (
-                column_config.agent_id
-                and getattr(column_config, "execution_type", "task_queue") != "conversational"
-                and not column_config.pr_review_cycle_config
-            ):
+            # Trigger agent if eligible
+            if self._should_trigger_agent(column_config):
                 await self._trigger_agent(work_item_id, column_config, board_id)
 
         else:
@@ -635,6 +623,26 @@ class BoardColumnEventHandler(EventHandler):
                 exc_info=True,
                 extra={"error_id": "ERR_BOARD_EVENT_WORKFLOW_RUN_FAIL_FAILURE"},
             )
+
+    def _should_trigger_agent(self, column_config: ColumnTemplate) -> bool:
+        """Check if agent should be triggered for this column.
+
+        Triggers are eligible unless:
+        - Column has no agent assigned
+        - Column is conversational (handled by ConversationalLoopOrchestrator)
+        - Column is part of a PR review cycle (handled by PRReviewCycleDispatchHandler)
+
+        Args:
+            column_config: Column configuration to check
+
+        Returns:
+            True if agent should be triggered, False otherwise
+        """
+        return (
+            column_config.agent_id
+            and getattr(column_config, "execution_type", "task_queue") != "conversational"
+            and not column_config.pr_review_cycle_config
+        )
 
     async def _trigger_agent(self, work_item_id: str, column_config: ColumnTemplate, board_id: str = "board-1") -> None:
         """

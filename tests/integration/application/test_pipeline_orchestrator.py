@@ -9,18 +9,17 @@ Comprehensive test suite covering:
 - Edge cases (empty queue, non-holder release attempts)
 """
 
-import asyncio
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from codetoreum.adapters.testing import (
     InMemoryActiveWorkflowRunRegistry,
-    InMemoryQueueService,
+    InMemoryDistributedLock,
+    InMemoryOrphanScanRegistry,
+    InMemoryPipelineQueue,
 )
-from codetoreum.adapters.secondary.redis_distributed_lock import RedisDistributedLock
-from codetoreum.adapters.secondary.redis_pipeline_queue import RedisPipelineQueue
 from codetoreum.application.event_handlers.pipeline_orchestrator import (
     PipelineOrchestrator,
 )
@@ -29,140 +28,8 @@ from codetoreum.domain.events.lock_events import (
     PipelineLockReleasedEvent,
 )
 from codetoreum.infrastructure.event_bus import EventBus
-from codetoreum.ports.output.distributed_lock import AcquireStatus, ReleaseReason
-from codetoreum.ports.output.orphan_scan_registry import IOrphanScanRegistry
+from codetoreum.ports.output.distributed_lock import AcquireStatus
 from codetoreum.ports.output.pipeline_queue import QueueEntry
-
-
-class InMemoryDistributedLock:
-    """In-memory distributed lock for testing."""
-
-    def __init__(self):
-        self._locks: dict[str, dict] = {}
-        self._lock = asyncio.Lock()
-
-    async def try_acquire(
-        self,
-        lock_key: str,
-        holder_id: str,
-        ttl_seconds: int = 7200,
-        holder_metadata=None,
-    ):
-        from codetoreum.ports.output.distributed_lock import AcquireResult, AcquireStatus
-
-        async with self._lock:
-            if lock_key not in self._locks:
-                self._locks[lock_key] = {
-                    "holder_id": holder_id,
-                    "acquired_at": datetime.now(UTC),
-                    "ttl_seconds": ttl_seconds,
-                    "metadata": holder_metadata or {},
-                }
-                return AcquireResult(
-                    status=AcquireStatus.ACQUIRED,
-                    lock_key=lock_key,
-                    holder_id=holder_id,
-                    acquired_at=datetime.now(UTC),
-                )
-            elif self._locks[lock_key]["holder_id"] == holder_id:
-                return AcquireResult(
-                    status=AcquireStatus.ALREADY_HELD_BY_SELF,
-                    lock_key=lock_key,
-                    holder_id=holder_id,
-                    acquired_at=None,
-                )
-            else:
-                return AcquireResult(
-                    status=AcquireStatus.ALREADY_HELD_BY_OTHER,
-                    lock_key=lock_key,
-                    holder_id=self._locks[lock_key]["holder_id"],
-                    acquired_at=None,
-                )
-
-    async def release(self, lock_key: str, holder_id: str):
-        from codetoreum.ports.output.distributed_lock import ReleaseResult, ReleaseReason
-
-        async with self._lock:
-            if lock_key not in self._locks:
-                return ReleaseResult(
-                    released=False,
-                    reason=ReleaseReason.NOT_HELD,
-                    lock_key=lock_key,
-                )
-            if self._locks[lock_key]["holder_id"] != holder_id:
-                return ReleaseResult(
-                    released=False,
-                    reason=ReleaseReason.HELD_BY_OTHER,
-                    lock_key=lock_key,
-                )
-            del self._locks[lock_key]
-            return ReleaseResult(released=True, reason=None, lock_key=lock_key)
-
-    async def get_holder(self, lock_key: str):
-        from codetoreum.ports.output.distributed_lock import LockHolder
-        from types import MappingProxyType
-
-        async with self._lock:
-            if lock_key not in self._locks:
-                return None
-            info = self._locks[lock_key]
-            return LockHolder(
-                lock_key=lock_key,
-                holder_id=info["holder_id"],
-                acquired_at=info["acquired_at"],
-                ttl_seconds=info["ttl_seconds"],
-                expires_at=info["acquired_at"] + timedelta(seconds=info["ttl_seconds"]),
-                holder_metadata=MappingProxyType(info["metadata"]),
-            )
-
-    async def get_all_holders(self):
-        from codetoreum.ports.output.distributed_lock import LockHolder
-        from types import MappingProxyType
-
-        async with self._lock:
-            return [
-                LockHolder(
-                    lock_key=key,
-                    holder_id=info["holder_id"],
-                    acquired_at=info["acquired_at"],
-                    ttl_seconds=info["ttl_seconds"],
-                    expires_at=info["acquired_at"] + timedelta(seconds=info["ttl_seconds"]),
-                    holder_metadata=MappingProxyType(info["metadata"]),
-                )
-                for key, info in self._locks.items()
-            ]
-
-    async def renew(self, lock_key: str, holder_id: str, ttl_seconds: int) -> bool:
-        async with self._lock:
-            if lock_key not in self._locks:
-                return False
-            if self._locks[lock_key]["holder_id"] != holder_id:
-                return False
-            self._locks[lock_key]["ttl_seconds"] = ttl_seconds
-            return True
-
-
-class InMemoryOrphanScanRegistry:
-    """In-memory orphan scan registry for testing."""
-
-    def __init__(self):
-        self.scans = []
-
-    async def record_scan(
-        self,
-        locks_scanned: int,
-        orphaned_locks_found: int,
-        orphaned_locks_released: int,
-        errors: tuple[str, ...] | None = None,
-    ):
-        self.scans.append(
-            {
-                "locks_scanned": locks_scanned,
-                "orphaned_locks_found": orphaned_locks_found,
-                "orphaned_locks_released": orphaned_locks_released,
-                "errors": errors,
-            }
-        )
 
 
 @pytest.fixture
@@ -182,7 +49,7 @@ def distributed_lock():
 @pytest.fixture
 def pipeline_queue():
     """In-memory pipeline queue."""
-    return InMemoryQueueService()
+    return InMemoryPipelineQueue()
 
 
 @pytest.fixture

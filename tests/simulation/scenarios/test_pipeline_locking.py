@@ -11,11 +11,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from codetoreum.adapters.testing import InMemoryQueueService
+from codetoreum.adapters.testing import (
+    InMemoryDistributedLock,
+    InMemoryPipelineQueue,
+)
 from codetoreum.ports.output.distributed_lock import AcquireStatus
 from codetoreum.ports.output.pipeline_queue import QueueEntry
-
-from tests.integration.application.test_pipeline_orchestrator import InMemoryDistributedLock
 
 
 @pytest.fixture
@@ -37,7 +38,7 @@ def distributed_lock():
 @pytest.fixture
 def pipeline_queue():
     """In-memory pipeline queue."""
-    return InMemoryQueueService()
+    return InMemoryPipelineQueue()
 
 
 @pytest.mark.asyncio

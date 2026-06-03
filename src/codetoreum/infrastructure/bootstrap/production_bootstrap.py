@@ -1576,7 +1576,6 @@ class ProductionApplicationBootstrap:
             return
 
         # Create distributed lock and pipeline queue adapters (Phase 5 decomposition)
-        # These replace the old IPipelineLockService
         redis_client = self.adapters.redis_client
         event_bus = self.infrastructure.event_bus
 
