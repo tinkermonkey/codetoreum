@@ -121,6 +121,7 @@ from codetoreum.infrastructure.resilience.config import OperationMode
 from codetoreum.infrastructure.resilience.factory import ResilienceFactory
 from codetoreum.infrastructure.simulation.bootstrap import SimulationAdapters
 from codetoreum.infrastructure.simulation.simulation_config import AdapterSelectionConfig
+from codetoreum.ports.exceptions import ExternalServiceError, ResourceNotFoundError
 from codetoreum.ports.input.agent_command import IAgentCommandPort
 from codetoreum.ports.input.agent_query import IAgentQueryPort
 from codetoreum.ports.input.audit_query import IAuditQueryPort
@@ -485,6 +486,15 @@ class ProductionApplicationBootstrap:
             self._production_work_item_service = WorkItemService(
                 event_store=self.adapters.event_store,
             )
+
+            # Wire the work item query port into the board adapter so it can translate
+            # GitHub issue numbers to canonical work item UUIDs. The board adapter is the
+            # sole keeper of the issue#↔UUID↔Projects-item-node-id mappings; without this
+            # the board would expose issue numbers as work_item_ids and the execution
+            # pipeline (which loads work items by UUID) could never find them.
+            _raw_board = getattr(self.adapters.board, "_wrapped", self.adapters.board)
+            _raw_board._work_item_service = self._production_work_item_service
+
             logger.info("Phase 4c: Resolving coding-agent (ICodingAgent) adapter...")
             self.adapters.coding_agent = resolver.resolve_coding_agent(
                 prompt_builder=DefaultPromptBuilder(),
@@ -771,7 +781,7 @@ class ProductionApplicationBootstrap:
     # enough to never false-positive a slow in-flight run.
     _ORPHAN_STALE_THRESHOLD_SECONDS: int = 5 * 60
 
-# =========================================================================
+    # =========================================================================
     # Phase 3: Critical Path Enforcement
     # =========================================================================
 
@@ -1386,9 +1396,7 @@ class ProductionApplicationBootstrap:
             for project_config in project_configs:
                 try:
                     # Get all board workflow templates for this project
-                    templates = await self.adapters.workflow_config.list_board_workflow_templates(
-                        project_config.id
-                    )
+                    templates = await self.adapters.workflow_config.list_board_workflow_templates(project_config.id)
 
                     if not templates:
                         logger.debug(f"Project {project_config.id} has no board templates")
@@ -1408,6 +1416,13 @@ class ProductionApplicationBootstrap:
                                 expected_columns=expected_columns,
                                 auto_create_missing=True,
                             )
+
+                            # Establish board context (project_id + board_id) before
+                            # reconciling. Without this the adapter falls back to an empty
+                            # project_id (ProjectBoard rejects it) and its self-started poll
+                            # loop would bind to the wrong key. get_board sets the context and
+                            # registers polling under the correct project.
+                            await self.adapters.board.get_board(project_config.id, board_config.board_id)
 
                             # Reconcile the board
                             result = await self.adapters.board.reconcile_board(
@@ -1429,6 +1444,20 @@ class ProductionApplicationBootstrap:
                                 )
                             else:
                                 logger.debug(f"Board {board_config.board_id} is in sync")
+                        except (ResourceNotFoundError, ExternalServiceError) as e:
+                            # Expected external condition: the board id does not resolve to a
+                            # GitHub Projects node (e.g. a self-monitoring project configured
+                            # with a placeholder board). This is config state, not a code fault,
+                            # so log it concisely without a stack trace to avoid startup noise.
+                            logger.warning(
+                                f"Skipping board reconciliation for project {project_config.id}: "
+                                f"board '{board_config.board_id}' not reconcilable on GitHub ({e})",
+                                extra={
+                                    "error_id": "ERR_BOOTSTRAP_BOARD_RECONCILE_FAILURE",
+                                    "project_id": project_config.id,
+                                    "board_id": board_config.board_id,
+                                },
+                            )
                         except Exception as e:
                             logger.warning(
                                 f"Failed to reconcile board for project {project_config.id}: {e}",
@@ -1603,6 +1632,20 @@ class ProductionApplicationBootstrap:
             "(WorkItemColumnChangedEvent + AgentExecutionCompletedEvent)"
         )
 
+        # Bridge the board adapter's own event emission to the central event bus.
+        # The board adapter emits WorkItemColumnChangedEvent / BoardReconciledEvent to
+        # its internal `on()` handler registry; without this bridge those events never
+        # reach the event bus and BoardColumnEventHandler above is never invoked, so a
+        # column move (manual trigger or poll-detected) silently fails to kick the
+        # pipeline. Simulation bootstrap wires this; production previously did not.
+        from codetoreum.infrastructure.event_bus_wiring import wire_adapters_to_event_bus
+
+        wire_adapters_to_event_bus(
+            event_bus=event_bus,
+            board_service=self.adapters.board,
+        )
+        logger.info("Wired board adapter event emission to central event bus")
+
         # Register PipelineOrchestrator to coordinate lock and queue events
         # PipelineOrchestrator expects IPipelineQueue, but we have IPipelineQueueService
         # Use an adapter to bridge the two interfaces
@@ -1736,7 +1779,8 @@ class ProductionApplicationBootstrap:
 
         Performs cleanup in order:
         - Stop agent scheduler consumer loop
-        - Stop multi-project orchestrator poll loop
+        - Stop adapter-internal board poll loops
+        - Drain in-flight detached event publishes (EventBus.drain)
         - Close event store (closes Elasticsearch client if applicable)
         - Log final event bus statistics
         - Clear adapter references
@@ -1765,6 +1809,41 @@ class ProductionApplicationBootstrap:
                     )
                     # Continue with other cleanup even if scheduler stop fails
 
+            # Stop adapter-internal board poll loops
+            if self.adapters and getattr(self.adapters, "board", None):
+                _raw_board = getattr(self.adapters.board, "_wrapped", self.adapters.board)
+                _board_close = getattr(_raw_board, "close", None)
+                if callable(_board_close):
+                    logger.info("Stopping board adapter poll loops...")
+                    try:
+                        await _board_close()
+                    except Exception as e:
+                        logger.error(
+                            f"Error closing board adapter: {e}",
+                            extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                            exc_info=True,
+                        )
+
+            # Drain in-flight detached event publishes BEFORE closing the stores
+            # the handlers write to. A completion published just before shutdown
+            # runs its handler chain (lock release / board advance / persistence)
+            # via EventBus.publish_detached; draining gives it a bounded window to
+            # finish instead of being killed with the loop. Closes the graceful-
+            # shutdown loss window (hard-crash recovery is ADR-0001 / durable delivery).
+            if self.infrastructure and self.infrastructure.event_bus:
+                _bus = self.infrastructure.event_bus
+                _drain = getattr(_bus, "drain", None)
+                if callable(_drain):
+                    logger.info("Draining in-flight event publishes...")
+                    try:
+                        await _drain()
+                    except Exception as e:
+                        logger.error(
+                            f"Error draining event bus: {e}",
+                            extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                            exc_info=True,
+                        )
+                        # Continue with teardown even if drain fails
 
             # Close event store (closes Elasticsearch client for production deployments)
             if self.adapters and self.adapters.event_store:

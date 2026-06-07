@@ -147,10 +147,19 @@ class TestEventBusWiringInitialization:
         wiring = EventBusWiring(event_bus)
         assert wiring._wired_adapters == set()
 
-    def test_wiring_initializes_empty_pending_tasks(self, event_bus):
-        """Test wiring initializes with empty pending tasks."""
+    def test_publisher_delegates_to_bus_detached_publish(self, event_bus):
+        """Detached publishing + task tracking is owned by the bus, not the wiring.
+
+        The wiring's publisher simply delegates to EventBus.publish_detached;
+        it no longer keeps its own _pending_tasks set.
+        """
         wiring = EventBusWiring(event_bus)
-        assert wiring._pending_tasks == set()
+        assert not hasattr(wiring, "_pending_tasks")
+
+        publisher = wiring._create_event_publisher()
+        sentinel = Mock()
+        publisher(sentinel)
+        event_bus.publish_detached.assert_called_once_with(sentinel)
 
 
 # ====================================================================================
@@ -432,8 +441,8 @@ class TestEventPublishing:
         # Give time for async task to complete
         await asyncio.sleep(0.1)
 
-        # Verify event bus publish was called
-        event_bus.publish.assert_called()
+        # Verify event bus detached-publish was called
+        event_bus.publish_detached.assert_called()
 
     @pytest.mark.asyncio
     async def test_multiple_events_published(self, wiring, board_service, event_bus):
@@ -449,8 +458,8 @@ class TestEventPublishing:
         # Give time for async tasks to complete
         await asyncio.sleep(0.1)
 
-        # Verify event bus publish was called multiple times
-        assert event_bus.publish.call_count >= 2
+        # Verify event bus detached-publish was called multiple times
+        assert event_bus.publish_detached.call_count >= 2
 
     def test_event_publisher_created(self, wiring):
         """Test event publisher is created."""
@@ -478,22 +487,21 @@ class TestErrorHandling:
     """Tests for error handling in event publishing."""
 
     @pytest.mark.asyncio
-    async def test_event_bus_error_logged(self, wiring, board_service, event_bus, caplog):
-        """Test event bus errors are logged."""
-        # Make event bus publish raise an exception
-        event_bus.publish.side_effect = Exception("Event bus error")
+    async def test_publish_errors_owned_by_bus(self, wiring, board_service, event_bus):
+        """Detached-publish error handling/logging is owned by EventBus.
 
+        The wiring delegates to EventBus.publish_detached, which tracks the task
+        and logs any publish-level failure (see test_event_bus.py). The wiring no
+        longer wraps publishing in its own try/except, so it must simply hand the
+        event to publish_detached without raising.
+        """
         wiring.wire_board_service(board_service)
 
-        # Emit an event
         test_event = Mock()
         board_service.emit_event("workitem.column_changed", test_event)
+        await asyncio.sleep(0.01)
 
-        # Give time for async task to complete
-        await asyncio.sleep(0.1)
-
-        # Error should be logged
-        assert "Error publishing event" in caplog.text or "event_bus" in caplog.text.lower()
+        event_bus.publish_detached.assert_called_once_with(test_event)
 
     def test_has_event_method_checks_callable(self, wiring):
         """Test _has_event_method checks if method is callable."""
@@ -612,4 +620,4 @@ class TestEventBusWiringIntegration:
         await asyncio.sleep(0.1)
 
         # Verify events were published
-        assert event_bus.publish.call_count >= 2
+        assert event_bus.publish_detached.call_count >= 2

@@ -97,6 +97,9 @@ class WorkItemResponse(BaseModel):
     assigned_at: datetime | None = Field(None, description="Assignment timestamp")
     current_workflow_id: str | None = Field(None, description="Current workflow ID")
     current_stage: str | None = Field(None, description="Current workflow stage")
+    current_column: str | None = Field(
+        None, description="Current board column (the item's board position; mirrors current_stage)"
+    )
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
     completed_at: datetime | None = Field(None, description="Completion timestamp")

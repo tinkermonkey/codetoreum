@@ -439,3 +439,123 @@ class TestEventBus:
         stats = bus.get_statistics()
         assert stats["handler_errors"] == 1
         assert "Callback failed" in caplog.text
+
+
+class _GatedWildcardHandler(EventHandler):
+    """Wildcard handler that blocks on a gate until released, recording events."""
+
+    def __init__(self, gate: asyncio.Event):
+        self._gate = gate
+        self.handled_events: list[CodetoreumEvent] = []
+
+    async def handle(self, event: CodetoreumEvent) -> None:
+        await self._gate.wait()
+        self.handled_events.append(event)
+
+    def get_event_types(self):
+        return []
+
+
+class _FailingWildcardHandler(EventHandler):
+    """Wildcard handler that always raises."""
+
+    async def handle(self, event: CodetoreumEvent) -> None:
+        raise RuntimeError("boom")
+
+    def get_event_types(self):
+        return []
+
+
+@pytest.mark.asyncio
+class TestDetachedPublishAndDrain:
+    """publish_detached() fire-and-forget primitive + drain() shutdown barrier."""
+
+    async def test_publish_detached_runs_handler_and_counts(self):
+        bus = EventBus()
+        handler = _TestWildcardHandler()
+        bus.register_handler(handler)
+
+        bus.publish_detached(_make_created_event("wi-1"))
+        # Detached: not necessarily handled synchronously. Drain to completion.
+        pending = await bus.drain(timeout=2.0)
+
+        assert pending == 0
+        assert len(handler.handled_events) == 1
+        stats = bus.get_statistics()
+        assert stats["events_published_detached"] == 1
+        assert stats["detached_publishes_inflight"] == 0
+
+    async def test_drain_awaits_inflight_publish(self):
+        bus = EventBus()
+        gate = asyncio.Event()
+        handler = _GatedWildcardHandler(gate)
+        bus.register_handler(handler)
+
+        bus.publish_detached(_make_created_event("wi-2"))
+        # Let the task start and block on the gate.
+        await asyncio.sleep(0)
+        assert handler.handled_events == []  # blocked, not yet handled
+        assert bus.get_statistics()["detached_publishes_inflight"] == 1
+
+        gate.set()  # release the handler
+        pending = await bus.drain(timeout=2.0)
+
+        assert pending == 0
+        assert len(handler.handled_events) == 1
+
+    async def test_drain_with_nothing_inflight_returns_zero(self):
+        bus = EventBus()
+        assert await bus.drain() == 0
+
+    async def test_drain_timeout_reports_pending(self, caplog):
+        bus = EventBus()
+        gate = asyncio.Event()  # never set
+        bus.register_handler(_GatedWildcardHandler(gate))
+
+        task = bus.publish_detached(_make_created_event("wi-3"))
+        await asyncio.sleep(0)
+
+        with caplog.at_level(logging.WARNING):
+            pending = await bus.drain(timeout=0.05)
+
+        assert pending == 1
+        assert "drain timed out" in caplog.text
+        # Release and clean up the lingering task so it doesn't leak.
+        gate.set()
+        await task
+
+    async def test_handler_failure_does_not_trigger_on_error(self, caplog):
+        # publish() swallows handler exceptions (gather return_exceptions=True),
+        # so a failing handler does NOT make the detached publish task fail.
+        # on_error is reserved for publish-LEVEL failures, matching the executor's
+        # original recovery semantics.
+        bus = EventBus(max_retries=0)
+        bus.register_handler(_FailingWildcardHandler())
+        captured: list[BaseException] = []
+
+        bus.publish_detached(_make_created_event("wi-4"), on_error=captured.append)
+        pending = await bus.drain(timeout=2.0)
+
+        assert pending == 0
+        assert captured == []  # handler failure is not a publish failure
+        assert bus.get_statistics()["detached_publish_errors"] == 0
+
+    async def test_on_error_invoked_on_publish_level_failure(self, caplog):
+        # A publish-level failure (the publish coroutine itself raising) DOES
+        # propagate to on_error and is logged + counted by the bus.
+        bus = EventBus()
+        captured: list[BaseException] = []
+
+        async def _boom(_event):
+            raise RuntimeError("publish exploded")
+
+        bus.publish = _boom  # type: ignore[method-assign]
+
+        with caplog.at_level(logging.ERROR):
+            bus.publish_detached(_make_created_event("wi-5"), on_error=captured.append)
+            await bus.drain(timeout=2.0)
+
+        assert len(captured) == 1
+        assert isinstance(captured[0], RuntimeError)
+        assert bus.get_statistics()["detached_publish_errors"] == 1
+        assert "Detached publish failed" in caplog.text

@@ -207,19 +207,23 @@ class ProductionPathFixture:
         )
 
     async def drain_pending(self, executor: ExecutionServiceAgentExecutor, deadline_s: float = 1.0) -> None:
-        """Await every task the executor scheduled in `_pending_tasks`.
+        """Await the in-flight completion publish AND every executor-scheduled task.
 
-        `_call_completion` now schedules the AgentExecutionCompletedEvent publish as
-        a fire-and-forget task so the executor's outer task can complete (and clear
-        its `_executing_work_items` membership) before the BEH handler runs. Tests
-        that assert against the completion bridge need to wait until that task has
-        finished. We snapshot the set, await each task with a deadline, and repeat
-        until no new tasks appear (recovery cascades).
+        `_publish_completion` now hands the AgentExecutionCompletedEvent to
+        `EventBus.publish_detached`, so the publish task is tracked by the BUS
+        (drainable via `event_bus.drain()`), not in `executor._pending_tasks`.
+        The executor's own set still holds the outer run task and any recovery
+        cascade scheduled by the publish's on_error callback. We drain the bus,
+        then the executor's tasks, repeating until neither has work left.
         """
+
+        def _inflight() -> bool:
+            return bool(executor._pending_tasks) or (self.event_bus.get_statistics()["detached_publishes_inflight"] > 0)
+
         loop_count = 0
-        while executor._pending_tasks and loop_count < 20:
-            snapshot = list(executor._pending_tasks)
-            for t in snapshot:
+        while _inflight() and loop_count < 20:
+            await self.event_bus.drain(timeout=deadline_s)
+            for t in list(executor._pending_tasks):
                 try:
                     await asyncio.wait_for(asyncio.shield(t), timeout=deadline_s)
                 except (TimeoutError, asyncio.CancelledError):

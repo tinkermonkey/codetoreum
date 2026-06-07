@@ -144,11 +144,19 @@ class DefaultPromptBuilder(IPromptBuilder):
         capability adds "Run tests after making changes").
         """
         instructions: list[str] = [
-            "Make the changes described above.",
+            "Read the task above and identify the specific problem or request it "
+            "describes. Your objective is to resolve that task — implement the change "
+            "that actually fixes the described problem at its root cause, not a "
+            "superficial workaround or an unrelated change.",
         ]
 
         if workspace_context.allow_code_changes:
             instructions.append("You may edit files in the repository.")
+            instructions.append(
+                "Keep your change focused and minimal: make only the edits the task "
+                "requires. Do not refactor, reformat, or fix unrelated problems you "
+                "happen to notice while working — mention them rather than changing them."
+            )
 
         if workspace_context.should_post_to_discussion():
             instructions.append("You may post comments to the associated discussion thread.")
@@ -157,11 +165,21 @@ class DefaultPromptBuilder(IPromptBuilder):
         # order for deterministic output across runs.
         capability_keys = set(agent.capabilities.keys())
         if "testing" in capability_keys:
-            instructions.append("Run the project's tests after making changes.")
+            instructions.append(
+                "Run the project's tests after making changes and make sure they pass; "
+                "where practical, add or update a test that demonstrates the task is resolved."
+            )
         if "documentation" in capability_keys:
             instructions.append("Update documentation when changing public APIs.")
         if "code_review" in capability_keys:
             instructions.append("Review the changes for correctness before signalling completion.")
+
+        if workspace_context.allow_code_changes:
+            instructions.append(
+                "Before signalling completion, confirm your change genuinely resolves "
+                "the task as described. Only report success when it does; if you could "
+                "not complete it, state clearly what remains and why."
+            )
 
         return tuple(instructions)
 
@@ -180,6 +198,7 @@ class DefaultPromptBuilder(IPromptBuilder):
             "Do not modify .env files or any file containing credentials.",
             "Do not commit binary artefacts (build outputs, compiled assets).",
             "Stay within the mounted workspace directory.",
+            "Do not make changes unrelated to the task described above.",
         ]
 
         if not workspace_context.allow_code_changes:

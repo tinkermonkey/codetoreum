@@ -313,8 +313,10 @@ class TestDefaultPromptBuilderWorkspaceVariations:
 
     @pytest.mark.asyncio
     async def test_baseline_instruction_always_present(self) -> None:
-        """The minimum "make the changes" instruction is always first."""
+        """The first instruction always anchors the agent to resolving the described task."""
         builder = DefaultPromptBuilder()
         prompt = await builder.build(_make_agent(), _make_work_item(), _make_workspace_context())
 
-        assert prompt.instructions[0].lower().startswith("make the changes")
+        first = prompt.instructions[0].lower()
+        assert "task" in first
+        assert "resolve" in first or "fix" in first

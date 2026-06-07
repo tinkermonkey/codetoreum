@@ -284,6 +284,8 @@ class TestExecutionServiceAgentExecutorChainSteps:
         await executor._run_execution("item-1", "architect", "board-1")
 
         # Wait for the AgentExecutionCompletedEvent publish task to finish
+        # The publish is bus-tracked (publish_detached), so drain the bus first.
+        await executor._event_bus.drain(timeout=1.0)
 
         for t in list(executor._pending_tasks):
 
@@ -325,6 +327,8 @@ class TestExecutionServiceAgentExecutorChainSteps:
         await executor._run_execution("item-1", "architect", "board-1")
 
         # Wait for the AgentExecutionCompletedEvent publish task to finish
+        # The publish is bus-tracked (publish_detached), so drain the bus first.
+        await executor._event_bus.drain(timeout=1.0)
 
         for t in list(executor._pending_tasks):
 
@@ -369,6 +373,8 @@ class TestExecutionServiceAgentExecutorChainSteps:
         await executor._run_execution("item-1", "architect", "board-1")
 
         # Wait for the AgentExecutionCompletedEvent publish task to finish
+        # The publish is bus-tracked (publish_detached), so drain the bus first.
+        await executor._event_bus.drain(timeout=1.0)
 
         for t in list(executor._pending_tasks):
 
@@ -416,6 +422,8 @@ class TestExecutionServiceAgentExecutorChainSteps:
         await executor._run_execution("item-1", "architect", "board-1")
 
         # Wait for the AgentExecutionCompletedEvent publish task to finish
+        # The publish is bus-tracked (publish_detached), so drain the bus first.
+        await executor._event_bus.drain(timeout=1.0)
 
         for t in list(executor._pending_tasks):
 
@@ -450,6 +458,8 @@ class TestExecutionServiceAgentExecutorCompletion:
         # Should not raise
         await executor._run_execution("item-1", "architect", "board-1")
         # Wait for the AgentExecutionCompletedEvent publish task to finish
+        # The publish is bus-tracked (publish_detached), so drain the bus first.
+        await executor._event_bus.drain(timeout=1.0)
         for t in list(executor._pending_tasks):
             try:
                 await asyncio.wait_for(asyncio.shield(t), timeout=1.0)

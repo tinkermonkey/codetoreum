@@ -215,6 +215,10 @@ class BoardColumnEventHandler(EventHandler):
             logger.warning(f"Unknown column '{to_column}' in board {board_id}, skipping automation")
             return
 
+        # Mirror the board column onto the work item so reads (REST API, queries)
+        # reflect the item's board position.
+        await self._mirror_board_column(work_item_id, to_column)
+
         # Check if this is a pipeline trigger column (requires lock)
         if column_config.is_pipeline_trigger:
             await self._handle_pipeline_trigger(work_item_id, project_id, board_id, column_config, config)
@@ -825,6 +829,85 @@ class BoardColumnEventHandler(EventHandler):
             success=event.success,
         )
 
+    async def _mirror_board_column(self, work_item_id: str, column: str) -> None:
+        """Mirror a board column onto the work item (workflow-independent) so reads
+        reflect the item's board position. Best-effort: a persistence failure must
+        not block pipeline automation. Uses a guarded lookup so command-port
+        implementations lacking this convenience method are tolerated (mirrors the
+        get_work_item pattern used elsewhere in this handler).
+        """
+        record_position = getattr(self.work_item_service, "record_board_position", None)
+        if record_position is None:
+            return
+        try:
+            await record_position(work_item_id, column)
+        except Exception as e:
+            logger.error(
+                f"Failed to record board column '{column}' onto work item {work_item_id}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_BOARD_EVENT_STAGE_PERSIST_FAILURE", "work_item_id": work_item_id},
+            )
+
+    async def _release_pipeline_lock_after_stage(
+        self,
+        work_item_id: str,
+        board_id: str,
+        reason: str,
+        project_id: str,
+    ) -> None:
+        """Release the pipeline lock once an agent stage completes and no further
+        automated agent work will pick the item up.
+
+        Without this, an item that finishes its agent stage and parks in a
+        non-agent column (e.g. a manual "Testing" gate) holds the board's pipeline
+        lock until a human finally moves it to the exit column, blocking every other
+        item on the board in the meantime. Releasing here frees the board; the lock
+        is re-acquired if the item re-enters a pipeline-trigger column. Mirrors the
+        release in _handle_exit_column (emits PipelineLockReleasedEvent so the
+        orchestrator grants the next queued item).
+
+        project_id must be the same value used to acquire the lock (the lock key is
+        ``{project_id}:{board_id}``). Callers pass the board template's project_id —
+        the run registry is NOT a reliable source here because the workflow run may
+        already be completed by the time this runs.
+        """
+        if not self.distributed_lock:
+            return
+
+        if not project_id and self.run_registry:
+            try:
+                run_meta = await self.run_registry.get_active_run(work_item_id)
+                if run_meta:
+                    project_id = run_meta.project_id
+            except Exception as e:
+                logger.error(
+                    f"Could not resolve project for lock release of {work_item_id}: {e}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_BOARD_EVENT_LOCK_RELEASE_PROJECT_LOOKUP"},
+                )
+
+        lock_key = f"{project_id}:{board_id}"
+        try:
+            result = await self.distributed_lock.release(lock_key=lock_key, holder_id=work_item_id)
+        except Exception as e:
+            logger.error(
+                f"Failed to release pipeline lock for {work_item_id} after stage completion ({reason}): {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_BOARD_EVENT_STAGE_LOCK_RELEASE_FAILURE", "work_item_id": work_item_id},
+            )
+            return
+
+        if result.released:
+            logger.info(f"Released pipeline lock for {work_item_id} after stage completion ({reason})")
+        else:
+            # Already released (e.g. by a concurrent exit-column move) is benign; any other
+            # reason means the board may stay blocked, so surface it.
+            reason_val = result.reason.value if result.reason else "not held"
+            logger.warning(
+                f"Pipeline lock not released for {work_item_id} on '{lock_key}' ({reason}): {reason_val}",
+                extra={"error_id": "ERR_BOARD_EVENT_STAGE_LOCK_NOT_RELEASED", "work_item_id": work_item_id},
+            )
+
     async def handle_agent_completion(
         self,
         work_item_id: str,
@@ -921,16 +1004,49 @@ class BoardColumnEventHandler(EventHandler):
 
             if not current_column_config.auto_progress_on_completion:
                 logger.info(f"Auto-progression disabled for {current_position.column_name}")
+                # Agent work is done and the item will not auto-advance; release the
+                # pipeline lock so the board is not held while the item awaits a manual move.
+                await self._release_pipeline_lock_after_stage(
+                    work_item_id,
+                    board_id,
+                    reason=f"auto-progress disabled at '{current_position.column_name}'",
+                    project_id=config.project_id,
+                )
                 return
 
             next_column_name = config.get_next_column(current_position.column_name)
             if not next_column_name:
                 logger.info(f"No next column for {current_position.column_name}, workflow complete")
+                await self._release_pipeline_lock_after_stage(
+                    work_item_id,
+                    board_id,
+                    reason="workflow complete (no next column)",
+                    project_id=config.project_id,
+                )
                 return
 
             logger.info(f"Auto-progressing {work_item_id} from {current_position.column_name} to {next_column_name}")
 
             await self._advance_workflow_stage(work_item_id, current_position.column_name, next_column_name)
+
+            # The auto-progress board move below uses MovedByType.ORCHESTRATOR (event
+            # suppressed), so handle_column_change does not re-fire for it. Mirror the
+            # new column onto the work item here so reads reflect the advance.
+            await self._mirror_board_column(work_item_id, next_column_name)
+
+            # If the destination column has no agent, the automated pipeline has no further
+            # work for this item right now (it is waiting on a human/external gate such as a
+            # testing or review sign-off). Release the pipeline lock so the next queued item
+            # on this board can run; the lock is re-acquired if the item later re-enters a
+            # pipeline-trigger column.
+            next_column_config = config.get_column_config(next_column_name)
+            if next_column_config is None or not next_column_config.agent_id:
+                await self._release_pipeline_lock_after_stage(
+                    work_item_id,
+                    board_id,
+                    reason=f"advanced to non-agent column '{next_column_name}'",
+                    project_id=config.project_id,
+                )
 
             try:
                 # Set board context so GitHubBoardAdapter._move_item_to_column_locked

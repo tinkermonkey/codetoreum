@@ -138,11 +138,17 @@ class EventBus:
         self._wildcard_handlers: list[EventHandler] = []
         self._wildcard_callbacks: list[Callable] = []
 
+        # In-flight detached (fire-and-forget) publishes, tracked so drain() can
+        # await them on shutdown. See publish_detached()/drain().
+        self._detached_publishes: set[asyncio.Task] = set()
+
         # Statistics
         self._stats = {
             "events_published": 0,
+            "events_published_detached": 0,
             "events_handled": 0,
             "handler_errors": 0,
+            "detached_publish_errors": 0,
             "events_persisted": 0,
             "persistence_errors": 0,
         }
@@ -398,6 +404,114 @@ class EventBus:
         for event in events:
             await self.publish(event)
 
+    def publish_detached(
+        self,
+        event: CodetoreumEvent,
+        *,
+        on_error: Callable[[BaseException], None] | None = None,
+    ) -> "asyncio.Task[None]":
+        """
+        Fire-and-forget publish, tracked by the bus so drain() can await it.
+
+        This is the ONE standardized primitive for detached event publication.
+        Callers that must not block on the handler chain (e.g. the agent
+        executor publishing `AgentExecutionCompletedEvent` -- awaiting it inline
+        would keep the work item "executing" across auto-progression and risk a
+        re-trigger loop) use this instead of a raw `asyncio.create_task(
+        publish(...))`. Centralizing it gives every such publish uniform error
+        logging AND makes the in-flight task drainable on shutdown.
+
+        **Durability boundary (read before relying on this for correctness):**
+        The publish is still at-most-once across a process restart. `drain()`
+        (called from bootstrap teardown) closes the *graceful* shutdown window by
+        awaiting in-flight publishes; it does NOT protect against a hard crash in
+        the ~handler-chain window. Crash recovery requires durable delivery
+        (consumer group / transactional outbox) for the must-not-lose handler
+        class -- see ADR-0001. The advance/side-effect handlers reached this way
+        MUST therefore remain idempotent.
+
+        Args:
+            event: Domain event to publish.
+            on_error: Optional callback invoked (synchronously, from the task's
+                done-callback) with the exception if the publish task fails. The
+                bus already logs the failure at error level; use this only to
+                trigger additional remediation (e.g. a recovery service). Any
+                task the callback schedules is the caller's to track.
+
+        Returns:
+            The created task. Callers generally do not need it (the bus tracks
+            and drains it), but it is returned for tests and advanced callers.
+        """
+        task = asyncio.create_task(self.publish(event))
+        self._detached_publishes.add(task)
+        self._stats["events_published_detached"] += 1
+
+        def _on_done(t: "asyncio.Task[None]") -> None:
+            self._detached_publishes.discard(t)
+            try:
+                exc = t.exception()
+            except asyncio.CancelledError:
+                return
+            if exc is None:
+                return
+            self._stats["detached_publish_errors"] += 1
+            logger.error(
+                f"Detached publish failed for {event.event_type} (id={event.event_id}): {exc}",
+                exc_info=exc,
+                extra={
+                    "event_id": event.event_id,
+                    "event_type": event.event_type,
+                    "error_id": ErrorRegistry.ERR_EVENT_BUS_ERROR,
+                },
+            )
+            if on_error is not None:
+                try:
+                    on_error(exc)
+                except Exception:
+                    logger.error(
+                        f"on_error callback raised while handling detached-publish " f"failure for {event.event_type}",
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_EVENT_BUS_ERROR},
+                    )
+
+        task.add_done_callback(_on_done)
+        return task
+
+    async def drain(self, timeout: float = 10.0) -> int:
+        """
+        Await all in-flight detached publishes so their handler side effects
+        complete before shutdown.
+
+        Closes the graceful-shutdown loss window for `publish_detached()`: a
+        completion publish issued just before teardown gets a chance to finish
+        its handler chain (lock release, board advance, persistence) instead of
+        being killed with the event loop. Call this in bootstrap teardown AFTER
+        stopping the sources of new events (scheduler, board polls) and BEFORE
+        closing the event/persistence stores the handlers write to.
+
+        Args:
+            timeout: Max seconds to wait for in-flight publishes to finish.
+
+        Returns:
+            Number of detached publishes still pending after the timeout
+            (0 == fully drained). A non-zero return is logged at WARNING because
+            those handler side effects may be lost.
+        """
+        pending = [t for t in self._detached_publishes if not t.done()]
+        if not pending:
+            return 0
+        logger.info(f"Draining {len(pending)} in-flight detached event publish(es) (timeout={timeout:.1f}s)...")
+        _done, still_pending = await asyncio.wait(pending, timeout=timeout)
+        if still_pending:
+            logger.warning(
+                f"Event bus drain timed out: {len(still_pending)} detached publish(es) did not "
+                f"complete within {timeout:.1f}s; their handler side effects may be lost.",
+                extra={"error_id": ErrorRegistry.ERR_EVENT_BUS_ERROR},
+            )
+            return len(still_pending)
+        logger.info(f"Event bus drain complete: {len(pending)} detached publish(es) finished.")
+        return 0
+
     def _get_handlers_for_event(self, event: CodetoreumEvent) -> list[EventHandler]:
         """Get all handlers for a given event."""
         handlers = []
@@ -624,14 +738,17 @@ class EventBus:
             "wildcard_handlers": len(self._wildcard_handlers),
             "wildcard_callbacks": len(self._wildcard_callbacks),
             "redis_enabled": bool(self.redis_client),
+            "detached_publishes_inflight": sum(1 for t in self._detached_publishes if not t.done()),
         }
 
     def reset_statistics(self) -> None:
         """Reset statistics (for testing)."""
         self._stats = {
             "events_published": 0,
+            "events_published_detached": 0,
             "events_handled": 0,
             "handler_errors": 0,
+            "detached_publish_errors": 0,
             "events_persisted": 0,
             "persistence_errors": 0,
         }

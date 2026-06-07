@@ -293,10 +293,10 @@ class TestPollingMechanism:
         mock_graphql_client.execute.side_effect = [response1, response2]
 
         # Manually call state detection
-        board1 = board_adapter._parse_board_response("proj-123", "board-456", response1["node"])
+        board1 = await board_adapter._parse_board_response("proj-123", "board-456", response1["node"])
         state1 = board_adapter._extract_item_positions(board1)
 
-        board2 = board_adapter._parse_board_response("proj-123", "board-456", response2["node"])
+        board2 = await board_adapter._parse_board_response("proj-123", "board-456", response2["node"])
         state2 = board_adapter._extract_item_positions(board2)
 
         board_adapter._last_known_state["proj-123:board-456"] = state1

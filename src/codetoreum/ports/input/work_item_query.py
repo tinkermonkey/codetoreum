@@ -150,3 +150,23 @@ class IWorkItemQueryPort(ABC):
 
         Returns: Count of matching work items
         """
+
+    async def find_by_external_id(self, external_id: str) -> WorkItem | None:
+        """
+        Resolves the work item carrying the given external system ID (e.g. a
+        GitHub issue number) to its canonical Codetoreum work item.
+
+        Adapters that speak external identifiers (the GitHub board adapter maps a
+        Projects v2 item to its issue number) use this to translate back to the
+        domain aggregate ID before emitting domain events. Default implementation
+        delegates to list_work_items; subclasses may override with an indexed lookup.
+
+        Args: external_id: External system identifier (e.g. GitHub issue number)
+
+        Returns: The matching work item, or None if no work item carries that external_id
+        """
+        result = await self.list_work_items(
+            WorkItemFilters(external_id=external_id),
+            PaginationParams(offset=0, limit=1),
+        )
+        return result.work_items[0] if result.work_items else None

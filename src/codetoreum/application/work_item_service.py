@@ -242,6 +242,17 @@ class WorkItemService(IWorkItemCommandPort, IWorkItemQueryPort):
 
         return work_item
 
+    async def record_board_position(self, work_item_id: str, column: str) -> WorkItem:
+        """Persist the work item's current board column (workflow-independent).
+
+        Used by the board event handler to mirror the board's authoritative position
+        onto the work item so reads reflect it even before a workflow is attached.
+        """
+        work_item = await self._load_work_item(work_item_id)
+        work_item.record_board_position(column)
+        await self._save_work_item(work_item)
+        return work_item
+
     # ========================================================================
     # Query Port Implementation
     # ========================================================================

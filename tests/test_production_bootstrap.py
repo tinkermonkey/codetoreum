@@ -311,9 +311,7 @@ async def test_event_handler_types_declared() -> None:
 
     # Verify the total number of registered handlers matches our expectations
     total_registered_handlers = sum(len(handlers) for handlers in event_bus._handlers.values())
-    assert (
-        total_registered_handlers > 0
-    ), "Event bus should have registered handlers for the declared event types"
+    assert total_registered_handlers > 0, "Event bus should have registered handlers for the declared event types"
 
 
 @pytest.mark.asyncio
@@ -407,15 +405,21 @@ async def test_validate_event_emitter_passes_with_non_capturing_adapter() -> Non
 
 @pytest.mark.asyncio
 async def test_graceful_shutdown_stops_background_loops() -> None:
-    """Verify that teardown() stops all background loops cleanly.
+    """Verify that teardown() stops the real background work cleanly.
 
-    This test verifies:
-    1. teardown() calls stop() on agent_scheduler
-    2. teardown() calls stop() on multi_project_orchestrator
-    3. teardown() is safe to call and properly cleans up state
+    The application is fully event-driven (INV-13): there is NO application-layer
+    poll loop. The background work teardown must wind down is:
+    1. the agent scheduler consumer loop      -> agent_scheduler.stop()
+    2. the adapter-internal board poll loops   -> board adapter close()
+    3. in-flight detached event publishes      -> event_bus.drain()  (graceful-
+       shutdown window for publish_detached; see event-bus.md §6 / ADR-0001)
 
-    This is a unit test that mocks the services to avoid requiring
-    full production adapter credentials.
+    MultiProjectOrchestrator is an admin-query-only service with no loop (INV-13),
+    so teardown must NOT try to stop it. This test guards that design: an MPO with
+    a stop() present must be left untouched.
+
+    This is a unit test that mocks the services/adapters to avoid requiring full
+    production adapter credentials or live infrastructure.
     """
 
     class MockAgentScheduler:
@@ -428,13 +432,35 @@ async def test_graceful_shutdown_stops_background_loops() -> None:
             self.stop_called = True
 
     class MockMultiProjectOrchestrator:
-        """Mock multi-project orchestrator with stop tracking."""
+        """Admin-query-only service (INV-13). Present to guard that teardown does
+        NOT stop it -- there is no loop to stop."""
 
         def __init__(self):
             self.stop_called = False
 
         async def stop(self):
             self.stop_called = True
+
+    class MockBoardAdapter:
+        """Mock board adapter; close() stops its internal poll loops."""
+
+        def __init__(self):
+            self.close_called = False
+
+        async def close(self):
+            self.close_called = True
+
+    class MockEventBus:
+        """Mock event bus; drain() awaits in-flight detached publishes."""
+
+        def __init__(self):
+            self.drain_called = False
+
+        async def drain(self, timeout: float = 10.0):
+            self.drain_called = True
+
+        def get_statistics(self):
+            return {}
 
     class MockServices:
         """Mock services container."""
@@ -443,24 +469,42 @@ async def test_graceful_shutdown_stops_background_loops() -> None:
             self.agent_scheduler = MockAgentScheduler()
             self.multi_project_orchestrator = MockMultiProjectOrchestrator()
 
+    class MockAdapters:
+        """Mock adapters container (board + no event store)."""
+
+        def __init__(self, board):
+            self.board = board
+            self.event_store = None
+
+    class MockInfrastructure:
+        """Mock infrastructure container (event bus only)."""
+
+        def __init__(self, event_bus):
+            self.event_bus = event_bus
+
     bootstrap = ProductionApplicationBootstrap()
 
     # Manually set up minimal state for teardown testing
     bootstrap._is_setup = True
     mock_services = MockServices()
+    mock_board = MockBoardAdapter()
+    mock_bus = MockEventBus()
     bootstrap.services = mock_services
     bootstrap.ports = None
-    bootstrap.infrastructure = None
-    bootstrap.adapters = None
+    bootstrap.infrastructure = MockInfrastructure(mock_bus)
+    bootstrap.adapters = MockAdapters(mock_board)
 
-    # Call teardown and verify both services were stopped
     await bootstrap.teardown()
 
-    # Verify that both services' stop() methods were called
+    # The real background work is wound down...
     assert mock_services.agent_scheduler.stop_called, "agent_scheduler.stop() should have been called"
+    assert mock_board.close_called, "board adapter close() should stop its internal poll loops"
+    assert mock_bus.drain_called, "event_bus.drain() should drain in-flight detached publishes"
+
+    # ...but MPO has no loop and must NOT be stopped (INV-13).
     assert (
-        mock_services.multi_project_orchestrator.stop_called
-    ), "multi_project_orchestrator.stop() should have been called"
+        not mock_services.multi_project_orchestrator.stop_called
+    ), "MPO is admin-query only (INV-13); teardown must not stop it"
 
     # Verify state was properly cleaned up
     assert bootstrap.services is None, "Services should be cleared after teardown"

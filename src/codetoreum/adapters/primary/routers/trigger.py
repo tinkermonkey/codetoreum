@@ -94,11 +94,18 @@ def create_trigger_router(
             # Set board context for the board service (some adapters require it)
             await board_service.get_board(request.project_id, request.board_id)
 
-            # Move the item synchronously
+            # Move the item synchronously.
+            #
+            # Use HUMAN, not ORCHESTRATOR: the board adapter suppresses the
+            # WorkItemColumnChangedEvent for ORCHESTRATOR-initiated moves (to avoid
+            # the orchestrator re-triggering its own internal progression). A manual
+            # trigger is an external command equivalent to a human dragging the card,
+            # so it MUST emit the event — that event is what BoardColumnEventHandler
+            # consumes to kick the agent pipeline.
             result: ColumnMovementResult = await board_service.move_item_to_column(
                 work_item_id=request.work_item_id,
                 target_column=request.to_column,
-                moved_by=MovedByType.ORCHESTRATOR,
+                moved_by=MovedByType.HUMAN,
             )
 
             return TriggerColumnChangeResponse(

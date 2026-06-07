@@ -495,6 +495,32 @@ class WorkItem:
         )
         self._add_event(event)
 
+    def record_board_position(self, column: str) -> None:
+        """Mirror the work item's current board column onto the aggregate.
+
+        Unlike :meth:`update_stage` — which models a transition inside an attached
+        workflow and therefore requires one — this records the board's authoritative
+        position even when no workflow is attached yet (e.g. an item sitting in
+        Backlog). It reuses WorkItemStageUpdatedEvent: ``current_stage`` carries the
+        column name so reads (REST API ``current_column``/``current_stage``) reflect
+        the item's board position. No-op when the column is unchanged.
+        """
+        if self.current_stage == column:
+            return
+        old_stage = self.current_stage
+        self.current_stage = column
+        self.updated_at = datetime.now(UTC)
+        self._version += 1
+        self._add_event(
+            WorkItemStageUpdatedEvent(
+                type="workitem.stage_updated",
+                timestamp=now_iso(),
+                source="domain",
+                work_item_id=self.id,
+                old_stage=old_stage or "",
+                new_stage=column,
+            )
+        )
 
     # Metadata
     def update_labels(self, labels: list[str]) -> None:

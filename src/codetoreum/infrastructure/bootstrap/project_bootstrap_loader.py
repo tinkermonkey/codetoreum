@@ -33,6 +33,41 @@ def _column_type(type_str: str) -> ColumnType:
     return ColumnType.AUTOMATED if type_str == "automated" else ColumnType.MANUAL
 
 
+async def _prune_stale_board_templates(workflow_config, project_id: str, keep_board_id: str) -> None:
+    """Delete board workflow templates for a project other than the one just loaded.
+
+    Re-registering a project (e.g. with a new GitHub Projects board id) leaves the
+    previous template behind. Those orphans are reconciled against GitHub on every
+    startup and fail noisily. Keeping exactly the registered board makes the loaded
+    config the single source of truth and keeps the template store in sync.
+    """
+    try:
+        existing = await workflow_config.list_board_workflow_templates(project_id)
+    except Exception as e:
+        logger.warning(
+            f"Could not list board templates for project '{project_id}' to prune stale ones: {e}",
+            exc_info=True,
+            extra={"error_id": "ERR_BOOTSTRAP_BOARD_TEMPLATE_PRUNE_FAILURE", "project_id": project_id},
+        )
+        return
+
+    for tmpl in existing:
+        if tmpl.board_id == keep_board_id:
+            continue
+        try:
+            await workflow_config.delete_board_workflow_template(tmpl.board_id)
+            logger.info(
+                f"Pruned stale board template '{tmpl.board_id}' for project '{project_id}' "
+                f"(kept '{keep_board_id}')",
+            )
+        except Exception as e:
+            logger.warning(
+                f"Failed to prune stale board template '{tmpl.board_id}' for project '{project_id}': {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_BOOTSTRAP_BOARD_TEMPLATE_PRUNE_FAILURE", "project_id": project_id},
+            )
+
+
 def _build_board_template(board_config: dict, project_id: str) -> BoardWorkflowTemplate:
     board_id = board_config["id"]
     columns = tuple(
@@ -236,6 +271,13 @@ async def load_bootstrap_dir(
                     f"Loaded board template '{template.board_id}' for project '{project_id}' "
                     f"({len(template.columns)} columns)",
                 )
+
+                # Prune stale templates: a project's bootstrap config defines exactly
+                # one board. Any other template still registered for this project is
+                # debris from a previous registration (e.g. an old placeholder board_id)
+                # and would otherwise be reconciled against GitHub every startup, failing
+                # noisily. Delete them so the registered config is the single source of truth.
+                await _prune_stale_board_templates(workflow_config, project_id, keep_board_id=template.board_id)
             except Exception as e:
                 logger.error(
                     f"Failed to load board template from {json_path.name}: {e}",

@@ -32,6 +32,7 @@ from codetoreum.ports.exceptions import (
     ResourceNotFoundError,
     ValidationError,
 )
+from codetoreum.ports.input.work_item_query import IWorkItemQueryPort
 from codetoreum.ports.output.board_service import (
     BoardColumn,
     BoardConfig,
@@ -65,6 +66,7 @@ class GitHubBoardAdapter(IBoardService):
         webhook_enabled: bool = True,
         event_emitter: "IEventEmitter | None" = None,
         failed_event_store: IFailedEventStore | None = None,
+        work_item_service: "IWorkItemQueryPort | None" = None,
     ):
         """Initialize GitHub board adapter.
 
@@ -74,12 +76,17 @@ class GitHubBoardAdapter(IBoardService):
             webhook_enabled: If False, use polling fallback
             event_emitter: Optional event emitter (unused, for adapter factory compatibility)
             failed_event_store: Failed event store for routing failures to DLQ (INV-20)
+            work_item_service: Query port used to translate GitHub issue numbers to
+                canonical Codetoreum work item UUIDs (the identifier that flows through
+                domain events and the execution pipeline). When absent, the adapter
+                falls back to issue numbers and logs a warning.
         """
         self._ticket_adapter = ticket_adapter
         self._graphql = graphql_client
         self._webhook_enabled = webhook_enabled
         self._event_emitter = event_emitter
         self.failed_event_store = failed_event_store
+        self._work_item_service = work_item_service
 
         # Monitoring state
         self._monitoring: dict[str, MonitoringStatus] = {}
@@ -96,6 +103,11 @@ class GitHubBoardAdapter(IBoardService):
         # Cache for GitHub Projects v2 field and option IDs (adapter-internal, not in port)
         self._status_field_id_cache: dict[str, str] = {}
         self._option_id_cache: dict[str, dict[str, str]] = {}
+
+        # Maps canonical work item UUID -> GitHub Projects v2 item node id (PVTI_...).
+        # The node id is required as the `itemId` argument of updateProjectV2ItemFieldValue
+        # but must never leak above the adapter boundary. Populated in _parse_board_response.
+        self._pvti_node_id_by_uuid: dict[str, str] = {}
 
         # Current context for event emission
         self._current_project_id: str | None = None
@@ -155,6 +167,47 @@ class GitHubBoardAdapter(IBoardService):
                     # Continue processing other handlers - don't re-raise
 
     # IMonitoredService implementation
+
+    def _ensure_polling(self, project_id: str, board_id: str) -> None:
+        """Start the adapter-internal poll loop for a board if not already running.
+
+        Idempotent and safe to call on every get_board(). Polling is how this adapter
+        notices changes made directly on the external board (e.g. a human dragging a
+        card on GitHub) and turns them into domain events. It is intentionally hidden
+        from callers: the application never starts, stops, or reasons about polling.
+        """
+        key = f"{project_id}:{board_id}"
+        existing = self._polling_tasks.get(key)
+        if existing is not None and not existing.done():
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # No running loop (e.g. a construction-time call). Polling will be started
+            # by the next get_board() that executes inside the event loop.
+            return
+        self._polling_intervals.setdefault(key, 60.0)
+        self._activity_counters.setdefault(key, {"changes_detected": 0, "no_changes": 0})
+        self._polling_tasks[key] = loop.create_task(self._poll_board_changes(project_id, board_id))
+        logger.info(
+            f"Started adapter-internal board polling for {key} "
+            "(autonomous change detection; not an application concern)"
+        )
+
+    async def close(self) -> None:
+        """Cancel all adapter-internal poll loops. Invoked on adapter/server shutdown."""
+        for task in list(self._polling_tasks.values()):
+            task.cancel()
+        for task in list(self._polling_tasks.values()):
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            except (
+                Exception
+            ) as e:  # justification: a poll task may surface any error while unwinding; log and continue cancelling the rest
+                logger.warning(f"Board poll task raised during shutdown: {e}", exc_info=True)
+        self._polling_tasks.clear()
 
     async def start_monitoring(self, project_id: str, config: MonitoringConfig) -> None:
         """Start monitoring board for changes.
@@ -298,7 +351,13 @@ class GitHubBoardAdapter(IBoardService):
             self._current_project_id = project_id
             self._current_board_id = board_id
 
-            return self._parse_board_response(project_id, board_id, board_node)
+            # Adapter-internal change detection: make sure a background poll loop is
+            # running for this board so external column changes are noticed and emitted
+            # as events. Polling is an implementation detail of this adapter — callers
+            # never start, stop, or even know about it.
+            self._ensure_polling(project_id, board_id)
+
+            return await self._parse_board_response(project_id, board_id, board_node)
         except ExternalServiceError:
             raise
         except (
@@ -461,18 +520,34 @@ class GitHubBoardAdapter(IBoardService):
             msg = f"Cannot find field mapping for column '{target_column}'"
             raise ValidationError(msg)
 
+        # The GraphQL mutation addresses the item by its GitHub Projects v2 node id
+        # (PVTI_...), not the canonical work item UUID. Resolve it from the cache
+        # populated when the board was fetched.
+        pvti_node_id = self._pvti_node_id_by_uuid.get(work_item_id)
+        if not pvti_node_id:
+            msg = f"No GitHub Projects item node id cached for work item '{work_item_id}'"
+            raise ResourceNotFoundError(msg, work_item_id)
+
         try:
             await self._graphql.execute(
                 mutation,
                 {
                     "projectId": self._current_board_id,
-                    "itemId": work_item_id,
+                    "itemId": pvti_node_id,
                     "fieldId": status_field_id,
                     "optionId": option_id,
                 },
             )
         except ExternalServiceError:
             raise
+
+        # Keep the poll baseline in sync with this adapter-initiated move so the
+        # background poll loop does not re-report it as an external change (which
+        # would otherwise re-emit a WorkItemColumnChangedEvent and double-trigger).
+        poll_key = f"{self._current_project_id}:{self._current_board_id}"
+        known = self._last_known_state.get(poll_key)
+        if known is not None:
+            known[work_item_id] = target_column
 
         # Create timestamp for result
         timestamp = datetime.now(UTC).isoformat()
@@ -608,9 +683,7 @@ class GitHubBoardAdapter(IBoardService):
         """
         return await self.reconcile_board_structure_to_config(board_id, config)
 
-    async def reconcile_board_structure_to_config(
-        self, board_id: str, config: BoardConfig
-    ) -> ReconciliationResult:
+    async def reconcile_board_structure_to_config(self, board_id: str, config: BoardConfig) -> ReconciliationResult:
         """Reconcile board structure to match configuration via Projects v2 API.
 
         Creates missing columns, renames mismatched columns when unambiguous,
@@ -679,9 +752,7 @@ class GitHubBoardAdapter(IBoardService):
         # Step 3: Check for unsafe drift
         # Unsafe drift: multiple removals with items, but only one addition
         # (can't determine which removal maps to which addition)
-        remaining_removals = {
-            name for name in columns_to_remove if current_columns[name].work_item_ids
-        }
+        remaining_removals = {name for name in columns_to_remove if current_columns[name].work_item_ids}
 
         if len(remaining_removals) > 1 and len(columns_to_add) < len(remaining_removals):
             drift_desc = f"Multiple columns with items being removed ({remaining_removals}) but insufficient additions ({columns_to_add})"
@@ -934,7 +1005,43 @@ class GitHubBoardAdapter(IBoardService):
 
         return positions
 
-    def _parse_board_response(
+    async def _resolve_work_item_id(self, issue_number: str) -> str:
+        """Translate a GitHub issue number to its canonical Codetoreum work item UUID.
+
+        Uses the injected work item query port. When no work item service is wired,
+        or no work item carries this external_id yet (e.g. an item present on the
+        GitHub board that was never imported into Codetoreum), falls back to the
+        issue number so the board still parses — but logs a warning because that
+        item cannot be executed until a work item is registered for it.
+
+        Args:
+            issue_number: GitHub issue number as a string
+
+        Returns:
+            The canonical work item UUID, or the issue number as a fallback.
+        """
+        if self._work_item_service is None:
+            logger.warning(
+                "No work item service wired into GitHubBoardAdapter; falling back to "
+                "issue number '%s' as work_item_id (item will not be executable)",
+                issue_number,
+                extra={"error_id": ErrorRegistry.ERR_BOARD_ERROR, "issue_number": issue_number},
+            )
+            return issue_number
+
+        work_item = await self._work_item_service.find_by_external_id(issue_number)
+        if work_item is None:
+            logger.warning(
+                "No Codetoreum work item registered for GitHub issue #%s; falling back to "
+                "issue number as work_item_id (item will not be executable until imported)",
+                issue_number,
+                extra={"error_id": ErrorRegistry.ERR_BOARD_ERROR, "issue_number": issue_number},
+            )
+            return issue_number
+
+        return work_item.id
+
+    async def _parse_board_response(
         self,
         project_id: str,
         board_id: str,
@@ -943,7 +1050,12 @@ class GitHubBoardAdapter(IBoardService):
         """Parse GraphQL board response into ProjectBoard.
 
         Extracts and caches the Status field ID and option IDs to avoid
-        additional GraphQL calls during column moves.
+        additional GraphQL calls during column moves. Translates each GitHub
+        Projects v2 item (identified externally by its issue number and its
+        PVTI_ node id) into the canonical Codetoreum work item UUID so that the
+        identifier exposed in BoardColumn.work_item_ids — and therefore every
+        downstream domain event, lock, and execution — is the domain aggregate ID.
+        The PVTI_ node id is cached for the move mutation and never leaks upward.
 
         Args:
             project_id: Project ID
@@ -991,12 +1103,21 @@ class GitHubBoardAdapter(IBoardService):
             columns_by_name: dict[str, list[str]] = {}
 
             for item in items_data:
-                # Extract issue number from content
+                # Extract issue number and the Projects v2 item node id from content.
                 content = item.get("content", {})
                 issue_number = content.get("number")
+                pvti_node_id = item.get("id")
 
                 if not issue_number:
                     continue
+
+                # Translate the external issue number to the canonical work item UUID.
+                # This is the identifier that must flow through domain events and the
+                # execution pipeline; the issue number and PVTI node id stay inside
+                # this adapter.
+                work_item_id = await self._resolve_work_item_id(str(issue_number))
+                if pvti_node_id:
+                    self._pvti_node_id_by_uuid[work_item_id] = pvti_node_id
 
                 # Find which column this item is in
                 field_values = item.get("fieldValues", {}).get("nodes", [])
@@ -1008,8 +1129,7 @@ class GitHubBoardAdapter(IBoardService):
                         if column_name:
                             if column_name not in columns_by_name:
                                 columns_by_name[column_name] = []
-                            # Use issue number as work_item_id
-                            columns_by_name[column_name].append(str(issue_number))
+                            columns_by_name[column_name].append(work_item_id)
 
             # Create BoardColumn objects ordered by position
             columns: list[BoardColumn] = []

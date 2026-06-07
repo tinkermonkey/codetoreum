@@ -12,12 +12,10 @@ The wiring connects:
 All adapters emit their events to the event bus via handlers registered here.
 """
 
-import asyncio
 import logging
 from collections.abc import Callable
 from typing import Any
 
-from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.event_bus_protocols import (
     IBoardService,
@@ -41,7 +39,6 @@ class EventBusWiring:
         """
         self._event_bus = event_bus
         self._wired_adapters = set()
-        self._pending_tasks: set = set()  # Track background tasks for cleanup
 
     def wire_board_service(self, board_service: IBoardService) -> None:
         """
@@ -203,29 +200,15 @@ class EventBusWiring:
         """
 
         def publisher(event) -> None:
-            """Publish event to the event bus."""
-            # Schedule async publish as a background task with error handling
-            task = asyncio.create_task(self._event_bus.publish(event))
+            """Publish event to the event bus (detached + bus-tracked).
 
-            # Track the task and remove it when done
-            self._pending_tasks.add(task)
-            task.add_done_callback(lambda t: self._handle_task_done(t))
+            Delegates to `EventBus.publish_detached`, the one standardized
+            fire-and-forget primitive: the bus tracks the task (so teardown's
+            `drain()` can await it) and owns the error logging.
+            """
+            self._event_bus.publish_detached(event)
 
         return publisher
-
-    def _handle_task_done(self, task) -> None:
-        """Handle completion of a background task and log any errors."""
-        self._pending_tasks.discard(task)
-        try:
-            task.result()
-        except Exception as e:
-            logger.error(
-                f"Error publishing event in background task: {e}",
-                exc_info=True,
-                extra={"task_id": id(task), "error_id": ErrorRegistry.ERR_EVENT_BUS_ERROR},
-            )
-        # TODO: Track metric for background task failures
-        # TODO: Consider emitting system event for monitoring
 
 
 def wire_adapters_to_event_bus(

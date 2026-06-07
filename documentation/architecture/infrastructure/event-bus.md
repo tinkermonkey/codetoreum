@@ -357,6 +357,55 @@ Each Stream Entry:
 - Supports debugging: "what happened between T1 and T2?"
 - Audit trail for compliance: "show all WorkItem events for issue #42"
 
+### 6. Completion-Event Delivery Semantics (durability boundary)
+
+> **Read this before validating, monitoring, or alerting on agent completion.**
+> Several engineers have independently "re-discovered" the timing described here
+> and mistaken it for a regression. It is by design.
+
+**Container exit != stage complete.** When a coding-agent container exits, the
+orchestration side effects (release the pipeline lock, mirror the board column,
+advance the workflow stage) do **not** happen synchronously. The executor
+(`ExecutionServiceAgentExecutor._publish_completion`) emits
+`AgentExecutionCompletedEvent` via `asyncio.create_task(...)` and **deliberately
+does not await it** -- awaiting would keep the work item in
+`_executing_work_items` across the handler chain and let a deferred bridge task
+re-acquire the lock and re-trigger the agent (an auto-progression loop). The
+handler chain then does network-bound work (GitHub GraphQL board move + ES
+round-trips), so the lock-release / column-advance lands **~3-4s after the
+container exits**.
+
+**Consumer contract -- synchronize on the event, never on container exit.**
+Any test, harness, monitor, or reconciliation check that samples lock state or
+`current_column` at container-exit time will read stale state for that window
+and will *look like* a failure that isn't one. Wait for one of:
+- the `AgentExecutionCompletedEvent` to be handled, or
+- the `Released pipeline lock for <id> after stage completion ...` log line.
+
+An alert on "lock held + container gone" must include a grace period longer than
+this window or it will fire spuriously on every successful run.
+
+**Durability boundary (at-most-once across a restart).** The publish is
+fire-and-forget, tracked only in the executor's in-memory `_pending_tasks` set.
+`publish()` persists the event to a Redis Stream (`xadd`) *before* dispatching
+handlers, but that stream is an **audit/replay trail, not an acked work queue**:
+it has no consumer group, no pending-entries-list, and **no reader replays
+unprocessed completion events back through the orchestration handlers on
+restart**. Consequences:
+- If the process crashes/redeploys during the ~3-4s window, the lock is never
+  released and the board never advances -- the work item is stranded and the
+  board stays serialized. The `recovery_service` done-callback covers the
+  publish *task* failing in-process; it cannot cover process death.
+- Graceful shutdown must **drain `_pending_tasks`** or even a clean redeploy in
+  the window loses the in-flight completion.
+- Because completion is async and detached, the advance path **must remain
+  idempotent** -- any future replay/recovery mechanism will re-fire it.
+
+`EventBus.publish_detached()` + `drain()` (called from `ProductionApplication
+Bootstrap.teardown()`) close the **graceful-shutdown** window. The **crash**
+window is closed by durable delivery for the must-not-lose event class — see
+[ADR-0001](../decisions/0001-durable-event-delivery.md).
+
 ## Source
 
 **File Path**: `src/codetoreum/infrastructure/event_bus.py`

@@ -174,6 +174,7 @@ class ElasticsearchEventStore(IEventStore):
             "events_persisted_async": 0,
             "events_dropped_overflow": 0,
             "events_dropped_failure": 0,
+            "events_deferred_dlq": 0,
             "batches_persisted_async": 0,
             "retries": 0,
         }
@@ -454,21 +455,11 @@ class ElasticsearchEventStore(IEventStore):
                             try:
                                 self._async_queue.put_nowait(_PendingAppend(stream_id, events, attempt=attempt + 1))
                             except asyncio.QueueFull:
-                                self._async_stats["events_dropped_failure"] += len(events)
-                                logger.critical(
-                                    f"Dropping {len(events)} events for stream {stream_id}: "
-                                    "queue full on retry re-enqueue",
-                                    extra={"error_id": "ERR_EVENT_STORE_ASYNC_RETRY_DROP"},
-                                )
-                                await self._invoke_drop_callback(stream_id, events, e)
+                                await self._spool_or_drop(stream_id, events, e, reason="queue full on retry re-enqueue")
                         else:
-                            self._async_stats["events_dropped_failure"] += len(events)
-                            logger.critical(
-                                f"Dropping {len(events)} events for stream {stream_id} "
-                                f"after {attempt + 1} attempts",
-                                extra={"error_id": "ERR_EVENT_STORE_ASYNC_RETRY_EXHAUSTED"},
+                            await self._spool_or_drop(
+                                stream_id, events, e, reason=f"exhausted {attempt + 1} append attempts"
                             )
-                            await self._invoke_drop_callback(stream_id, events, e)
                     finally:
                         # task_done() once per get() — we got one per pending item.
                         pass
@@ -507,12 +498,18 @@ class ElasticsearchEventStore(IEventStore):
         stream_id: str,
         events: list,
         error: Exception,
-    ) -> None:
-        """Best-effort call to the on_drop_callback. Never propagates."""
+    ) -> bool:
+        """Best-effort call to the on_drop_callback. Never propagates.
+
+        Returns True when a callback was present and handled the events without
+        raising (i.e. they were deferred to the DLQ for retry, not lost); False
+        when no callback is wired or the callback itself failed (true data loss).
+        """
         if self._on_drop_callback is None:
-            return
+            return False
         try:
             await self._on_drop_callback(stream_id, events, error)
+            return True
         except Exception:
             logger.error(
                 "on_drop_callback failed while spooling %d dropped events for stream %s",
@@ -520,6 +517,44 @@ class ElasticsearchEventStore(IEventStore):
                 stream_id,
                 exc_info=True,
                 extra={"error_id": "ERR_EVENT_STORE_DROP_CALLBACK_FAILED"},
+            )
+            return False
+
+    async def _spool_or_drop(
+        self,
+        stream_id: str,
+        events: list,
+        error: Exception,
+        reason: str,
+    ) -> None:
+        """Route events that exhausted ES-append retries to the DLQ, or record a
+        true drop when no DLQ is wired.
+
+        When an on_drop_callback (DLQ) is wired the events are deferred for retry,
+        not lost — that is logged at WARNING, not CRITICAL, so it does not read as
+        permanent data loss. Only when nothing can capture the events (no callback,
+        or the callback failed) is it a CRITICAL drop.
+        """
+        deferred = await self._invoke_drop_callback(stream_id, events, error)
+        if deferred:
+            self._async_stats["events_deferred_dlq"] += len(events)
+            logger.warning(
+                "Deferred %d events for stream %s to the DLQ (%s): %s",
+                len(events),
+                stream_id,
+                reason,
+                error,
+                extra={"error_id": "ERR_EVENT_STORE_ASYNC_DEFERRED_DLQ"},
+            )
+        else:
+            self._async_stats["events_dropped_failure"] += len(events)
+            logger.critical(
+                "Dropping %d events for stream %s (%s) — no DLQ captured them: %s",
+                len(events),
+                stream_id,
+                reason,
+                error,
+                extra={"error_id": "ERR_EVENT_STORE_ASYNC_RETRY_EXHAUSTED"},
             )
 
     async def get_events(

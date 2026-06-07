@@ -650,6 +650,18 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
         BEH handler runs, matching the timing of the original
         `set_completion_handler` callback path.
 
+        **Consumer contract & durability boundary**: This publish is detached and
+        NOT awaited, so the lock-release / column-advance side effects land ~3-4s
+        after the container exits (network-bound handler chain). Container exit is
+        therefore NOT a valid synchronization point -- tests/monitors/harnesses must
+        wait for `AgentExecutionCompletedEvent` (or the "Released pipeline lock ...
+        after stage completion" log line). The event is persisted to a Redis Stream
+        for audit only. `EventBus.drain()` (bootstrap teardown) closes the
+        graceful-shutdown window, but nothing replays on a hard crash, so a crash
+        in this window strands the work item until durable delivery lands (ADR-0001).
+        See "Completion-Event Delivery Semantics" in
+        documentation/architecture/infrastructure/event-bus.md.
+
         **Failure handling**: A done-callback inspects the publish task's result.
         If it failed, the recovery service is invoked from within the callback —
         this preserves the recovery semantics the old callback path had, even
@@ -672,24 +684,13 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
             error_summary=error_summary,
         )
 
-        publish_task = asyncio.create_task(self._event_bus.publish(event))
-        # Track the task so it isn't garbage-collected mid-flight; the done-callback
-        # discards it from the set once it finishes.
-        self._pending_tasks.add(publish_task)
-
-        def _on_publish_done(t: asyncio.Task[None]) -> None:
-            self._pending_tasks.discard(t)
-            try:
-                exc = t.exception()
-            except asyncio.CancelledError:
-                return
-            if exc is None:
-                return
-            logger.error(
-                f"Publishing AgentExecutionCompletedEvent failed for '{work_item_id}': {exc}",
-                exc_info=exc,
-                extra={"error_id": ErrorRegistry.ERR_EXEC_CHAIN_COMPLETION_CALLBACK_FAILURE},
-            )
+        # Detached + bus-tracked: the EventBus owns the task and its error
+        # logging, and `EventBus.drain()` (called from bootstrap teardown) can
+        # await it so a completion published just before shutdown still lands its
+        # handler chain (lock release / board advance). See publish_detached().
+        def _on_publish_failure(exc: BaseException) -> None:
+            # The bus already logged the publish failure at error level; here we
+            # only preserve the recovery semantics the old callback path had.
             if not self._recovery_service:
                 return
             # Recovery is async; schedule it as its own task. We can't await here
@@ -719,4 +720,4 @@ class ExecutionServiceAgentExecutor(IAgentExecutor):
 
             recovery_task.add_done_callback(_on_recovery_done)
 
-        publish_task.add_done_callback(_on_publish_done)
+        self._event_bus.publish_detached(event, on_error=_on_publish_failure)
