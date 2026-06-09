@@ -548,14 +548,34 @@ class ExecutionService:
         try:
             vcs_status = await self.vcs.status(context.repository_path)
             has_staged = bool(vcs_status.staged_files)
-            has_unstaged = vcs_status.is_dirty or bool(vcs_status.unstaged_files)
+            # Claude Code edits existing files (unstaged) AND creates new files
+            # (untracked) but does not run `git commit`. New files are the common
+            # case, so both sets must be staged or the commit captures nothing.
+            files_to_stage = list(vcs_status.unstaged_files) + list(vcs_status.untracked_files)
+            commit_message = (
+                f"[{context.work_item_id}] {context.stage_name}: agent {context.agent_id}\n\n"
+                f"Co-Authored-By: Codetoreum <noreply@codetoreum.ai>"
+            )
 
-            if has_staged:
-                # Commit whatever is staged (agent may have staged files before container exit)
-                commit_message = (
-                    f"[{context.work_item_id}] {context.stage_name}: agent {context.agent_id}\n\n"
-                    f"Co-Authored-By: Codetoreum <noreply@codetoreum.ai>"
+            if files_to_stage:
+                # Stage all unstaged + untracked files so the pushed branch captures
+                # the agent's actual output. Anything already staged is committed too
+                # (the commit carries no pathspec).
+                commit_sha = await self.vcs.commit(
+                    context.repository_path,
+                    message=commit_message,
+                    author_name="Codetoreum",
+                    author_email="noreply@codetoreum.ai",
+                    files=files_to_stage,
                 )
+                logger.info(
+                    f"Committed {len(files_to_stage)} file(s) for execution {execution.id}: "
+                    f"{commit_sha} → {branch}",
+                    extra={"work_item_id": context.work_item_id, "commit_sha": commit_sha, "branch": branch},
+                )
+            elif has_staged:
+                # Only pre-staged content (agent staged before container exit), nothing
+                # else dirty. Commit whatever is in the index.
                 commit_sha = await self.vcs.commit(
                     context.repository_path,
                     message=commit_message,
@@ -564,26 +584,6 @@ class ExecutionService:
                 )
                 logger.info(
                     f"Committed workspace for execution {execution.id}: {commit_sha} → {branch}",
-                    extra={"work_item_id": context.work_item_id, "commit_sha": commit_sha, "branch": branch},
-                )
-            elif has_unstaged:
-                # Agent edited files but did not commit them (Claude Code edits files
-                # but does not run `git commit`). Stage and commit all unstaged files
-                # so the pushed branch captures the agent's actual output.
-                commit_message = (
-                    f"[{context.work_item_id}] {context.stage_name}: agent {context.agent_id}\n\n"
-                    f"Co-Authored-By: Codetoreum <noreply@codetoreum.ai>"
-                )
-                commit_sha = await self.vcs.commit(
-                    context.repository_path,
-                    message=commit_message,
-                    author_name="Codetoreum",
-                    author_email="noreply@codetoreum.ai",
-                    files=list(vcs_status.unstaged_files),
-                )
-                logger.info(
-                    f"Committed {len(vcs_status.unstaged_files)} unstaged file(s) for execution {execution.id}: "
-                    f"{commit_sha} → {branch}",
                     extra={"work_item_id": context.work_item_id, "commit_sha": commit_sha, "branch": branch},
                 )
             else:

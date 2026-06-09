@@ -325,3 +325,64 @@ async def test_execute_coding_agent_exception_is_translated_to_failed_result(
 
     events = await event_store.get_events(sample_execution.id)
     assert any(isinstance(e, ExecutionFailedEvent) for e in events)
+
+
+# ---------------------------------------------------------------------------
+# Regression: untracked (new) files must be staged + committed
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_commit_workspace_stages_untracked_files(
+    coding_agent_mock: AsyncMock,
+    sample_execution: AgentExecution,
+    sample_execution_context: ExecutionContext,
+    event_store: InMemoryEventStore,
+    tmp_path,
+) -> None:
+    """Agent-created NEW (untracked) files must be staged and committed.
+
+    Claude Code creates new files; _commit_workspace previously staged only
+    ``unstaged_files`` (modified-tracked), so a new-file-only run staged
+    nothing and ``git commit`` failed with "nothing to commit". The fix adds
+    ``untracked_files`` to VCSStatus and stages unstaged + untracked together.
+    """
+    from dataclasses import replace
+
+    from codetoreum.ports.output.version_control_service import VCSStatus
+
+    new_file = "rounds/tests/core/test_fingerprint.py"
+    vcs = AsyncMock()
+    vcs.status = AsyncMock(
+        return_value=VCSStatus(
+            is_dirty=True,
+            staged_files=(),
+            unstaged_files=(),
+            untracked_files=(new_file,),
+        )
+    )
+    vcs.commit = AsyncMock(return_value="abc123")
+    vcs.push = AsyncMock()
+
+    service = ExecutionService(
+        coding_agent=coding_agent_mock,
+        event_store=event_store,
+        vcs=vcs,
+    )
+
+    ctx = replace(
+        sample_execution_context,
+        commit_policy=CommitPolicy.ON_SUCCESS,
+        can_make_commits=True,
+        repository_path=str(tmp_path),
+        branch_name="feature/test",
+    )
+
+    commit_sha, branch = await service._commit_workspace(ctx, sample_execution)
+
+    vcs.commit.assert_awaited_once()
+    _, kwargs = vcs.commit.await_args
+    assert new_file in kwargs["files"], f"untracked file not staged for commit; files={kwargs.get('files')!r}"
+    assert commit_sha == "abc123"
+    assert branch == "feature/test"
+    vcs.push.assert_awaited_once()

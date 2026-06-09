@@ -318,6 +318,7 @@ class GitHubVersionControlAdapter(IVersionControlService):
                 is_dirty=repo_status.is_dirty,
                 staged_files=repo_status.staged_files,
                 unstaged_files=repo_status.unstaged_files,
+                untracked_files=repo_status.untracked_files,
             )
         except Exception as e:
             logger.error(f"Failed to get repository status: {e}", exc_info=True)
