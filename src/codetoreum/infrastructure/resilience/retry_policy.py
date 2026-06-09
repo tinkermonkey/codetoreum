@@ -8,6 +8,14 @@ import random
 from collections.abc import Callable
 from typing import TypeVar
 
+from codetoreum.ports.exceptions import (
+    ConfigurationError,
+    ValidationError,
+)
+from codetoreum.ports.exceptions import (
+    PermissionError as PortPermissionError,
+)
+
 from .exceptions import MaxRetriesExceededError
 from .exceptions import TimeoutError as ResilienceTimeoutError
 from .interfaces import IRetryPolicy, RetryStats
@@ -107,6 +115,12 @@ class ExponentialBackoffRetry(IRetryPolicy):
             KeyboardInterrupt,
             SystemExit,
             ResilienceTimeoutError,  # Timeouts reflect load/duration, not transient failures
+            # Deterministic errors: retrying re-runs the same failing call with the
+            # same inputs/config, so it can never succeed. Retrying only wastes the
+            # budget and floods logs with identical tracebacks.
+            ConfigurationError,
+            ValidationError,
+            PortPermissionError,
         )
 
         if isinstance(exception, non_retryable):
