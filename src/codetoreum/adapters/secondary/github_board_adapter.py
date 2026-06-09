@@ -583,28 +583,178 @@ class GitHubBoardAdapter(IBoardService):
     async def add_item_to_column(
         self, work_item_id: str, target_column: str, moved_by: MovedByType
     ) -> ColumnMovementResult:
-        """Add newly created work item to initial column.
+        """Add a newly created work item to its initial column on the board.
 
-        Places a newly created work item in its initial column. This differs from
-        move_item_to_column in that it's the item's first placement, not a transition.
+        Unlike move_item_to_column, the item is NOT yet a GitHub Projects v2
+        item — this method first adds the backing issue to the project board
+        (addProjectV2ItemById) and then sets its Status field to target_column.
 
         Args:
-            work_item_id: Item to place (must be newly created)
-            target_column: Target column name (e.g., "Backlog")
-            moved_by: Type of entity initiating the placement (HUMAN or ORCHESTRATOR)
+            work_item_id: Canonical Codetoreum work item UUID. The GitHub issue
+                number is resolved from the work item's external_id.
+            target_column: Target column name (e.g., "Backlog").
+            moved_by: Entity initiating the placement.
 
         Returns:
-            ColumnMovementResult: Details of the placement operation
+            ColumnMovementResult: Details of the placement (from_column is None
+            because this is the item's first appearance on the board).
 
         Raises:
-            ResourceNotFoundError: Work item or target column doesn't exist
-            ExternalServiceError: Service communication failure
+            ResourceNotFoundError: Work item, backing issue, or target column not found.
+            ValidationError: Board context missing or column has no field mapping.
+            ExternalServiceError: GitHub API failure.
         """
-        # For GitHub, adding to a column is the same as moving to a column
-        # since the item already exists at this point. The semantic difference
-        # (new placement vs. movement) is handled at the adapter level but the
-        # actual GitHub operation is identical.
-        return await self.move_item_to_column(work_item_id, target_column, moved_by)
+        async with self._board_lock:
+            return await self._add_item_to_column_locked(work_item_id, target_column, moved_by)
+
+    async def _add_item_to_column_locked(
+        self, work_item_id: str, target_column: str, moved_by: MovedByType
+    ) -> ColumnMovementResult:
+        """Add item under board lock — called only from add_item_to_column."""
+        if not self._current_project_id or not self._current_board_id:
+            msg = "Project and board context required; call within get_board context or set context explicitly"
+            raise ValidationError(msg)
+
+        # Resolve the GitHub issue number from the canonical UUID. The board port
+        # speaks UUIDs; the GitHub GraphQL surface needs the issue number.
+        if self._work_item_service is None:
+            msg = "work_item_service is required for add_item_to_column (resolves issue number from UUID)"
+            raise ValidationError(msg)
+        work_item = await self._work_item_service.get_work_item(work_item_id)
+        issue_number = work_item.external_id
+        if not issue_number:
+            msg = f"Work item '{work_item_id}' has no external_id (GitHub issue number); cannot add to board"
+            raise ResourceNotFoundError(msg, work_item_id)
+
+        # Resolve the issue's GraphQL node id (I_...), required by addProjectV2ItemById.
+        org = self._ticket_adapter.config.organization
+        repo = self._ticket_adapter._get_repo(self._current_project_id)
+        issue_node_id = await self._fetch_issue_node_id(org, repo, issue_number)
+
+        # Add the issue to the project board. Idempotent: GitHub returns the
+        # existing item id if the issue is already on the board.
+        add_mutation = """
+        mutation AddProjectItem($projectId: ID!, $contentId: ID!) {
+          addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
+            item {
+              id
+            }
+          }
+        }
+        """
+        add_result = await self._graphql.execute(
+            add_mutation,
+            {"projectId": self._current_board_id, "contentId": issue_node_id},
+        )
+        pvti_node_id = (add_result.get("addProjectV2ItemById") or {}).get("item", {}).get("id")
+        if not pvti_node_id:
+            msg = "GitHub"
+            raise ExternalServiceError(
+                service=msg,
+                message=f"addProjectV2ItemById returned no item id for issue #{issue_number}",
+            )
+
+        # Cache the PVTI under the UUID immediately so a later move (e.g.
+        # auto-progression) succeeds before the next board poll runs.
+        self._pvti_node_id_by_uuid[work_item_id] = pvti_node_id
+
+        # Set the Status field to target_column (same mutation as the move path).
+        board = await self.get_board(self._current_project_id, self._current_board_id)
+        status_field_id = self._find_status_field_id(board)
+        option_id = self._find_option_id(board, status_field_id, target_column)
+        if not status_field_id or not option_id:
+            msg = f"Cannot find field mapping for column '{target_column}'"
+            raise ValidationError(msg)
+
+        move_mutation = """
+        mutation UpdateProjectV2ItemFieldValue(
+          $projectId: ID!
+          $itemId: ID!
+          $fieldId: ID!
+          $optionId: String!
+        ) {
+          updateProjectV2ItemFieldValue(
+            input: {
+              projectId: $projectId
+              itemId: $itemId
+              fieldId: $fieldId
+              value: {singleSelectOptionId: $optionId}
+            }
+          ) {
+            projectV2Item {
+              id
+            }
+          }
+        }
+        """
+        await self._graphql.execute(
+            move_mutation,
+            {
+                "projectId": self._current_board_id,
+                "itemId": pvti_node_id,
+                "fieldId": status_field_id,
+                "optionId": option_id,
+            },
+        )
+
+        # Keep the poll baseline in sync so the background poll loop does not
+        # re-report this placement as an external change (double-trigger).
+        poll_key = f"{self._current_project_id}:{self._current_board_id}"
+        known = self._last_known_state.get(poll_key)
+        if known is not None:
+            known[work_item_id] = target_column
+
+        timestamp = datetime.now(UTC).isoformat()
+
+        # Emit with from_column=None: this is the item's first placement, not a
+        # transition. Not suppressed for GITHUB_WEBHOOK/HUMAN — the workflow
+        # handler needs the event to evaluate the pipeline-trigger column.
+        self.emit(
+            WorkItemColumnChangedEvent(
+                type="workitem.column_changed",
+                timestamp=timestamp,
+                source="github",
+                work_item_id=work_item_id,
+                project_id=self._current_project_id,
+                board_id=self._current_board_id,
+                from_column=None,
+                to_column=target_column,
+                moved_by=moved_by.value,
+            )
+        )
+
+        return ColumnMovementResult(
+            work_item_id=work_item_id,
+            from_column=None,
+            to_column=target_column,
+            moved_by=moved_by,
+            timestamp=timestamp,
+        )
+
+    async def _fetch_issue_node_id(self, org: str, repo: str, issue_number: str) -> str:
+        """Fetch the GitHub GraphQL node id (I_...) for an issue by number.
+
+        Private to add_item_to_column: the node id is the contentId required by
+        addProjectV2ItemById and never leaks above the adapter boundary.
+        """
+        query = """
+        query GetIssueNodeId($owner: String!, $repo: String!, $number: Int!) {
+          repository(owner: $owner, name: $repo) {
+            issue(number: $number) {
+              id
+            }
+          }
+        }
+        """
+        result = await self._graphql.execute(
+            query,
+            {"owner": org, "repo": repo, "number": int(issue_number)},
+        )
+        node_id = ((result.get("repository") or {}).get("issue") or {}).get("id")
+        if not node_id:
+            msg = "Issue"
+            raise ResourceNotFoundError(msg, issue_number)
+        return node_id
 
     async def get_all_boards(self) -> list[ProjectBoard]:
         """Get all boards across all projects.

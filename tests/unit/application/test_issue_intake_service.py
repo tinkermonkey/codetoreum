@@ -93,12 +93,27 @@ class MockWorkflowConfigService:
         )
 
 
+class MockWorkItemQueryService:
+    """Mock IWorkItemQueryPort: maps issue number -> a work item with a UUID."""
+
+    def __init__(self, found=True):
+        self._found = found
+        self.find_by_external_id_called_with = None
+
+    async def find_by_external_id(self, external_id):
+        self.find_by_external_id_called_with = external_id
+        if not self._found:
+            return None
+        return type("WI", (), {"id": f"wi-uuid-{external_id}", "external_id": external_id})()
+
+
 @pytest.mark.asyncio
 async def test_on_issue_opened_success():
     """Test successful issue intake."""
     board_service = MockBoardService()
     config_service = MockWorkflowConfigService()
-    service = IssueIntakeService(board_service, config_service)
+    work_item_service = MockWorkItemQueryService()
+    service = IssueIntakeService(board_service, config_service, work_item_service)
 
     command = IssueOpenedCommand(
         project_id="proj-1",
@@ -115,7 +130,7 @@ async def test_on_issue_opened_success():
     assert board_service.get_all_boards_called
     assert config_service.get_board_workflow_template_called
     assert board_service.add_item_to_column_called
-    assert board_service.last_add_item_call["work_item_id"] == "42"
+    assert board_service.last_add_item_call["work_item_id"] == "wi-uuid-42"
     assert board_service.last_add_item_call["target_column"] == "Backlog"
 
 
@@ -129,7 +144,8 @@ async def test_on_issue_opened_no_boards():
 
     board_service = EmptyBoardService()
     config_service = MockWorkflowConfigService()
-    service = IssueIntakeService(board_service, config_service)
+    work_item_service = MockWorkItemQueryService()
+    service = IssueIntakeService(board_service, config_service, work_item_service)
 
     command = IssueOpenedCommand(
         project_id="proj-1",
@@ -153,7 +169,8 @@ async def test_on_issue_opened_no_template():
 
     board_service = MockBoardService()
     config_service = NullTemplateConfigService()
-    service = IssueIntakeService(board_service, config_service)
+    work_item_service = MockWorkItemQueryService()
+    service = IssueIntakeService(board_service, config_service, work_item_service)
 
     command = IssueOpenedCommand(
         project_id="proj-1",
@@ -203,7 +220,8 @@ async def test_on_issue_opened_no_initial_column():
 
     board_service = MockBoardService()
     config_service = InvalidPositionConfigService()
-    service = IssueIntakeService(board_service, config_service)
+    work_item_service = MockWorkItemQueryService()
+    service = IssueIntakeService(board_service, config_service, work_item_service)
 
     command = IssueOpenedCommand(
         project_id="proj-1",
@@ -332,7 +350,8 @@ async def test_on_issue_opened_programming_error_propagates():
 
     board_service = BuggyBoardService()
     config_service = MockWorkflowConfigService()
-    service = IssueIntakeService(board_service, config_service)
+    work_item_service = MockWorkItemQueryService()
+    service = IssueIntakeService(board_service, config_service, work_item_service)
 
     command = IssueOpenedCommand(
         project_id="proj-1",
@@ -342,3 +361,27 @@ async def test_on_issue_opened_programming_error_propagates():
     # Programming error should propagate, not be caught
     with pytest.raises(AttributeError):
         await service.on_issue_opened(command)
+
+
+@pytest.mark.asyncio
+async def test_on_issue_opened_unregistered_work_item_fails_gracefully():
+    """When no work item is registered for the issue number, intake fails with a
+    clear error instead of passing a bare issue number to the board port."""
+    board_service = MockBoardService()
+    config_service = MockWorkflowConfigService()
+    work_item_service = MockWorkItemQueryService(found=False)
+    service = IssueIntakeService(board_service, config_service, work_item_service)
+
+    command = IssueOpenedCommand(
+        project_id="proj-1",
+        issue_number="42",
+        issue_title="Test Issue",
+        issue_url="https://github.com/org/repo/issues/42",
+    )
+
+    result = await service.on_issue_opened(command)
+
+    assert not result.success
+    assert work_item_service.find_by_external_id_called_with == "42"
+    # Board must not be touched when the UUID cannot be resolved.
+    assert not board_service.add_item_to_column_called

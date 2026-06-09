@@ -1541,6 +1541,7 @@ class ProductionApplicationBootstrap:
         issue_intake_service: IIssueIntakePort = IssueIntakeService(
             board_service=self.adapters.board,
             workflow_config_service=self.adapters.workflow_config,
+            work_item_service=self.adapters.work_item_service,
         )
         logger.debug("Created issue intake service for webhook event handling")
 
