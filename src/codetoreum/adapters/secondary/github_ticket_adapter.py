@@ -143,16 +143,24 @@ class GitHubTicketAdapter(ITicketSystem):
         repo = self._get_repo()
         return (self.config.organization, repo)
 
-    def _get_repo(self) -> str:
+    def _get_repo(self, project_id: str | None = None) -> str:
         """Return the GitHub repo for the current call context.
 
-        Checks the project registry first. Falls back to config.repository for
-        backward compatibility (used in tests; production bootstrap must call
-        register_project_repo() instead of setting a global GITHUB_REPO env var).
+        When a project_id is supplied it is resolved directly against the
+        registry — this is the path that lets multi-project deployments work.
+        Otherwise falls back to the single registered repo or config.repository
+        for backward compatibility (used in tests; production bootstrap calls
+        register_project_repo() per project).
 
         Raises if no repo is determinable and multiple projects are registered
-        (requires ITicketSystem to be updated to pass project_id per call).
+        without a project_id to disambiguate.
         """
+        if project_id is not None:
+            repo = self._project_repos.get(project_id)
+            if repo is not None:
+                return repo
+            # Unknown project_id: fall through to the registry-size heuristics
+            # below so single-project / config-repo setups still resolve.
         if len(self._project_repos) == 1:
             return next(iter(self._project_repos.values()))
         if len(self._project_repos) == 0:
@@ -560,14 +568,18 @@ class GitHubTicketAdapter(ITicketSystem):
             discussion_id=discussion_id,
         )
 
-    async def get_work_item(self, item_id: WorkItemId) -> WorkItem:
+    async def get_work_item(
+        self,
+        item_id: WorkItemId,
+        project_id: ProjectId | None = None,
+    ) -> WorkItem:
         """Get work item by ID."""
         cache_key = f"issue:{item_id}"
         cached = self._check_cache(cache_key)
         if cached:
             return cached
 
-        path = f"/repos/{self.config.organization}/{self._get_repo()}/issues/{item_id}"
+        path = f"/repos/{self.config.organization}/{self._get_repo(project_id)}/issues/{item_id}"
         response = await self._make_request("GET", path)
 
         if response.status_code == 404:
@@ -582,8 +594,8 @@ class GitHubTicketAdapter(ITicketSystem):
 
         issue = response.json()
         # Extract project_id from repository
-        project_id = ProjectId(f"{self.config.organization}/{self._get_repo()}")
-        work_item = await self._map_github_issue_to_work_item(issue, project_id)
+        resolved_project_id = ProjectId(f"{self.config.organization}/{self._get_repo(project_id)}")
+        work_item = await self._map_github_issue_to_work_item(issue, resolved_project_id)
 
         self._set_cache(cache_key, work_item)
         return work_item
@@ -912,6 +924,7 @@ class GitHubTicketAdapter(ITicketSystem):
         item_id: WorkItemId,
         since: datetime | None = None,
         limit: int = 100,
+        project_id: ProjectId | None = None,
     ) -> list[Comment]:
         """Get comments for a work item."""
         params: dict[str, Any] = {
@@ -921,7 +934,7 @@ class GitHubTicketAdapter(ITicketSystem):
         if since:
             params["since"] = since.isoformat()
 
-        path = f"/repos/{self.config.organization}/{self._get_repo()}/issues/{item_id}/comments"
+        path = f"/repos/{self.config.organization}/{self._get_repo(project_id)}/issues/{item_id}/comments"
         response = await self._make_request("GET", path, params=params)
 
         if response.status_code == 404:
@@ -970,6 +983,7 @@ class GitHubTicketAdapter(ITicketSystem):
         self,
         item_id: WorkItemId,
         relationship: str | None = None,
+        project_id: ProjectId | None = None,
     ) -> list[WorkItem]:
         """
         Get related work items.
@@ -977,7 +991,7 @@ class GitHubTicketAdapter(ITicketSystem):
         This searches for issue references in comments and description.
         """
         # Get the work item
-        work_item = await self.get_work_item(item_id)
+        work_item = await self.get_work_item(item_id, project_id=project_id)
 
         # Extract issue numbers from description and comments
         issue_pattern = r"#(\d+)"
@@ -989,7 +1003,7 @@ class GitHubTicketAdapter(ITicketSystem):
             referenced_ids.add(WorkItemId(match.group(1)))
 
         # Search in comments
-        comments = await self.get_comments(item_id)
+        comments = await self.get_comments(item_id, project_id=project_id)
         for comment in comments:
             for match in re.finditer(issue_pattern, comment.body):
                 referenced_ids.add(WorkItemId(match.group(1)))
@@ -998,7 +1012,7 @@ class GitHubTicketAdapter(ITicketSystem):
         related_items = []
         for ref_id in referenced_ids:
             try:
-                item = await self.get_work_item(ref_id)
+                item = await self.get_work_item(ref_id, project_id=project_id)
                 related_items.append(item)
             except WorkItemNotFoundError:
                 # Skip invalid references

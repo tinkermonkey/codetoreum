@@ -60,7 +60,11 @@ class InMemoryTicketAdapter(MockEventEmitter, ITicketSystem):
 
     # ===== Query Operations =====
 
-    async def get_work_item(self, item_id: WorkItemId) -> WorkItem:
+    async def get_work_item(
+        self,
+        item_id: WorkItemId,
+        project_id: ProjectId | None = None,
+    ) -> WorkItem:
         """
         Retrieve a work item by ID.
 
@@ -482,6 +486,7 @@ class InMemoryTicketAdapter(MockEventEmitter, ITicketSystem):
         item_id: WorkItemId,
         since: datetime | None = None,
         limit: int = 100,
+        project_id: ProjectId | None = None,
     ) -> list[Comment]:
         """
         Get comments for a work item.
@@ -557,6 +562,7 @@ class InMemoryTicketAdapter(MockEventEmitter, ITicketSystem):
         self,
         item_id: WorkItemId,
         relationship: str | None = None,
+        project_id: ProjectId | None = None,
     ) -> list[WorkItem]:
         """
         Get related work items.

@@ -21,11 +21,17 @@ class ITicketSystem(ABC):
     # Work Item Operations
 
     @abstractmethod
-    async def get_work_item(self, item_id: WorkItemId) -> WorkItem:
+    async def get_work_item(
+        self,
+        item_id: WorkItemId,
+        project_id: ProjectId | None = None,
+    ) -> WorkItem:
         """
         Retrieve a work item by ID.
 
         Args: item_id: Unique identifier for the work item
+            project_id: Project that owns the item (required when several
+                projects are registered, to resolve the backing repository)
 
         Returns: WorkItem: The requested work item
 
@@ -230,6 +236,7 @@ class ITicketSystem(ABC):
         item_id: WorkItemId,
         since: datetime | None = None,
         limit: int = 100,
+        project_id: ProjectId | None = None,
     ) -> list[Comment]:
         """
         Get comments for a work item.
@@ -272,12 +279,15 @@ class ITicketSystem(ABC):
         self,
         item_id: WorkItemId,
         relationship: str | None = None,
+        project_id: ProjectId | None = None,
     ) -> list[WorkItem]:
         """
         Get related work items.
 
         Args: item_id: Work item identifier
             relationship: Optional filter by relationship type
+            project_id: Project that owns the item (required when several
+                projects are registered, to resolve the backing repository)
 
         Returns: List[WorkItem]: List of related work items
 

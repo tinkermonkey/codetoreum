@@ -230,10 +230,11 @@ class ResilientTicketSystemDecorator(ITicketSystem):
         self,
         item_id: WorkItemId,
         relationship: str | None = None,
+        project_id: ProjectId | None = None,
     ) -> list[WorkItem]:
         """Get related items with resilience."""
         return await self._execute_resilient(
-            operation=lambda: self._wrapped.get_related_items(item_id, relationship),
+            operation=lambda: self._wrapped.get_related_items(item_id, relationship, project_id=project_id),
             operation_name="get_related_items",
             rate_limit_cost=1,
         )
