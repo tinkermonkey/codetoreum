@@ -56,6 +56,7 @@ def mock_board_service():
 def mock_distributed_lock():
     """Create mock distributed lock service."""
     from datetime import UTC
+
     service = AsyncMock()
     service.try_acquire = AsyncMock(
         return_value=AcquireResult(
@@ -250,9 +251,7 @@ class TestHandleColumnChangeWithPipelineTrigger:
         self, handler, mock_distributed_lock, mock_pipeline_queue, sample_workflow_config
     ):
         """Should acquire lock when work item enters pipeline trigger column."""
-        handler.workflow_config.get_board_workflow_template = AsyncMock(
-            return_value=sample_workflow_config
-        )
+        handler.workflow_config.get_board_workflow_template = AsyncMock(return_value=sample_workflow_config)
 
         event = WorkItemColumnChangedEvent(
             type="workitem.column_changed",
@@ -283,9 +282,7 @@ class TestHandleColumnChangeWithPipelineTrigger:
         sample_workflow_config,
     ):
         """Should trigger agent after successfully acquiring lock."""
-        handler.workflow_config.get_board_workflow_template = AsyncMock(
-            return_value=sample_workflow_config
-        )
+        handler.workflow_config.get_board_workflow_template = AsyncMock(return_value=sample_workflow_config)
 
         event = WorkItemColumnChangedEvent(
             type="workitem.column_changed",
@@ -319,9 +316,7 @@ class TestHandleExitColumn:
         sample_workflow_config,
     ):
         """Should release lock when work item enters exit column."""
-        handler.workflow_config.get_board_workflow_template = AsyncMock(
-            return_value=sample_workflow_config
-        )
+        handler.workflow_config.get_board_workflow_template = AsyncMock(return_value=sample_workflow_config)
 
         event = WorkItemColumnChangedEvent(
             type="workitem.column_changed",
@@ -352,9 +347,7 @@ class TestHandleExitColumn:
         sample_workflow_config,
     ):
         """Should complete workflow run when exiting."""
-        handler.workflow_config.get_board_workflow_template = AsyncMock(
-            return_value=sample_workflow_config
-        )
+        handler.workflow_config.get_board_workflow_template = AsyncMock(return_value=sample_workflow_config)
 
         event = WorkItemColumnChangedEvent(
             type="workitem.column_changed",
@@ -448,9 +441,7 @@ class TestExistingRunCheckErrorHandling:
         test_error = Exception("Redis connection failed")
         mock_run_registry.get_active_run.side_effect = test_error
 
-        handler.workflow_config.get_board_workflow_template = AsyncMock(
-            return_value=sample_workflow_config
-        )
+        handler.workflow_config.get_board_workflow_template = AsyncMock(return_value=sample_workflow_config)
 
         # Create an automated column event that bypasses pipeline trigger
         event = WorkItemColumnChangedEvent(
@@ -470,8 +461,7 @@ class TestExistingRunCheckErrorHandling:
 
         # Verify error was logged at ERROR level with exc_info
         assert any(
-            "Failed to check existing run for item-1" in record.message
-            and record.levelname == "ERROR"
+            "Failed to check existing run for item-1" in record.message and record.levelname == "ERROR"
             for record in caplog.records
         )
 
@@ -491,9 +481,7 @@ class TestExistingRunCheckErrorHandling:
         # Set up: no existing run
         mock_run_registry.get_active_run.return_value = None
 
-        handler.workflow_config.get_board_workflow_template = AsyncMock(
-            return_value=sample_workflow_config
-        )
+        handler.workflow_config.get_board_workflow_template = AsyncMock(return_value=sample_workflow_config)
 
         automated_column = sample_workflow_config.columns[2]  # Review column
         event = WorkItemColumnChangedEvent(
@@ -527,9 +515,7 @@ class TestAgentExecutionCompletion:
         sample_workflow_config,
     ):
         """Should handle AgentExecutionCompletedEvent and auto-progress."""
-        handler.workflow_config.get_board_workflow_template = AsyncMock(
-            return_value=sample_workflow_config
-        )
+        handler.workflow_config.get_board_workflow_template = AsyncMock(return_value=sample_workflow_config)
         # Set up board service to return current position
         handler.board_service.get_item_position = AsyncMock(
             return_value=WorkItemPosition(
@@ -565,9 +551,7 @@ class TestAgentExecutionCompletion:
         sample_workflow_config,
     ):
         """Should route failed items to on_failure_column."""
-        handler.workflow_config.get_board_workflow_template = AsyncMock(
-            return_value=sample_workflow_config
-        )
+        handler.workflow_config.get_board_workflow_template = AsyncMock(return_value=sample_workflow_config)
 
         event = AgentExecutionCompletedEvent(
             type="agent.execution_completed",
@@ -587,6 +571,11 @@ class TestAgentExecutionCompletion:
         assert call_args[0][1] == "Backlog"  # on_failure_column from fixture
         assert call_args[0][2] == MovedByType.ORCHESTRATOR
 
+        # The ORCHESTRATOR move suppresses WorkItemColumnChangedEvent, so the read
+        # model must be mirrored explicitly here — otherwise it stays stuck in the
+        # agent column while the board shows the failure column.
+        handler.work_item_service.record_board_position.assert_awaited_once_with("item-1", "Backlog")
+
 
 class TestErrorRecovery:
     """Tests for error recovery patterns."""
@@ -604,9 +593,7 @@ class TestErrorRecovery:
         test_error = Exception("Agent execution error")
         mock_agent_executor.execute.side_effect = test_error
 
-        handler.workflow_config.get_board_workflow_template = AsyncMock(
-            return_value=sample_workflow_config
-        )
+        handler.workflow_config.get_board_workflow_template = AsyncMock(return_value=sample_workflow_config)
 
         await handler._trigger_agent(
             work_item_id="item-1",
@@ -627,13 +614,9 @@ class TestErrorRecovery:
     ):
         """Should emit LockStuckEvent when lock release fails."""
         # Set up lock release to fail
-        mock_distributed_lock.release.side_effect = Exception(
-            "Lock service unavailable"
-        )
+        mock_distributed_lock.release.side_effect = Exception("Lock service unavailable")
 
-        handler.workflow_config.get_board_workflow_template = AsyncMock(
-            return_value=sample_workflow_config
-        )
+        handler.workflow_config.get_board_workflow_template = AsyncMock(return_value=sample_workflow_config)
         handler.board_service.get_board = AsyncMock()
 
         event = WorkItemColumnChangedEvent(

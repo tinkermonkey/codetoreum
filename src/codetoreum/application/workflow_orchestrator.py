@@ -243,6 +243,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
         workflow_config: IWorkflowConfigService | None = None,
         conversational_loop_orchestrator: IConversationalLoopService | None = None,
         dispatch_via_task_queue: bool = True,
+        work_item_service: Any = None,
     ):
         """
         Initialize workflow orchestrator.
@@ -272,10 +273,33 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
         self._workflow_config = workflow_config
         self._conversational_loop_orchestrator = conversational_loop_orchestrator
         self._dispatch_via_task_queue = dispatch_via_task_queue
+        # Optional command port to mirror the board column onto the work item read
+        # model after ORCHESTRATOR moves (which suppress WorkItemColumnChangedEvent).
+        self._work_item_service = work_item_service
 
         # Subscribe to adapter events if event bus is available
         if self.event_bus:
             self._subscribe_to_events()
+
+    async def _mirror_board_column(self, work_item_id: str, column: str) -> None:
+        """Mirror the board column onto the work item read model (best-effort).
+
+        ORCHESTRATOR board moves suppress WorkItemColumnChangedEvent, so the
+        read model would otherwise stay stuck in the prior column. Guarded so a
+        missing command port or a persistence failure does not break repair-cycle
+        automation.
+        """
+        record = getattr(self._work_item_service, "record_board_position", None)
+        if record is None:
+            return
+        try:
+            await record(work_item_id, column)
+        except Exception as e:
+            logger.error(
+                f"Failed to mirror board column '{column}' onto work item {work_item_id}: {e}",
+                exc_info=True,
+                extra={"work_item_id": work_item_id},
+            )
 
     @instrument_async_function(
         name="workflow.handle_card_movement",
@@ -1451,6 +1475,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
                     await self.board_service.move_item_to_column(
                         work_item_id, next_column_name, MovedByType.ORCHESTRATOR
                     )
+                    await self._mirror_board_column(work_item_id, next_column_name)
                 else:
                     logger.info(
                         f"Repair cycle succeeded for {work_item_id}: "
@@ -1468,6 +1493,7 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
                         f"moving from '{current_column_name}' to failure column '{failure_column}'"
                     )
                     await self.board_service.move_item_to_column(work_item_id, failure_column, MovedByType.ORCHESTRATOR)
+                    await self._mirror_board_column(work_item_id, failure_column)
                 else:
                     logger.warning(
                         f"Repair cycle failed for {work_item_id} in column '{current_column_name}': "
@@ -1486,4 +1512,3 @@ class WorkflowOrchestrator(IWorkflowOrchestrator):
                     "error_type": type(e).__name__,
                 },
             )
-

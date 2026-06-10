@@ -1152,6 +1152,7 @@ class ProductionApplicationBootstrap:
             workflow_config=self.adapters.workflow_config,
             conversational_loop_orchestrator=conversational_loop_orchestrator,
             dispatch_via_task_queue=False,  # BoardColumnEventHandler owns dispatch in production
+            work_item_service=self._production_work_item_service,
         )
 
         # WorkItemService was instantiated earlier (before the executor) so it
@@ -1702,6 +1703,7 @@ class ProductionApplicationBootstrap:
         # PR Review Cycle Event Handler
         pr_event_handler = PRReviewCycleEventHandler(
             board_service=self.adapters.board,
+            work_item_service=self.services.work_item_service,
         )
         self.infrastructure.event_bus.register_handler(pr_event_handler)
         logger.info("Registered PRReviewCycleEventHandler with event bus")
