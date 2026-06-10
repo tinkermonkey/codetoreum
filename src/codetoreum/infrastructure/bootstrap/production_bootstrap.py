@@ -1861,6 +1861,23 @@ class ProductionApplicationBootstrap:
                     )
                     # Continue with other cleanup even if event store close fails
 
+            # Close the config store (closes its Elasticsearch client when the
+            # store owns it — created inline by the resolver). Skipped otherwise
+            # leaks an aiohttp session on shutdown ("Unclosed client session").
+            if self.adapters and getattr(self.adapters, "config_store", None):
+                logger.info("Closing config store...")
+                from codetoreum.adapters.secondary.config_storage_factory import close_config_store
+
+                try:
+                    await close_config_store(self.adapters.config_store)
+                except Exception as e:
+                    logger.error(
+                        f"Error closing config store: {e}",
+                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                        exc_info=True,
+                    )
+                    # Continue with other cleanup even if config store close fails
+
             # Log final event bus statistics
             if self.infrastructure and self.infrastructure.event_bus:
                 stats = self.infrastructure.event_bus.get_statistics()
