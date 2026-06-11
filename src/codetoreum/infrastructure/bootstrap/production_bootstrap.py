@@ -1542,7 +1542,11 @@ class ProductionApplicationBootstrap:
         issue_intake_service: IIssueIntakePort = IssueIntakeService(
             board_service=self.adapters.board,
             workflow_config_service=self.adapters.workflow_config,
-            work_item_service=self.adapters.work_item_service,
+            # Use the production (event-store-backed) work item service, NOT
+            # self.adapters.work_item_service which resolves to the simulation
+            # MockWorkItemService — find_by_external_id must hit real state or
+            # webhook intake silently fails to place issues on the board.
+            work_item_service=self.services.work_item_service,
         )
         logger.debug("Created issue intake service for webhook event handling")
 

@@ -47,6 +47,8 @@ def _make_adapter() -> GitHubBoardAdapter:
         columns=(BoardColumn(id="OPT_backlog", name="Backlog", position=0, work_item_ids=()),),
     )
     adapter.get_board = AsyncMock(return_value=board)  # type: ignore[method-assign]
+    # Poll baseline present so the add path keeps it in sync (double-trigger guard).
+    adapter._last_known_state["rounds:PVT_board"] = {}
     return adapter
 
 
@@ -82,6 +84,10 @@ async def test_add_item_to_column_adds_issue_then_sets_status():
 
     # PVTI cached under the UUID so a later move() succeeds before the next poll.
     assert adapter._pvti_node_id_by_uuid["wi-uuid-1"] == "PVTI_new"
+
+    # Poll baseline synced so the background poll does not re-report this placement
+    # as an external change (double-trigger guard).
+    assert adapter._last_known_state["rounds:PVT_board"]["wi-uuid-1"] == "Backlog"
 
     # Initial placement: from_column is None.
     assert result.from_column is None

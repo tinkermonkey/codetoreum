@@ -838,6 +838,11 @@ class BoardColumnEventHandler(EventHandler):
         """
         record_position = getattr(self.work_item_service, "record_board_position", None)
         if record_position is None:
+            logger.warning(
+                f"work_item_service has no record_board_position; board column '{column}' "
+                f"not mirrored onto work item {work_item_id} (read model will lag the board)",
+                extra={"work_item_id": work_item_id},
+            )
             return
         try:
             await record_position(work_item_id, column)

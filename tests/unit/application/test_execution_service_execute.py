@@ -386,3 +386,51 @@ async def test_commit_workspace_stages_untracked_files(
     assert commit_sha == "abc123"
     assert branch == "feature/test"
     vcs.push.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_commit_workspace_commits_pre_staged_when_nothing_else_dirty(
+    coding_agent_mock: AsyncMock,
+    sample_execution: AgentExecution,
+    sample_execution_context: ExecutionContext,
+    event_store: InMemoryEventStore,
+    tmp_path,
+) -> None:
+    """When only pre-staged content exists (agent staged before container exit)
+    and nothing is unstaged/untracked, _commit_workspace commits the index as-is
+    — calling vcs.commit WITHOUT a files= kwarg (no pathspec)."""
+    from dataclasses import replace
+
+    from codetoreum.ports.output.version_control_service import VCSStatus
+
+    vcs = AsyncMock()
+    vcs.status = AsyncMock(
+        return_value=VCSStatus(
+            is_dirty=True,
+            staged_files=("already_staged.py",),
+            unstaged_files=(),
+            untracked_files=(),
+        )
+    )
+    vcs.commit = AsyncMock(return_value="def456")
+    vcs.push = AsyncMock()
+
+    service = ExecutionService(
+        coding_agent=coding_agent_mock,
+        event_store=event_store,
+        vcs=vcs,
+    )
+    ctx = replace(
+        sample_execution_context,
+        commit_policy=CommitPolicy.ON_SUCCESS,
+        can_make_commits=True,
+        repository_path=str(tmp_path),
+        branch_name="feature/test",
+    )
+
+    commit_sha, branch = await service._commit_workspace(ctx, sample_execution)
+
+    vcs.commit.assert_awaited_once()
+    _, kwargs = vcs.commit.await_args
+    assert "files" not in kwargs, "pre-staged commit must not pass a pathspec"
+    assert commit_sha == "def456"

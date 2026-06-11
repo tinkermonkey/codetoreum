@@ -69,10 +69,14 @@ class ResilientTicketSystemDecorator(ITicketSystem):
         self._timeout = timeout
         self._default_timeout = default_timeout_seconds
 
-    async def get_work_item(self, item_id: WorkItemId) -> WorkItem:
+    async def get_work_item(
+        self,
+        item_id: WorkItemId,
+        project_id: ProjectId | None = None,
+    ) -> WorkItem:
         """Get work item with full resilience."""
         return await self._execute_resilient(
-            operation=lambda: self._wrapped.get_work_item(item_id),
+            operation=lambda: self._wrapped.get_work_item(item_id, project_id=project_id),
             operation_name="get_work_item",
             rate_limit_cost=1,
         )
@@ -205,10 +209,11 @@ class ResilientTicketSystemDecorator(ITicketSystem):
         item_id: WorkItemId,
         since: datetime | None = None,
         limit: int = 100,
+        project_id: ProjectId | None = None,
     ) -> list[Comment]:
         """Get comments with resilience."""
         return await self._execute_resilient(
-            operation=lambda: self._wrapped.get_comments(item_id, since, limit),
+            operation=lambda: self._wrapped.get_comments(item_id, since, limit, project_id=project_id),
             operation_name="get_comments",
             rate_limit_cost=1,
         )

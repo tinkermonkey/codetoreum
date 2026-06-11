@@ -159,8 +159,18 @@ class GitHubTicketAdapter(ITicketSystem):
             repo = self._project_repos.get(project_id)
             if repo is not None:
                 return repo
-            # Unknown project_id: fall through to the registry-size heuristics
-            # below so single-project / config-repo setups still resolve.
+            # An explicit project_id that is not registered is a wiring/caller
+            # error — fail loudly rather than silently resolving to the wrong
+            # (or only) repo, which would mask exactly the multi-project misroute
+            # this parameter exists to prevent. Only fall through to the
+            # registry-size heuristics below when no projects are registered at
+            # all (the test / config.repository back-compat path).
+            if self._project_repos:
+                raise ConfigurationError(
+                    f"project_id '{project_id}' is not registered "
+                    f"(known: {list(self._project_repos.keys())}). "
+                    "Call register_project_repo() for it during bootstrap."
+                )
         if len(self._project_repos) == 1:
             return next(iter(self._project_repos.values()))
         if len(self._project_repos) == 0:
