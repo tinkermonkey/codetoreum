@@ -161,6 +161,37 @@ class TestExponentialBackoffRetry:
         # Should only be called once (no retries)
         assert call_count == 1
 
+    @pytest.mark.asyncio
+    async def test_does_not_retry_deterministic_port_errors(self):
+        """Deterministic errors (ConfigurationError, ValidationError,
+        PermissionError) re-run the same failing call with the same inputs, so
+        they must not be retried — retrying only wastes the budget and floods
+        logs with identical tracebacks."""
+        from codetoreum.ports.exceptions import (
+            ConfigurationError,
+            ValidationError,
+        )
+        from codetoreum.ports.exceptions import (
+            PermissionError as PortPermissionError,
+        )
+
+        policy = ExponentialBackoffRetry(max_retries=3)
+
+        for exc_type in (ConfigurationError, ValidationError, PortPermissionError):
+            call_count = 0
+
+            async def operation(exc_type=exc_type):
+                nonlocal call_count
+                call_count += 1
+                raise exc_type("deterministic failure")
+
+            with pytest.raises(exc_type):
+                await policy.execute(operation, "test_op")
+
+            # Called exactly once — the original exception propagates immediately,
+            # not wrapped in MaxRetriesExceededError after 3 attempts.
+            assert call_count == 1, f"{exc_type.__name__} was retried"
+
     def test_get_stats(self):
         """Test that statistics are tracked correctly."""
         policy = ExponentialBackoffRetry()

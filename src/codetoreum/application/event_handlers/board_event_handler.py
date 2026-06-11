@@ -838,6 +838,11 @@ class BoardColumnEventHandler(EventHandler):
         """
         record_position = getattr(self.work_item_service, "record_board_position", None)
         if record_position is None:
+            logger.warning(
+                f"work_item_service has no record_board_position; board column '{column}' "
+                f"not mirrored onto work item {work_item_id} (read model will lag the board)",
+                extra={"work_item_id": work_item_id},
+            )
             return
         try:
             await record_position(work_item_id, column)
@@ -957,6 +962,12 @@ class BoardColumnEventHandler(EventHandler):
                         await self.board_service.move_item_to_column(
                             work_item_id, column_config.on_failure_column, MovedByType.ORCHESTRATOR
                         )
+                        # The ORCHESTRATOR move suppresses WorkItemColumnChangedEvent, so
+                        # handle_column_change does not re-fire — mirror the failure column
+                        # onto the work item here so reads reflect the board (mirrors the
+                        # auto-progress path). Without this the read model is stuck in the
+                        # agent column while the board shows on_failure_column.
+                        await self._mirror_board_column(work_item_id, column_config.on_failure_column)
                         logger.info(f"Moved {work_item_id} to failure column '{column_config.on_failure_column}'")
                     else:
                         logger.warning(

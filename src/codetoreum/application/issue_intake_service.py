@@ -14,6 +14,7 @@ from codetoreum.ports.input.issue_intake import (
     IssueIntakeResult,
     IssueOpenedCommand,
 )
+from codetoreum.ports.input.work_item_query import IWorkItemQueryPort
 from codetoreum.ports.output.board_service import IBoardService, MovedByType
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 
@@ -34,6 +35,7 @@ class IssueIntakeService(IIssueIntakePort):
         self,
         board_service: IBoardService,
         workflow_config_service: IWorkflowConfigService,
+        work_item_service: IWorkItemQueryPort,
     ):
         """
         Initialize issue intake service.
@@ -41,9 +43,12 @@ class IssueIntakeService(IIssueIntakePort):
         Args:
             board_service: Board service for placing items
             workflow_config_service: Workflow config service for resolving columns
+            work_item_service: Query port to resolve an issue number to its
+                canonical work item UUID (the identifier the board port expects)
         """
         self.board_service = board_service
         self.workflow_config = workflow_config_service
+        self._work_item_service = work_item_service
 
     async def on_issue_opened(self, command: IssueOpenedCommand) -> IssueIntakeResult:
         """
@@ -105,10 +110,26 @@ class IssueIntakeService(IIssueIntakePort):
                     errors=(message,),
                 )
 
+            # The board port speaks canonical work item UUIDs, not issue
+            # numbers. Resolve the UUID for this freshly opened issue.
+            work_item = await self._work_item_service.find_by_external_id(str(issue_number))
+            if work_item is None:
+                message = (
+                    f"No Codetoreum work item registered for issue {issue_number} "
+                    f"in project {project_id}; cannot place it on the board"
+                )
+                logger.warning(message)
+                return IssueIntakeResult(
+                    success=False,
+                    work_item_id=issue_number,
+                    message=message,
+                    errors=(message,),
+                )
+
             # Place the issue in the initial column
             # This triggers a WorkItemColumnChangedEvent with from_column=None
             await self.board_service.add_item_to_column(
-                work_item_id=issue_number,
+                work_item_id=work_item.id,
                 target_column=initial_column.name,
                 moved_by=MovedByType.GITHUB_WEBHOOK,
             )

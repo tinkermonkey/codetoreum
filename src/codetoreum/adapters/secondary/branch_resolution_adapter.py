@@ -28,6 +28,7 @@ from codetoreum.domain.events.branch_events import (
     BranchResolvedEvent,
     BranchReusedEvent,
 )
+from codetoreum.domain.types import ProjectId
 from codetoreum.domain.value_objects import BranchResolution
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.exceptions import ExternalServiceError
@@ -170,13 +171,13 @@ class BranchResolutionAdapter(IBranchResolutionService):
                 return resolution
 
             # Strategy 2: Parent issue
-            resolution = await self._strategy_parent_issue(repo_path, issue_id, metadata)
+            resolution = await self._strategy_parent_issue(repo_path, issue_id, metadata, project_id)
             if resolution:
                 await self._emit_events(resolution, project_id, issue_id)
                 return resolution
 
             # Strategy 3: Sibling issues
-            resolution = await self._strategy_sibling_issues(repo_path, issue_id, metadata)
+            resolution = await self._strategy_sibling_issues(repo_path, issue_id, metadata, project_id)
             if resolution:
                 await self._emit_events(resolution, project_id, issue_id)
                 return resolution
@@ -251,6 +252,7 @@ class BranchResolutionAdapter(IBranchResolutionService):
         repo_path: str,
         issue_id: str,
         metadata: dict[str, Any],
+        project_id: str,
     ) -> BranchResolution | None:
         """Strategy 2: Check parent issue for existing branch.
 
@@ -264,7 +266,7 @@ class BranchResolutionAdapter(IBranchResolutionService):
             ExternalServiceError: If ticket system or branch listing fails
         """
         # Get parent issue (uses cache to avoid duplicate calls)
-        parent_items = await self._get_parent_items(issue_id)
+        parent_items = await self._get_parent_items(issue_id, project_id)
 
         if not parent_items:
             return None
@@ -294,6 +296,7 @@ class BranchResolutionAdapter(IBranchResolutionService):
         repo_path: str,
         issue_id: str,
         metadata: dict[str, Any],
+        project_id: str,
     ) -> BranchResolution | None:
         """Strategy 3: Check sibling issues for shared branch.
 
@@ -308,7 +311,7 @@ class BranchResolutionAdapter(IBranchResolutionService):
             ExternalServiceError: If ticket system or branch listing fails
         """
         # Get parent issue (uses cache to avoid duplicate calls)
-        parent_items = await self._get_parent_items(issue_id)
+        parent_items = await self._get_parent_items(issue_id, project_id)
 
         if not parent_items:
             return None
@@ -317,7 +320,9 @@ class BranchResolutionAdapter(IBranchResolutionService):
         parent_id = parent_issue.id
 
         # Get siblings
-        sibling_items = await self._ticket_system.get_related_items(parent_id, relationship="parent-of")
+        sibling_items = await self._ticket_system.get_related_items(
+            parent_id, relationship="parent-of", project_id=ProjectId(project_id)
+        )
 
         # Skip ourselves, look for siblings with branches
         branches = await self._list_branches(repo_path)
@@ -508,7 +513,7 @@ class BranchResolutionAdapter(IBranchResolutionService):
                 exc_info=True,
             )
 
-    async def _get_parent_items(self, issue_id: str) -> Any:
+    async def _get_parent_items(self, issue_id: str, project_id: str) -> Any:
         """Get parent items for an issue with caching within a resolve_branch call.
 
         Caches the result to avoid duplicate API calls when multiple strategies
@@ -516,22 +521,27 @@ class BranchResolutionAdapter(IBranchResolutionService):
 
         Args:
             issue_id: Issue identifier
+            project_id: Project that owns the issue; part of the cache key so
+                identical issue numbers in different projects don't collide
 
         Returns:
             Parent items list from get_related_items
         """
+        cache_key = f"{project_id}:{issue_id}"
         # Check cache without holding lock during I/O
         async with self._parent_items_lock:
             # Check cache first
-            if issue_id in self._parent_items_cache:
-                return self._parent_items_cache[issue_id]
+            if cache_key in self._parent_items_cache:
+                return self._parent_items_cache[cache_key]
 
         # Release lock before I/O call to allow concurrent requests
-        parent_items = await self._ticket_system.get_related_items(issue_id, relationship="child-of")
+        parent_items = await self._ticket_system.get_related_items(
+            issue_id, relationship="child-of", project_id=ProjectId(project_id)
+        )
 
         # Cache result with lock held to ensure atomic update
         async with self._parent_items_lock:
-            self._parent_items_cache[issue_id] = parent_items
+            self._parent_items_cache[cache_key] = parent_items
 
         return parent_items
 

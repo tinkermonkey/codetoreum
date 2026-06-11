@@ -25,6 +25,7 @@ class VCSStatus:
     is_dirty: bool
     staged_files: tuple[str, ...]
     unstaged_files: tuple[str, ...]
+    untracked_files: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

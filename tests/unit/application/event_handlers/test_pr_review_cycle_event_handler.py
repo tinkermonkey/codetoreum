@@ -66,6 +66,28 @@ class TestPRReviewCycleEventHandlerApprovedPath:
         # Verify move_item_to_column was called with correct arguments
         mock_service.move_item_to_column.assert_called_once_with("item-1", "Done", MovedByType.ORCHESTRATOR)
 
+    async def test_approved_event_mirrors_board_column_to_read_model(self):
+        """The ORCHESTRATOR move suppresses WorkItemColumnChangedEvent, so the
+        handler must mirror the new column onto the work item read model."""
+        mock_service = AsyncMock(spec=IBoardService)
+        work_item_service = AsyncMock()
+        handler = PRReviewCycleEventHandler(mock_service, work_item_service=work_item_service)
+
+        event = PRReviewCycleApprovedEvent(
+            type="pr_review_cycle.approved",
+            timestamp="2026-04-21T12:00:00+00:00",
+            source="test",
+            pr_id="PR-123",
+            work_item_id="item-1",
+            cycle_number=1,
+            next_column="Done",
+            workflow_run_id="run-1",
+        )
+
+        await handler.handle(event)
+
+        work_item_service.record_board_position.assert_awaited_once_with("item-1", "Done")
+
     async def test_approved_event_correct_move_by_type(self):
         """Test handler uses MovedByType.ORCHESTRATOR when moving item."""
         mock_service = AsyncMock(spec=IBoardService)

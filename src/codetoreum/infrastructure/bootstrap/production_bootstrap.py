@@ -1152,6 +1152,7 @@ class ProductionApplicationBootstrap:
             workflow_config=self.adapters.workflow_config,
             conversational_loop_orchestrator=conversational_loop_orchestrator,
             dispatch_via_task_queue=False,  # BoardColumnEventHandler owns dispatch in production
+            work_item_service=self._production_work_item_service,
         )
 
         # WorkItemService was instantiated earlier (before the executor) so it
@@ -1541,6 +1542,11 @@ class ProductionApplicationBootstrap:
         issue_intake_service: IIssueIntakePort = IssueIntakeService(
             board_service=self.adapters.board,
             workflow_config_service=self.adapters.workflow_config,
+            # Use the production (event-store-backed) work item service, NOT
+            # self.adapters.work_item_service which resolves to the simulation
+            # MockWorkItemService — find_by_external_id must hit real state or
+            # webhook intake silently fails to place issues on the board.
+            work_item_service=self.services.work_item_service,
         )
         logger.debug("Created issue intake service for webhook event handling")
 
@@ -1701,6 +1707,7 @@ class ProductionApplicationBootstrap:
         # PR Review Cycle Event Handler
         pr_event_handler = PRReviewCycleEventHandler(
             board_service=self.adapters.board,
+            work_item_service=self.services.work_item_service,
         )
         self.infrastructure.event_bus.register_handler(pr_event_handler)
         logger.info("Registered PRReviewCycleEventHandler with event bus")
@@ -1859,6 +1866,23 @@ class ProductionApplicationBootstrap:
                         exc_info=True,
                     )
                     # Continue with other cleanup even if event store close fails
+
+            # Close the config store (closes its Elasticsearch client when the
+            # store owns it — created inline by the resolver). Skipped otherwise
+            # leaks an aiohttp session on shutdown ("Unclosed client session").
+            if self.adapters and getattr(self.adapters, "config_store", None):
+                logger.info("Closing config store...")
+                from codetoreum.adapters.secondary.config_storage_factory import close_config_store
+
+                try:
+                    await close_config_store(self.adapters.config_store)
+                except Exception as e:
+                    logger.error(
+                        f"Error closing config store: {e}",
+                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                        exc_info=True,
+                    )
+                    # Continue with other cleanup even if config store close fails
 
             # Log final event bus statistics
             if self.infrastructure and self.infrastructure.event_bus:

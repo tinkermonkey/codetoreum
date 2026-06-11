@@ -225,9 +225,12 @@ class AdapterResolver:
 
             es_url = os.environ.get("ELASTICSEARCH_URL", "http://localhost:9200")
             es_client = AsyncElasticsearch([es_url])
+            # The client is created here solely for the config store, so the
+            # store owns it and must close it on teardown.
             return self._factory.create_config_store(
                 adapter_name=self._config.config_store,
                 es_client=es_client,
+                owns_client=True,
             )
         return self._factory.create_config_store(adapter_name=self._config.config_store)
 

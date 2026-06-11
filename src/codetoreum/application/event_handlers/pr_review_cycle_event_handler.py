@@ -5,6 +5,7 @@ and moves work items to the appropriate next column based on cycle outcome.
 """
 
 import logging
+from typing import Any
 
 from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.domain.events.pr_review_cycle_events import (
@@ -54,14 +55,41 @@ class PRReviewCycleEventHandler(EventHandler):
         # Handler moves item-1 to "Done" column
     """
 
-    def __init__(self, board_service: IBoardService):
+    def __init__(self, board_service: IBoardService, work_item_service: Any = None):
         """
         Initialize PR review cycle event handler.
 
         Args:
             board_service: Board service for moving work items between columns
+            work_item_service: Optional command port used to mirror the board
+                column onto the work item read model after an ORCHESTRATOR move
+                (which suppresses WorkItemColumnChangedEvent). No-op when absent.
         """
         self.board_service = board_service
+        self.work_item_service = work_item_service
+
+    async def _mirror_board_column(self, work_item_id: str, column: str) -> None:
+        """Mirror the board column onto the work item read model (best-effort).
+
+        Guarded so command-port implementations lacking record_board_position are
+        tolerated; a persistence failure must not break review-cycle automation.
+        """
+        record = getattr(self.work_item_service, "record_board_position", None)
+        if record is None:
+            logger.warning(
+                f"work_item_service has no record_board_position; board column '{column}' "
+                f"not mirrored onto work item {work_item_id} (read model will lag the board)",
+                extra={"work_item_id": work_item_id},
+            )
+            return
+        try:
+            await record(work_item_id, column)
+        except Exception as e:
+            logger.error(
+                f"Failed to mirror board column '{column}' onto work item {work_item_id}: {e}",
+                exc_info=True,
+                extra={"work_item_id": work_item_id},
+            )
 
     def get_event_types(self) -> list[str]:
         """Get list of event types this handler processes.
@@ -138,6 +166,9 @@ class PRReviewCycleEventHandler(EventHandler):
 
         try:
             await self.board_service.move_item_to_column(work_item_id, next_column, MovedByType.ORCHESTRATOR)
+            # ORCHESTRATOR moves suppress WorkItemColumnChangedEvent, so mirror the
+            # new column onto the work item read model here (no-op if not wired).
+            await self._mirror_board_column(work_item_id, next_column)
             logger.info(f"Moved {work_item_id} to column '{next_column}'")
         except ResourceNotFoundError:
             logger.error(

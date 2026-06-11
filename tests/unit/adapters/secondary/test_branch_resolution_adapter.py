@@ -207,6 +207,37 @@ class TestParentIssueStrategy:
         assert resolution.parent_issue_id == "100"
 
     @pytest.mark.asyncio
+    async def test_parent_strategy_threads_project_id_to_ticket_system(self):
+        """Regression: the parent-issue strategy must pass project_id to
+        get_related_items. Without it, a multi-project GitHubTicketAdapter
+        cannot resolve the backing repo and raises ConfigurationError, so the
+        strategy silently degrades to branch generation for every issue."""
+        ticket_system = AsyncMock()
+        version_control = AsyncMock()
+        event_emitter = MagicMock()
+
+        adapter = BranchResolutionAdapter(
+            ticket_system=ticket_system,
+            version_control=version_control,
+            event_emitter=event_emitter,
+        )
+
+        version_control.list_branches.return_value = ["main"]
+        ticket_system.get_related_items.return_value = []  # no parent → fall through
+
+        await adapter.resolve_branch(
+            project_id="proj-1",
+            issue_id="123",
+            issue_metadata={"title": "Child task"},
+            repo_path="/repo",
+        )
+
+        # Every get_related_items call must carry the originating project_id.
+        assert ticket_system.get_related_items.await_count >= 1
+        for call in ticket_system.get_related_items.await_args_list:
+            assert call.kwargs.get("project_id") == "proj-1", f"get_related_items called without project_id: {call}"
+
+    @pytest.mark.asyncio
     async def test_parent_not_found_continues_to_sibling(self):
         """Test fallthrough to sibling when parent has no branch."""
         ticket_system = AsyncMock()
@@ -233,7 +264,7 @@ class TestParentIssueStrategy:
         sibling_issue.id = "101"
 
         # Setup get_related_items to handle both calls
-        async def mock_get_related_items(item_id, relationship=None):
+        async def mock_get_related_items(item_id, relationship=None, project_id=None):
             if item_id == "123" and relationship == "child-of":
                 return [parent_issue]
             if item_id == "100" and relationship == "parent-of":
@@ -289,7 +320,7 @@ class TestSiblingIssueStrategy:
         sibling = MagicMock(spec=WorkItem)
         sibling.id = "101"
 
-        async def mock_get_related_items(item_id, relationship=None):
+        async def mock_get_related_items(item_id, relationship=None, project_id=None):
             if item_id == "123" and relationship == "child-of":
                 return [parent_issue]
             if item_id == "100" and relationship == "parent-of":
@@ -336,7 +367,7 @@ class TestSiblingIssueStrategy:
         sibling = MagicMock(spec=WorkItem)
         sibling.id = "101"
 
-        async def mock_get_related_items(item_id, relationship=None):
+        async def mock_get_related_items(item_id, relationship=None, project_id=None):
             if item_id == "123" and relationship == "child-of":
                 return [parent_issue]
             if item_id == "100" and relationship == "parent-of":

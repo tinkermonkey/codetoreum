@@ -80,6 +80,7 @@ class ElasticsearchConfigStorage(IConfigStore):
         create_index_templates: bool = True,
         shard_count: int = 1,
         replica_count: int = 1,
+        owns_client: bool = False,
     ):
         """
         Initialize Elasticsearch configuration storage.
@@ -89,12 +90,17 @@ class ElasticsearchConfigStorage(IConfigStore):
             create_index_templates: Whether to create index templates on init
             shard_count: Number of shards for indices (configurable)
             replica_count: Number of replicas for indices (configurable)
+            owns_client: When True, close() also closes es_client. Set by callers
+                that create the client solely for this store (e.g. the production
+                resolver). Tests that share an externally-owned client leave this
+                False so close() does not pull the rug out from other users.
         """
         self.client = es_client
         self._initialized = False
         self._create_index_templates = create_index_templates
         self.shard_count = shard_count
         self.replica_count = replica_count
+        self._owns_client = owns_client
 
     async def initialize(self) -> None:
         """
@@ -1582,7 +1588,13 @@ class ElasticsearchConfigStorage(IConfigStore):
         )
 
     async def close(self) -> None:
-        """Close the storage (cleanup resources)."""
-        # Elasticsearch client is managed externally, so nothing to do here
+        """Close the storage (cleanup resources).
+
+        Closes the underlying Elasticsearch client only when this store owns it
+        (owns_client=True). Without this, a client created solely for the config
+        store leaks its aiohttp session on shutdown ("Unclosed client session").
+        """
         self._initialized = False
+        if self._owns_client and self.client is not None:
+            await self.client.close()
         logger.info("Elasticsearch configuration storage closed")
