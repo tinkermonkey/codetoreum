@@ -6,8 +6,8 @@ The implementations tier documents concrete implementations that fulfill the arc
 
 An implementation is a complete, working configuration of adapters that together satisfy all output ports. For example:
 
-- **Simulation Implementation**: Uses mock adapters to simulate the entire system in-memory. Used for testing, development, and scenario testing. (Currently the only complete implementation.)
-- **Production Implementation**: Would use real adapters for GitHub, Docker, Claude Code, etc. (Planned for future development.)
+- **Simulation Implementation**: Uses mock adapters to simulate the entire system in-memory. Used for testing, development, and scenario testing.
+- **Production Implementation**: Uses real adapters for GitHub, Docker, Claude Code, etc. See [production-bootstrap.md](./production-bootstrap.md) for the wiring sequence and validation run.
 
 Each implementation includes:
 - A bootstrap function that instantiates and wires all adapters
@@ -91,7 +91,7 @@ Architecture remains stable while implementations can be added or evolved. A new
 ## Available and Planned Implementations
 
 - **Simulation** — ✅ Complete mock implementation with in-memory services
-- **Production** (Planned) — Real GitHub, Docker, Claude Code, and external services
+- **Production** — Real GitHub, Docker, Claude Code, and external services
 - **Staging** (Planned) — Real systems with test GitHub organization
 - **Cloud-Hosted** (Planned) — Kubernetes-based deployment with cloud storage
 

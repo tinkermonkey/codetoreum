@@ -52,7 +52,7 @@ Each input port documentation file includes:
 ### [output/](./output/)
 **40 output port interfaces** across 7 documentation files:
 
-1. **core-system.md** — Fundamental operations (tickets, VCS, containers, LLM)
+1. **core-system.md** — Fundamental operations (tickets, VCS, containers, coding agent)
 2. **board-management.md** — Project board operations
 3. **code-review.md** — Pull request and review lifecycle
 4. **work-coordination.md** — Work item coordination and workflow
@@ -144,7 +144,7 @@ This mapping ensures that every adapter is documented and traceable to its port(
 - **Elasticsearch**: `ElasticsearchEventStore`
 - **Redis**: `RedisPubSubAdapter` (for messaging)
 - **Prometheus**: `PrometheusMetricsAdapter`
-- **Claude**: `ClaudeCodeAdapter` (LLM provider)
+- **Claude**: `ClaudeCodeAdapter` (coding agent)
 - **Branch Resolution**: `BranchResolutionAdapter`
 - **Environment Repair**: `ProductionEnvironmentRepairAdapter`
 - **Repair Cycles**: `ProductionRepairCycleAdapter`
