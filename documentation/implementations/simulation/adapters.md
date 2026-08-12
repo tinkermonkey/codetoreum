@@ -491,6 +491,6 @@ See `~/.claude/plans/coding-agent-port-redesign.md` §3a–§3c for the producti
 
 ---
 
-**Total Adapter Count**: 40 testing + 18 input port = **58 adapters**
+**Total Adapter Count**: 38 testing + 2 secondary + 18 input port = **58 adapters**
 
 All adapters implement port contracts to provide a complete, testable implementation of the Codetoreum architecture.
