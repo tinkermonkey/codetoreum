@@ -325,6 +325,7 @@ classDiagram
 
 ### Contract Tests
 - Shared contract suite (`tests/contracts/adapters/test_coding_agent_contract.py`) runs against `GitHubCopilotAdapter` and `MockGitHubCopilotAdapter`.
+  > ⚠ Not yet built — prerequisite for the `ICodingAgent` pluggability track; tracked separately.
 - Confirms `supported_invocation_modes()`, `execute()` signature, exception types.
 
 ### Simulation Tests

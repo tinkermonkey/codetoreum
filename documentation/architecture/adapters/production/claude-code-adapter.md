@@ -267,6 +267,7 @@ When the parser detects a rate-limit notice or an internal API retry in the `str
 - Method signatures, exception types, return value shapes (`CodingAgentResult`).
 
 **Location**: `tests/contracts/adapters/test_coding_agent_contract.py`
+> ⚠ Not yet built — prerequisite for the `ICodingAgent` pluggability track; tracked separately.
 
 ### Simulation Tests
 - Use `MockClaudeCodeAdapter` (replaces `MockLLMAdapter`). Deterministic event emission for scenario tests.

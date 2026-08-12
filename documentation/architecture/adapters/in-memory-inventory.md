@@ -92,7 +92,7 @@ These implement primary (input) port interfaces for testing. Located in `adapter
 | `InMemoryMessageBroker` | `IMessageBroker` | `adapters/testing/in_memory_message_broker.py` | ✅ YES | KEEP EPHEMERAL — simulation message transport |
 | `InMemoryMetricsAdapter` | `IMetricsAdapter` | `adapters/testing/in_memory_metrics_adapter.py` | ✅ YES | KEEP EPHEMERAL — test metric capture |
 | `InMemoryQueueService` | `IQueueService` | `adapters/testing/in_memory_queue_service.py` | ✅ YES | KEEP EPHEMERAL — simulation queue |
-| `InMemoryRepositoryAdapter` | `IVersionControlService` | `adapters/testing/in_memory_repository_adapter.py` | ✅ YES | KEEP EPHEMERAL — mock git operations |
+| `InMemoryRepositoryAdapter` | `IRepository` | `adapters/testing/in_memory_repository_adapter.py` | ✅ YES | KEEP EPHEMERAL — mock git operations |
 | `InMemoryTicketAdapter` | `ITicketSystem` | `adapters/testing/in_memory_ticket_adapter.py` | ✅ YES | KEEP EPHEMERAL — mock board operations |
 | `InMemoryTracer` | `ITracer` | `adapters/testing/in_memory_tracer.py` | ❌ NO | KEEP EPHEMERAL — test observation |
 | `InMemoryVersionControlService` | `IVersionControlService` | `adapters/testing/in_memory_version_control_service.py` | ✅ YES | KEEP EPHEMERAL — simulation VCS |
