@@ -307,7 +307,7 @@ async def test_exec_on_stopped_container(docker_adapter):
 
 
 @pytest.mark.asyncio
-async def test_context_manager(docker_config):
+async def test_context_manager(docker_config, ensure_alpine_image):
     """Test using adapter as async context manager."""
     try:
         async with DockerContainerAdapter(docker_config) as adapter:

@@ -43,6 +43,14 @@ except ImportError:
 os.environ.setdefault("OTEL_ENABLED", "false")
 os.environ.setdefault("OTEL_TRACES_ENABLED", "false")
 
+# Configure testcontainers to handle Docker socket properly and increase Reaper timeouts
+# This is important for systems with Docker socket proxies or unusual network configs
+os.environ.setdefault("TESTCONTAINERS_RYUK_PRIVILEGED", "true")
+os.environ.setdefault("TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE", "/var/run/docker.sock")
+
+# Increase Reaper reconnection timeout for flaky network environments
+os.environ.setdefault("TESTCONTAINERS_RYUK_RECONNECTION_TIMEOUT", "10")
+
 from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdapter
 from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
 from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
