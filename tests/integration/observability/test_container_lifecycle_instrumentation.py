@@ -51,6 +51,7 @@ class TestDockerContainerAdapterInstrumentation:
             mock_client = MagicMock()
             mock_container = MagicMock()
             mock_container.logs.return_value = iter([b"test output\n"])
+            mock_container.wait.return_value = {"StatusCode": 0}
             mock_container.attrs = {"State": {"ExitCode": 0}}
             mock_container.short_id = "abc123"
             mock_container.id = "abc123def456"

@@ -23,7 +23,8 @@ def elasticsearch_container():
     from the environment pick up the container's dynamic port.
     """
     container = ModernElasticsearchContainer("elasticsearch:8.17.0")
-    container.with_env("ES_JAVA_OPTS", "-Xms512m -Xmx512m")
+    container.with_env("ES_JAVA_OPTS", "-Xms256m -Xmx256m")  # Smaller heap for faster startup
+    container.with_env("discovery.seed_hosts", "[]")  # Faster startup
     container.start()
 
     url = container.get_url()

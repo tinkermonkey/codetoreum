@@ -53,8 +53,9 @@ def elasticsearch_container():
     """Create Elasticsearch testcontainer with resource limits."""
     # Use Elasticsearch 8.x with modern wait strategy (no deprecation warnings)
     container = ModernElasticsearchContainer("elasticsearch:8.17.0")
-    # Add resource limits to prevent memory exhaustion
-    container.with_env("ES_JAVA_OPTS", "-Xms512m -Xmx512m")  # Limit ES heap to 512MB
+    # Add resource limits to prevent memory exhaustion - smaller heap for faster startup
+    container.with_env("ES_JAVA_OPTS", "-Xms256m -Xmx256m")
+    container.with_env("discovery.seed_hosts", "[]")  # Faster startup
     container.start()
 
     yield container

@@ -43,13 +43,57 @@ except ImportError:
 os.environ.setdefault("OTEL_ENABLED", "false")
 os.environ.setdefault("OTEL_TRACES_ENABLED", "false")
 
-# Configure testcontainers to handle Docker socket properly and increase Reaper timeouts
+# Configure testcontainers to handle Docker socket properly
 # This is important for systems with Docker socket proxies or unusual network configs
 os.environ.setdefault("TESTCONTAINERS_RYUK_PRIVILEGED", "true")
 os.environ.setdefault("TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE", "/var/run/docker.sock")
 
-# Increase Reaper reconnection timeout for flaky network environments
-os.environ.setdefault("TESTCONTAINERS_RYUK_RECONNECTION_TIMEOUT", "10")
+# Patch testcontainers Reaper to handle connection failures gracefully
+# Must be done before importing DockerContainer from testcontainers
+# This prevents testcontainers from failing when Reaper can't connect
+try:
+    from testcontainers.core.container import Reaper
+
+    # Store original methods
+    _original_reaper_get_instance = Reaper.get_instance
+    _original_reaper_init = Reaper.__init__
+
+    # Create a NullReaper for handling Reaper connection failures
+    class _NullReaper:
+        """No-op Reaper for environments where Reaper can't connect."""
+        def __init__(self):
+            self.socket = None
+
+        def delete_containers(self, *args, **kwargs):
+            """No-op cleanup."""
+            pass
+
+    # Patch get_instance to catch connection errors
+    @classmethod
+    def _patched_get_instance(cls):
+        """Get or create Reaper instance, falling back to NullReaper on connection failure."""
+        if cls._instance is not None:
+            return cls._instance
+
+        try:
+            # Try to create the real Reaper
+            return _original_reaper_get_instance()
+        except ConnectionRefusedError as e:
+            # Reaper connection failed, use NullReaper instead
+            import logging
+            logging.warning(f"Testcontainers Reaper connection failed ({e}), using no-op Reaper for cleanup")
+            cls._instance = _NullReaper()
+            return cls._instance
+        except Exception:
+            # Other exceptions should still fail
+            raise
+
+    # Apply the patch
+    Reaper.get_instance = _patched_get_instance
+
+except ImportError:
+    # testcontainers not available yet, will be imported later
+    pass
 
 from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdapter
 from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
