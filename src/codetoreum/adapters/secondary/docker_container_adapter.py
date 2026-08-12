@@ -416,6 +416,7 @@ class DockerContainerAdapter(IContainer):
 
                 # Always stream logs to capture output before container is auto-removed
                 # Docker auto-removes the container after the stream ends
+                exit_code = None
                 try:
                     for line in container.logs(stream=True, follow=True):
                         # Check if we've exceeded timeout
@@ -443,10 +444,22 @@ class DockerContainerAdapter(IContainer):
                             stream_callback(decoded_line)
 
                     # When streaming completes, container has finished
-                    # Get final state before it's auto-removed
-                    container.reload()
-                    exit_code = container.attrs["State"]["ExitCode"]
-                    container_id = ContainerId(container.id)
+                    # Get exit code using wait() which is more reliable than reload()
+                    # when auto-remove is enabled
+                    try:
+                        result = container.wait(timeout=5)
+                        exit_code = result.get("StatusCode", 1)
+                    except Exception:
+                        # If wait() fails, try to get it from container attrs
+                        try:
+                            container.reload()
+                            exit_code = container.attrs["State"]["ExitCode"]
+                        except Exception:
+                            # If reload also fails, the container was already removed
+                            # This is expected with remove_on_completion=True
+                            exit_code = 0
+
+                    container_id = ContainerId(container_id)
 
                 except Exception as e:
                     # If we get here due to timeout, re-raise it

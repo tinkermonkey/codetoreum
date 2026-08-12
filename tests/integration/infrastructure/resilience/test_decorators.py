@@ -114,13 +114,24 @@ class FlakyTicketSystem(ITicketSystem):
     ) -> Comment:
         raise NotImplementedError
 
-    async def get_comments(self, item_id: WorkItemId, since: datetime | None = None, limit: int = 100) -> list[Comment]:
+    async def get_comments(
+        self,
+        item_id: WorkItemId,
+        since: datetime | None = None,
+        limit: int = 100,
+        project_id: ProjectId | None = None,
+    ) -> list[Comment]:
         raise NotImplementedError
 
     async def link_work_items(self, source_id: WorkItemId, target_id: WorkItemId, relationship: str) -> None:
         raise NotImplementedError
 
-    async def get_related_items(self, item_id: WorkItemId, relationship: str | None = None) -> list[WorkItem]:
+    async def get_related_items(
+        self,
+        item_id: WorkItemId,
+        relationship: str | None = None,
+        project_id: ProjectId | None = None,
+    ) -> list[WorkItem]:
         raise NotImplementedError
 
     async def register_webhook(self, url: str, events: list[str], project_id: ProjectId | None = None) -> str:
