@@ -154,18 +154,30 @@ ALPINE_IMAGE = "alpine:latest"
 
 @pytest.fixture(scope="session")
 def ensure_alpine_image() -> None:
-    """Pre-pull alpine:latest so Docker integration tests don't fail on missing image.
+    """Ensure alpine:latest is available so Docker integration tests can run.
 
     Session-scoped: runs once per test session. Skips if Docker is unavailable.
+    Checks for a local image first, then tries to pull. Skips dependent tests
+    with a clear message if the image cannot be obtained.
     """
     if not is_docker_available():
         return
 
     client = docker.from_env()
     try:
-        client.images.pull("alpine", tag="latest")
-    except Exception:
-        pass
+        try:
+            client.images.get(ALPINE_IMAGE)
+            return
+        except docker.errors.ImageNotFound:
+            pass
+
+        try:
+            client.images.pull("alpine", tag="latest")
+        except Exception:
+            pytest.skip(
+                f"{ALPINE_IMAGE} is not available locally and could not be pulled. "
+                "Ensure the Docker daemon has network access or pre-load the image."
+            )
     finally:
         client.close()
 

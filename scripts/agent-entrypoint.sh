@@ -140,5 +140,18 @@ if [ -n "${GITHUB_TOKEN:-}" ]; then
     fi
 fi || true
 
+# --- Pre-pull alpine:latest for workspace verification ---------------------
+# The DockerContainerAdapter._verify_workspace_writable() method runs a
+# throwaway alpine:latest container. If the image is missing and the daemon
+# has no network access, the verification (and thus the whole agent run)
+# fails. Pull it eagerly when the Docker socket is available.
+if [ -S /var/run/docker.sock ] && command -v docker >/dev/null 2>&1; then
+    if ! docker image inspect alpine:latest >/dev/null 2>&1; then
+        echo "[agent-entrypoint] Pre-pulling alpine:latest for workspace verification..." >&2
+        docker pull alpine:latest >/dev/null 2>&1 || \
+            echo "[agent-entrypoint] WARNING: Could not pull alpine:latest. Workspace verification may fail." >&2
+    fi
+fi
+
 # --- Hand off to the requested command --------------------------------------
 exec "$@"

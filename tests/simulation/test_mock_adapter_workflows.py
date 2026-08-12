@@ -9,8 +9,8 @@ import pytest
 from codetoreum.adapters.secondary.configurable_identity_service import (
     ConfigurableIdentityService,
 )
-from codetoreum.adapters.secondary.in_memory_queue_lock_service import (
-    InMemoryLockService,
+from codetoreum.adapters.testing.in_memory_distributed_lock import (
+    InMemoryDistributedLock,
 )
 from codetoreum.adapters.secondary.mock_code_review_adapter import MockCodeReviewAdapter
 from codetoreum.adapters.testing import MockDiscussionAdapter
@@ -269,7 +269,7 @@ class TestCombinedWorkflow:
         review = MockCodeReviewAdapter()
         review.current_project = "ACME"
 
-        lock = InMemoryLockService(event_bus=EventBus())
+        lock = InMemoryDistributedLock()
 
         # Collect all events
         events: list[CodetoreumEvent] = []
