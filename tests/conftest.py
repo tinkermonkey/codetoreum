@@ -384,8 +384,7 @@ class ModernElasticsearchContainer(DockerContainer):
     """Elasticsearch container using modern wait strategy API.
 
     This class replaces testcontainers.elasticsearch.ElasticSearchContainer to avoid
-    the DeprecationWarning from @wait_container_is_ready decorator. Uses structured
-    wait strategies (HttpWaitStrategy) instead of the deprecated decorator approach.
+    the DeprecationWarning from @wait_container_is_ready decorator.
 
     Example:
         >>> container = ModernElasticsearchContainer("elasticsearch:8.17.0")
@@ -409,10 +408,6 @@ class ModernElasticsearchContainer(DockerContainer):
         self.with_env("http.host", "0.0.0.0")
         self.with_env("xpack.security.enabled", "false")
         self.with_env("discovery.type", "single-node")
-        # Use HttpWaitStrategy instead of deprecated @wait_container_is_ready decorator
-        # Note: waiting_for() method may not be available in all testcontainers versions
-        if hasattr(self, "waiting_for"):
-            self.waiting_for(HttpWaitStrategy(port=self.port).for_status_code(200))
 
     def get_url(self) -> str:
         """Get the URL to access Elasticsearch.
@@ -423,6 +418,54 @@ class ModernElasticsearchContainer(DockerContainer):
         host = self.get_container_host_ip()
         port = self.get_exposed_port(self.port)
         return f"http://{host}:{port}"
+
+    def start(self) -> "ModernElasticsearchContainer":
+        """Start container and wait for Elasticsearch to be ready.
+
+        Overrides parent start() to add explicit wait for Elasticsearch readiness
+        via HTTP health check, since testcontainers' wait strategies may not work
+        reliably with Elasticsearch.
+
+        Returns:
+            Self for method chaining
+        """
+        super().start()
+        self._wait_for_elasticsearch()
+        return self
+
+    def _wait_for_elasticsearch(self) -> None:
+        """Wait for Elasticsearch to respond to HTTP requests.
+
+        Polls the Elasticsearch health endpoint until it responds with 200,
+        indicating the cluster is ready to accept queries.
+
+        Raises:
+            TimeoutError if Elasticsearch doesn't respond within 60 seconds
+        """
+        import socket
+
+        host = self.get_container_host_ip()
+        port = int(self.get_exposed_port(self.port))
+        deadline = time.monotonic() + 60.0
+        last_error = None
+
+        while time.monotonic() < deadline:
+            try:
+                with socket.create_connection((host, port), timeout=2.0) as sock:
+                    sock.sendall(b"GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                    response = sock.recv(4096)
+                    # Check if we got a 200 response from Elasticsearch
+                    if b"HTTP/1.1 200" in response or b"HTTP/2 200" in response:
+                        return
+                    last_error = f"Got unexpected response: {response[:100]}"
+            except (OSError, socket.error) as e:
+                last_error = str(e)
+            time.sleep(0.1)
+
+        raise TimeoutError(
+            f"Elasticsearch on {host}:{port} did not respond within 60s. "
+            f"Last error: {last_error}"
+        )
 
 
 class _RedisPingWaitStrategy(WaitStrategy):  # type: ignore
