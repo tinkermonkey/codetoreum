@@ -33,7 +33,7 @@ def docker_config():
 
 
 @pytest.fixture
-def docker_adapter(docker_config):
+def docker_adapter(docker_config, ensure_alpine_image):
     """Create Docker adapter instance with proper cleanup."""
     adapter = DockerContainerAdapter(docker_config)
 

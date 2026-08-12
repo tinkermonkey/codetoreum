@@ -9,7 +9,34 @@ from dataclasses import dataclass
 import docker
 import pytest
 from testcontainers.core.container import DockerContainer
-from testcontainers.core.wait_strategies import HttpWaitStrategy, PortWaitStrategy, WaitStrategy
+
+# Wait strategies may not be available in all testcontainers versions
+# These are only used in integration tests, so we can import them conditionally
+try:
+    from testcontainers.core.wait_strategies import HttpWaitStrategy, PortWaitStrategy, WaitStrategy
+except ImportError:
+    # Fallback for testcontainers versions without wait_strategies module
+    # These will be replaced with stubs if needed
+    class WaitStrategy:  # type: ignore
+        """Stub for missing WaitStrategy."""
+        def __init__(self) -> None:
+            self._startup_timeout = 60
+            self._poll_interval = 0.1
+
+    class HttpWaitStrategy(WaitStrategy):  # type: ignore
+        """Stub for missing HttpWaitStrategy."""
+        def __init__(self, port: int = 80) -> None:
+            super().__init__()
+            self.port = port
+
+        def for_status_code(self, status_code: int) -> "HttpWaitStrategy":
+            return self
+
+    class PortWaitStrategy(WaitStrategy):  # type: ignore
+        """Stub for missing PortWaitStrategy."""
+        def __init__(self, port: int = 80) -> None:
+            super().__init__()
+            self.port = port
 
 # Disable OpenTelemetry for tests to prevent daemon threads from hanging event loops
 # This must happen before any codetoreum imports that trigger fastapi_app import
@@ -120,6 +147,27 @@ def is_docker_available() -> bool:
 
 # Create a global pytest marker for tests requiring Docker
 docker_available = pytest.mark.skipif(not is_docker_available(), reason="Docker is not available or not running")
+
+
+ALPINE_IMAGE = "alpine:latest"
+
+
+@pytest.fixture(scope="session")
+def ensure_alpine_image() -> None:
+    """Pre-pull alpine:latest so Docker integration tests don't fail on missing image.
+
+    Session-scoped: runs once per test session. Skips if Docker is unavailable.
+    """
+    if not is_docker_available():
+        return
+
+    client = docker.from_env()
+    try:
+        client.images.pull("alpine", tag="latest")
+    except Exception:
+        pass
+    finally:
+        client.close()
 
 
 @pytest.fixture(scope="session")
@@ -298,7 +346,9 @@ class ModernElasticsearchContainer(DockerContainer):
         self.with_env("xpack.security.enabled", "false")
         self.with_env("discovery.type", "single-node")
         # Use HttpWaitStrategy instead of deprecated @wait_container_is_ready decorator
-        self.waiting_for(HttpWaitStrategy(port=self.port).for_status_code(200))
+        # Note: waiting_for() method may not be available in all testcontainers versions
+        if hasattr(self, "waiting_for"):
+            self.waiting_for(HttpWaitStrategy(port=self.port).for_status_code(200))
 
     def get_url(self) -> str:
         """Get the URL to access Elasticsearch.
@@ -311,7 +361,7 @@ class ModernElasticsearchContainer(DockerContainer):
         return f"http://{host}:{port}"
 
 
-class _RedisPingWaitStrategy(WaitStrategy):
+class _RedisPingWaitStrategy(WaitStrategy):  # type: ignore
     """Wait strategy that verifies Redis is ready by issuing a PING command.
 
     PortWaitStrategy only checks that the TCP port accepts connections, which can
@@ -374,7 +424,9 @@ class ModernRedisContainer(DockerContainer):
         if self.password:
             self.with_command(f"redis-server --requirepass {self.password}")
         # Use PING-based wait strategy to ensure Redis is fully ready (not just TCP-open)
-        self.waiting_for(_RedisPingWaitStrategy(self.port))
+        # Note: waiting_for() method may not be available in all testcontainers versions
+        if hasattr(self, "waiting_for"):
+            self.waiting_for(_RedisPingWaitStrategy(self.port))
 
 
 @pytest.fixture(scope="function", autouse=True)
