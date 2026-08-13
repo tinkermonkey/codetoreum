@@ -66,7 +66,6 @@ try:
 
         def delete_containers(self, *args, **kwargs):
             """No-op cleanup."""
-            pass
 
     # Patch get_instance to catch connection errors
     @classmethod
@@ -458,7 +457,7 @@ class ModernElasticsearchContainer(DockerContainer):
                     if b"HTTP/1.1 200" in response or b"HTTP/2 200" in response:
                         return
                     last_error = f"Got unexpected response: {response[:100]}"
-            except (OSError, socket.error) as e:
+            except OSError as e:
                 last_error = str(e)
             time.sleep(0.1)
 
