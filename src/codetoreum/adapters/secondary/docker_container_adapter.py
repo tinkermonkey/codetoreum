@@ -364,19 +364,18 @@ class DockerContainerAdapter(IContainer):
                 raise ContainerExecutionError(
                     f"Failed to retrieve container exit code: {prior_wait_error}"
                 ) from prior_wait_error
-            else:
-                # Single failure: wait() threw NotFound (expected), reload() failed
-                logger.error(
-                    f"Failed to reload container {container_id_str} to retrieve exit code: {reload_error}",
-                    exc_info=True,
-                    extra={
-                        "error_id": ErrorRegistry.ERR_CONTAINER_RELOAD_FAILED,
-                        "container_id": container_id_str,
-                    },
-                )
-                raise ContainerExecutionError(
-                    f"Failed to retrieve container exit code: {reload_error}"
-                ) from reload_error
+            # Single failure: wait() threw NotFound (expected), reload() failed
+            logger.error(
+                f"Failed to reload container {container_id_str} to retrieve exit code: {reload_error}",
+                exc_info=True,
+                extra={
+                    "error_id": ErrorRegistry.ERR_CONTAINER_RELOAD_FAILED,
+                    "container_id": container_id_str,
+                },
+            )
+            raise ContainerExecutionError(
+                f"Failed to retrieve container exit code: {reload_error}"
+            ) from reload_error
 
     @instrument_async_function(
         name="container.run",
