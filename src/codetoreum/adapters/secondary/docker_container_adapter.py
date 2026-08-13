@@ -449,15 +449,80 @@ class DockerContainerAdapter(IContainer):
                     try:
                         result = container.wait(timeout=5)
                         exit_code = result.get("StatusCode", 1)
-                    except Exception:
-                        # If wait() fails, try to get it from container attrs
+                    except docker.errors.NotFound:
+                        # Container was already removed - expected with remove_on_completion=True
+                        # Try reload as fallback
                         try:
                             container.reload()
                             exit_code = container.attrs["State"]["ExitCode"]
-                        except Exception:
-                            # If reload also fails, the container was already removed
-                            # This is expected with remove_on_completion=True
+                        except docker.errors.NotFound:
+                            # Container genuinely not found - already removed after successful log streaming.
+                            # If we successfully streamed logs, the container completed (not crashed mid-stream).
+                            # Log warning but default to exit_code=0 since streaming succeeded.
+                            container_id_str = container.short_id if container else "unknown"
+                            logger.warning(
+                                f"Container {container_id_str} was auto-removed before exit code could be retrieved. "
+                                "Log streaming completed successfully, defaulting to exit_code=0.",
+                                extra={
+                                    "error_id": "ERR_CONTAINER_AUTO_REMOVED_AFTER_STREAMING",
+                                    "container_id": container_id_str,
+                                },
+                            )
                             exit_code = 0
+                        except Exception as reload_error:
+                            # Docker API error during reload (not NotFound) - log and raise
+                            container_id_str = container.short_id if container else "unknown"
+                            logger.error(
+                                f"Failed to reload container {container_id_str} to retrieve exit code: {reload_error}",
+                                exc_info=True,
+                                extra={
+                                    "error_id": "ERR_CONTAINER_RELOAD_FAILED",
+                                    "container_id": container_id_str,
+                                },
+                            )
+                            raise ContainerExecutionError(
+                                f"Failed to retrieve container exit code: {reload_error}"
+                            ) from reload_error
+                    except Exception as wait_error:
+                        # Docker API error during wait (not NotFound) - log and try reload as fallback
+                        logger.warning(
+                            f"Failed to wait for container exit code: {wait_error}",
+                            exc_info=True,
+                            extra={
+                                "error_id": "ERR_CONTAINER_WAIT_FAILED",
+                                "container_id": container.short_id if container else "unknown",
+                            },
+                        )
+                        try:
+                            container.reload()
+                            exit_code = container.attrs["State"]["ExitCode"]
+                        except docker.errors.NotFound:
+                            # Container was removed - log and default to 0 since streaming completed
+                            container_id_str = container.short_id if container else "unknown"
+                            logger.warning(
+                                f"Container {container_id_str} not found after wait() failed. "
+                                "Log streaming completed successfully, defaulting to exit_code=0.",
+                                extra={
+                                    "error_id": "ERR_CONTAINER_AUTO_REMOVED_AFTER_STREAMING",
+                                    "container_id": container_id_str,
+                                },
+                            )
+                            exit_code = 0
+                        except Exception as reload_error:
+                            # Failed to reload after wait failed (not NotFound) - log and raise
+                            container_id_str = container.short_id if container else "unknown"
+                            logger.error(
+                                f"Failed to retrieve exit code via both wait() and reload(): "
+                                f"{wait_error} (wait), {reload_error} (reload). Container ID: {container_id_str}",
+                                exc_info=True,
+                                extra={
+                                    "error_id": "ERR_CONTAINER_DUAL_RETRIEVAL_FAILED",
+                                    "container_id": container_id_str,
+                                },
+                            )
+                            raise ContainerExecutionError(
+                                f"Failed to retrieve container exit code: {wait_error}"
+                            ) from wait_error
 
                     container_id = ContainerId(container_id)
 
