@@ -49,8 +49,8 @@ os.environ.setdefault("TESTCONTAINERS_RYUK_PRIVILEGED", "true")
 os.environ.setdefault("TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE", "/var/run/docker.sock")
 
 # Patch testcontainers Reaper to handle connection failures gracefully
-# Must be done before importing DockerContainer from testcontainers
 # This prevents testcontainers from failing when Reaper can't connect
+# (Note: DockerContainer is already imported at line 11; this patch runs before containers are *started*)
 try:
     from testcontainers.core.container import Reaper
 
@@ -503,8 +503,9 @@ class ModernRedisContainer(DockerContainer):
     """Redis container using modern wait strategy API.
 
     This class replaces testcontainers.redis.RedisContainer to avoid
-    the DeprecationWarning from @wait_container_is_ready decorator. Uses structured
-    wait strategies (PortWaitStrategy) instead of the deprecated decorator approach.
+    the DeprecationWarning from @wait_container_is_ready decorator. Implements
+    explicit Redis readiness checking via PING commands instead of relying on
+    port availability (which can succeed before Redis finishes initialization).
 
     Example:
         >>> container = ModernRedisContainer("redis:7-alpine")
@@ -529,10 +530,70 @@ class ModernRedisContainer(DockerContainer):
         self.with_exposed_ports(self.port)
         if self.password:
             self.with_command(f"redis-server --requirepass {self.password}")
-        # Use PING-based wait strategy to ensure Redis is fully ready (not just TCP-open)
-        # Note: waiting_for() method may not be available in all testcontainers versions
-        if hasattr(self, "waiting_for"):
-            self.waiting_for(_RedisPingWaitStrategy(self.port))
+        # Set startup timeout (default is fine but make it explicit)
+        self._startup_timeout = 60
+
+    def start(self) -> "ModernRedisContainer":
+        """Start container and wait for Redis to be ready.
+
+        Overrides parent start() to add explicit wait for Redis readiness
+        via PING command, ensuring the container is fully initialized before
+        tests use it. This prevents race conditions from tests connecting
+        before Redis finishes startup.
+
+        Returns:
+            Self for method chaining
+        """
+        super().start()
+        # Give Redis time to start inside the container
+        time.sleep(1.0)
+        self._wait_for_redis()
+        return self
+
+    def _wait_for_redis(self) -> None:
+        """Wait for Redis to respond to PING commands.
+
+        Polls Redis with PING until it responds with +PONG,
+        indicating the container is ready to accept connections.
+
+        Raises:
+            TimeoutError if Redis doesn't respond within 60 seconds
+        """
+        import socket
+        import logging as mod_logging
+
+        host = self.get_container_host_ip()
+        port = int(self.get_exposed_port(self.port))
+        deadline = time.monotonic() + 60.0
+        last_error = None
+        attempt = 0
+
+        while time.monotonic() < deadline:
+            attempt += 1
+            try:
+                # Try TCP connection with short timeout
+                with socket.create_connection((host, port), timeout=1.0) as sock:
+                    sock.sendall(b"PING\r\n")
+                    response = sock.recv(16)
+                    if response.startswith(b"+PONG"):
+                        mod_logging.getLogger(__name__).info(f"Redis ready after {attempt} attempts")
+                        return
+                    last_error = f"Got unexpected response: {response[:100]}"
+            except (ConnectionRefusedError, OSError) as e:
+                # Port not yet available or connection failed, will retry
+                last_error = str(e)
+                if attempt <= 3:  # Log first few attempts
+                    mod_logging.getLogger(__name__).debug(
+                        f"Redis connection attempt {attempt} failed: {e}"
+                    )
+
+            # Sleep a bit more between retries
+            time.sleep(0.5)
+
+        raise TimeoutError(
+            f"Redis on {host}:{port} did not respond to PING within 60s "
+            f"(attempted {attempt} times). Last error: {last_error}"
+        )
 
 
 @pytest.fixture(scope="function", autouse=True)
