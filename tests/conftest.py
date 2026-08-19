@@ -19,12 +19,14 @@ except ImportError:
     # These will be replaced with stubs if needed
     class WaitStrategy:  # type: ignore
         """Stub for missing WaitStrategy."""
+
         def __init__(self) -> None:
             self._startup_timeout = 60
             self._poll_interval = 0.1
 
     class HttpWaitStrategy(WaitStrategy):  # type: ignore
         """Stub for missing HttpWaitStrategy."""
+
         def __init__(self, port: int = 80) -> None:
             super().__init__()
             self.port = port
@@ -34,9 +36,11 @@ except ImportError:
 
     class PortWaitStrategy(WaitStrategy):  # type: ignore
         """Stub for missing PortWaitStrategy."""
+
         def __init__(self, port: int = 80) -> None:
             super().__init__()
             self.port = port
+
 
 # Disable OpenTelemetry for tests to prevent daemon threads from hanging event loops
 # This must happen before any codetoreum imports that trigger fastapi_app import
@@ -61,6 +65,7 @@ try:
     # Create a NullReaper for handling Reaper connection failures
     class _NullReaper:
         """No-op Reaper for environments where Reaper can't connect."""
+
         def __init__(self):
             self.socket = None
 
@@ -80,6 +85,7 @@ try:
         except ConnectionRefusedError as e:
             # Reaper connection failed, use NullReaper instead
             import logging
+
             logging.warning(f"Testcontainers Reaper connection failed ({e}), using no-op Reaper for cleanup")
             cls._instance = _NullReaper()
             return cls._instance
@@ -101,6 +107,59 @@ from codetoreum.domain.events import CodetoreumEvent, now_iso
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.simulation import SimulationConfig
 from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
+
+# ============================================================================
+# Fallback container cleanup (safety net for the disabled Reaper)
+# ============================================================================
+# With Ryuk patched to a no-op above, nothing automatically removes a
+# container if the process that started it never gets to call .stop() —
+# e.g. a fixture whose readiness check times out before its try/finally is
+# registered, or a test run that gets killed mid-suite. Track every
+# container this session actually creates and force-remove anything still
+# present when the session ends, regardless of how each individual test
+# fixture cleaned up (or failed to).
+_started_container_ids: list[str] = []
+
+
+def _track_started_container(container: "DockerContainer") -> None:
+    """Record a container's ID so it can be force-removed at session end.
+
+    Safe to call multiple times for the same container and safe to call
+    even if the container was later stopped normally — pytest_sessionfinish
+    ignores IDs that no longer exist.
+    """
+    try:
+        container_id = container.get_wrapped_container().id
+    except Exception:
+        return
+    _started_container_ids.append(container_id)
+
+
+def pytest_sessionfinish(session, exitstatus) -> None:
+    """Force-remove any testcontainers container this session leaked."""
+    if not _started_container_ids:
+        return
+
+    import logging
+
+    logger = logging.getLogger(__name__)
+    client = docker.from_env()
+    removed = 0
+    for container_id in _started_container_ids:
+        try:
+            client.containers.get(container_id).remove(force=True)
+            removed += 1
+        except docker.errors.NotFound:
+            # Already cleaned up normally — nothing to do.
+            pass
+        except Exception as e:
+            logger.warning(f"Failed to force-remove leaked container {container_id}: {e}")
+    if removed:
+        logger.warning(
+            f"Force-removed {removed} testcontainers container(s) that weren't cleaned up "
+            "by their fixtures (Reaper is disabled in this environment)."
+        )
+
 
 # ============================================================================
 # TestEvent Fixture for Adapter Tests
@@ -429,6 +488,9 @@ class ModernElasticsearchContainer(DockerContainer):
             Self for method chaining
         """
         super().start()
+        # Register with the session-level safety net before the readiness
+        # wait, which can itself raise and skip past a fixture's cleanup.
+        _track_started_container(self)
         self._wait_for_elasticsearch()
         return self
 
@@ -461,10 +523,7 @@ class ModernElasticsearchContainer(DockerContainer):
                 last_error = str(e)
             time.sleep(0.1)
 
-        raise TimeoutError(
-            f"Elasticsearch on {host}:{port} did not respond within 60s. "
-            f"Last error: {last_error}"
-        )
+        raise TimeoutError(f"Elasticsearch on {host}:{port} did not respond within 60s. " f"Last error: {last_error}")
 
 
 class _RedisPingWaitStrategy(WaitStrategy):  # type: ignore
@@ -545,6 +604,9 @@ class ModernRedisContainer(DockerContainer):
             Self for method chaining
         """
         super().start()
+        # Register with the session-level safety net before the readiness
+        # wait, which can itself raise and skip past a fixture's cleanup.
+        _track_started_container(self)
         # Give Redis time to start inside the container
         time.sleep(1.0)
         self._wait_for_redis()
@@ -559,8 +621,8 @@ class ModernRedisContainer(DockerContainer):
         Raises:
             TimeoutError if Redis doesn't respond within 60 seconds
         """
-        import socket
         import logging as mod_logging
+        import socket
 
         host = self.get_container_host_ip()
         port = int(self.get_exposed_port(self.port))
@@ -583,9 +645,7 @@ class ModernRedisContainer(DockerContainer):
                 # Port not yet available or connection failed, will retry
                 last_error = str(e)
                 if attempt <= 3:  # Log first few attempts
-                    mod_logging.getLogger(__name__).debug(
-                        f"Redis connection attempt {attempt} failed: {e}"
-                    )
+                    mod_logging.getLogger(__name__).debug(f"Redis connection attempt {attempt} failed: {e}")
 
             # Sleep a bit more between retries
             time.sleep(0.5)
