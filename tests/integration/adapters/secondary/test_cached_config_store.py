@@ -9,15 +9,15 @@ with Redis caching, providing:
 """
 
 import asyncio
-import pytest
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from redis import asyncio as aioredis
 
 from codetoreum.adapters.secondary.cached_config_store import CachedConfigStore
-from tests.conftest import ModernRedisContainer, docker_available
+from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
 from codetoreum.infrastructure.redis_config_cache import RedisConfigCache
 from codetoreum.ports.output.config_store import (
     AgentConfig,
@@ -28,7 +28,7 @@ from codetoreum.ports.output.config_store import (
     ProjectConfig,
     WorkflowTemplate,
 )
-from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
+from tests.conftest import ModernRedisContainer, docker_available
 
 pytest_plugins = ["pytest_asyncio"]
 
@@ -39,7 +39,18 @@ pytestmark = docker_available
 def redis_container():
     """Redis test container with automatic cleanup."""
     container = ModernRedisContainer(image="redis:7-alpine")
-    container.start()
+    try:
+        container.start()
+    except Exception:
+        # start() may have created and started the underlying Docker
+        # container before its readiness check raised (e.g. a startup
+        # TimeoutError). Since this is outside the try/finally below,
+        # nothing else will clean it up — stop it here before re-raising.
+        try:
+            container.stop()
+        except Exception:
+            pass  # session-level pytest_sessionfinish hook will force-remove it
+        raise
     try:
         yield container
     finally:
@@ -374,9 +385,7 @@ async def test_save_workflow_template_write_through(cached_store, mock_storage, 
 
 
 @pytest.mark.asyncio
-async def test_delete_project_config_invalidates_cache(
-    cached_store, mock_storage, sample_project_config
-):
+async def test_delete_project_config_invalidates_cache(cached_store, mock_storage, sample_project_config):
     """Test that deleting project config invalidates cache."""
     mock_storage.delete_project_config = AsyncMock()
 
@@ -399,9 +408,7 @@ async def test_delete_project_config_invalidates_cache(
 
 
 @pytest.mark.asyncio
-async def test_delete_agent_config_invalidates_cache(
-    cached_store, mock_storage, sample_agent_config
-):
+async def test_delete_agent_config_invalidates_cache(cached_store, mock_storage, sample_agent_config):
     """Test that deleting agent config invalidates cache."""
     mock_storage.delete_agent_config = AsyncMock()
 

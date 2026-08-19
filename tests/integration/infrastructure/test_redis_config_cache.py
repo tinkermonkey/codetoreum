@@ -11,20 +11,20 @@ Tests the RedisConfigCache class which provides:
 import asyncio
 import json
 import logging
-import pytest
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
+import pytest
 from redis import asyncio as aioredis
 
+from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
 from codetoreum.infrastructure.redis_config_cache import RedisConfigCache, RedisConfigCacheError
-from tests.conftest import ModernRedisContainer, docker_available
 from codetoreum.ports.output.config_store import (
     AgentConfig,
     PipelineConfig,
     ProjectConfig,
     WorkflowTemplate,
 )
-from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
+from tests.conftest import ModernRedisContainer, docker_available
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,18 @@ pytestmark = docker_available
 def redis_container():
     """Redis test container with automatic cleanup."""
     container = ModernRedisContainer(image="redis:7-alpine")
-    container.start()
+    try:
+        container.start()
+    except Exception:
+        # start() may have created and started the underlying Docker
+        # container before its readiness check raised (e.g. a startup
+        # TimeoutError). Since this is outside the try/finally below,
+        # nothing else will clean it up — stop it here before re-raising.
+        try:
+            container.stop()
+        except Exception:
+            pass  # session-level pytest_sessionfinish hook will force-remove it
+        raise
     try:
         yield container
     finally:

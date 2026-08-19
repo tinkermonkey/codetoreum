@@ -8,14 +8,14 @@ Tests the ElasticsearchConfigStorage adapter which provides:
 - Index lifecycle management (ILM) for retention
 """
 
-import pytest
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from decimal import Decimal
 
+import pytest
 from elasticsearch import AsyncElasticsearch
 
 from codetoreum.adapters.secondary.elasticsearch_config_storage import ElasticsearchConfigStorage
-from tests.conftest import ModernElasticsearchContainer, wait_for_elasticsearch_indexing, docker_available
+from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
 from codetoreum.ports.output.config_store import (
     AgentConfig,
     ConfigNotFoundError,
@@ -23,7 +23,7 @@ from codetoreum.ports.output.config_store import (
     ProjectConfig,
     WorkflowTemplate,
 )
-from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
+from tests.conftest import ModernElasticsearchContainer, docker_available, wait_for_elasticsearch_indexing
 
 pytest_plugins = ["pytest_asyncio"]
 
@@ -34,7 +34,18 @@ pytestmark = docker_available
 def es_container():
     """Elasticsearch test container with automatic cleanup."""
     container = ModernElasticsearchContainer("elasticsearch:8.17.0")
-    container.start()
+    try:
+        container.start()
+    except Exception:
+        # start() may have created and started the underlying Docker
+        # container before its readiness check raised (e.g. a startup
+        # TimeoutError). Since this is outside the try/finally below,
+        # nothing else will clean it up — stop it here before re-raising.
+        try:
+            container.stop()
+        except Exception:
+            pass  # session-level pytest_sessionfinish hook will force-remove it
+        raise
     try:
         yield container
     finally:
@@ -65,7 +76,7 @@ async def config_storage(es_client):
     """Elasticsearch configuration storage instance."""
     storage = ElasticsearchConfigStorage(es_client, create_index_templates=True, owns_client=False)
     await storage.initialize()
-    yield storage
+    return storage
 
 
 @pytest.fixture
