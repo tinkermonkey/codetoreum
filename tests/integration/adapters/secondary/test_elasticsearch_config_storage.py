@@ -25,8 +25,6 @@ from codetoreum.ports.output.config_store import (
 )
 from tests.conftest import ModernElasticsearchContainer, docker_available, wait_for_elasticsearch_indexing
 
-pytest_plugins = ["pytest_asyncio"]
-
 pytestmark = docker_available
 
 
@@ -388,6 +386,7 @@ async def test_list_agents(config_storage):
             project_id="proj-001",
             agent_name=f"agent-{i}",
             makes_code_changes=True,
+            coding_agent="claude",
             version=1,
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),

@@ -9,8 +9,6 @@ Tests the RedisConfigCache class which provides:
 """
 
 import asyncio
-import json
-import logging
 from datetime import UTC, datetime
 
 import pytest
@@ -25,8 +23,6 @@ from codetoreum.ports.output.config_store import (
     WorkflowTemplate,
 )
 from tests.conftest import ModernRedisContainer, docker_available
-
-logger = logging.getLogger(__name__)
 
 pytestmark = docker_available
 

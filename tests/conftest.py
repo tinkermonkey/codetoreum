@@ -530,37 +530,6 @@ class ModernElasticsearchContainer(DockerContainer):
         raise TimeoutError(f"Elasticsearch on {host}:{port} did not respond within 60s. " f"Last error: {last_error}")
 
 
-class _RedisPingWaitStrategy(WaitStrategy):  # type: ignore
-    """Wait strategy that verifies Redis is ready by issuing a PING command.
-
-    PortWaitStrategy only checks that the TCP port accepts connections, which can
-    succeed before Redis has finished initializing and is ready to process commands.
-    This strategy connects via raw socket and sends a Redis PING, retrying until
-    Redis responds with +PONG.
-    """
-
-    def __init__(self, port: int = 6379) -> None:
-        super().__init__()
-        self.port = port
-
-    def wait_until_ready(self, container: "DockerContainer") -> None:
-        import socket
-
-        host = container.get_container_host_ip()
-        mapped_port = int(container.get_exposed_port(self.port))
-        deadline = time.monotonic() + self._startup_timeout
-        while time.monotonic() < deadline:
-            try:
-                with socket.create_connection((host, mapped_port), timeout=1.0) as sock:
-                    sock.sendall(b"PING\r\n")
-                    response = sock.recv(16)
-                    if response.startswith(b"+PONG"):
-                        return
-            except OSError:
-                pass
-            time.sleep(self._poll_interval)
-        raise TimeoutError(f"Redis on {host}:{mapped_port} did not respond to PING within {self._startup_timeout}s")
-
 
 class ModernRedisContainer(DockerContainer):
     """Redis container using modern wait strategy API.
@@ -611,8 +580,6 @@ class ModernRedisContainer(DockerContainer):
         # Register with the session-level safety net before the readiness
         # wait, which can itself raise and skip past a fixture's cleanup.
         _track_started_container(self)
-        # Give Redis time to start inside the container
-        time.sleep(1.0)
         self._wait_for_redis()
         return self
 

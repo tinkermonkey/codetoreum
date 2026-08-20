@@ -10,7 +10,6 @@ with Redis caching, providing:
 
 import asyncio
 from datetime import UTC, datetime
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -29,8 +28,6 @@ from codetoreum.ports.output.config_store import (
     WorkflowTemplate,
 )
 from tests.conftest import ModernRedisContainer, docker_available
-
-pytest_plugins = ["pytest_asyncio"]
 
 pytestmark = docker_available
 
@@ -463,6 +460,7 @@ async def test_list_agents_bypasses_cache(cached_store, mock_storage):
             project_id="proj-001",
             agent_name=f"agent-{i}",
             makes_code_changes=True,
+            coding_agent="claude",
             version=1,
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),
@@ -542,8 +540,8 @@ async def test_get_config_version_bypasses_cache(cached_store, mock_storage):
 async def test_list_config_versions_bypasses_cache(cached_store, mock_storage):
     """Test that list_config_versions goes directly to storage (not cached)."""
     versions = [
-        ConfigVersion(id="proj-001", version=2, created_at=datetime.now(UTC)),
-        ConfigVersion(id="proj-001", version=1, created_at=datetime.now(UTC)),
+        ConfigVersion(version=2, changed_at=datetime.now(UTC), changed_by="test", change_type="update", changes={}),
+        ConfigVersion(version=1, changed_at=datetime.now(UTC), changed_by="test", change_type="create", changes={}),
     ]
     mock_storage.list_config_versions.return_value = versions
 
