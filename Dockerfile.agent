@@ -40,13 +40,14 @@ RUN apt-get update && \
 # doesn't have to install them every time it runs.
 
 # WORKDIR should match where the orchestrator will mount the project
-WORKDIR /workspace/codetoreum
+WORKDIR /workspace
 
 # Poetry configuration: install into system Python, no per-project virtualenv.
 # In a container the container itself is the isolated environment, so a nested
 # venv adds no value and breaks `poetry run pytest` by creating a second Python.
 ENV POETRY_NO_INTERACTION=1 \
     POETRY_VIRTUALENVS_CREATE=false \
+    POETRY_VIRTUALENVS_IN_PROJECT=false \
     POETRY_CACHE_DIR=/tmp/poetry_cache
 
 # Copy ONLY the dependency manifests needed for installation
