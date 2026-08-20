@@ -16,6 +16,99 @@ from testcontainers.core.wait_strategies import HttpWaitStrategy, PortWaitStrate
 os.environ.setdefault("OTEL_ENABLED", "false")
 os.environ.setdefault("OTEL_TRACES_ENABLED", "false")
 
+# Patch testcontainers Reaper to handle connection failures gracefully.
+# In this environment Ryuk (the Reaper sidecar) can't always reach the Docker
+# socket, and DockerContainer.start() calls Reaper.get_instance() unconditionally
+# before creating the container — an unhandled ConnectionRefusedError there would
+# otherwise fail every container-based test outright. Try the real Reaper first;
+# only fall back to a no-op if it can't connect, since a working Reaper is the
+# most robust cleanup path we have (it survives even the test process being
+# SIGKILLed, unlike anything hooked into pytest's own lifecycle).
+try:
+    from testcontainers.core.container import Reaper
+
+    _original_reaper_get_instance = Reaper.get_instance
+
+    class _NullReaper:
+        """No-op Reaper for environments where Reaper can't connect."""
+
+        def __init__(self):
+            self.socket = None
+
+        def delete_containers(self, *args, **kwargs):
+            """No-op cleanup."""
+
+    @classmethod
+    def _patched_get_instance(cls):
+        """Get or create Reaper instance, falling back to NullReaper on connection failure."""
+        if cls._instance is not None:
+            return cls._instance
+        try:
+            return _original_reaper_get_instance()
+        except ConnectionRefusedError as e:
+            import logging
+
+            logging.warning(f"Testcontainers Reaper connection failed ({e}), using no-op Reaper for cleanup")
+            cls._instance = _NullReaper()
+            return cls._instance
+        except Exception:
+            raise
+
+    Reaper.get_instance = _patched_get_instance
+
+except ImportError:
+    pass
+
+# ============================================================================
+# Fallback container cleanup (safety net for when Reaper is unavailable)
+# ============================================================================
+# If the Reaper above falls back to a no-op, nothing automatically removes a
+# container whose owning process never gets to call .stop() — e.g. a fixture
+# whose readiness check times out before its try/finally runs, or a test
+# session that gets killed mid-run. Track every container this session
+# actually creates and force-remove anything still present when the session
+# ends, regardless of how (or whether) each individual fixture cleaned up.
+_started_container_ids: list[str] = []
+
+
+def _track_started_container(container: "DockerContainer") -> None:
+    """Record a container's ID so it can be force-removed at session end.
+
+    Safe to call multiple times for the same container and safe to call
+    even if the container was later stopped normally — pytest_sessionfinish
+    ignores IDs that no longer exist.
+    """
+    try:
+        container_id = container.get_wrapped_container().id
+    except Exception:
+        return
+    _started_container_ids.append(container_id)
+
+
+def pytest_sessionfinish(session, exitstatus) -> None:
+    """Force-remove any testcontainers container this session leaked."""
+    if not _started_container_ids:
+        return
+
+    import logging
+
+    logger = logging.getLogger(__name__)
+    client = docker.from_env()
+    removed = 0
+    for container_id in _started_container_ids:
+        try:
+            client.containers.get(container_id).remove(force=True)
+            removed += 1
+        except docker.errors.NotFound:
+            pass
+        except Exception as e:
+            logger.warning(f"Failed to force-remove leaked container {container_id}: {e}")
+    if removed:
+        logger.warning(
+            f"Force-removed {removed} testcontainers container(s) that weren't cleaned up " "by their fixtures."
+        )
+
+
 from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdapter
 from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
 from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
@@ -300,6 +393,31 @@ class ModernElasticsearchContainer(DockerContainer):
         # Use HttpWaitStrategy instead of deprecated @wait_container_is_ready decorator
         self.waiting_for(HttpWaitStrategy(port=self.port).for_status_code(200))
 
+    def start(self) -> "ModernElasticsearchContainer":
+        """Start the container, cleaning up on a failed readiness check.
+
+        DockerContainer.start() sets self._container (the container is created
+        and actually running) *before* invoking the configured wait strategy —
+        if that wait strategy raises (e.g. a readiness timeout), the exception
+        propagates out of start() with the container left running and nothing
+        left to clean it up. Track it either way, and best-effort stop it here
+        if the wait failed; the session-level pytest_sessionfinish safety net
+        above catches anything this can't (e.g. this process itself dying).
+        """
+        try:
+            super().start()
+        except Exception:
+            if self._container is not None:
+                _track_started_container(self)
+                try:
+                    self.stop()
+                except Exception:
+                    pass
+            raise
+        else:
+            _track_started_container(self)
+        return self
+
     def get_url(self) -> str:
         """Get the URL to access Elasticsearch.
 
@@ -375,6 +493,25 @@ class ModernRedisContainer(DockerContainer):
             self.with_command(f"redis-server --requirepass {self.password}")
         # Use PING-based wait strategy to ensure Redis is fully ready (not just TCP-open)
         self.waiting_for(_RedisPingWaitStrategy(self.port))
+
+    def start(self) -> "ModernRedisContainer":
+        """Start the container, cleaning up on a failed readiness check.
+
+        See ModernElasticsearchContainer.start() for why this override exists.
+        """
+        try:
+            super().start()
+        except Exception:
+            if self._container is not None:
+                _track_started_container(self)
+                try:
+                    self.stop()
+                except Exception:
+                    pass
+            raise
+        else:
+            _track_started_container(self)
+        return self
 
 
 @pytest.fixture(scope="function", autouse=True)
