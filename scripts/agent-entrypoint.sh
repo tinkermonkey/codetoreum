@@ -140,6 +140,27 @@ if [ -n "${GITHUB_TOKEN:-}" ]; then
     fi
 fi || true
 
+# --- Validate Docker socket access (needed by testcontainers) -------------
+# Integration tests use testcontainers to spin up Redis/Elasticsearch
+# containers. The socket must be bind-mounted and the orchestrator user
+# must have group-level access. Warn loudly if either condition fails so
+# the operator can fix the mount / GID mismatch instead of chasing
+# "Connection refused" timeouts 60 seconds into the test suite.
+if [ -S /var/run/docker.sock ]; then
+    if python3 -c "import docker; docker.from_env().ping()" 2>/dev/null; then
+        echo "[agent-entrypoint] Docker socket access: OK" >&2
+    else
+        echo "[agent-entrypoint] WARNING: /var/run/docker.sock exists but is not accessible." >&2
+        echo "[agent-entrypoint] WARNING: Testcontainers integration tests will fail." >&2
+        echo "[agent-entrypoint] WARNING: Check that DOCKER_GID build arg matches the host docker group GID" >&2
+        echo "[agent-entrypoint] WARNING:   Host GID: $(stat -c '%g' /var/run/docker.sock 2>/dev/null || echo 'unknown')" >&2
+        echo "[agent-entrypoint] WARNING:   Container docker group GID: $(getent group docker 2>/dev/null | cut -d: -f3 || echo 'not found')" >&2
+        echo "[agent-entrypoint] WARNING:   Current user groups: $(id)" >&2
+    fi
+else
+    echo "[agent-entrypoint] INFO: /var/run/docker.sock not mounted. Testcontainers tests will be skipped." >&2
+fi
+
 # --- Pre-pull alpine:latest for workspace verification ---------------------
 # The DockerContainerAdapter._verify_workspace_writable() method runs a
 # throwaway alpine:latest container. If the image is missing and the daemon

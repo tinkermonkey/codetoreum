@@ -33,10 +33,6 @@ RUN apt-get update && \
     && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Add orchestrator user to docker group so testcontainers can access /var/run/docker.sock.
-# The docker-py SDK connects to the socket directly; no Docker CLI binary is needed.
-RUN groupadd -f docker && usermod -aG docker orchestrator
-
 # ============================================================================
 # Stage 3: Pre-install Dependencies (OPTIONAL but RECOMMENDED)
 # ============================================================================
@@ -122,18 +118,18 @@ ENV DBUS_SESSION_BUS_ADDRESS=disabled:
 # ============================================================================
 
 # ============================================================================
-# Stage 4b: Create Non-Root User with Docker Group Access
+# Stage 4b: Docker Group Access for Testcontainers
 # ============================================================================
-# Create docker group matching host GID and non-root user (if not already exists)
+# Ensure the docker group exists with the correct host GID so the
+# orchestrator user can access /var/run/docker.sock at runtime.
+# The group may already exist (from the base image) with a different GID —
+# delete it first, then recreate with the host-matching GID.
 RUN if [ "${DOCKER_GID}" = "0" ]; then \
-        id -u orchestrator >/dev/null 2>&1 || useradd -m -u 1000 -G root orchestrator; \
+        usermod -aG root orchestrator 2>/dev/null || true; \
     else \
-        groupadd -g ${DOCKER_GID} docker 2>/dev/null || true; \
-        if id -u orchestrator >/dev/null 2>&1; then \
-            usermod -aG docker orchestrator; \
-        else \
-            useradd -m -u 1000 -G docker orchestrator; \
-        fi \
+        groupdel docker 2>/dev/null || true; \
+        groupadd -g ${DOCKER_GID} docker; \
+        usermod -aG docker orchestrator; \
     fi
 
 # ============================================================================

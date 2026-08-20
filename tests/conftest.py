@@ -51,6 +51,10 @@ os.environ.setdefault("OTEL_TRACES_ENABLED", "false")
 # This is important for systems with Docker socket proxies or unusual network configs
 os.environ.setdefault("TESTCONTAINERS_RYUK_PRIVILEGED", "true")
 os.environ.setdefault("TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE", "/var/run/docker.sock")
+# Disable Ryuk resource reaper in environments where it can't reach the
+# Docker daemon (e.g. nested containers, restricted network modes).
+# Session-level cleanup in pytest_sessionfinish handles leaked containers.
+os.environ.setdefault("TESTCONTAINERS_RYUK_DISABLED", "true")
 
 # Patch testcontainers Reaper to handle connection failures gracefully
 # This prevents testcontainers from failing when Reaper can't connect
