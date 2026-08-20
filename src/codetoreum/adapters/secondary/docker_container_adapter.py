@@ -327,26 +327,33 @@ class DockerContainerAdapter(IContainer):
             prior_wait_error: The prior error from wait() if applicable, for context in error logging
 
         Returns:
-            Exit code from container or 0 if container was auto-removed
+            Exit code from container
 
         Raises:
-            ContainerExecutionError: If reload() fails with a non-NotFound error
+            ContainerExecutionError: If exit code cannot be determined (container not found or reload fails).
+                                    Container may have been OOM-killed, force-removed, or crashed, and
+                                    the exit status cannot be recovered.
         """
         try:
             container.reload()
             return container.attrs["State"]["ExitCode"]
         except docker.errors.NotFound:
-            # Container was removed - expected after successful log streaming
+            # Container was removed - cannot determine exit code (may have been OOM-killed, force-removed, or crashed)
             container_id_str = container.short_id if container else "unknown"
-            logger.warning(
+            msg = (
                 f"Container {container_id_str} was auto-removed before exit code could be retrieved. "
-                "Log streaming completed successfully, defaulting to exit_code=0.",
+                "Cannot determine if container succeeded or failed. Container may have been OOM-killed, "
+                "force-removed, or crashed, causing data loss or incomplete artifacts."
+            )
+            logger.error(
+                msg,
+                exc_info=True,
                 extra={
                     "error_id": ErrorRegistry.ERR_CONTAINER_AUTO_REMOVED_AFTER_STREAMING,
                     "container_id": container_id_str,
                 },
             )
-            return 0
+            raise ContainerExecutionError(msg) from None
         except Exception as reload_error:
             container_id_str = container.short_id if container else "unknown"
 
@@ -1324,7 +1331,7 @@ class DockerContainerAdapter(IContainer):
             try:
                 container = client.containers.get(container_id)
                 result = container.wait(timeout=timeout)
-                exit_code = result.get("StatusCode", 0)
+                exit_code = result.get("StatusCode", 1)
                 return exit_code
             except Exception as e:
                 if "not found" in str(e).lower():
