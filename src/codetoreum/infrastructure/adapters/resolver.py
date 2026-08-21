@@ -664,8 +664,22 @@ class AdapterResolver:
                 container_adapter=container_adapter,
             )
 
-        systemic_analysis_service = self._resolved.get("systemic_analysis_service")
-        environment_repair_service = self._resolved.get("environment_repair_service")
+        # Production branch requires these dependencies; comprehension check collects all missing
+        # dependencies at bootstrap time for batch reporting instead of early failure on first KeyError
+        required_keys = ["systemic_analysis_service", "environment_repair_service", "checkpoint_store"]
+        missing = [k for k in required_keys if k not in self._resolved]
+        if missing:
+            raise AdapterConfigurationError(
+                [
+                    f"repair_cycle='{self._config.repair_cycle}' requires {key} to be resolved first; "
+                    f"ensure resolve_all() dependency ordering is correct."
+                    for key in missing
+                ]
+            )
+
+        systemic_analysis_service = self._resolved["systemic_analysis_service"]
+        environment_repair_service = self._resolved["environment_repair_service"]
+        checkpoint_store = self._resolved["checkpoint_store"]
 
         return self._factory.create_repair_cycle(
             adapter_name=self._config.repair_cycle,
@@ -673,6 +687,7 @@ class AdapterResolver:
             systemic_analysis_service=systemic_analysis_service,
             environment_repair_service=environment_repair_service,
             invocation_defaults_resolver=self._create_invocation_defaults_resolver(),
+            checkpoint_store=checkpoint_store,
         )
 
     def resolve_code_review(self) -> ICodeReviewService:

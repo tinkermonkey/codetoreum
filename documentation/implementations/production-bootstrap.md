@@ -27,6 +27,56 @@ This document covers production bootstrap configuration including:
 | 6 | Input port creation (17 input port implementations) |
 | 7 | FastAPI app creation |
 
+### Phase 2 — Repair-cycle adapter resolution (Issue #940 Phase 1/2)
+
+The repair-cycle slot is resolved during Phase 2 adapter resolution, choosing between mock (for simulation) or production (for real execution). The `repair_cycle="production"` configuration in `ProductionApplicationBootstrap.__init__()` ensures the real `ProductionRepairCycleAdapter` is wired end-to-end.
+
+**Configuration in ProductionApplicationBootstrap**:
+```python
+adapter_config = AdapterSelectionConfig(
+    repair_cycle="production",  # Non-mock path; resolver uses factory.create_repair_cycle()
+    systemic_analysis="production",  # Used by repair cycle for failure analysis
+    environment_repair="production",  # Used by repair cycle for env rebuild
+    # ... other adapters
+)
+```
+
+**Resolver path** (Phase 2, `AdapterResolver.resolve_repair_cycle()`):
+- If `repair_cycle == "mock"`: Engine creates time-aware mock (for simulation only)
+- If `repair_cycle == "production"`: Factory creates production adapter with full dependency injection
+
+**Dependencies wired into ProductionRepairCycleAdapter**:
+In `AdapterResolver.resolve_repair_cycle()` (line 670), the factory call mirrors what the resolver has already prepared:
+```python
+return self._factory.create_repair_cycle(
+    adapter_name=self._config.repair_cycle,
+    coding_agent_factory=self._create_coding_agent_factory(),  # Per-call factory for LLM agents
+    systemic_analysis_service=self._resolved["systemic_analysis_service"],  # For failure analysis
+    environment_repair_service=self._resolved["environment_repair_service"],  # For env rebuild
+    invocation_defaults_resolver=self._create_invocation_defaults_resolver(),  # Per-workflow-step config
+    checkpoint_store=self._resolved["checkpoint_store"],  # Phase 1 fix: wired here (non-None)
+)
+```
+The `checkpoint_store` is resolved first (step 6, line 944) before repair_cycle is resolved (step 10, line 967).
+
+**Hard key access** (`[]` instead of `.get()`) catches missing dependency bugs at bootstrap time instead of allowing silent `None` propagation to runtime (issue #967). If any dependency is missing, bootstrap fails immediately with a clear `KeyError` rather than deferring the failure until the adapter tries to use a `None` value.
+
+**Key dependencies**:
+- **checkpoint_store**: `IRepairCycleCheckpointStore` instance (in-memory or persistent). Phase 1 fix wired this as non-None during Phase 2; previously was missing, causing `AttributeError` on checkpoint save.
+- **coding_agent_factory**: Callable factory returning fresh `ICodingAgent` instances (e.g., Claude Code).
+- **systemic_analysis_service**: `ISystemicAnalysisService` for analyzing test failure patterns.
+- **environment_repair_service**: `IEnvironmentRepairService` for infrastructure/environment recovery.
+- **invocation_defaults_resolver**: Async callback `(work_item_id, agent_name) -> AgentInvocationConfig` to honor per-workflow-step agent configurations.
+
+**Classification**: `repair_cycle` is in `NON_CRITICAL_SLOTS` (not CRITICAL_ADAPTER_SLOTS). Repair cycles are background/optional repair workflows, not on the critical path of work-item creation or execution. Promotion to CRITICAL_ADAPTER_SLOTS is a future decision (see Issue #940 Phase 3).
+
+**Validation outcome** (Issue #940 Phase 2):
+Tests in `test_repair_cycle_bootstrap_resolution.py` verify:
+- `test_adapter_resolver_resolves_production_repair_cycle()`: Confirms AdapterResolver.resolve_repair_cycle() with `repair_cycle="production"` returns a ProductionRepairCycleAdapter (not mock) and verifies checkpoint_store is wired (non-None).
+- `test_resolved_repair_cycle_adapter_executes_scenario()`: Confirms the resolver-created adapter can execute a repair-cycle scenario end-to-end with mocked coding agent, verifying checkpoint_store remains accessible after execute().
+- `test_repair_cycle_is_non_critical_slot()`: Confirms repair_cycle is in NON_CRITICAL_SLOTS (background workflows, not critical path).
+- The Phase 1 fix (checkpoint_store wiring) is validated via hard key access (`self._resolved["checkpoint_store"]`) — missing dependencies raise `KeyError` at bootstrap time, preventing silent `None` propagation to runtime (issue #967).
+
 ### Phase 4c — `ICodingAgent` resolution (DEF-015 D3/D4)
 
 The `coding_agent` slot replaces the retired `llm_provider` slot (the `ILLMProvider` port deleted in D5). The slot is resolved *after* Phase 4 resilience decoration so the resilient `IContainer` is passed into the containerized strategy.

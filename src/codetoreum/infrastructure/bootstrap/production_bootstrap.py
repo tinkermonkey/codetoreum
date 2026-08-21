@@ -166,6 +166,7 @@ NON_CRITICAL_SLOTS = {
     "pr_review_cycle",
     "systemic_analysis",
     "environment_repair",
+    "repair_cycle",
 }
 
 
@@ -298,6 +299,7 @@ class ProductionApplicationBootstrap:
                 # _create_coding_agent_factory helper.
                 systemic_analysis="production",
                 environment_repair="production",
+                repair_cycle="production",
             )
 
         self.config = adapter_config
