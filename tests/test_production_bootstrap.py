@@ -684,8 +684,8 @@ async def test_repair_cycle_resolver_production_promotion() -> None:
 async def test_repair_cycle_production_missing_dependencies() -> None:
     """Verify that resolve_repair_cycle() raises AdapterConfigurationError when production dependencies are missing.
 
-    This test validates that hard key access for production repair_cycle dependencies catches
-    ordering bugs at bootstrap time instead of silently passing None to the adapter.
+    This test validates that the comprehension-based check collects all missing dependencies
+    at bootstrap time for batch reporting, instead of early failure on the first missing key.
     """
     from unittest.mock import MagicMock
 
@@ -728,11 +728,69 @@ async def test_repair_cycle_production_missing_dependencies() -> None:
     with pytest.raises(AdapterConfigurationError) as exc_info:
         resolver.resolve_repair_cycle()
 
-    # Verify error message mentions the missing dependency and proper dependency ordering
+    # Verify error message mentions ALL missing dependencies and proper dependency ordering
     error_msg = str(exc_info.value)
     assert "repair_cycle='production' requires" in error_msg
     assert "to be resolved first" in error_msg
     assert "resolve_all() dependency ordering" in error_msg
+    # Verify all three missing dependency names appear in the error
+    assert "systemic_analysis_service" in error_msg, "Error should list systemic_analysis_service"
+    assert "environment_repair_service" in error_msg, "Error should list environment_repair_service"
+    assert "checkpoint_store" in error_msg, "Error should list checkpoint_store"
+
+
+async def test_repair_cycle_dynamic_config_interpolation() -> None:
+    """Verify that error messages correctly interpolate the actual repair_cycle config value.
+
+    This test ensures that when repair_cycle is set to a non-standard value (e.g., a typo),
+    the error message reflects the actual configured value, not a hardcoded string.
+    """
+    from unittest.mock import MagicMock
+
+    from codetoreum.infrastructure.adapters.resolver import (
+        AdapterConfigurationError,
+        AdapterDependencies,
+        AdapterResolver,
+    )
+    from codetoreum.infrastructure.simulation.simulation_config import AdapterSelectionConfig
+
+    # Create config with a non-standard repair_cycle value (simulating a typo)
+    config = AdapterSelectionConfig(repair_cycle="producton")
+
+    # Create minimal mock dependencies
+    mock_event_bus = MagicMock()
+    mock_factory = MagicMock()
+
+    # Create a mock dependencies object with required attributes
+    mock_deps = MagicMock(spec=AdapterDependencies)
+    mock_deps.event_bus = mock_event_bus
+    mock_deps.failed_event_store = MagicMock()
+    mock_deps.engine = MagicMock()
+
+    # Create the resolver
+    resolver = AdapterResolver(
+        adapter_config=config,
+        factory=mock_factory,
+        dependencies=mock_deps,
+    )
+
+    # Set up resolver's internal state with MISSING dependencies
+    resolver._factory = mock_factory
+    resolver._resolved = {
+        "event_emitter": MagicMock(),
+        # Missing: checkpoint_store, systemic_analysis_service, environment_repair_service
+    }
+
+    # Attempt to resolve repair_cycle should raise AdapterConfigurationError
+    import pytest
+    with pytest.raises(AdapterConfigurationError) as exc_info:
+        resolver.resolve_repair_cycle()
+
+    # Verify error message contains the actual repair_cycle value, not hardcoded 'production'
+    error_msg = str(exc_info.value)
+    assert "repair_cycle='producton' requires" in error_msg, (
+        "Error message should interpolate actual repair_cycle value 'producton', not hardcoded 'production'"
+    )
 
 
 def test_repair_cycle_in_production_adapter_selection_config() -> None:

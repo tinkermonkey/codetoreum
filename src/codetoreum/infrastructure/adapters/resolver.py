@@ -664,8 +664,8 @@ class AdapterResolver:
                 container_adapter=container_adapter,
             )
 
-        # Production branch requires these dependencies; hard key access catches ordering bugs
-        # at bootstrap time instead of silent None propagation at runtime
+        # Production branch requires these dependencies; comprehension check collects all missing
+        # dependencies at bootstrap time for batch reporting instead of early failure on first KeyError
         required_keys = ["systemic_analysis_service", "environment_repair_service", "checkpoint_store"]
         missing = [k for k in required_keys if k not in self._resolved]
         if missing:
