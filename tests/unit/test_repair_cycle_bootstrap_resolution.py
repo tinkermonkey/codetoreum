@@ -5,8 +5,9 @@ through the real AdapterResolver with production configuration, and that the
 resolved adapter can execute repair-cycle scenarios end-to-end.
 """
 
-import pytest
 from decimal import Decimal
+
+import pytest
 
 from codetoreum.adapters.secondary.production_repair_cycle_adapter import (
     ProductionRepairCycleAdapter,
@@ -15,11 +16,13 @@ from codetoreum.adapters.secondary.production_repair_cycle_adapter import (
 from codetoreum.adapters.testing.in_memory_checkpoint_store import (
     InMemoryCheckpointStore,
 )
+from codetoreum.domain.agent_execution import AgentExecution
 from codetoreum.domain.coding_agent_types import InvocationMode
 from codetoreum.domain.repair_cycle_types import (
     RepairTestRunConfig,
     RepairTestType,
 )
+from codetoreum.domain.workspace_context import WorkspaceContext
 from codetoreum.infrastructure.adapters.resolver import AdapterResolver
 from codetoreum.infrastructure.bootstrap.production_bootstrap import (
     CRITICAL_ADAPTER_SLOTS,
@@ -33,13 +36,14 @@ from codetoreum.infrastructure.simulation.simulation_config import (
     AdapterSelectionConfig,
 )
 from codetoreum.ports.output.coding_agent import (
+    CodingAgentInvocationOptions,
     CodingAgentResult,
     ICodingAgent,
 )
 from codetoreum.ports.output.failed_event_store import (
-    IFailedEventStore,
-    FailureReason,
     FailedEventStoreStats,
+    FailureReason,
+    IFailedEventStore,
 )
 from tests.simulation.scenarios.scenario_07_repair_cycle import (
     create_repair_context,
@@ -53,7 +57,7 @@ class MockCodingAgent(ICodingAgent):
         """Return supported invocation modes."""
         return frozenset({InvocationMode.CONTAINERIZED, InvocationMode.HOST})
 
-    async def execute(self, execution: "AgentExecution", workspace_context: "WorkspaceContext", options: "CodingAgentInvocationOptions") -> CodingAgentResult:
+    async def execute(self, execution: AgentExecution, workspace_context: WorkspaceContext, options: CodingAgentInvocationOptions) -> CodingAgentResult:
         """Execute mock coding agent with successful test result."""
         return CodingAgentResult(
             success=True,
@@ -103,7 +107,7 @@ class SimpleFailedEventStore(IFailedEventStore):
 
     def get_event(self, event_id: str):
         """Get event (mock implementation)."""
-        return None
+        return
 
     def remove_event(self, event_id: str) -> bool:
         """Remove event (mock implementation)."""
@@ -111,7 +115,6 @@ class SimpleFailedEventStore(IFailedEventStore):
 
     def clear(self) -> None:
         """Clear events (mock implementation)."""
-        pass
 
 
 class TestRepairCycleBootstrapResolution:
