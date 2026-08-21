@@ -118,7 +118,7 @@ src/codetoreum/adapters/primary/input_port_adapters/mock/
 
 ## Key Adapter Characteristics
 
-### In-Memory Adapters (15)
+### In-Memory Adapters (19)
 - **Purpose**: Backing stores without external services
 - **Thread-Safe**: Protected by locks for concurrent test execution
 - **Persisted During Session**: Data survives for event replay
