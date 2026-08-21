@@ -224,7 +224,7 @@ class TestTryReloadForExitCodeFailureWithoutPriorError:
 
         mock_container = MagicMock()
         mock_container.short_id = "chain_single"
-        reload_error = IOError("Connection lost")
+        reload_error = OSError("Connection lost")
         mock_container.reload.side_effect = reload_error
 
         with pytest.raises(ContainerExecutionError) as exc_info:
