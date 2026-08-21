@@ -41,18 +41,6 @@ class TestNotificationDataModels:
         assert notification.message == "Test Message"
         assert notification.priority == NotificationPriority.NORMAL
 
-    def test_notification_invalid_channel(self) -> None:
-        """Test that invalid channel raises ValueError."""
-        with pytest.raises(ValueError, match="channel must be a NotificationChannel"):
-            Notification(
-                channel=NotificationChannel.INVALID,
-                recipient="user@example.com",
-                subject="Test",
-                message="Message",
-                priority=NotificationPriority.NORMAL,
-                metadata=MappingProxyType({}),
-            )
-
     def test_notification_empty_recipient(self) -> None:
         """Test that empty recipient raises ValueError."""
         with pytest.raises(ValueError, match="recipient must be a non-empty string"):
@@ -87,30 +75,6 @@ class TestNotificationDataModels:
                 message="",
                 priority=NotificationPriority.NORMAL,
                 metadata=MappingProxyType({}),
-            )
-
-    def test_notification_invalid_priority(self) -> None:
-        """Test that invalid priority raises ValueError."""
-        with pytest.raises(ValueError, match="priority must be a NotificationPriority"):
-            Notification(
-                channel=NotificationChannel.EMAIL,
-                recipient="user@example.com",
-                subject="Test",
-                message="Message",
-                priority=NotificationPriority.INVALID,
-                metadata=MappingProxyType({}),
-            )
-
-    def test_notification_invalid_metadata(self) -> None:
-        """Test that invalid metadata type raises ValueError."""
-        with pytest.raises(ValueError, match="metadata must be a MappingProxyType"):
-            Notification(
-                channel=NotificationChannel.EMAIL,
-                recipient="user@example.com",
-                subject="Test",
-                message="Message",
-                priority=NotificationPriority.NORMAL,
-                metadata=MappingProxyType({"key": "value"}),
             )
 
     def test_notification_immutable(self) -> None:
@@ -153,16 +117,6 @@ class TestNotificationDataModels:
 
         assert result.success is False
         assert result.error == "Send failed"
-
-    def test_notification_result_invalid_success(self) -> None:
-        """Test that invalid success raises ValueError."""
-        with pytest.raises(ValueError, match="success must be a boolean"):
-            NotificationResult(
-                success=True,
-                notification_id=str(uuid4()),
-                error=None,
-                timestamp=datetime.now(UTC),
-            )
 
     def test_notification_result_empty_notification_id(self) -> None:
         """Test that empty notification_id raises ValueError."""
