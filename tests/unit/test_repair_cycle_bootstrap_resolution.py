@@ -215,7 +215,8 @@ class TestRepairCycleBootstrapResolution:
 
         This is the core Phase 2 validation: the adapter resolved through the real
         bootstrap/resolver path can execute a repair-cycle scenario successfully
-        with checkpoint_store properly wired.
+        with checkpoint_store properly wired and the mock coding agent factory
+        properly injected during construction.
         """
         from codetoreum.adapters.testing import CapturingMockEventEmitter
         from codetoreum.infrastructure.adapters.factory import (
@@ -223,6 +224,7 @@ class TestRepairCycleBootstrapResolution:
         )
         from codetoreum.infrastructure.adapters.resolver import (
             AdapterDependencies,
+            AdapterResolver,
         )
 
         # Create test adapter config
@@ -235,6 +237,18 @@ class TestRepairCycleBootstrapResolution:
             code_review="mock",
             event_store="in_memory",
         )
+
+        # Mock coding agent factory (returns inert mock for testing)
+        async def mock_coding_agent_factory(prompt_builder):
+            return MockCodingAgent()
+
+        # Custom resolver subclass that uses the mock factory
+        class TestAdapterResolver(AdapterResolver):
+            """Resolver that injects mock coding agent factory for testing."""
+
+            def _create_coding_agent_factory(self):
+                """Override to return mock factory instead of real one."""
+                return mock_coding_agent_factory
 
         # Set up resolver
         event_bus = EventBus()
@@ -254,7 +268,7 @@ class TestRepairCycleBootstrapResolution:
             failed_event_store=failed_event_store,
         )
 
-        resolver = AdapterResolver(
+        resolver = TestAdapterResolver(
             adapter_config=adapter_config,
             factory=factory,
             dependencies=adapter_deps,
@@ -266,12 +280,17 @@ class TestRepairCycleBootstrapResolution:
         resolver._resolved["systemic_analysis_service"] = None
         resolver._resolved["environment_repair_service"] = None
 
-        # Resolve adapter through real resolver path
+        # Resolve adapter through real resolver path with mock factory
         adapter = resolver.resolve_repair_cycle()
 
         # Verify it's the production adapter
         assert isinstance(adapter, ProductionRepairCycleAdapter)
         assert adapter.checkpoint_store is not None
+
+        # Verify the mock factory was wired during construction (not after)
+        # by checking that the adapter can execute with the mock
+        # (if it were using the real factory, execution would fail due to
+        # lack of Claude Code credentials)
 
         # Create a minimal repair-cycle context
         test_configs = (
@@ -283,16 +302,10 @@ class TestRepairCycleBootstrapResolution:
             max_total_agent_calls=100,
         )
 
-        # Create a factory that returns a mock coding agent
-        async def mock_coding_agent_factory(prompt_builder):
-            return MockCodingAgent()
-
-        # Rewire the adapter with the mock factory for this test
-        adapter.coding_agent_factory = mock_coding_agent_factory
-
         # Execute the scenario (verifies adapter can run end-to-end)
         # This exercises the production adapter's execute path with the real
-        # checkpoint_store wiring, confirming Phase 1 fix works in practice.
+        # checkpoint_store wiring, confirming Phase 1 fix works in practice,
+        # and the mock coding agent factory is properly used.
         try:
             # Execute returns when the scenario completes or times out
             result = await adapter.execute(context)
