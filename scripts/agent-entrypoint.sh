@@ -134,9 +134,13 @@ fi || true
 if [ -n "${GITHUB_TOKEN:-}" ]; then
     mkdir -p /home/orchestrator/.config 2>/dev/null || true
 
-    # Authenticate via token (fallback to gh auth, but don't fail if it errors)
+    # Authenticate via token with proper error handling for operator visibility
     if command -v gh >/dev/null 2>&1; then
-        echo "$GITHUB_TOKEN" | gh auth login --with-token >/dev/null 2>&1 || true
+        if ! echo "$GITHUB_TOKEN" | gh auth login --with-token 2>&1; then
+            echo "[agent-entrypoint] ERROR: Failed to authenticate GitHub CLI with provided token." >&2
+            echo "[agent-entrypoint] ERROR: The token may be expired, malformed, or GitHub API may be unreachable." >&2
+            echo "[agent-entrypoint] ERROR: Downstream 'gh' commands will fail." >&2
+        fi
     fi
 fi || true
 
