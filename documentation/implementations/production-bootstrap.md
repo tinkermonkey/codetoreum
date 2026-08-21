@@ -51,13 +51,15 @@ In `AdapterResolver.resolve_repair_cycle()` (line 670), the factory call mirrors
 return self._factory.create_repair_cycle(
     adapter_name=self._config.repair_cycle,
     coding_agent_factory=self._create_coding_agent_factory(),  # Per-call factory for LLM agents
-    systemic_analysis_service=self._resolved.get("systemic_analysis_service"),  # For failure analysis
-    environment_repair_service=self._resolved.get("environment_repair_service"),  # For env rebuild
+    systemic_analysis_service=self._resolved["systemic_analysis_service"],  # For failure analysis
+    environment_repair_service=self._resolved["environment_repair_service"],  # For env rebuild
     invocation_defaults_resolver=self._create_invocation_defaults_resolver(),  # Per-workflow-step config
-    checkpoint_store=self._resolved.get("checkpoint_store"),  # Phase 1 fix: wired here (non-None)
+    checkpoint_store=self._resolved["checkpoint_store"],  # Phase 1 fix: wired here (non-None)
 )
 ```
 The `checkpoint_store` is resolved first (step 6, line 944) before repair_cycle is resolved (step 10, line 967).
+
+**Hard key access** (`[]` instead of `.get()`) catches missing dependency bugs at bootstrap time instead of allowing silent `None` propagation to runtime (issue #967). If any dependency is missing, bootstrap fails immediately with a clear `KeyError` rather than deferring the failure until the adapter tries to use a `None` value.
 
 **Key dependencies**:
 - **checkpoint_store**: `IRepairCycleCheckpointStore` instance (in-memory or persistent). Phase 1 fix wired this as non-None during Phase 2; previously was missing, causing `AttributeError` on checkpoint save.
@@ -73,7 +75,7 @@ Tests in `test_repair_cycle_bootstrap_resolution.py` verify:
 - `test_adapter_resolver_resolves_production_repair_cycle()`: Confirms AdapterResolver.resolve_repair_cycle() with `repair_cycle="production"` returns a ProductionRepairCycleAdapter (not mock) and verifies checkpoint_store is wired (non-None).
 - `test_resolved_repair_cycle_adapter_executes_scenario()`: Confirms the resolver-created adapter can execute a repair-cycle scenario end-to-end with mocked coding agent, verifying checkpoint_store remains accessible after execute().
 - `test_repair_cycle_is_non_critical_slot()`: Confirms repair_cycle is in NON_CRITICAL_SLOTS (background workflows, not critical path).
-- The Phase 1 fix (checkpoint_store wiring) is validated via the resolver's cached resolution (`self._resolved.get("checkpoint_store")`) before passing to the adapter.
+- The Phase 1 fix (checkpoint_store wiring) is validated via hard key access (`self._resolved["checkpoint_store"]`) — missing dependencies raise `KeyError` at bootstrap time, preventing silent `None` propagation to runtime (issue #967).
 
 ### Phase 4c — `ICodingAgent` resolution (DEF-015 D3/D4)
 
