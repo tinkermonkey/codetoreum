@@ -95,13 +95,13 @@ class TestRepairCycleBootstrapResolution:
         )
 
         # Import what we need for setting up the resolver
+        from codetoreum.adapters.testing import CapturingMockEventEmitter
         from codetoreum.infrastructure.adapters.factory import (
             AdapterFactory,
         )
         from codetoreum.infrastructure.adapters.resolver import (
             AdapterDependencies,
         )
-        from codetoreum.adapters.testing import CapturingMockEventEmitter
 
         # Create minimal dependencies for resolver
         event_bus = EventBus()
@@ -162,13 +162,13 @@ class TestRepairCycleBootstrapResolution:
         bootstrap/resolver path can execute a repair-cycle scenario successfully
         with checkpoint_store properly wired.
         """
+        from codetoreum.adapters.testing import CapturingMockEventEmitter
         from codetoreum.infrastructure.adapters.factory import (
             AdapterFactory,
         )
         from codetoreum.infrastructure.adapters.resolver import (
             AdapterDependencies,
         )
-        from codetoreum.adapters.testing import CapturingMockEventEmitter
 
         # Create test adapter config
         adapter_config = AdapterSelectionConfig(
