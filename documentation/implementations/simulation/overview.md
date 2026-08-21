@@ -6,7 +6,7 @@ The Simulation Implementation is a complete, working system that demonstrates al
 
 **Key characteristics:**
 
-- 56 total mock adapters (37 testing + 1 secondary + 18 input port) implementing the same contracts as production
+- 57 total mock adapters (37 testing + 2 secondary + 18 input port) implementing the same contracts as production
 - Domain layer, application services, and event flows identical to production
 - Deterministic responses (no randomness, configurable via YAML)
 - Time controlled via SimulationClock (10-100x speed multiplier)
@@ -35,7 +35,7 @@ This file covers:
 ## Related Documentation
 
 - **[Bootstrap Wiring](./bootstrap-wiring.md)** — 6-phase bootstrap sequence with detailed diagrams
-- **[Adapters Reference](./adapters.md)** — Complete mapping of all 58 adapters
+- **[Adapters Reference](./adapters.md)** — Complete mapping of all 57 adapters
 - **[Scenarios Reference](./scenarios.md)** — All scenario definitions and configurations
 - **[Implementations Overview](../README.md)** — All implementation tiers
 - **[Architecture: Ports](../../architecture/ports/)** — Port interface specifications

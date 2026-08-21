@@ -1,6 +1,6 @@
 # Simulation Adapters Reference
 
-Complete mapping of all 56 simulation/mock adapters to their port interfaces.
+Complete mapping of all 57 simulation/mock adapters to their port interfaces.
 
 > **Counting Methodology**: One concrete class explicitly inheriting one port ABC = one counted implementation. Abstract bases, decorators, mixins, and helper dataclasses are excluded.
 
@@ -8,7 +8,7 @@ Complete mapping of all 56 simulation/mock adapters to their port interfaces.
 
 The Simulation Implementation provides:
 - **37 Testing Adapters**: Mock/in-memory implementations of output ports
-- **1 Secondary Adapter**: In-memory identity service
+- **2 Secondary Adapters**: In-memory identity service and event emitter
 - **18 Input Port Adapters**: Mock adapters wrapping application services for HTTP endpoints
 
 All adapters implement the same port contracts as production adapters, ensuring the simulation exercises identical business logic.
@@ -59,13 +59,14 @@ Complete list of mock implementations for all output ports in `adapters/testing/
 | 36 | `IOrphanScanRegistry` | `InMemoryOrphanScanRegistry` | `adapters/testing/in_memory_orphan_scan_registry.py` | In-memory orphan scan tracking — container recovery |
 | 37 | `IPipelineQueue` | `InMemoryPipelineQueue` | `adapters/testing/in_memory_pipeline_queue.py` | In-memory FIFO queue — work item coordination |
 
-## Secondary Adapters (1 Adapter in `adapters/secondary/`)
+## Secondary Adapters (2 Adapters in `adapters/secondary/`)
 
 Adapters located in `adapters/secondary/` but used in simulation testing:
 
 | # | Port Interface | Adapter Class | File | Purpose |
 |---|---|---|---|---|
 | 1 | `IIdentityService` | `ConfigurableIdentityService` | `adapters/secondary/configurable_identity_service.py` | Simulates identity — bot/human user detection |
+| 2 | `IEventEmitter` | `MockEventEmitter` | `adapters/secondary/mock_event_emitter.py` | In-memory event emitter for testing — handles event subscription and synchronous dispatch |
 
 ## Input Port Adapters (18 Mock Adapters)
 
@@ -97,7 +98,7 @@ Mock implementations of input ports that wrap application services for HTTP endp
 ### Testing Adapters Location
 ```
 src/codetoreum/adapters/testing/
-├── in_memory_*.py          (15 files) - In-memory backing stores
+├── in_memory_*.py          (19 files) - In-memory backing stores
 ├── mock_*.py               (15 files) - Mock external systems (incl. mock_claude_code_adapter.py)
 ├── fake_*.py               (1 file)  - Fake implementations
 ├── simple_*.py             (1 file)  - Simple implementations
@@ -488,6 +489,6 @@ See `~/.claude/plans/coding-agent-port-redesign.md` §3a–§3c for the producti
 
 ---
 
-**Total Adapter Count**: 37 testing + 1 secondary + 18 input port = **56 adapters**
+**Total Adapter Count**: 37 testing + 2 secondary + 18 input port = **57 adapters**
 
 All adapters implement port contracts to provide a complete, testable implementation of the Codetoreum architecture.
