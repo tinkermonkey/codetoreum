@@ -802,7 +802,7 @@ class TestMockAuditQueryAdapterEventInfo:
 
         # Verify immutability
         with pytest.raises(TypeError):
-            event.metadata["key"] = "new_value"
+            event.metadata["key"] = "new_value"  # type: ignore[index]
 
     @pytest.mark.asyncio
     async def test_all_required_fields_populated(self):

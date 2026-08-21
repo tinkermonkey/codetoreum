@@ -68,7 +68,7 @@ class TestLocalKeyEncryptionAdapterInvalidInput:
     async def test_encrypt_rejects_non_string(self) -> None:
         adapter = LocalKeyEncryptionAdapter(key=generate_local_key())
         with pytest.raises(EncryptionError):
-            await adapter.encrypt(b"not-a-string")  # type: ignore[arg-type]
+            await adapter.encrypt(b"not-a-string")
 
     @pytest.mark.asyncio
     async def test_decrypt_corrupt_ciphertext_raises(self) -> None:

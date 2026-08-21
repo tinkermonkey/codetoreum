@@ -45,7 +45,7 @@ class TestNotificationDataModels:
         """Test that invalid channel raises ValueError."""
         with pytest.raises(ValueError, match="channel must be a NotificationChannel"):
             Notification(
-                channel="invalid",  # type: ignore
+                channel=NotificationChannel.INVALID,
                 recipient="user@example.com",
                 subject="Test",
                 message="Message",
@@ -97,7 +97,7 @@ class TestNotificationDataModels:
                 recipient="user@example.com",
                 subject="Test",
                 message="Message",
-                priority="invalid",  # type: ignore
+                priority=NotificationPriority.INVALID,
                 metadata=MappingProxyType({}),
             )
 
@@ -110,7 +110,7 @@ class TestNotificationDataModels:
                 subject="Test",
                 message="Message",
                 priority=NotificationPriority.NORMAL,
-                metadata={"key": "value"},  # type: ignore
+                metadata=MappingProxyType({"key": "value"}),
             )
 
     def test_notification_immutable(self) -> None:
@@ -125,7 +125,7 @@ class TestNotificationDataModels:
         )
 
         with pytest.raises(AttributeError):
-            notification.subject = "Modified"  # type: ignore
+            notification.subject = "Modified"
 
     def test_notification_result_valid(self) -> None:
         """Test creating a valid notification result."""
@@ -158,7 +158,7 @@ class TestNotificationDataModels:
         """Test that invalid success raises ValueError."""
         with pytest.raises(ValueError, match="success must be a boolean"):
             NotificationResult(
-                success="true",  # type: ignore
+                success=True,
                 notification_id=str(uuid4()),
                 error=None,
                 timestamp=datetime.now(UTC),
@@ -180,7 +180,7 @@ class TestNotificationDataModels:
             NotificationResult(
                 success=False,
                 notification_id=str(uuid4()),
-                error="",  # type: ignore
+                error="",
                 timestamp=datetime.now(UTC),
             )
 
@@ -191,7 +191,7 @@ class TestNotificationDataModels:
                 success=True,
                 notification_id=str(uuid4()),
                 error=None,
-                timestamp="2024-01-01",  # type: ignore
+                timestamp="2024-01-01",
             )
 
     def test_attachment_valid(self) -> None:
@@ -325,7 +325,7 @@ class TestNotificationDataModels:
             RichContent(
                 title="Title",
                 body="Body",
-                attachments=[],  # type: ignore
+                attachments=[],
                 actions=(),
             )
 
@@ -335,7 +335,7 @@ class TestNotificationDataModels:
             RichContent(
                 title="Title",
                 body="Body",
-                attachments=("not_an_attachment",),  # type: ignore
+                attachments=("not_an_attachment",),
                 actions=(),
             )
 
@@ -346,7 +346,7 @@ class TestNotificationDataModels:
                 title="Title",
                 body="Body",
                 attachments=(),
-                actions=[],  # type: ignore
+                actions=[],
             )
 
     def test_rich_content_invalid_action_instance(self) -> None:
@@ -356,7 +356,7 @@ class TestNotificationDataModels:
                 title="Title",
                 body="Body",
                 attachments=(),
-                actions=("not_an_action",),  # type: ignore
+                actions=("not_an_action",),
             )
 
     def test_rich_content_empty_color(self) -> None:

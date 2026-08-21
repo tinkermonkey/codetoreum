@@ -91,7 +91,7 @@ class TestExtractRepoName:
     def test_none_raises_error(self):
         """Raise ValueError when given None."""
         with pytest.raises(ValueError, match="repo_url cannot be empty, None, or whitespace-only"):
-            extract_repo_name(None)  # type: ignore
+            extract_repo_name(None)
 
     def test_whitespace_only_string(self):
         """Raise ValueError when given whitespace-only string."""

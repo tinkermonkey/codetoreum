@@ -98,7 +98,7 @@ def store() -> _FakeConfigStore:
 
 @pytest.fixture
 def repo(store: _FakeConfigStore) -> ElasticsearchAgentRepository:
-    return ElasticsearchAgentRepository(config_storage=store, cache_ttl_seconds=60)  # type: ignore[arg-type]
+    return ElasticsearchAgentRepository(config_storage=store, cache_ttl_seconds=60)
 
 
 class TestAgentConfigRoundTrip:

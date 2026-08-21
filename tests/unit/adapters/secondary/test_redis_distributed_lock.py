@@ -33,7 +33,7 @@ class MockRedis:
     def __init__(self):
         """Initialize mock Redis storage."""
         self._data: dict[str, bytes] = {}
-        self._hashes: dict[str, dict[str, bytes]] = {}
+        self._hashes: dict[str, dict[bytes, bytes]] = {}
         self._ttl: dict[str, int] = {}  # Track TTL in seconds for each key
 
     async def get(self, key: str) -> bytes | None:
@@ -87,10 +87,9 @@ class MockRedis:
 
     async def hget(self, key: str, field: str) -> bytes | None:
         """Mock Redis HGET operation."""
-        if isinstance(field, str):
-            field = field.encode("utf-8")
+        field_bytes = field.encode("utf-8") if isinstance(field, str) else field
         hash_data = self._hashes.get(key, {})
-        return hash_data.get(field)
+        return hash_data.get(field_bytes)
 
     async def eval(self, script: str, numkeys: int, *keys_and_args) -> int:
         """Mock Redis EVAL for Lua script.
@@ -113,12 +112,11 @@ class MockRedis:
 
         # Get current value of first key
         key1 = keys[0]
-        current_value = self._data.get(key1)
-        if isinstance(current_value, bytes):
-            current_value = current_value.decode("utf-8")
+        current_value_bytes = self._data.get(key1)
+        current_value_str = current_value_bytes.decode("utf-8") if isinstance(current_value_bytes, bytes) else None
 
         # Check if holder matches
-        if current_value != holder_id:
+        if current_value_str != holder_id:
             return 0
 
         # Release script (1 key): delete the lock key

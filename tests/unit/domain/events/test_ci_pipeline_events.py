@@ -34,13 +34,13 @@ class TestCIPipelineStatusCheckedEvent:
         )
 
         with pytest.raises(FrozenInstanceError):
-            event.pr_id = "789"  # type: ignore
+            event.pr_id = "789"
 
         with pytest.raises(FrozenInstanceError):
-            event.status = "failed"  # type: ignore
+            event.status = "failed"
 
         with pytest.raises(FrozenInstanceError):
-            event.check_count = 10  # type: ignore
+            event.check_count = 10
 
     def test_create_valid_event(self):
         """Test creating a valid CI pipeline status checked event."""
@@ -161,7 +161,7 @@ class TestCIPipelineStatusCheckedEvent:
                 source="github",
                 pr_id="456",
                 project_id="proj-1",
-                status=status,  # type: ignore
+                status=status,
             )
             assert event.status == status
 
@@ -467,13 +467,13 @@ class TestCIRunStartedEvent:
         )
 
         with pytest.raises(FrozenInstanceError):
-            event.project_id = "proj-2"  # type: ignore
+            event.project_id = "proj-2"
 
         with pytest.raises(FrozenInstanceError):
-            event.timeout_seconds = 300  # type: ignore
+            event.timeout_seconds = 300
 
         with pytest.raises(FrozenInstanceError):
-            event.workflow_run_id = "wf-456"  # type: ignore
+            event.workflow_run_id = "wf-456"
 
     def test_create_valid_event(self):
         """Test creating a valid CI run started event."""
@@ -707,13 +707,13 @@ class TestCIRunCompletedEvent:
         )
 
         with pytest.raises(FrozenInstanceError):
-            event.project_id = "proj-2"  # type: ignore
+            event.project_id = "proj-2"
 
         with pytest.raises(FrozenInstanceError):
-            event.passed_count = 3  # type: ignore
+            event.passed_count = 3
 
         with pytest.raises(FrozenInstanceError):
-            event.failure_count = 2  # type: ignore
+            event.failure_count = 2
 
     def test_create_valid_event(self):
         """Test creating a valid CI run completed event."""

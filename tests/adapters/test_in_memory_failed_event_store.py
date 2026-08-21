@@ -103,7 +103,7 @@ class TestInMemoryFailedEventStoreBasics:
 
         # Frozen dataclass should prevent mutations
         with pytest.raises(Exception):  # FrozenInstanceError or AttributeError
-            record.event_type = "Modified"  # type: ignore
+            record.event_type = "Modified"
 
 
 class TestInMemoryFailedEventStoreStats:

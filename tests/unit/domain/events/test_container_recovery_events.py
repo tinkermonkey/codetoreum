@@ -132,7 +132,7 @@ class TestContainerRecoveredEvent:
                 project_id="proj-456",
                 agent_id="agent-789",
                 uptime_seconds=3600.0,
-                recovery_action="invalid_action",  # type: ignore
+                recovery_action="invalid_action",
             )
 
     def test_immutability(self):
@@ -150,7 +150,7 @@ class TestContainerRecoveredEvent:
         )
 
         with pytest.raises(FrozenInstanceError):
-            event.container_id = "container-xyz789"  # type: ignore
+            event.container_id = "container-xyz789"
 
     def test_serialization(self):
         """Test ContainerRecoveredEvent serialization."""
@@ -301,7 +301,7 @@ class TestContainerKilledEvent:
                 source="container_recovery",
                 container_id="container-abc123",
                 container_name="agent-run-123",
-                kill_reason="invalid_reason",  # type: ignore
+                kill_reason="invalid_reason",
                 uptime_seconds=1000.0,
             )
 
@@ -322,7 +322,7 @@ class TestContainerKilledEvent:
                 source="container_recovery",
                 container_id="container-abc123",
                 container_name="agent-run-123",
-                kill_reason=reason,  # type: ignore
+                kill_reason=reason,
                 uptime_seconds=1000.0,
             )
             assert event.kill_reason == reason
@@ -340,7 +340,7 @@ class TestContainerKilledEvent:
         )
 
         with pytest.raises(FrozenInstanceError):
-            event.kill_reason = "container_timeout"  # type: ignore
+            event.kill_reason = "container_timeout"
 
     def test_serialization(self):
         """Test ContainerKilledEvent serialization."""
@@ -556,7 +556,7 @@ class TestContainerRecoveryCompletedEvent:
         )
 
         with pytest.raises(FrozenInstanceError):
-            event.containers_recovered = 10  # type: ignore
+            event.containers_recovered = 10
 
     def test_serialization(self):
         """Test ContainerRecoveryCompletedEvent serialization."""

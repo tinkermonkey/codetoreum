@@ -51,7 +51,7 @@ class TestCICheckResult:
         )
 
         with pytest.raises(AttributeError):
-            result.name = "modified"  # type: ignore
+            result.name = "modified"
 
     def test_rejects_empty_name(self) -> None:
         """Test that empty name is rejected."""
@@ -63,21 +63,21 @@ class TestCICheckResult:
     def test_rejects_none_name(self) -> None:
         """Test that None name is rejected."""
         with pytest.raises(ValueError) as exc_info:
-            CICheckResult(name=None, status=CICheckStatus.PASSED)  # type: ignore
+            CICheckResult(name=None, status=CICheckStatus.PASSED)
 
         assert "name must be a non-empty string" in str(exc_info.value)
 
     def test_rejects_non_string_name(self) -> None:
         """Test that non-string name is rejected."""
         with pytest.raises(ValueError) as exc_info:
-            CICheckResult(name=123, status=CICheckStatus.PASSED)  # type: ignore
+            CICheckResult(name=123, status=CICheckStatus.PASSED)
 
         assert "name must be a non-empty string" in str(exc_info.value)
 
     def test_rejects_invalid_status(self) -> None:
         """Test that invalid status is rejected."""
         with pytest.raises(ValueError) as exc_info:
-            CICheckResult(name="test", status="invalid")  # type: ignore
+            CICheckResult(name="test", status="invalid")
 
         assert "status must be a CICheckStatus instance" in str(exc_info.value)
 
@@ -87,7 +87,7 @@ class TestCICheckResult:
             CICheckResult(
                 name="test",
                 status=CICheckStatus.PASSED,
-                conclusion=123,  # type: ignore
+                conclusion=123,
             )
 
         assert "conclusion must be a string or None" in str(exc_info.value)
@@ -98,7 +98,7 @@ class TestCICheckResult:
             CICheckResult(
                 name="test",
                 status=CICheckStatus.PASSED,
-                url=123,  # type: ignore
+                url=123,
             )
 
         assert "url must be a string or None" in str(exc_info.value)
@@ -188,7 +188,7 @@ class TestCIPipelineStatus:
         )
 
         with pytest.raises(AttributeError):
-            status.pr_id = "pr-999"  # type: ignore
+            status.pr_id = "pr-999"
 
     def test_rejects_empty_pr_id(self) -> None:
         """Test that empty pr_id is rejected."""
@@ -210,7 +210,7 @@ class TestCIPipelineStatus:
         with pytest.raises(ValueError) as exc_info:
             CIPipelineStatus(
                 pr_id="pr-123",
-                status="invalid",  # type: ignore
+                status="invalid",
                 check_results=(),
                 total_checks=0,
                 passed=0,
@@ -226,7 +226,7 @@ class TestCIPipelineStatus:
             CIPipelineStatus(
                 pr_id="pr-123",
                 status=CICheckStatus.PASSED,
-                check_results="invalid",  # type: ignore
+                check_results="invalid",
                 total_checks=0,
                 passed=0,
                 failed=0,
@@ -241,7 +241,7 @@ class TestCIPipelineStatus:
             CIPipelineStatus(
                 pr_id="pr-123",
                 status=CICheckStatus.PASSED,
-                check_results=["not-a-check-result"],  # type: ignore
+                check_results=["not-a-check-result"],
                 total_checks=1,
                 passed=0,
                 failed=0,
@@ -321,7 +321,7 @@ class TestCIPipelineStatus:
                 passed=0,
                 failed=0,
                 pending=0,
-                pipeline_url=123,  # type: ignore
+                pipeline_url=123,
             )
 
         assert "pipeline_url must be a string" in str(exc_info.value)
@@ -542,13 +542,13 @@ class TestCIRunResult:
         )
 
         with pytest.raises(AttributeError):
-            result.passed = False  # type: ignore
+            result.passed = False
 
     def test_rejects_non_bool_passed(self) -> None:
         """Test that non-boolean passed value is rejected."""
         with pytest.raises(ValueError) as exc_info:
             CIRunResult(
-                passed=1,  # type: ignore
+                passed=1,
                 failed=0,
                 check_results=(),
             )
@@ -572,7 +572,7 @@ class TestCIRunResult:
             CIRunResult(
                 passed=True,
                 failed=0,
-                check_results="invalid",  # type: ignore
+                check_results="invalid",
             )
 
         assert "check_results must be a list or tuple" in str(exc_info.value)
@@ -583,7 +583,7 @@ class TestCIRunResult:
             CIRunResult(
                 passed=True,
                 failed=0,
-                check_results=["not-a-check-result"],  # type: ignore
+                check_results=["not-a-check-result"],
             )
 
         assert "all check_results must be CICheckResult instances" in str(exc_info.value)
@@ -595,7 +595,7 @@ class TestCIRunResult:
                 passed=True,
                 failed=0,
                 check_results=(),
-                failures="invalid",  # type: ignore
+                failures="invalid",
             )
 
         assert "failures must be a list or tuple" in str(exc_info.value)
@@ -607,7 +607,7 @@ class TestCIRunResult:
                 passed=True,
                 failed=0,
                 check_results=(),
-                failures=[123],  # type: ignore
+                failures=[123],
             )
 
         assert "all failures must be strings" in str(exc_info.value)
@@ -619,7 +619,7 @@ class TestCIRunResult:
                 passed=True,
                 failed=0,
                 check_results=(),
-                warnings="invalid",  # type: ignore
+                warnings="invalid",
             )
 
         assert "warnings must be a list or tuple" in str(exc_info.value)
@@ -631,7 +631,7 @@ class TestCIRunResult:
                 passed=True,
                 failed=0,
                 check_results=(),
-                warnings=[123],  # type: ignore
+                warnings=[123],
             )
 
         assert "all warnings must be strings" in str(exc_info.value)
@@ -643,7 +643,7 @@ class TestCIRunResult:
                 passed=True,
                 failed=0,
                 check_results=(),
-                output=123,  # type: ignore
+                output=123,
             )
 
         assert "output must be a string" in str(exc_info.value)

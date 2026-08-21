@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 import pytest
 
 from codetoreum.ports.output.pipeline_queue import IPipelineQueue, QueueEntry
+from types import MappingProxyType
 
 
 class TestPipelineQueueContract(ABC):
@@ -43,7 +44,7 @@ class TestPipelineQueueContract(ABC):
             stage_name="In Progress",
             board_position=0,
             enqueued_at=now,
-            metadata={"key": "value"},
+            metadata=MappingProxyType({"key": "value"}),
         )
 
         result = await queue.enqueue("queue-1", entry)
@@ -77,9 +78,9 @@ class TestPipelineQueueContract(ABC):
         queue = await self.create_queue()
         now = datetime.now(UTC)
 
-        entry1 = QueueEntry("item-1", "In Progress", 0, now, {})
-        entry2 = QueueEntry("item-2", "In Progress", 1, now, {})
-        entry3 = QueueEntry("item-3", "In Progress", 2, now, {})
+        entry1 = QueueEntry("item-1", "In Progress", 0, now, MappingProxyType({}))
+        entry2 = QueueEntry("item-2", "In Progress", 1, now, MappingProxyType({}))
+        entry3 = QueueEntry("item-3", "In Progress", 2, now, MappingProxyType({}))
 
         result1 = await queue.enqueue("queue-1", entry1)
         result2 = await queue.enqueue("queue-1", entry2)
@@ -95,8 +96,8 @@ class TestPipelineQueueContract(ABC):
         queue = await self.create_queue()
         now = datetime.now(UTC)
 
-        entry1 = QueueEntry("item-1", "In Progress", 0, now, {})
-        entry2 = QueueEntry("item-2", "In Progress", 1, now, {})
+        entry1 = QueueEntry("item-1", "In Progress", 0, now, MappingProxyType({}))
+        entry2 = QueueEntry("item-2", "In Progress", 1, now, MappingProxyType({}))
 
         result1 = await queue.enqueue("queue-1", entry1)
         result2 = await queue.enqueue("queue-1", entry2)
@@ -133,7 +134,7 @@ class TestPipelineQueueContract(ABC):
         """Peek should return head entry."""
         queue = await self.create_queue()
         now = datetime.now(UTC)
-        entry = QueueEntry("item-1", "In Progress", 0, now, {})
+        entry = QueueEntry("item-1", "In Progress", 0, now, MappingProxyType({}))
 
         await queue.enqueue("queue-1", entry)
         result = await queue.peek("queue-1")
@@ -146,7 +147,7 @@ class TestPipelineQueueContract(ABC):
         """Peek should not remove entry."""
         queue = await self.create_queue()
         now = datetime.now(UTC)
-        entry = QueueEntry("item-1", "In Progress", 0, now, {})
+        entry = QueueEntry("item-1", "In Progress", 0, now, MappingProxyType({}))
 
         await queue.enqueue("queue-1", entry)
         await queue.peek("queue-1")
@@ -160,8 +161,8 @@ class TestPipelineQueueContract(ABC):
         queue = await self.create_queue()
         now = datetime.now(UTC)
 
-        await queue.enqueue("queue-1", QueueEntry("item-1", "In Progress", 0, now, {}))
-        await queue.enqueue("queue-1", QueueEntry("item-2", "In Progress", 1, now, {}))
+        await queue.enqueue("queue-1", QueueEntry("item-1", "In Progress", 0, now, MappingProxyType({})))
+        await queue.enqueue("queue-1", QueueEntry("item-2", "In Progress", 1, now, MappingProxyType({})))
 
         result = await queue.peek("queue-1")
 
@@ -183,7 +184,7 @@ class TestPipelineQueueContract(ABC):
         """Pop should return head entry."""
         queue = await self.create_queue()
         now = datetime.now(UTC)
-        entry = QueueEntry("item-1", "In Progress", 0, now, {})
+        entry = QueueEntry("item-1", "In Progress", 0, now, MappingProxyType({}))
 
         await queue.enqueue("queue-1", entry)
         result = await queue.pop("queue-1")
@@ -196,7 +197,7 @@ class TestPipelineQueueContract(ABC):
         """Pop should remove entry from queue."""
         queue = await self.create_queue()
         now = datetime.now(UTC)
-        entry = QueueEntry("item-1", "In Progress", 0, now, {})
+        entry = QueueEntry("item-1", "In Progress", 0, now, MappingProxyType({}))
 
         await queue.enqueue("queue-1", entry)
         await queue.pop("queue-1")
@@ -210,9 +211,9 @@ class TestPipelineQueueContract(ABC):
         queue = await self.create_queue()
         now = datetime.now(UTC)
 
-        await queue.enqueue("queue-1", QueueEntry("item-1", "In Progress", 0, now, {}))
-        await queue.enqueue("queue-1", QueueEntry("item-2", "In Progress", 1, now, {}))
-        await queue.enqueue("queue-1", QueueEntry("item-3", "In Progress", 2, now, {}))
+        await queue.enqueue("queue-1", QueueEntry("item-1", "In Progress", 0, now, MappingProxyType({})))
+        await queue.enqueue("queue-1", QueueEntry("item-2", "In Progress", 1, now, MappingProxyType({})))
+        await queue.enqueue("queue-1", QueueEntry("item-3", "In Progress", 2, now, MappingProxyType({})))
 
         r1 = await queue.pop("queue-1")
         r2 = await queue.pop("queue-1")
@@ -238,7 +239,7 @@ class TestPipelineQueueContract(ABC):
         """Contains should return True for enqueued item."""
         queue = await self.create_queue()
         now = datetime.now(UTC)
-        entry = QueueEntry("item-1", "In Progress", 0, now, {})
+        entry = QueueEntry("item-1", "In Progress", 0, now, MappingProxyType({}))
 
         await queue.enqueue("queue-1", entry)
         result = await queue.contains("queue-1", "item-1")
@@ -250,7 +251,7 @@ class TestPipelineQueueContract(ABC):
         """Contains should return False after removal."""
         queue = await self.create_queue()
         now = datetime.now(UTC)
-        entry = QueueEntry("item-1", "In Progress", 0, now, {})
+        entry = QueueEntry("item-1", "In Progress", 0, now, MappingProxyType({}))
 
         await queue.enqueue("queue-1", entry)
         await queue.remove("queue-1", "item-1")
@@ -274,7 +275,7 @@ class TestPipelineQueueContract(ABC):
         """Removing existing item should return True."""
         queue = await self.create_queue()
         now = datetime.now(UTC)
-        entry = QueueEntry("item-1", "In Progress", 0, now, {})
+        entry = QueueEntry("item-1", "In Progress", 0, now, MappingProxyType({}))
 
         await queue.enqueue("queue-1", entry)
         result = await queue.remove("queue-1", "item-1")
@@ -286,7 +287,7 @@ class TestPipelineQueueContract(ABC):
         """Removing twice should be idempotent."""
         queue = await self.create_queue()
         now = datetime.now(UTC)
-        entry = QueueEntry("item-1", "In Progress", 0, now, {})
+        entry = QueueEntry("item-1", "In Progress", 0, now, MappingProxyType({}))
 
         await queue.enqueue("queue-1", entry)
         await queue.remove("queue-1", "item-1")
@@ -300,9 +301,9 @@ class TestPipelineQueueContract(ABC):
         queue = await self.create_queue()
         now = datetime.now(UTC)
 
-        await queue.enqueue("queue-1", QueueEntry("item-1", "In Progress", 0, now, {}))
-        await queue.enqueue("queue-1", QueueEntry("item-2", "In Progress", 1, now, {}))
-        await queue.enqueue("queue-1", QueueEntry("item-3", "In Progress", 2, now, {}))
+        await queue.enqueue("queue-1", QueueEntry("item-1", "In Progress", 0, now, MappingProxyType({})))
+        await queue.enqueue("queue-1", QueueEntry("item-2", "In Progress", 1, now, MappingProxyType({})))
+        await queue.enqueue("queue-1", QueueEntry("item-3", "In Progress", 2, now, MappingProxyType({})))
 
         await queue.remove("queue-1", "item-2")
 
@@ -330,10 +331,10 @@ class TestPipelineQueueContract(ABC):
 
         assert await queue.length("queue-1") == 0
 
-        await queue.enqueue("queue-1", QueueEntry("item-1", "In Progress", 0, now, {}))
+        await queue.enqueue("queue-1", QueueEntry("item-1", "In Progress", 0, now, MappingProxyType({})))
         assert await queue.length("queue-1") == 1
 
-        await queue.enqueue("queue-1", QueueEntry("item-2", "In Progress", 1, now, {}))
+        await queue.enqueue("queue-1", QueueEntry("item-2", "In Progress", 1, now, MappingProxyType({})))
         assert await queue.length("queue-1") == 2
 
     @pytest.mark.asyncio
@@ -342,8 +343,8 @@ class TestPipelineQueueContract(ABC):
         queue = await self.create_queue()
         now = datetime.now(UTC)
 
-        await queue.enqueue("queue-1", QueueEntry("item-1", "In Progress", 0, now, {}))
-        await queue.enqueue("queue-1", QueueEntry("item-2", "In Progress", 1, now, {}))
+        await queue.enqueue("queue-1", QueueEntry("item-1", "In Progress", 0, now, MappingProxyType({})))
+        await queue.enqueue("queue-1", QueueEntry("item-2", "In Progress", 1, now, MappingProxyType({})))
 
         assert await queue.length("queue-1") == 2
 
@@ -367,8 +368,8 @@ class TestPipelineQueueContract(ABC):
         queue = await self.create_queue()
         now = datetime.now(UTC)
 
-        await queue.enqueue("queue-1", QueueEntry("item-1", "In Progress", 0, now, {}))
-        await queue.enqueue("queue-1", QueueEntry("item-2", "In Progress", 1, now, {}))
+        await queue.enqueue("queue-1", QueueEntry("item-1", "In Progress", 0, now, MappingProxyType({})))
+        await queue.enqueue("queue-1", QueueEntry("item-2", "In Progress", 1, now, MappingProxyType({})))
 
         result = await queue.list("queue-1")
 
@@ -380,9 +381,9 @@ class TestPipelineQueueContract(ABC):
         queue = await self.create_queue()
         now = datetime.now(UTC)
 
-        await queue.enqueue("queue-1", QueueEntry("item-1", "In Progress", 0, now, {}))
-        await queue.enqueue("queue-1", QueueEntry("item-2", "In Progress", 1, now, {}))
-        await queue.enqueue("queue-1", QueueEntry("item-3", "In Progress", 2, now, {}))
+        await queue.enqueue("queue-1", QueueEntry("item-1", "In Progress", 0, now, MappingProxyType({})))
+        await queue.enqueue("queue-1", QueueEntry("item-2", "In Progress", 1, now, MappingProxyType({})))
+        await queue.enqueue("queue-1", QueueEntry("item-3", "In Progress", 2, now, MappingProxyType({})))
 
         result = await queue.list("queue-1")
 
@@ -407,7 +408,7 @@ class TestPipelineQueueContract(ABC):
         queue = await self.create_queue()
         now = datetime.now(UTC)
 
-        await queue.enqueue("queue-1", QueueEntry("item-1", "In Progress", 0, now, {}))
+        await queue.enqueue("queue-1", QueueEntry("item-1", "In Progress", 0, now, MappingProxyType({})))
         result = await queue.position_of("queue-1", "item-1")
 
         assert result == 0
@@ -418,9 +419,9 @@ class TestPipelineQueueContract(ABC):
         queue = await self.create_queue()
         now = datetime.now(UTC)
 
-        await queue.enqueue("queue-1", QueueEntry("item-1", "In Progress", 0, now, {}))
-        await queue.enqueue("queue-1", QueueEntry("item-2", "In Progress", 1, now, {}))
-        await queue.enqueue("queue-1", QueueEntry("item-3", "In Progress", 2, now, {}))
+        await queue.enqueue("queue-1", QueueEntry("item-1", "In Progress", 0, now, MappingProxyType({})))
+        await queue.enqueue("queue-1", QueueEntry("item-2", "In Progress", 1, now, MappingProxyType({})))
+        await queue.enqueue("queue-1", QueueEntry("item-3", "In Progress", 2, now, MappingProxyType({})))
 
         result = await queue.position_of("queue-1", "item-2")
 
@@ -434,8 +435,8 @@ class TestPipelineQueueContract(ABC):
         queue = await self.create_queue()
         now = datetime.now(UTC)
 
-        await queue.enqueue("queue-1", QueueEntry("item-1", "In Progress", 0, now, {}))
-        await queue.enqueue("queue-2", QueueEntry("item-2", "In Progress", 0, now, {}))
+        await queue.enqueue("queue-1", QueueEntry("item-1", "In Progress", 0, now, MappingProxyType({})))
+        await queue.enqueue("queue-2", QueueEntry("item-2", "In Progress", 0, now, MappingProxyType({})))
 
         result1 = await queue.list("queue-1")
         result2 = await queue.list("queue-2")
@@ -452,7 +453,7 @@ class TestPipelineQueueContract(ABC):
         """Queue entries should be immutable (frozen dataclasses)."""
         queue = await self.create_queue()
         now = datetime.now(UTC)
-        entry = QueueEntry("item-1", "In Progress", 0, now, {})
+        entry = QueueEntry("item-1", "In Progress", 0, now, MappingProxyType({}))
 
         await queue.enqueue("queue-1", entry)
         entries = await queue.list("queue-1")

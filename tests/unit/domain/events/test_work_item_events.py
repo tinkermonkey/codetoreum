@@ -410,13 +410,13 @@ class TestWorkItemCreatedEventImmutability:
         # WorkItemCreatedEvent is a frozen dataclass, so attempting to modify
         # any attribute should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            event.work_item_id = "456"  # type: ignore
+            event.work_item_id = "456"
 
         with pytest.raises(FrozenInstanceError):
-            event.title = "Different title"  # type: ignore
+            event.title = "Different title"
 
         with pytest.raises(FrozenInstanceError):
-            event.initial_column = "In Progress"  # type: ignore
+            event.initial_column = "In Progress"
 
 
 class TestWorkItemUpdatedEventImmutability:
@@ -442,10 +442,10 @@ class TestWorkItemUpdatedEventImmutability:
         # WorkItemUpdatedEvent is a frozen dataclass, so attempting to modify
         # field attributes should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            event.work_item_id = "456"  # type: ignore
+            event.work_item_id = "456"
 
         with pytest.raises(FrozenInstanceError):
-            event.changes = {"status": "Done"}  # type: ignore
+            event.changes = {"status": "Done"}
 
     def test_work_item_updated_event_changes_dict_limitation(self):
         """Test that changes dict is mutable (known limitation).
@@ -471,7 +471,7 @@ class TestWorkItemUpdatedEventImmutability:
 
         # The dict field itself cannot be reassigned
         with pytest.raises(FrozenInstanceError):
-            event.changes = {}  # type: ignore
+            event.changes = {}
 
         # But the dict contents CAN be mutated (known limitation)
         # This is documented but not prevented

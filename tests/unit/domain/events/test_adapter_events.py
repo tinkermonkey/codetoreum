@@ -275,7 +275,7 @@ class TestEventTypeProperty:
 
         # event_type is read-only (property)
         with pytest.raises(AttributeError):
-            event.event_type = "NewType"  # type: ignore
+            event.event_type = "NewType"
 
     def test_event_type_distinct_from_type_field(self):
         """Test that event_type (class name) differs from type (dot-notation)."""

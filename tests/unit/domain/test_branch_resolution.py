@@ -420,7 +420,7 @@ class TestBranchResolutionImmutability:
         )
 
         with pytest.raises(AttributeError):  # FrozenInstanceError for frozen dataclass
-            resolution.action = "reuse"  # type: ignore
+            resolution.action = "reuse"
 
     def test_immutable_branch_name(self):
         """Test that branch_name field cannot be modified."""
@@ -433,7 +433,7 @@ class TestBranchResolutionImmutability:
         )
 
         with pytest.raises(AttributeError):
-            resolution.branch_name = "feature/other"  # type: ignore
+            resolution.branch_name = "feature/other"
 
     def test_immutable_confidence(self):
         """Test that confidence field cannot be modified."""
@@ -446,7 +446,7 @@ class TestBranchResolutionImmutability:
         )
 
         with pytest.raises(AttributeError):
-            resolution.confidence = 0.9  # type: ignore
+            resolution.confidence = 0.9
 
     def test_immutable_reason(self):
         """Test that reason field cannot be modified."""
@@ -459,7 +459,7 @@ class TestBranchResolutionImmutability:
         )
 
         with pytest.raises(AttributeError):
-            resolution.reason = "modified reason"  # type: ignore
+            resolution.reason = "modified reason"
 
     def test_immutable_parent_issue_id(self):
         """Test that parent_issue_id field cannot be modified."""
@@ -473,7 +473,7 @@ class TestBranchResolutionImmutability:
         )
 
         with pytest.raises(AttributeError):
-            resolution.parent_issue_id = "456"  # type: ignore
+            resolution.parent_issue_id = "456"
 
     def test_immutable_resolution_strategy(self):
         """Test that resolution_strategy field cannot be modified."""
@@ -486,7 +486,7 @@ class TestBranchResolutionImmutability:
         )
 
         with pytest.raises(AttributeError):
-            resolution.resolution_strategy = "exact_match"  # type: ignore
+            resolution.resolution_strategy = "exact_match"
 
 
 class TestBranchResolutionSerialization:

@@ -64,7 +64,7 @@ class TestConversationalSessionState:
                 llm_conversation_id=None,
                 last_processed_comment_id="comment-1",
                 last_interaction_timestamp="2025-01-14T10:00:00+00:00",
-                status=status,  # type: ignore
+                status=status,
             )
             assert state.status == status
 
@@ -230,7 +230,7 @@ class TestConversationalSessionState:
                 llm_conversation_id="conv-abc123",
                 last_processed_comment_id="comment-10",
                 last_interaction_timestamp="2025-01-14T10:35:00+00:00",
-                status="invalid",  # type: ignore
+                status="invalid",
             )
 
     def test_session_state_serialization(self):
@@ -376,31 +376,31 @@ class TestConversationalSessionStateImmutability:
         # ConversationalSessionState is a frozen dataclass, so attempting to modify
         # any attribute should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            state.session_id = "sess-002"  # type: ignore
+            state.session_id = "sess-002"
 
         with pytest.raises(FrozenInstanceError):
-            state.work_item_id = "issue-99"  # type: ignore
+            state.work_item_id = "issue-99"
 
         with pytest.raises(FrozenInstanceError):
-            state.project_id = "proj-2"  # type: ignore
+            state.project_id = "proj-2"
 
         with pytest.raises(FrozenInstanceError):
-            state.agent_assignment = "different-agent"  # type: ignore
+            state.agent_assignment = "different-agent"
 
         with pytest.raises(FrozenInstanceError):
-            state.column_name = "Done"  # type: ignore
+            state.column_name = "Done"
 
         with pytest.raises(FrozenInstanceError):
-            state.llm_conversation_id = "conv-different"  # type: ignore
+            state.llm_conversation_id = "conv-different"
 
         with pytest.raises(FrozenInstanceError):
-            state.last_processed_comment_id = "comment-99"  # type: ignore
+            state.last_processed_comment_id = "comment-99"
 
         with pytest.raises(FrozenInstanceError):
-            state.last_interaction_timestamp = "2025-01-15T00:00:00+00:00"  # type: ignore
+            state.last_interaction_timestamp = "2025-01-15T00:00:00+00:00"
 
         with pytest.raises(FrozenInstanceError):
-            state.status = "terminated"  # type: ignore
+            state.status = "terminated"
 
     def test_session_state_immutability_pattern(self):
         """Test the immutability pattern for session state updates."""
@@ -454,4 +454,4 @@ class TestConversationalSessionStateImmutability:
         # All modification attempts should fail consistently
         for attempt in range(3):
             with pytest.raises(FrozenInstanceError):
-                state.session_id = f"sess-{attempt}"  # type: ignore
+                state.session_id = f"sess-{attempt}"

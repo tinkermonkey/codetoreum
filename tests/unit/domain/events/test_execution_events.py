@@ -106,7 +106,7 @@ class TestExecutionTimedOutEvent:
         )
 
         with pytest.raises(AttributeError):
-            event.execution_id = "exec-999"  # type: ignore
+            event.execution_id = "exec-999"
 
     def test_to_dict_serialization(self) -> None:
         """Test serializing event to dictionary."""

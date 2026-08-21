@@ -33,9 +33,10 @@ from codetoreum.cli.sim_watch import (
 
 def render_panel_text(panel: Panel) -> str:
     """Helper to render a Panel to text for assertions."""
-    console = Console(file=io.StringIO(), width=80, legacy_windows=False)
+    string_io = io.StringIO()
+    console = Console(file=string_io, width=80, legacy_windows=False)
     console.print(panel)
-    return console.file.getvalue()
+    return string_io.getvalue()
 
 
 class TestBuildBoardDisplay:

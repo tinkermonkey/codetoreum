@@ -219,7 +219,7 @@ class TestContainerExecutionCompletedEvent:
 
         # Tuples don't have append(), so this would raise AttributeError
         with pytest.raises(AttributeError):
-            event.output_files.append("file2.txt")  # type: ignore
+            event.output_files.append("file2.txt")
 
     def test_multiple_output_files(self):
         """Test handling of multiple output files."""

@@ -62,10 +62,10 @@ class TestContainerMetadataImmutability:
 
         # Attempting to modify any field should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            metadata.container_id = "xyz789"  # type: ignore
+            metadata.container_id = "xyz789"
 
         with pytest.raises(FrozenInstanceError):
-            metadata.project_id = "proj-2"  # type: ignore
+            metadata.project_id = "proj-2"
 
     def test_container_metadata_preserves_all_fields(self):
         """ContainerMetadata should preserve all fields exactly as provided."""
@@ -118,10 +118,10 @@ class TestRecoveryAssessmentImmutability:
 
         # Attempting to modify any field should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            assessment.action = "kill"  # type: ignore
+            assessment.action = "kill"
 
         with pytest.raises(FrozenInstanceError):
-            assessment.reason = "Container timeout"  # type: ignore
+            assessment.reason = "Container timeout"
 
     def test_recovery_assessment_kill_action(self):
         """RecoveryAssessment should support kill action."""
@@ -165,10 +165,10 @@ class TestRecoveryResultImmutability:
 
         # Attempting to modify any field should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            result.recovered = 10  # type: ignore
+            result.recovered = 10
 
         with pytest.raises(FrozenInstanceError):
-            result.errors = 5  # type: ignore
+            result.errors = 5
 
     def test_recovery_result_preserves_counts(self):
         """RecoveryResult should preserve counts accurately."""

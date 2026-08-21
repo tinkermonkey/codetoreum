@@ -17,6 +17,7 @@ from codetoreum.adapters.secondary.redis_pipeline_queue import RedisPipelineQueu
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.ports.output.pipeline_queue import IPipelineQueue, QueueEntry
 from tests.unit.ports.output.test_pipeline_queue_contract import TestPipelineQueueContract
+from types import MappingProxyType
 
 
 class MockRedis:
@@ -26,7 +27,7 @@ class MockRedis:
         """Initialize mock Redis storage."""
         self._data: dict[str, bytes] = {}
         self._sorted_sets: dict[str, dict[str, float]] = {}
-        self._hashes: dict[str, dict[str, bytes]] = {}
+        self._hashes: dict[str, dict[bytes, bytes]] = {}
 
     async def zadd(self, key: str, mapping: dict[str, float]) -> int:
         """Mock Redis ZADD operation."""
@@ -148,18 +149,16 @@ class MockRedis:
 
     async def hget(self, key: str, field: str) -> bytes | None:
         """Mock Redis HGET operation."""
-        if isinstance(field, str):
-            field = field.encode("utf-8")
+        field_bytes = field.encode("utf-8") if isinstance(field, str) else field
         hash_data = self._hashes.get(key, {})
-        return hash_data.get(field)
+        return hash_data.get(field_bytes)
 
     async def hdel(self, key: str, field: str) -> int:
         """Mock Redis HDEL operation."""
-        if isinstance(field, str):
-            field = field.encode("utf-8")
+        field_bytes = field.encode("utf-8") if isinstance(field, str) else field
         hash_data = self._hashes.get(key, {})
-        if field in hash_data:
-            del hash_data[field]
+        if field_bytes in hash_data:
+            del hash_data[field_bytes]
             return 1
         return 0
 
@@ -252,9 +251,9 @@ class TestRedisPipelineQueue(TestPipelineQueueContract):
 
         now = datetime.now(UTC)
 
-        await queue.enqueue("queue-1", QueueEntry("item-1", "In Progress", 100, now, {}))
-        await queue.enqueue("queue-1", QueueEntry("item-2", "In Progress", 10, now, {}))
-        await queue.enqueue("queue-1", QueueEntry("item-3", "In Progress", 50, now, {}))
+        await queue.enqueue("queue-1", QueueEntry("item-1", "In Progress", 100, now, MappingProxyType({})))
+        await queue.enqueue("queue-1", QueueEntry("item-2", "In Progress", 10, now, MappingProxyType({})))
+        await queue.enqueue("queue-1", QueueEntry("item-3", "In Progress", 50, now, MappingProxyType({})))
 
         entries = await queue.list("queue-1")
 
@@ -271,8 +270,8 @@ class TestRedisPipelineQueue(TestPipelineQueueContract):
         queue = RedisPipelineQueue(redis_client=redis, event_bus=event_bus)
 
         now = datetime.now(UTC)
-        await queue.enqueue("queue-1", QueueEntry("item-1", "In Progress", 0, now, {}))
-        await queue.enqueue("queue-1", QueueEntry("item-2", "In Progress", 1, now, {}))
+        await queue.enqueue("queue-1", QueueEntry("item-1", "In Progress", 0, now, MappingProxyType({})))
+        await queue.enqueue("queue-1", QueueEntry("item-2", "In Progress", 1, now, MappingProxyType({})))
 
         peeked = await queue.peek("queue-1")
         popped = await queue.pop("queue-1")
@@ -310,7 +309,7 @@ class TestRedisPipelineQueue(TestPipelineQueueContract):
         queue = RedisPipelineQueue(redis_client=redis, event_bus=event_bus)
 
         now = datetime.now(UTC)
-        entry = QueueEntry("item-1", "Code Review", 0, now, {})
+        entry = QueueEntry("item-1", "Code Review", 0, now, MappingProxyType({}))
 
         await queue.enqueue("queue-1", entry)
         result = await queue.peek("queue-1")
@@ -325,7 +324,7 @@ class TestRedisPipelineQueue(TestPipelineQueueContract):
         queue = RedisPipelineQueue(redis_client=redis, event_bus=event_bus)
 
         original_time = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
-        entry = QueueEntry("item-1", "In Progress", 0, original_time, {})
+        entry = QueueEntry("item-1", "In Progress", 0, original_time, MappingProxyType({}))
 
         await queue.enqueue("queue-1", entry)
         result = await queue.peek("queue-1")
@@ -340,9 +339,9 @@ class TestRedisPipelineQueue(TestPipelineQueueContract):
         queue = RedisPipelineQueue(redis_client=redis, event_bus=event_bus)
 
         now = datetime.now(UTC)
-        await queue.enqueue("queue-1", QueueEntry("item-1", "In Progress", 0, now, {}))
-        await queue.enqueue("queue-1", QueueEntry("item-2", "In Progress", 1, now, {}))
-        await queue.enqueue("queue-1", QueueEntry("item-3", "In Progress", 2, now, {}))
+        await queue.enqueue("queue-1", QueueEntry("item-1", "In Progress", 0, now, MappingProxyType({})))
+        await queue.enqueue("queue-1", QueueEntry("item-2", "In Progress", 1, now, MappingProxyType({})))
+        await queue.enqueue("queue-1", QueueEntry("item-3", "In Progress", 2, now, MappingProxyType({})))
 
         await queue.remove("queue-1", "item-2")
 
@@ -363,7 +362,7 @@ class TestRedisPipelineQueue(TestPipelineQueueContract):
 
         # Enqueue 100 items
         for i in range(100):
-            entry = QueueEntry(f"item-{i}", "In Progress", i, now, {})
+            entry = QueueEntry(f"item-{i}", "In Progress", i, now, MappingProxyType({}))
             await queue.enqueue("queue-1", entry)
 
         length = await queue.length("queue-1")
@@ -487,7 +486,7 @@ class TestRedisPipelineQueue(TestPipelineQueueContract):
         queue = RedisPipelineQueue(redis_client=redis, event_bus=event_bus)
 
         now = datetime.now(UTC)
-        entry = QueueEntry("item-1", "In Progress", 0, now, {})
+        entry = QueueEntry("item-1", "In Progress", 0, now, MappingProxyType({}))
 
         # Enqueue an item
         await queue.enqueue("queue-1", entry)

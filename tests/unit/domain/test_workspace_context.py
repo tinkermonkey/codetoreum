@@ -155,13 +155,13 @@ class TestImmutability:
 
         # Attempting to modify frozen dataclass fields should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            context.branch_name = "new-branch"  # type: ignore
+            context.branch_name = "new-branch"
 
         with pytest.raises(FrozenInstanceError):
-            context.create_pr = False  # type: ignore
+            context.create_pr = False
 
         with pytest.raises(FrozenInstanceError):
-            context.workspace_type = WorkspaceType.ISSUE  # type: ignore
+            context.workspace_type = WorkspaceType.ISSUE
 
 
 class TestEquality:

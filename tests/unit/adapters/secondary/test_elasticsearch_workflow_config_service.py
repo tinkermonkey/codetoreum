@@ -86,7 +86,7 @@ def store() -> _FakeConfigStore:
 
 @pytest.fixture
 def service(store: _FakeConfigStore) -> ElasticsearchWorkflowConfigService:
-    return ElasticsearchWorkflowConfigService(config_storage=store, cache_ttl_seconds=60)  # type: ignore[arg-type]
+    return ElasticsearchWorkflowConfigService(config_storage=store, cache_ttl_seconds=60)
 
 
 class TestTemplateSerialization:

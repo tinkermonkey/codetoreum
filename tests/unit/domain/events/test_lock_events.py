@@ -339,10 +339,10 @@ class TestLockAcquiredEventImmutability:
         # LockAcquiredEvent is a frozen dataclass, so attempting to modify
         # should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            event.project_id = "proj-2"  # type: ignore
+            event.project_id = "proj-2"
 
         with pytest.raises(FrozenInstanceError):
-            event.work_item_id = "456"  # type: ignore
+            event.work_item_id = "456"
 
     def test_lock_acquired_event_acquisition_method_immutable(self):
         """Test that acquisition_method field is immutable."""
@@ -360,7 +360,7 @@ class TestLockAcquiredEventImmutability:
 
         # Should raise FrozenInstanceError when attempting modification
         with pytest.raises(FrozenInstanceError):
-            event.acquisition_method = "normal"  # type: ignore
+            event.acquisition_method = "normal"
 
 
 class TestLockReleasedEventImmutability:
@@ -387,10 +387,10 @@ class TestLockReleasedEventImmutability:
         # LockReleasedEvent is a frozen dataclass, so attempting to modify
         # should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            event.work_item_id = "456"  # type: ignore
+            event.work_item_id = "456"
 
         with pytest.raises(FrozenInstanceError):
-            event.reason = "timeout"  # type: ignore
+            event.reason = "timeout"
 
     def test_lock_released_event_reason_immutable(self):
         """Test that reason field is immutable."""
@@ -408,7 +408,7 @@ class TestLockReleasedEventImmutability:
 
         # Should raise FrozenInstanceError when attempting modification
         with pytest.raises(FrozenInstanceError):
-            event.reason = "manual"  # type: ignore
+            event.reason = "manual"
 
     def test_lock_released_event_next_in_queue_immutable(self):
         """Test that next_in_queue field is immutable."""
@@ -427,7 +427,7 @@ class TestLockReleasedEventImmutability:
 
         # Should raise FrozenInstanceError when attempting modification
         with pytest.raises(FrozenInstanceError):
-            event.next_in_queue = "125"  # type: ignore
+            event.next_in_queue = "125"
 
 
 class TestStaleLockDetectedEventImmutability:
@@ -453,10 +453,10 @@ class TestStaleLockDetectedEventImmutability:
         # StaleLockDetectedEvent is a frozen dataclass, so attempting to modify
         # should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            event.work_item_id = "456"  # type: ignore
+            event.work_item_id = "456"
 
         with pytest.raises(FrozenInstanceError):
-            event.lock_acquired_at = "2024-01-01T00:00:00+00:00"  # type: ignore
+            event.lock_acquired_at = "2024-01-01T00:00:00+00:00"
 
     def test_lock_stale_detected_event_lock_acquired_at_immutable(self):
         """Test that lock_acquired_at field is immutable."""
@@ -475,7 +475,7 @@ class TestStaleLockDetectedEventImmutability:
 
         # Should raise FrozenInstanceError when attempting modification
         with pytest.raises(FrozenInstanceError):
-            event.lock_acquired_at = "2024-01-09T10:00:00+00:00"  # type: ignore
+            event.lock_acquired_at = "2024-01-09T10:00:00+00:00"
 
 
 class TestLockStuckEvent:
@@ -606,7 +606,7 @@ class TestLockStuckEvent:
         assert event.work_item_id == "123"
 
         with pytest.raises(FrozenInstanceError):
-            event.work_item_id = "456"  # type: ignore
+            event.work_item_id = "456"
 
         with pytest.raises(FrozenInstanceError):
-            event.reason = "different reason"  # type: ignore
+            event.reason = "different reason"

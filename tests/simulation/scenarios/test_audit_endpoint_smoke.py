@@ -173,7 +173,7 @@ async def _get_workflow_run_id(query_service: IWorkflowRunQueryPort, work_item_i
     if not result.runs:
         raise ValueError("No workflow runs returned")
     first_run = result.runs[0]
-    return first_run.id
+    return first_run.id  # type: ignore[no-any-return]
 
 
 # ============================================================================

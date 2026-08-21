@@ -180,15 +180,15 @@ def _build_adapter(
         credential_provider=_FakeCredentialProvider(),
         agent_repository=agent_repo,
         work_item_service=wi_service,
-        container=container,  # type: ignore[arg-type]
+        container=container,
     )
 
     # Replace the strategies the constructor built with recording stubs so
     # we can intercept dispatch.
     recorders: dict[InvocationMode, _RecordingStrategy] = {}
     if strategies_override is not None:
-        adapter._strategies.host = strategies_override.get(InvocationMode.HOST)  # type: ignore[attr-defined]
-        adapter._strategies.containerised = strategies_override.get(  # type: ignore[attr-defined]
+        adapter._strategies.host = strategies_override.get(InvocationMode.HOST)
+        adapter._strategies.containerised = strategies_override.get(
             InvocationMode.CONTAINERIZED,
         )
         for mode, strat in strategies_override.items():
@@ -196,11 +196,11 @@ def _build_adapter(
                 recorders[mode] = strat
     else:
         host_recorder = _RecordingStrategy()
-        adapter._strategies.host = host_recorder  # type: ignore[attr-defined]
+        adapter._strategies.host = host_recorder
         recorders[InvocationMode.HOST] = host_recorder
         if container is not None:
             cont_recorder = _RecordingStrategy()
-            adapter._strategies.containerised = cont_recorder  # type: ignore[attr-defined]
+            adapter._strategies.containerised = cont_recorder
             recorders[InvocationMode.CONTAINERIZED] = cont_recorder
 
     return adapter, recorders, builder, execution, work_item

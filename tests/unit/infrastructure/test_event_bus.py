@@ -549,7 +549,7 @@ class TestDetachedPublishAndDrain:
         async def _boom(_event):
             raise RuntimeError("publish exploded")
 
-        bus.publish = _boom  # type: ignore[method-assign]
+        bus.publish = _boom
 
         with caplog.at_level(logging.ERROR):
             bus.publish_detached(_make_created_event("wi-5"), on_error=captured.append)

@@ -78,7 +78,7 @@ class TestCodingAgentInvocationOptions:
     def test_is_frozen(self) -> None:
         opts = self._make()
         with pytest.raises(FrozenInstanceError):
-            opts.model = "claude-opus"  # type: ignore[misc]
+            opts.model = "claude-opus"
 
     def test_supports_api_mode(self) -> None:
         opts = self._make(
@@ -125,7 +125,7 @@ class TestCodingAgentResult:
     def test_is_frozen(self) -> None:
         r = self._make()
         with pytest.raises(FrozenInstanceError):
-            r.success = False  # type: ignore[misc]
+            r.success = False
 
 
 class TestICodingAgent:
@@ -133,7 +133,7 @@ class TestICodingAgent:
 
     def test_cannot_instantiate_directly(self) -> None:
         with pytest.raises(TypeError):
-            ICodingAgent()  # type: ignore[abstract]
+            ICodingAgent()
 
     def test_concrete_subclass_must_implement_both_methods(self) -> None:
         # A subclass missing one abstract method must still fail to
@@ -145,4 +145,4 @@ class TestICodingAgent:
             # `execute` deliberately not implemented.
 
         with pytest.raises(TypeError):
-            OnlySupportedModes()  # type: ignore[abstract]
+            OnlySupportedModes()

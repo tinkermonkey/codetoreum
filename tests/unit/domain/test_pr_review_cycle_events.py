@@ -337,7 +337,7 @@ class TestPRReviewCyclePhaseStartedEvent:
                 phase_name="code_review",
                 phase_index=1,
                 agent_id="agent-456",
-                context_source=None,  # type: ignore
+                context_source=None,
                 workflow_run_id="run-789",
             )
 
