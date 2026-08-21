@@ -16,6 +16,7 @@ Verifies that:
 """
 
 import asyncio
+from typing import Any, Callable
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -79,6 +80,7 @@ class _RepairCycleContext:
         self.iteration = 0
         self.prior_fix_attempts = ()
         self.prior_classifications = ()
+        self.failures: list[Any] = []
         self.stage_config = RepairCycleStageConfig(
             name="fix_failures",
             test_configs=self.test_configs,
@@ -1572,10 +1574,10 @@ class TestEnvironmentRebuildAndVerifyReturnValueHandling:
     """
 
     @staticmethod
-    def _make_coding_agent_factory_with_mock(mock_coding_agent: AsyncMock) -> callable:
+    def _make_coding_agent_factory_with_mock(mock_coding_agent: AsyncMock) -> Callable[[Any], AsyncMock]:
         """Create a coding-agent factory that returns the given mock coding agent."""
 
-        def factory(prompt_builder) -> AsyncMock:
+        def factory(prompt_builder: Any) -> AsyncMock:
             return mock_coding_agent
 
         return factory

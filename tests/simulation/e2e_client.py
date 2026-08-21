@@ -576,7 +576,7 @@ class SimulationE2EClient:
         """
         max_iterations = int(timeout / poll_interval) + 1
 
-        async def poll_execution_status():
+        async def poll_execution_status() -> dict[str, Any] | None:
             for _ in range(max_iterations):
                 executions = self.get_executions()
                 for execution in executions:

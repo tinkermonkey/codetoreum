@@ -1103,10 +1103,10 @@ async def test_scenario_16_json_parse_retry_logic(coding_agent_factory):
     # Mock LLM that returns non-JSON
     mock_llm = Mock()
 
-    def coding_agent_factory(agent_name):
+    def mock_factory(agent_name):
         return mock_llm
 
-    adapter = ProductionRepairCycleAdapter(coding_agent_factory=coding_agent_factory, config=config)
+    adapter = ProductionRepairCycleAdapter(coding_agent_factory=mock_factory, config=config)
 
     start_time = time.time()
 
@@ -1136,10 +1136,10 @@ async def test_scenario_17_json_parse_success_after_retry(coding_agent_factory):
     config = RepairCycleConfig(max_json_parse_retries=3)
     mock_llm = Mock()
 
-    def coding_agent_factory(agent_name):
+    def mock_factory(agent_name):
         return mock_llm
 
-    adapter = ProductionRepairCycleAdapter(coding_agent_factory=coding_agent_factory, config=config)
+    adapter = ProductionRepairCycleAdapter(coding_agent_factory=mock_factory, config=config)
 
     # Test with embedded JSON in mixed content
     mixed_content = """
@@ -1176,10 +1176,10 @@ async def test_scenario_18_json_parse_malformed_structure(coding_agent_factory):
     config = RepairCycleConfig(max_json_parse_retries=2)
     mock_llm = Mock()
 
-    def coding_agent_factory(agent_name):
+    def mock_factory(agent_name):
         return mock_llm
 
-    adapter = ProductionRepairCycleAdapter(coding_agent_factory=coding_agent_factory, config=config)
+    adapter = ProductionRepairCycleAdapter(coding_agent_factory=mock_factory, config=config)
 
     # Test with malformed JSON (missing closing brace)
     malformed_json = '{"passed": 10, "failed": 0'

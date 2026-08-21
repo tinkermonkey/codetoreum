@@ -1,6 +1,7 @@
 """Simulation scenario tests."""
 
 from datetime import UTC, timedelta
+from typing import Any, Callable
 
 import pytest
 
@@ -260,7 +261,7 @@ async def test_all_scenarios_meet_performance_target():
     """
     Meta-test: Verify all scenarios meet the 10-100x performance target.
     """
-    scenarios = [
+    scenarios: list[tuple[str, Callable[[], SimulationConfig], Callable[[SimulationRunner], Any]]] = [
         ("Simple Workflow", create_simple_config, run_simple_scenario),
         ("Parallel Executions", create_parallel_config, run_parallel_scenario),
         ("Review Cycle", create_review_config, run_review_scenario),

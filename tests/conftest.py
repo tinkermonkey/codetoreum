@@ -77,8 +77,7 @@ try:
             """No-op cleanup."""
 
     # Patch get_instance to catch connection errors
-    @classmethod
-    def _patched_get_instance(cls):
+    def _patched_get_instance(cls) -> object:
         """Get or create Reaper instance, falling back to NullReaper on connection failure."""
         if cls._instance is not None:
             return cls._instance
@@ -97,8 +96,8 @@ try:
             # Other exceptions should still fail
             raise
 
-    # Apply the patch
-    Reaper.get_instance = _patched_get_instance
+    # Apply the patch as a classmethod
+    Reaper.get_instance = classmethod(_patched_get_instance)
 
 except ImportError:
     # testcontainers not available yet, will be imported later
@@ -522,7 +521,7 @@ class ModernElasticsearchContainer(DockerContainer):
                     # Check if we got a 200 response from Elasticsearch
                     if b"HTTP/1.1 200" in response or b"HTTP/2 200" in response:
                         return
-                    last_error = f"Got unexpected response: {response[:100]}"
+                    last_error = f"Got unexpected response: {response[:100].decode('utf-8', errors='replace')}"
             except OSError as e:
                 last_error = str(e)
             time.sleep(0.1)
@@ -611,7 +610,7 @@ class ModernRedisContainer(DockerContainer):
                     if response.startswith(b"+PONG"):
                         mod_logging.getLogger(__name__).info(f"Redis ready after {attempt} attempts")
                         return
-                    last_error = f"Got unexpected response: {response[:100]}"
+                    last_error = f"Got unexpected response: {response[:100].decode('utf-8', errors='replace')}"
             except (ConnectionRefusedError, OSError) as e:
                 # Port not yet available or connection failed, will retry
                 last_error = str(e)
