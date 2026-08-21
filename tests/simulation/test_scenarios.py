@@ -1,7 +1,8 @@
 """Simulation scenario tests."""
 
+from collections.abc import Callable
 from datetime import UTC, timedelta
-from typing import Any, Callable
+from typing import Any
 
 import pytest
 
