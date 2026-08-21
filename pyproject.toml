@@ -425,6 +425,7 @@ warn_no_return = true
 check_untyped_defs = true
 strict_equality = true
 ignore_missing_imports = true
+exclude = ["^scripts/"]
 
 [[tool.mypy.overrides]]
 module = "tests.*"
@@ -479,6 +480,11 @@ ignore_errors = true
 # Documentation utility scripts: not part of core package, excluded from type checking
 [[tool.mypy.overrides]]
 module = "documentation.*"
+ignore_errors = true
+
+# CLI scripts: not part of core package, excluded from type checking
+[[tool.mypy.overrides]]
+module = "scripts.*"
 ignore_errors = true
 
 # ===== Pytest Configuration =====

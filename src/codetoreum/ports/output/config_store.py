@@ -22,22 +22,26 @@ class ProjectConfig:
     All fields are validated at construction to ensure contract boundary integrity.
     Frozen to prevent accidental mutation after creation. Dict fields are converted
     to MappingProxyType and list fields to tuples for immutability.
+
+    Construction accepts flexible types (dict, list) which are coerced in __post_init__:
+    - dict/MappingProxyType inputs are coerced to MappingProxyType
+    - list/tuple inputs are coerced to tuple[MappingProxyType, ...]
     """
 
     id: str
     name: str
     github_org: str
     github_repo: str
-    tech_stacks: MappingProxyType = field(default_factory=lambda: MappingProxyType({}))
-    pipelines: tuple[MappingProxyType, ...] = ()
-    testing: MappingProxyType = field(default_factory=lambda: MappingProxyType({}))
-    environment_variables: MappingProxyType = field(default_factory=lambda: MappingProxyType({}))
-    mounted_commands: MappingProxyType = field(default_factory=lambda: MappingProxyType({}))
-    mounted_subagents: MappingProxyType = field(default_factory=lambda: MappingProxyType({}))
+    tech_stacks: MappingProxyType | dict[str, Any] = field(default_factory=lambda: MappingProxyType({}))
+    pipelines: tuple[MappingProxyType, ...] | list[dict[str, Any] | MappingProxyType] = field(default_factory=tuple)
+    testing: MappingProxyType | dict[str, Any] = field(default_factory=lambda: MappingProxyType({}))
+    environment_variables: MappingProxyType | dict[str, Any] = field(default_factory=lambda: MappingProxyType({}))
+    mounted_commands: MappingProxyType | dict[str, Any] = field(default_factory=lambda: MappingProxyType({}))
+    mounted_subagents: MappingProxyType | dict[str, Any] = field(default_factory=lambda: MappingProxyType({}))
     created_at: datetime | None = None
     updated_at: datetime | None = None
     version: int = 1
-    metadata: MappingProxyType = field(default_factory=lambda: MappingProxyType({}))
+    metadata: MappingProxyType | dict[str, Any] = field(default_factory=lambda: MappingProxyType({}))
     # When True (default), a successful agent run on this project triggers
     # ``IVersionControlService.create_pull_request`` after the push. Set to
     # False to keep the agent's branch unreviewed (e.g. for projects that
@@ -154,6 +158,10 @@ class AgentConfig:
     ``timeout``, and ``requires_docker``. Read these off ``invocation``:
     ``config.invocation.model``, ``config.invocation.timeout_seconds``,
     ``config.invocation.mode == InvocationMode.CONTAINERIZED``.
+
+    Construction accepts flexible types (list, dict) which are coerced in __post_init__:
+    - list/tuple inputs for mcp_servers/capabilities are coerced to tuple[str, ...]
+    - dict/MappingProxyType inputs for constraints/metadata are coerced to MappingProxyType
     """
 
     project_id: str
@@ -161,13 +169,13 @@ class AgentConfig:
     makes_code_changes: bool
     coding_agent: str
     invocation: AgentInvocationConfig
-    mcp_servers: tuple[str, ...] = ()
-    capabilities: tuple[str, ...] = ()
-    constraints: MappingProxyType = field(default_factory=lambda: MappingProxyType({}))
+    mcp_servers: tuple[str, ...] | list[str] = field(default_factory=tuple)
+    capabilities: tuple[str, ...] | list[str] = field(default_factory=tuple)
+    constraints: MappingProxyType | dict[str, Any] = field(default_factory=lambda: MappingProxyType({}))
     version: int = 1
     created_at: datetime | None = None
     updated_at: datetime | None = None
-    metadata: MappingProxyType = field(default_factory=lambda: MappingProxyType({}))
+    metadata: MappingProxyType | dict[str, Any] = field(default_factory=lambda: MappingProxyType({}))
 
     def __post_init__(self) -> None:
         """Validate all fields at construction time."""
@@ -232,17 +240,21 @@ class PipelineConfig:
 
     All fields validated at construction. Frozen for immutability.
     Lists converted to tuples, dicts to MappingProxyType.
+
+    Construction accepts flexible types (list, dict) which are coerced in __post_init__:
+    - list/tuple inputs for stages/triggers are coerced to tuple[MappingProxyType, ...] or tuple[str, ...]
+    - dict/MappingProxyType inputs for metadata are coerced to MappingProxyType
     """
 
     id: str
     project_id: str
     name: str
-    stages: tuple[MappingProxyType, ...] = ()
-    triggers: tuple[str, ...] = ()
+    stages: tuple[MappingProxyType, ...] | list[dict[str, Any] | MappingProxyType] = field(default_factory=tuple)
+    triggers: tuple[str, ...] | list[str] = field(default_factory=tuple)
     version: int = 1
     created_at: datetime | None = None
     updated_at: datetime | None = None
-    metadata: MappingProxyType = field(default_factory=lambda: MappingProxyType({}))
+    metadata: MappingProxyType | dict[str, Any] = field(default_factory=lambda: MappingProxyType({}))
 
     def __post_init__(self) -> None:
         """Validate all fields at construction time."""
@@ -293,16 +305,20 @@ class WorkflowTemplate:
 
     All fields validated at construction. Frozen for immutability.
     Lists converted to tuples, dicts to MappingProxyType.
+
+    Construction accepts flexible types (list, dict) which are coerced in __post_init__:
+    - list/tuple inputs for stages are coerced to tuple[MappingProxyType, ...]
+    - dict/MappingProxyType inputs for metadata are coerced to MappingProxyType
     """
 
     id: str
     name: str
     description: str
-    stages: tuple[MappingProxyType, ...] = ()
+    stages: tuple[MappingProxyType, ...] | list[dict[str, Any] | MappingProxyType] = field(default_factory=tuple)
     version: int = 1
     created_at: datetime | None = None
     updated_at: datetime | None = None
-    metadata: MappingProxyType = field(default_factory=lambda: MappingProxyType({}))
+    metadata: MappingProxyType | dict[str, Any] = field(default_factory=lambda: MappingProxyType({}))
 
     def __post_init__(self) -> None:
         """Validate all fields at construction time."""
@@ -425,10 +441,13 @@ class MountedSubAgent:
 
     All fields validated at construction. Frozen for immutability.
     Config dict converted to MappingProxyType for immutability.
+
+    Construction accepts flexible types (dict) which are coerced in __post_init__:
+    - dict/MappingProxyType inputs for config are coerced to MappingProxyType
     """
 
     name: str
-    config: MappingProxyType
+    config: MappingProxyType | dict[str, Any]
     description: str | None = None
     created_at: datetime | None = None
     created_by: str | None = None
@@ -464,13 +483,16 @@ class ConfigVersion:
 
     All fields validated at construction. Frozen for immutability.
     Changes dict converted to MappingProxyType for immutability.
+
+    Construction accepts flexible types (dict) which are coerced in __post_init__:
+    - dict/MappingProxyType inputs for changes are coerced to MappingProxyType
     """
 
     version: int
     changed_at: datetime
     changed_by: str
     change_type: str
-    changes: MappingProxyType
+    changes: MappingProxyType | dict[str, Any]
     reason: str | None = None
 
     def __post_init__(self) -> None:

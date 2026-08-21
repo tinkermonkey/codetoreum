@@ -35,7 +35,7 @@ class TestIdentityServiceContract(ABC):
         """Should identify users in bot_usernames list as bots."""
         service = self.create_service()
 
-        config = BotIdentityConfig(bot_usernames=["dependabot", "renovate", "codecov"], bot_patterns=[])
+        config = BotIdentityConfig(bot_usernames=("dependabot", "renovate", "codecov"), bot_patterns=())
         service.configure(config)
 
         assert service.is_bot_user("dependabot") is True
@@ -47,12 +47,12 @@ class TestIdentityServiceContract(ABC):
         service = self.create_service()
 
         config = BotIdentityConfig(
-            bot_usernames=[],
-            bot_patterns=[
+            bot_usernames=(),
+            bot_patterns=(
                 re.compile("^bot-"),
                 re.compile("-bot$"),
                 re.compile(".*-ci$"),
-            ],
+            ),
         )
         service.configure(config)
 
@@ -64,7 +64,7 @@ class TestIdentityServiceContract(ABC):
         """Should return False for non-bot users."""
         service = self.create_service()
 
-        config = BotIdentityConfig(bot_usernames=["dependabot"], bot_patterns=[re.compile("^bot-")])
+        config = BotIdentityConfig(bot_usernames=("dependabot"), bot_patterns=[re.compile("^bot-")])
         service.configure(config)
 
         assert service.is_bot_user("alice") is False
@@ -75,7 +75,7 @@ class TestIdentityServiceContract(ABC):
         """Bot detection should be case-sensitive for usernames."""
         service = self.create_service()
 
-        config = BotIdentityConfig(bot_usernames=["dependabot"], bot_patterns=[])
+        config = BotIdentityConfig(bot_usernames=("dependabot"), bot_patterns=())
         service.configure(config)
 
         assert service.is_bot_user("dependabot") is True
@@ -89,7 +89,7 @@ class TestIdentityServiceContract(ABC):
         """Should return the configured bot username."""
         service = self.create_service()
 
-        config = BotIdentityConfig(bot_usernames=["codetoreum-bot"], bot_patterns=[])
+        config = BotIdentityConfig(bot_usernames=("codetoreum-bot"), bot_patterns=())
         service.configure(config)
 
         bot_name = service.get_bot_username()
@@ -103,7 +103,7 @@ class TestIdentityServiceContract(ABC):
         service = self.create_service()
 
         # Create config with no bot_usernames
-        config = BotIdentityConfig(bot_usernames=[], bot_patterns=[])
+        config = BotIdentityConfig(bot_usernames=(), bot_patterns=())
         service.configure(config)
 
         with pytest.raises(ValidationError):
@@ -115,7 +115,7 @@ class TestIdentityServiceContract(ABC):
         """Should filter out bots from user list."""
         service = self.create_service()
 
-        config = BotIdentityConfig(bot_usernames=["dependabot", "renovate"], bot_patterns=[])
+        config = BotIdentityConfig(bot_usernames=("dependabot", "renovate"), bot_patterns=())
         service.configure(config)
 
         all_users = ["alice", "dependabot", "bob", "renovate", "charlie"]
@@ -132,7 +132,7 @@ class TestIdentityServiceContract(ABC):
         """Should filter based on bot patterns too."""
         service = self.create_service()
 
-        config = BotIdentityConfig(bot_usernames=["dependabot"], bot_patterns=[re.compile("^bot-")])
+        config = BotIdentityConfig(bot_usernames=("dependabot"), bot_patterns=[re.compile("^bot-")])
         service.configure(config)
 
         all_users = ["alice", "bot-agent", "bob", "dependabot", "bot-service"]
@@ -148,7 +148,7 @@ class TestIdentityServiceContract(ABC):
         """Should maintain order of filtered users."""
         service = self.create_service()
 
-        config = BotIdentityConfig(bot_usernames=["bot"], bot_patterns=[])
+        config = BotIdentityConfig(bot_usernames=("bot"), bot_patterns=())
         service.configure(config)
 
         all_users = ["alice", "bot", "bob", "charlie"]
@@ -160,7 +160,7 @@ class TestIdentityServiceContract(ABC):
         """Should handle empty user list."""
         service = self.create_service()
 
-        config = BotIdentityConfig(bot_usernames=["bot"], bot_patterns=[])
+        config = BotIdentityConfig(bot_usernames=("bot"), bot_patterns=())
         service.configure(config)
 
         humans = service.get_human_users([])
@@ -172,7 +172,7 @@ class TestIdentityServiceContract(ABC):
         """Should return empty list if all users are bots."""
         service = self.create_service()
 
-        config = BotIdentityConfig(bot_usernames=["bot1", "bot2"], bot_patterns=[])
+        config = BotIdentityConfig(bot_usernames=("bot1", "bot2"), bot_patterns=())
         service.configure(config)
 
         all_users = ["bot1", "bot2"]
@@ -187,13 +187,13 @@ class TestIdentityServiceContract(ABC):
         service = self.create_service()
 
         # First config
-        config1 = BotIdentityConfig(bot_usernames=["bot1"], bot_patterns=[])
+        config1 = BotIdentityConfig(bot_usernames=("bot1"), bot_patterns=())
         service.configure(config1)
         assert service.is_bot_user("bot1") is True
         assert service.is_bot_user("bot2") is False
 
         # Update config
-        config2 = BotIdentityConfig(bot_usernames=["bot2", "bot3"], bot_patterns=[])
+        config2 = BotIdentityConfig(bot_usernames=("bot2", "bot3"), bot_patterns=())
         service.configure(config2)
         assert service.is_bot_user("bot1") is False
         assert service.is_bot_user("bot2") is True
@@ -203,7 +203,7 @@ class TestIdentityServiceContract(ABC):
         """Configure with no bots should raise ValidationError."""
         service = self.create_service()
 
-        config = BotIdentityConfig(bot_usernames=[], bot_patterns=[])
+        config = BotIdentityConfig(bot_usernames=(), bot_patterns=())
 
         with pytest.raises(ValidationError):
             service.configure(config)
@@ -213,7 +213,7 @@ class TestIdentityServiceContract(ABC):
         service = self.create_service()
 
         config = BotIdentityConfig(
-            bot_usernames=["dependabot"], bot_patterns=[re.compile("^bot-"), re.compile("-bot$")]
+            bot_usernames=("dependabot"), bot_patterns=[re.compile("^bot-"), re.compile("-bot$")]
         )
         service.configure(config)
 

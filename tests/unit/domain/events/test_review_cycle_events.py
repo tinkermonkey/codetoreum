@@ -149,7 +149,7 @@ class TestReviewCycleStartedEvent:
         )
 
         with pytest.raises(FrozenInstanceError):
-            event.work_item_id = "item-2"  # type: ignore
+            event.work_item_id = "item-2"
 
     def test_serialization(self):
         """Test event serialization to dictionary."""

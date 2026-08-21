@@ -132,7 +132,7 @@ The existing fields become projections from `TokenUsage`; when `resource_usage` 
 - **Tier 2 — Operational (every adapter SHOULD emit if the vendor surfaces the data)**: `CodingAgentToolCallEvent`, `CodingAgentToolResultEvent`, `CodingAgentTextOutputEvent`, `CodingAgentRateLimitEvent`, `CodingAgentApiRetryEvent`.
 - **Tier 3 — Vendor-dependent (emit if vendor exposes)**: `CodingAgentThinkingEvent`, `CodingAgentOtlpSpanEvent`, `CodingAgentTokensUsedEvent`.
 
-Each `ICodingAgent` adapter's spec must declare which Tier 2 and Tier 3 events it emits. A new invariant in `bootstrap/ARCHITECTURE.md` §6 (e.g. INV-19) codifies the tiering.
+Each `ICodingAgent` adapter's spec must declare which Tier 2 and Tier 3 events it emits. A new invariant in `bootstrap/ARCHITECTURE.md` §6 (e.g. INV-22) codifies the tiering.
 
 **Phase**: Doc-only change. Can land in D9 or D10.
 
@@ -183,7 +183,7 @@ In **priority order**, before the Copilot adapter implementation cycle begins:
 |---|---|---|---|---|
 | 1 | Add `CodingAgentResourceUsage` discriminated union + `CodingAgentResult.resource_usage` field | Additive port + event change | Before Copilot D1 | Token vs request accounting mismatch. Gap 1. |
 | 2 | Add `CodingAgentToolCallEvent.tool_category: str | None = None` optional field | Additive event change | Before Copilot or Codex D1 | Cross-adapter tool-category analysis. Gap 3. |
-| 3 | Tier the `CodingAgent*` event catalog in `events.md`; add INV-19 documenting the tiering | Doc-only | Anytime (could land in D9) | Clarify emission expectations. Gap 4. |
+| 3 | Tier the `CodingAgent*` event catalog in `events.md`; add INV-22 documenting the tiering | Doc-only | Anytime (could land in D9) | Clarify emission expectations. Gap 4. |
 | 4 | Document `cost_limit_usd` as best-effort; emit `CodingAgentCostLimitNotEnforceableEvent` from adapters that cannot enforce it | Additive event change | Before Copilot D1 | Cost-limit silent-ignore is a footgun. Gap 2. |
 | 5 | Add `ICodingAgent.cost_limit_enforcement() -> CostLimitEnforcement` query method | Additive port change | Optional / deferrable | Stronger version of #4; nice-to-have, not required. |
 
@@ -207,7 +207,7 @@ In **priority order**, before the Copilot adapter implementation cycle begins:
 
 ## Forward Sequencing Recommendation
 
-1. **D10 (proposed, additive)** — land the four pre-Copilot port enhancements (changes 1–4 above). Single commit series; no breaking changes; Claude Code adapter gets the additive fields populated naturally. Tier the event catalog. Add INV-19.
+1. **D10 (proposed, additive)** — land the four pre-Copilot port enhancements (changes 1–4 above). Single commit series; no breaking changes; Claude Code adapter gets the additive fields populated naturally. Tier the event catalog. Add INV-22.
 
 2. **D11 (proposed)** — `CodexAdapter` implementation. Lower-risk than Copilot since it mirrors Claude Code's shape; serves as a second proof of the strategy template before tackling the API mode.
 

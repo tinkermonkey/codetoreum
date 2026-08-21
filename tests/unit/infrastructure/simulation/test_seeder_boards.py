@@ -27,7 +27,7 @@ class TestSeederBoardOperations:
         """Create seeder instance with a project."""
         seeder = SimulationDataSeeder(bootstrap)
         await seeder.create_project(name="test-project", description="Test")
-        return seeder
+        return seeder  # type: ignore[no-any-return]
 
     # =========================================================================
     # Board Creation Tests

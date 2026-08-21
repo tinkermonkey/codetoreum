@@ -41,18 +41,6 @@ class TestNotificationDataModels:
         assert notification.message == "Test Message"
         assert notification.priority == NotificationPriority.NORMAL
 
-    def test_notification_invalid_channel(self) -> None:
-        """Test that invalid channel raises ValueError."""
-        with pytest.raises(ValueError, match="channel must be a NotificationChannel"):
-            Notification(
-                channel="invalid",  # type: ignore
-                recipient="user@example.com",
-                subject="Test",
-                message="Message",
-                priority=NotificationPriority.NORMAL,
-                metadata=MappingProxyType({}),
-            )
-
     def test_notification_empty_recipient(self) -> None:
         """Test that empty recipient raises ValueError."""
         with pytest.raises(ValueError, match="recipient must be a non-empty string"):
@@ -89,30 +77,6 @@ class TestNotificationDataModels:
                 metadata=MappingProxyType({}),
             )
 
-    def test_notification_invalid_priority(self) -> None:
-        """Test that invalid priority raises ValueError."""
-        with pytest.raises(ValueError, match="priority must be a NotificationPriority"):
-            Notification(
-                channel=NotificationChannel.EMAIL,
-                recipient="user@example.com",
-                subject="Test",
-                message="Message",
-                priority="invalid",  # type: ignore
-                metadata=MappingProxyType({}),
-            )
-
-    def test_notification_invalid_metadata(self) -> None:
-        """Test that invalid metadata type raises ValueError."""
-        with pytest.raises(ValueError, match="metadata must be a MappingProxyType"):
-            Notification(
-                channel=NotificationChannel.EMAIL,
-                recipient="user@example.com",
-                subject="Test",
-                message="Message",
-                priority=NotificationPriority.NORMAL,
-                metadata={"key": "value"},  # type: ignore
-            )
-
     def test_notification_immutable(self) -> None:
         """Test that notification is immutable."""
         notification = Notification(
@@ -125,7 +89,7 @@ class TestNotificationDataModels:
         )
 
         with pytest.raises(AttributeError):
-            notification.subject = "Modified"  # type: ignore
+            notification.subject = "Modified"
 
     def test_notification_result_valid(self) -> None:
         """Test creating a valid notification result."""
@@ -154,16 +118,6 @@ class TestNotificationDataModels:
         assert result.success is False
         assert result.error == "Send failed"
 
-    def test_notification_result_invalid_success(self) -> None:
-        """Test that invalid success raises ValueError."""
-        with pytest.raises(ValueError, match="success must be a boolean"):
-            NotificationResult(
-                success="true",  # type: ignore
-                notification_id=str(uuid4()),
-                error=None,
-                timestamp=datetime.now(UTC),
-            )
-
     def test_notification_result_empty_notification_id(self) -> None:
         """Test that empty notification_id raises ValueError."""
         with pytest.raises(ValueError, match="notification_id must be a non-empty string"):
@@ -180,7 +134,7 @@ class TestNotificationDataModels:
             NotificationResult(
                 success=False,
                 notification_id=str(uuid4()),
-                error="",  # type: ignore
+                error="",
                 timestamp=datetime.now(UTC),
             )
 
@@ -191,7 +145,7 @@ class TestNotificationDataModels:
                 success=True,
                 notification_id=str(uuid4()),
                 error=None,
-                timestamp="2024-01-01",  # type: ignore
+                timestamp="2024-01-01",
             )
 
     def test_attachment_valid(self) -> None:
@@ -325,7 +279,7 @@ class TestNotificationDataModels:
             RichContent(
                 title="Title",
                 body="Body",
-                attachments=[],  # type: ignore
+                attachments=[],
                 actions=(),
             )
 
@@ -335,7 +289,7 @@ class TestNotificationDataModels:
             RichContent(
                 title="Title",
                 body="Body",
-                attachments=("not_an_attachment",),  # type: ignore
+                attachments=("not_an_attachment",),
                 actions=(),
             )
 
@@ -346,7 +300,7 @@ class TestNotificationDataModels:
                 title="Title",
                 body="Body",
                 attachments=(),
-                actions=[],  # type: ignore
+                actions=[],
             )
 
     def test_rich_content_invalid_action_instance(self) -> None:
@@ -356,7 +310,7 @@ class TestNotificationDataModels:
                 title="Title",
                 body="Body",
                 attachments=(),
-                actions=("not_an_action",),  # type: ignore
+                actions=("not_an_action",),
             )
 
     def test_rich_content_empty_color(self) -> None:

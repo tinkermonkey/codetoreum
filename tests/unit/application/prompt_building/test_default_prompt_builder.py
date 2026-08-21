@@ -209,7 +209,7 @@ class TestDefaultPromptBuilderImmutability:
         prompt = await builder.build(_make_agent(), _make_work_item(), _make_workspace_context())
 
         with pytest.raises(FrozenInstanceError):
-            prompt.role_description = "tampered"  # type: ignore[misc]
+            prompt.role_description = "tampered"
 
 
 class TestDefaultPromptBuilderCollections:

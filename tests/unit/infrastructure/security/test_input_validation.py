@@ -287,7 +287,7 @@ class TestValidateLabels:
     def test_validate_labels_not_list(self):
         """Test rejection of non-list input"""
         with pytest.raises(InvalidInputError, match="Expected list"):
-            validate_labels("bug,enhancement")  # type: ignore
+            validate_labels("bug,enhancement")
 
 
 # ============================================================================
@@ -349,7 +349,7 @@ class TestValidateIntegerRange:
     def test_validate_integer_range_not_integer(self):
         """Test rejection of non-integer"""
         with pytest.raises(InvalidInputError, match="Expected integer"):
-            validate_integer_range(50.5, min_value=0, max_value=100)  # type: ignore
+            validate_integer_range(50.5, min_value=0, max_value=100)
 
 
 class TestValidateFloatRange:

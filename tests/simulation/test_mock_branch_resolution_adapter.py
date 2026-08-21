@@ -190,7 +190,7 @@ class TestMockBranchResolutionAdapter:
     async def test_emits_branch_resolved_event(self):
         """Test BranchResolvedEvent is emitted on resolve_branch call."""
         adapter = MockBranchResolutionAdapter()
-        events = []
+        events: list[dict[str, object]] = []
 
         adapter.on("branch.resolved", events.append)
 
@@ -206,15 +206,15 @@ class TestMockBranchResolutionAdapter:
         await adapter.resolve_branch("proj-1", "600", {}, "/repo")
 
         assert len(events) == 1
-        assert events[0].type == "branch.resolved"
-        assert events[0].project_id == "proj-1"
-        assert events[0].issue_id == "600"
+        assert events[0]["type"] == "branch.resolved"
+        assert events[0]["project_id"] == "proj-1"
+        assert events[0]["issue_id"] == "600"
 
     @pytest.mark.asyncio
     async def test_emits_branch_reused_event_on_reuse(self):
         """Test BranchReusedEvent is emitted when action is 'reuse'."""
         adapter = MockBranchResolutionAdapter()
-        events = []
+        events: list[dict[str, object]] = []
 
         adapter.on("branch.reused", events.append)
 
@@ -230,14 +230,14 @@ class TestMockBranchResolutionAdapter:
         await adapter.resolve_branch("proj-1", "700", {}, "/repo")
 
         assert len(events) == 1
-        assert events[0].type == "branch.reused"
-        assert events[0].branch_name == "feature/reuse-700"
+        assert events[0]["type"] == "branch.reused"
+        assert events[0]["branch_name"] == "feature/reuse-700"
 
     @pytest.mark.asyncio
     async def test_emits_branch_created_event_on_create(self):
         """Test BranchCreatedEvent is emitted when action is 'create'."""
         adapter = MockBranchResolutionAdapter()
-        events = []
+        events: list[dict[str, object]] = []
 
         adapter.on("branch.created", events.append)
 
@@ -253,8 +253,8 @@ class TestMockBranchResolutionAdapter:
         await adapter.resolve_branch("proj-1", "800", {}, "/repo")
 
         assert len(events) == 1
-        assert events[0].type == "branch.created"
-        assert events[0].branch_name == "feature/new-800"
+        assert events[0]["type"] == "branch.created"
+        assert events[0]["branch_name"] == "feature/new-800"
 
     # =========================================================================
     # Test Helper Methods

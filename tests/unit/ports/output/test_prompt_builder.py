@@ -62,7 +62,7 @@ class TestExecutionOutput:
             created_at="2026-05-29T00:00:00+00:00",
         )
         with pytest.raises(FrozenInstanceError):
-            eo.output = "tampered"  # type: ignore[misc]
+            eo.output = "tampered"
 
 
 class TestStructuredPrompt:
@@ -114,7 +114,7 @@ class TestStructuredPrompt:
     def test_is_frozen(self) -> None:
         sp = self._make()
         with pytest.raises(FrozenInstanceError):
-            sp.role_description = "tampered"  # type: ignore[misc]
+            sp.role_description = "tampered"
 
     def test_empty_instructions_and_constraints_supported(self) -> None:
         sp = self._make(instructions=(), constraints=(), prior_outputs=())
@@ -128,11 +128,11 @@ class TestIPromptBuilder:
 
     def test_cannot_instantiate_directly(self) -> None:
         with pytest.raises(TypeError):
-            IPromptBuilder()  # type: ignore[abstract]
+            IPromptBuilder()
 
     def test_subclass_without_build_is_still_abstract(self) -> None:
         class Incomplete(IPromptBuilder):
             pass
 
         with pytest.raises(TypeError):
-            Incomplete()  # type: ignore[abstract]
+            Incomplete()

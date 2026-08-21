@@ -324,6 +324,7 @@ classDiagram
 - Shared contract suite runs against `CodexAdapter` and `MockCodexAdapter`.
 
 **Location**: `tests/contracts/adapters/test_coding_agent_contract.py`
+> ⚠ Not yet built — prerequisite for the `ICodingAgent` pluggability track; tracked separately.
 
 ### Simulation Tests
 - `MockCodexAdapter` ships canned JSONL event sequences for deterministic scenarios.

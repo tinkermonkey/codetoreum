@@ -668,6 +668,7 @@ class TestSimulationExecutionsRouter:
         assert response1.status_code == 200
         data1 = response1.json()
         active1 = next((ex for ex in data1["active"] if ex["run_id"] == run_id), None)
+        assert active1 is not None, f"Active execution {run_id} not found in response"
         started_at_1 = datetime.fromisoformat(active1["started_at"].replace("Z", "+00:00"))
 
         # 4. Advance time by 1 minute
@@ -679,6 +680,7 @@ class TestSimulationExecutionsRouter:
         assert response2.status_code == 200
         data2 = response2.json()
         active2 = next((ex for ex in data2["active"] if ex["run_id"] == run_id), None)
+        assert active2 is not None, f"Active execution {run_id} not found in response"
         started_at_2 = datetime.fromisoformat(active2["started_at"].replace("Z", "+00:00"))
 
         # 6. Verify started_at is consistent across queries and equals event time

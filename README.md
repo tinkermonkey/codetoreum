@@ -37,7 +37,7 @@ The system follows **Hexagonal Architecture** (Ports and Adapters) with clear se
                       │
 ┌─────────────────────▼───────────────────────────────────┐
 │                   Output Ports                          │
-│  (ITicketSystem, ILLMProvider, IContainer, etc.)       │
+│  (ITicketSystem, ICodingAgent, IContainer, etc.)       │
 └─────────────────────┬───────────────────────────────────┘
                       │
 ┌─────────────────────▼───────────────────────────────────┐
@@ -51,15 +51,17 @@ The system follows **Hexagonal Architecture** (Ports and Adapters) with clear se
 ```
 codetoreum/
 ├── src/
-│   ├── domain/              # Core business logic (pure, no dependencies)
-│   ├── application/         # Application services (orchestration)
-│   ├── ports/              # Port interfaces (contracts)
-│   │   ├── input/          # Inbound port interfaces
-│   │   └── output/         # Outbound port interfaces
-│   ├── adapters/           # Adapter implementations
-│   │   ├── primary/        # Inbound adapters (API, CLI, webhooks)
-│   │   └── secondary/      # Outbound adapters (GitHub, Docker, LLM)
-│   └── infrastructure/     # Cross-cutting concerns (logging, events, resilience)
+│   └── codetoreum/
+│       ├── domain/          # Core business logic (pure, no dependencies)
+│       ├── application/     # Application services (orchestration)
+│       ├── ports/           # Port interfaces (contracts)
+│       │   ├── input/       # Inbound port interfaces
+│       │   └── output/      # Outbound port interfaces
+│       ├── adapters/        # Adapter implementations
+│       │   ├── primary/     # Inbound adapters (API, CLI, webhooks)
+│       │   ├── secondary/   # Outbound adapters (GitHub, Docker, Claude Code)
+│       │   └── testing/     # In-memory/mock adapters for simulation
+│       └── infrastructure/  # Cross-cutting concerns (logging, events, resilience)
 ├── tests/
 │   ├── unit/               # Unit tests (domain models)
 │   ├── integration/        # Integration tests (with mock adapters)

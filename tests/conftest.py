@@ -9,26 +9,64 @@ from dataclasses import dataclass
 import docker
 import pytest
 from testcontainers.core.container import DockerContainer
-from testcontainers.core.wait_strategies import HttpWaitStrategy, PortWaitStrategy, WaitStrategy
+
+# Wait strategies may not be available in all testcontainers versions
+# These are only used in integration tests, so we can import them conditionally
+try:
+    from testcontainers.core.wait_strategies import HttpWaitStrategy, PortWaitStrategy, WaitStrategy
+except ImportError:
+    # Fallback for testcontainers versions without wait_strategies module
+    # These will be replaced with stubs if needed
+    class WaitStrategy:  # type: ignore
+        """Stub for missing WaitStrategy."""
+
+        def __init__(self) -> None:
+            self._startup_timeout = 60
+            self._poll_interval = 0.1
+
+    class HttpWaitStrategy(WaitStrategy):  # type: ignore
+        """Stub for missing HttpWaitStrategy."""
+
+        def __init__(self, port: int = 80) -> None:
+            super().__init__()
+            self.port = port
+
+        def for_status_code(self, status_code: int) -> "HttpWaitStrategy":
+            return self
+
+    class PortWaitStrategy(WaitStrategy):  # type: ignore
+        """Stub for missing PortWaitStrategy."""
+
+        def __init__(self, port: int = 80) -> None:
+            super().__init__()
+            self.port = port
+
 
 # Disable OpenTelemetry for tests to prevent daemon threads from hanging event loops
 # This must happen before any codetoreum imports that trigger fastapi_app import
 os.environ.setdefault("OTEL_ENABLED", "false")
 os.environ.setdefault("OTEL_TRACES_ENABLED", "false")
 
-# Patch testcontainers Reaper to handle connection failures gracefully.
-# In this environment Ryuk (the Reaper sidecar) can't always reach the Docker
-# socket, and DockerContainer.start() calls Reaper.get_instance() unconditionally
-# before creating the container — an unhandled ConnectionRefusedError there would
-# otherwise fail every container-based test outright. Try the real Reaper first;
-# only fall back to a no-op if it can't connect, since a working Reaper is the
-# most robust cleanup path we have (it survives even the test process being
-# SIGKILLed, unlike anything hooked into pytest's own lifecycle).
+# Configure testcontainers to handle Docker socket properly
+# This is important for systems with Docker socket proxies or unusual network configs
+os.environ.setdefault("TESTCONTAINERS_RYUK_PRIVILEGED", "true")
+os.environ.setdefault("TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE", "/var/run/docker.sock")
+# Disable Ryuk resource reaper in environments where it can't reach the
+# Docker daemon (e.g. nested containers, restricted network modes).
+# Session-level cleanup in pytest_sessionfinish handles leaked containers.
+os.environ.setdefault("TESTCONTAINERS_RYUK_DISABLED", "true")
+
+# Patch testcontainers Reaper to handle connection failures gracefully
+# This prevents testcontainers from failing when Reaper can't connect
+# (Note: DockerContainer is already imported at line 11; this patch runs before containers are *started*)
 try:
     from testcontainers.core.container import Reaper
 
+    # Store original methods
     _original_reaper_get_instance = Reaper.get_instance
+    _original_reaper_init = Reaper.__init__
 
+    # Create a NullReaper for handling Reaper connection failures
     class _NullReaper:
         """No-op Reaper for environments where Reaper can't connect."""
 
@@ -38,36 +76,51 @@ try:
         def delete_containers(self, *args, **kwargs):
             """No-op cleanup."""
 
-    @classmethod
-    def _patched_get_instance(cls):
+    # Patch get_instance to catch connection errors
+    def _patched_get_instance(cls) -> object:
         """Get or create Reaper instance, falling back to NullReaper on connection failure."""
         if cls._instance is not None:
             return cls._instance
+
         try:
+            # Try to create the real Reaper
             return _original_reaper_get_instance()
         except ConnectionRefusedError as e:
+            # Reaper connection failed, use NullReaper instead
             import logging
 
             logging.warning(f"Testcontainers Reaper connection failed ({e}), using no-op Reaper for cleanup")
             cls._instance = _NullReaper()
             return cls._instance
         except Exception:
+            # Other exceptions should still fail
             raise
 
-    Reaper.get_instance = _patched_get_instance
+    # Apply the patch as a classmethod
+    Reaper.get_instance = classmethod(_patched_get_instance)
 
 except ImportError:
+    # testcontainers not available yet, will be imported later
     pass
 
+from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdapter
+from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
+from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
+from codetoreum.domain.events import CodetoreumEvent, now_iso
+from codetoreum.infrastructure.event_bus import EventBus
+from codetoreum.infrastructure.simulation import SimulationConfig
+from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
+
 # ============================================================================
-# Fallback container cleanup (safety net for when Reaper is unavailable)
+# Fallback container cleanup (safety net for the disabled Reaper)
 # ============================================================================
-# If the Reaper above falls back to a no-op, nothing automatically removes a
-# container whose owning process never gets to call .stop() — e.g. a fixture
-# whose readiness check times out before its try/finally runs, or a test
-# session that gets killed mid-run. Track every container this session
-# actually creates and force-remove anything still present when the session
-# ends, regardless of how (or whether) each individual fixture cleaned up.
+# With Ryuk patched to a no-op above, nothing automatically removes a
+# container if the process that started it never gets to call .stop() —
+# e.g. a fixture whose readiness check times out before its try/finally is
+# registered, or a test run that gets killed mid-suite. Track every
+# container this session actually creates and force-remove anything still
+# present when the session ends, regardless of how each individual test
+# fixture cleaned up (or failed to).
 _started_container_ids: list[str] = []
 
 
@@ -100,22 +153,16 @@ def pytest_sessionfinish(session, exitstatus) -> None:
             client.containers.get(container_id).remove(force=True)
             removed += 1
         except docker.errors.NotFound:
+            # Already cleaned up normally — nothing to do.
             pass
         except Exception as e:
             logger.warning(f"Failed to force-remove leaked container {container_id}: {e}")
     if removed:
         logger.warning(
-            f"Force-removed {removed} testcontainers container(s) that weren't cleaned up " "by their fixtures."
+            f"Force-removed {removed} testcontainers container(s) that weren't cleaned up "
+            "by their fixtures (Reaper is disabled in this environment)."
         )
 
-
-from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdapter
-from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
-from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
-from codetoreum.domain.events import CodetoreumEvent, now_iso
-from codetoreum.infrastructure.event_bus import EventBus
-from codetoreum.infrastructure.simulation import SimulationConfig
-from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
 
 # ============================================================================
 # TestEvent Fixture for Adapter Tests
@@ -213,6 +260,39 @@ def is_docker_available() -> bool:
 
 # Create a global pytest marker for tests requiring Docker
 docker_available = pytest.mark.skipif(not is_docker_available(), reason="Docker is not available or not running")
+
+
+ALPINE_IMAGE = "alpine:latest"
+
+
+@pytest.fixture(scope="session")
+def ensure_alpine_image() -> None:
+    """Ensure alpine:latest is available so Docker integration tests can run.
+
+    Session-scoped: runs once per test session. Skips if Docker is unavailable.
+    Checks for a local image first, then tries to pull. Skips dependent tests
+    with a clear message if the image cannot be obtained.
+    """
+    if not is_docker_available():
+        return
+
+    client = docker.from_env()
+    try:
+        try:
+            client.images.get(ALPINE_IMAGE)
+            return
+        except docker.errors.ImageNotFound:
+            pass
+
+        try:
+            client.images.pull("alpine", tag="latest")
+        except Exception:
+            pytest.skip(
+                f"{ALPINE_IMAGE} is not available locally and could not be pulled. "
+                "Ensure the Docker daemon has network access or pre-load the image."
+            )
+    finally:
+        client.close()
 
 
 @pytest.fixture(scope="session")
@@ -365,8 +445,7 @@ class ModernElasticsearchContainer(DockerContainer):
     """Elasticsearch container using modern wait strategy API.
 
     This class replaces testcontainers.elasticsearch.ElasticSearchContainer to avoid
-    the DeprecationWarning from @wait_container_is_ready decorator. Uses structured
-    wait strategies (HttpWaitStrategy) instead of the deprecated decorator approach.
+    the DeprecationWarning from @wait_container_is_ready decorator.
 
     Example:
         >>> container = ModernElasticsearchContainer("elasticsearch:8.17.0")
@@ -390,33 +469,6 @@ class ModernElasticsearchContainer(DockerContainer):
         self.with_env("http.host", "0.0.0.0")
         self.with_env("xpack.security.enabled", "false")
         self.with_env("discovery.type", "single-node")
-        # Use HttpWaitStrategy instead of deprecated @wait_container_is_ready decorator
-        self.waiting_for(HttpWaitStrategy(port=self.port).for_status_code(200))
-
-    def start(self) -> "ModernElasticsearchContainer":
-        """Start the container, cleaning up on a failed readiness check.
-
-        DockerContainer.start() sets self._container (the container is created
-        and actually running) *before* invoking the configured wait strategy —
-        if that wait strategy raises (e.g. a readiness timeout), the exception
-        propagates out of start() with the container left running and nothing
-        left to clean it up. Track it either way, and best-effort stop it here
-        if the wait failed; the session-level pytest_sessionfinish safety net
-        above catches anything this can't (e.g. this process itself dying).
-        """
-        try:
-            super().start()
-        except Exception:
-            if self._container is not None:
-                _track_started_container(self)
-                try:
-                    self.stop()
-                except Exception:
-                    pass
-            raise
-        else:
-            _track_started_container(self)
-        return self
 
     def get_url(self) -> str:
         """Get the URL to access Elasticsearch.
@@ -428,45 +480,63 @@ class ModernElasticsearchContainer(DockerContainer):
         port = self.get_exposed_port(self.port)
         return f"http://{host}:{port}"
 
+    def start(self) -> "ModernElasticsearchContainer":
+        """Start container and wait for Elasticsearch to be ready.
 
-class _RedisPingWaitStrategy(WaitStrategy):
-    """Wait strategy that verifies Redis is ready by issuing a PING command.
+        Overrides parent start() to add explicit wait for Elasticsearch readiness
+        via HTTP health check, since testcontainers' wait strategies may not work
+        reliably with Elasticsearch.
 
-    PortWaitStrategy only checks that the TCP port accepts connections, which can
-    succeed before Redis has finished initializing and is ready to process commands.
-    This strategy connects via raw socket and sends a Redis PING, retrying until
-    Redis responds with +PONG.
-    """
+        Returns:
+            Self for method chaining
+        """
+        super().start()
+        # Register with the session-level safety net before the readiness
+        # wait, which can itself raise and skip past a fixture's cleanup.
+        _track_started_container(self)
+        self._wait_for_elasticsearch()
+        return self
 
-    def __init__(self, port: int = 6379) -> None:
-        super().__init__()
-        self.port = port
+    def _wait_for_elasticsearch(self) -> None:
+        """Wait for Elasticsearch to respond to HTTP requests.
 
-    def wait_until_ready(self, container: "DockerContainer") -> None:
+        Polls the Elasticsearch health endpoint until it responds with 200,
+        indicating the cluster is ready to accept queries.
+
+        Raises:
+            TimeoutError if Elasticsearch doesn't respond within 60 seconds
+        """
         import socket
 
-        host = container.get_container_host_ip()
-        mapped_port = int(container.get_exposed_port(self.port))
-        deadline = time.monotonic() + self._startup_timeout
+        host = self.get_container_host_ip()
+        port = int(self.get_exposed_port(self.port))
+        deadline = time.monotonic() + 60.0
+        last_error = None
+
         while time.monotonic() < deadline:
             try:
-                with socket.create_connection((host, mapped_port), timeout=1.0) as sock:
-                    sock.sendall(b"PING\r\n")
-                    response = sock.recv(16)
-                    if response.startswith(b"+PONG"):
+                with socket.create_connection((host, port), timeout=2.0) as sock:
+                    sock.sendall(b"GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                    response = sock.recv(4096)
+                    # Check if we got a 200 response from Elasticsearch
+                    if b"HTTP/1.1 200" in response or b"HTTP/2 200" in response:
                         return
-            except OSError:
-                pass
-            time.sleep(self._poll_interval)
-        raise TimeoutError(f"Redis on {host}:{mapped_port} did not respond to PING within {self._startup_timeout}s")
+                    last_error = f"Got unexpected response: {response[:100].decode('utf-8', errors='replace')}"
+            except OSError as e:
+                last_error = str(e)
+            time.sleep(0.1)
+
+        raise TimeoutError(f"Elasticsearch on {host}:{port} did not respond within 60s. " f"Last error: {last_error}")
+
 
 
 class ModernRedisContainer(DockerContainer):
     """Redis container using modern wait strategy API.
 
     This class replaces testcontainers.redis.RedisContainer to avoid
-    the DeprecationWarning from @wait_container_is_ready decorator. Uses structured
-    wait strategies (PortWaitStrategy) instead of the deprecated decorator approach.
+    the DeprecationWarning from @wait_container_is_ready decorator. Implements
+    explicit Redis readiness checking via PING commands instead of relying on
+    port availability (which can succeed before Redis finishes initialization).
 
     Example:
         >>> container = ModernRedisContainer("redis:7-alpine")
@@ -491,27 +561,69 @@ class ModernRedisContainer(DockerContainer):
         self.with_exposed_ports(self.port)
         if self.password:
             self.with_command(f"redis-server --requirepass {self.password}")
-        # Use PING-based wait strategy to ensure Redis is fully ready (not just TCP-open)
-        self.waiting_for(_RedisPingWaitStrategy(self.port))
+        # Set startup timeout (default is fine but make it explicit)
+        self._startup_timeout = 60
 
     def start(self) -> "ModernRedisContainer":
-        """Start the container, cleaning up on a failed readiness check.
+        """Start container and wait for Redis to be ready.
 
-        See ModernElasticsearchContainer.start() for why this override exists.
+        Overrides parent start() to add explicit wait for Redis readiness
+        via PING command, ensuring the container is fully initialized before
+        tests use it. This prevents race conditions from tests connecting
+        before Redis finishes startup.
+
+        Returns:
+            Self for method chaining
         """
-        try:
-            super().start()
-        except Exception:
-            if self._container is not None:
-                _track_started_container(self)
-                try:
-                    self.stop()
-                except Exception:
-                    pass
-            raise
-        else:
-            _track_started_container(self)
+        super().start()
+        # Register with the session-level safety net before the readiness
+        # wait, which can itself raise and skip past a fixture's cleanup.
+        _track_started_container(self)
+        self._wait_for_redis()
         return self
+
+    def _wait_for_redis(self) -> None:
+        """Wait for Redis to respond to PING commands.
+
+        Polls Redis with PING until it responds with +PONG,
+        indicating the container is ready to accept connections.
+
+        Raises:
+            TimeoutError if Redis doesn't respond within 60 seconds
+        """
+        import logging as mod_logging
+        import socket
+
+        host = self.get_container_host_ip()
+        port = int(self.get_exposed_port(self.port))
+        deadline = time.monotonic() + 60.0
+        last_error = None
+        attempt = 0
+
+        while time.monotonic() < deadline:
+            attempt += 1
+            try:
+                # Try TCP connection with short timeout
+                with socket.create_connection((host, port), timeout=1.0) as sock:
+                    sock.sendall(b"PING\r\n")
+                    response = sock.recv(16)
+                    if response.startswith(b"+PONG"):
+                        mod_logging.getLogger(__name__).info(f"Redis ready after {attempt} attempts")
+                        return
+                    last_error = f"Got unexpected response: {response[:100].decode('utf-8', errors='replace')}"
+            except (ConnectionRefusedError, OSError) as e:
+                # Port not yet available or connection failed, will retry
+                last_error = str(e)
+                if attempt <= 3:  # Log first few attempts
+                    mod_logging.getLogger(__name__).debug(f"Redis connection attempt {attempt} failed: {e}")
+
+            # Sleep a bit more between retries
+            time.sleep(0.5)
+
+        raise TimeoutError(
+            f"Redis on {host}:{port} did not respond to PING within 60s "
+            f"(attempted {attempt} times). Last error: {last_error}"
+        )
 
 
 @pytest.fixture(scope="function", autouse=True)
@@ -893,6 +1005,8 @@ async def simulation_seeder(
     """
     from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
 
+    if not simulation_bootstrap.adapters:
+        raise RuntimeError("Bootstrap adapters not initialized")
     adapters = simulation_bootstrap.adapters
     seeder = SimulationDataSeeder(
         simulation_bootstrap,

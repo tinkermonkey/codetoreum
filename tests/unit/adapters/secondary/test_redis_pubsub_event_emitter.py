@@ -78,12 +78,12 @@ class TestRedisPubSubEventEmitterValidation:
     @pytest.mark.asyncio
     async def test_on_rejects_non_callable(self, emitter):
         with pytest.raises(ValueError):
-            emitter.on("test.event", "not-a-callable")  # type: ignore[arg-type]
+            emitter.on("test.event", "not-a-callable")
 
     @pytest.mark.asyncio
     async def test_emit_rejects_non_event(self, emitter):
         with pytest.raises(ValueError):
-            emitter.emit("not-an-event")  # type: ignore[arg-type]
+            emitter.emit("not-an-event")
 
     @pytest.mark.asyncio
     async def test_off_unknown_handler_raises(self, emitter):

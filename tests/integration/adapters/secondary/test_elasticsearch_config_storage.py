@@ -1,19 +1,20 @@
-"""Integration tests for Elasticsearch Configuration Storage.
+"""Integration tests for Elasticsearch configuration storage.
 
-These tests use testcontainers to spin up a real Elasticsearch instance.
+Tests the ElasticsearchConfigStorage adapter which provides:
+- Separate indices for each configuration type
+- Full-text search across all configurations
+- Configuration versioning with audit trail
+- Optimistic concurrency control using _version field
+- Index lifecycle management (ILM) for retention
 """
 
-import asyncio
-import dataclasses
-from types import MappingProxyType
-from uuid import uuid4
+from datetime import UTC, datetime
+from decimal import Decimal
 
 import pytest
 from elasticsearch import AsyncElasticsearch
 
-from codetoreum.adapters.secondary.elasticsearch_config_storage import (
-    ElasticsearchConfigStorage,
-)
+from codetoreum.adapters.secondary.elasticsearch_config_storage import ElasticsearchConfigStorage
 from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
 from codetoreum.ports.output.config_store import (
     AgentConfig,
@@ -22,579 +23,557 @@ from codetoreum.ports.output.config_store import (
     ProjectConfig,
     WorkflowTemplate,
 )
-from tests.conftest import (
-    ModernElasticsearchContainer,
-    docker_available,
-    wait_for_condition,
-    wait_for_elasticsearch_indexing,
-)
+from tests.conftest import ModernElasticsearchContainer, docker_available, wait_for_elasticsearch_indexing
 
-
-def _test_inv(
-    model: str = "claude-sonnet-4-5",
-    timeout_seconds: int = 300,
-    requires_docker: bool = True,
-) -> AgentInvocationConfig:
-    """Build an AgentInvocationConfig for tests (DEF-020 transitional helper)."""
-    return AgentInvocationConfig(
-        mode=InvocationMode.CONTAINERIZED if requires_docker else InvocationMode.HOST,
-        model=model,
-        timeout_seconds=timeout_seconds,
-        mode_config={"image": "codetoreum-agent:latest"} if requires_docker else {},
-    )
-
-
-# Mark all tests in this module as requiring Docker
 pytestmark = docker_available
 
 
-@pytest.fixture(scope="module")
-def elasticsearch_container():
-    """Create Elasticsearch testcontainer with resource limits."""
-    # Use Elasticsearch 8.x with modern wait strategy (no deprecation warnings)
+@pytest.fixture(scope="function")
+def es_container():
+    """Elasticsearch test container with automatic cleanup."""
     container = ModernElasticsearchContainer("elasticsearch:8.17.0")
-    # Add resource limits to prevent memory exhaustion
-    container.with_env("ES_JAVA_OPTS", "-Xms512m -Xmx512m")  # Limit ES heap to 512MB
-    container.start()
+    try:
+        container.start()
+    except Exception:
+        # start() may have created and started the underlying Docker
+        # container before its readiness check raised (e.g. a startup
+        # TimeoutError). Since this is outside the try/finally below,
+        # nothing else will clean it up — stop it here before re-raising.
+        try:
+            container.stop()
+        except Exception:
+            pass  # session-level pytest_sessionfinish hook will force-remove it
+        raise
+    try:
+        yield container
+    finally:
+        container.stop()
 
-    yield container
 
-    container.stop()
-
-
-@pytest.fixture(scope="module")
-def elasticsearch_url(elasticsearch_container):
-    """Get Elasticsearch URL from container."""
-    return elasticsearch_container.get_url()
-
-
-@pytest.fixture
-async def es_client(elasticsearch_url):
-    """Create AsyncElasticsearch client."""
+@pytest.fixture(scope="function")
+async def es_client(es_container):
+    """Elasticsearch async client connected to test container."""
+    url = es_container.get_url()
     client = AsyncElasticsearch(
-        [elasticsearch_url],
+        [url],
         verify_certs=False,
+        ssl_show_warn=False,
         request_timeout=30,
     )
 
-    yield client
-
-    await client.close()
+    try:
+        # Wait for Elasticsearch to be ready
+        await wait_for_elasticsearch_indexing(client, timeout=30)
+        yield client
+    finally:
+        await client.close()
 
 
 @pytest.fixture
 async def config_storage(es_client):
-    """Create ElasticsearchConfigStorage instance."""
-    storage = ElasticsearchConfigStorage(
-        es_client=es_client,
-        create_index_templates=True,
-        shard_count=1,
-        replica_count=0,
-    )
-
-    # Initialize storage (create indices)
+    """Elasticsearch configuration storage instance."""
+    storage = ElasticsearchConfigStorage(es_client, create_index_templates=True, owns_client=False)
     await storage.initialize()
-
-    # Wait for indices to be ready by checking cluster health
-    async def indices_ready():
-        try:
-            health = await es_client.cluster.health()
-            # Wait for at least one index to be ready
-            return health.get("active_shards", 0) > 0
-        except Exception:
-            return False
-
-    await wait_for_condition(indices_ready, timeout=10.0)
-
-    yield storage
-
-    await storage.close()
+    return storage
 
 
 @pytest.fixture
 def sample_project_config():
-    """Create a sample ProjectConfig for testing."""
+    """Create a sample project configuration."""
     return ProjectConfig(
-        id=f"project-{uuid4().hex[:8]}",
-        name=f"Test Project {uuid4().hex[:8]}",
+        id="proj-001",
+        name="test-project",
         github_org="test-org",
         github_repo="test-repo",
-        tech_stacks={"python": "3.11", "node": "18"},
-        pipelines=[
-            {
-                "name": "main",
-                "stages": ["analyze", "implement", "review"],
-            }
-        ],
+        tech_stacks={"language": "python", "framework": "fastapi"},
+        pipelines=[{"name": "ci", "stages": ["test", "deploy"]}],
         testing={"framework": "pytest", "coverage": 80},
-        environment_variables={"ENV": "test"},
-        mounted_commands={},
-        mounted_subagents={},
+        environment_variables={"API_KEY": "secret", "DEBUG": "false"},
+        mounted_commands={"test": "pytest"},
+        mounted_subagents={"code-reviewer": "reviewer-agent"},
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
         version=1,
-        metadata={"created_by": "test"},
+        metadata={"environment": "test", "owner": "team-a"},
     )
 
 
 @pytest.fixture
 def sample_agent_config():
-    """Create a sample AgentConfig for testing."""
+    """Create a sample agent configuration."""
     return AgentConfig(
-        project_id=f"project-{uuid4().hex[:8]}",
-        agent_name="test-agent",
+        project_id="proj-001",
+        agent_name="code-agent",
         makes_code_changes=True,
-        mcp_servers=["artifacts", "logging"],
-        capabilities=["code-generation", "testing"],
-        constraints={"max_retries": 3},
+        mcp_servers=["mcp-server-1", "mcp-server-2"],
+        capabilities=["read", "write", "execute"],
+        constraints={"timeout": "3600", "max_tokens": "10000"},
         version=1,
-        metadata={"created_by": "test"},
-        invocation=_test_inv(model="claude-sonnet-4", timeout_seconds=300, requires_docker=True),
-        coding_agent="",
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        metadata={"type": "coding", "tier": "premium"},
+        coding_agent="claude",
+        invocation=AgentInvocationConfig(
+            mode=InvocationMode.CONTAINERIZED,
+            model="claude-sonnet-4",
+            timeout_seconds=3600,
+            mode_config={"image": "codetoreum-agent:latest", "cpus": "2"},
+            cost_limit_usd=Decimal("5.00"),
+        ),
     )
 
 
 @pytest.fixture
 def sample_pipeline_config():
-    """Create a sample PipelineConfig for testing."""
+    """Create a sample pipeline configuration."""
     return PipelineConfig(
-        id=f"pipeline-{uuid4().hex[:8]}",
-        project_id=f"project-{uuid4().hex[:8]}",
-        name="main-pipeline",
+        id="pipe-001",
+        project_id="proj-001",
+        name="test-pipeline",
         stages=[
-            {"name": "analyze", "agent": "analyst"},
-            {"name": "implement", "agent": "developer"},
-            {"name": "review", "agent": "reviewer"},
+            {"name": "build", "action": "build"},
+            {"name": "test", "action": "test"},
+            {"name": "deploy", "action": "deploy"},
         ],
-        triggers=["issue_created", "issue_updated"],
+        triggers=["push", "pull_request"],
         version=1,
-        metadata={"created_by": "test"},
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        metadata={"environment": "prod", "on_failure": "notify"},
     )
 
 
 @pytest.fixture
 def sample_workflow_template():
-    """Create a sample WorkflowTemplate for testing."""
+    """Create a sample workflow template."""
     return WorkflowTemplate(
-        id=f"template-{uuid4().hex[:8]}",
-        name="standard-workflow",
-        description="Standard software development workflow",
+        id="wf-001",
+        name="code-review-workflow",
+        description="Automated code review workflow",
         stages=[
-            {"name": "requirements", "agent": "analyst"},
-            {"name": "architecture", "agent": "architect"},
-            {"name": "implementation", "agent": "developer"},
-            {"name": "testing", "agent": "tester"},
-            {"name": "review", "agent": "reviewer"},
+            {"name": "static-analysis", "type": "analysis"},
+            {"name": "security-scan", "type": "security"},
+            {"name": "review", "type": "manual"},
         ],
         version=1,
-        metadata={"created_by": "test"},
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        metadata={"framework": "codetoreum", "retention_days": 90},
     )
 
 
-@pytest.mark.integration
 @pytest.mark.asyncio
-async def test_save_and_get_project_config(config_storage, sample_project_config, es_client):
-    """Test saving and retrieving a project configuration."""
-    # Save project config
+async def test_storage_initialization(es_client):
+    """Test storage initialization and index creation."""
+    storage = ElasticsearchConfigStorage(es_client, create_index_templates=True, owns_client=False)
+
+    # Should not be initialized yet
+    assert not storage._initialized
+
+    # Initialize
+    await storage.initialize()
+    assert storage._initialized
+
+    # Calling again should be idempotent
+    await storage.initialize()
+    assert storage._initialized
+
+
+@pytest.mark.asyncio
+async def test_save_and_retrieve_project_config(config_storage, sample_project_config):
+    """Test saving and retrieving project configuration."""
+    # Save config
     await config_storage.save_project_config(sample_project_config)
 
     # Wait for indexing
-    await wait_for_elasticsearch_indexing(es_client)
+    await wait_for_elasticsearch_indexing(config_storage.client)
 
-    # Retrieve by ID
-    retrieved = await config_storage.get_project_config(sample_project_config.id)
+    # Retrieve config
+    retrieved = await config_storage.get_project_config("proj-001")
 
-    assert retrieved.id == sample_project_config.id
-    assert retrieved.name == sample_project_config.name
-    assert retrieved.github_org == sample_project_config.github_org
-    assert retrieved.github_repo == sample_project_config.github_repo
-    assert retrieved.tech_stacks == sample_project_config.tech_stacks
+    assert retrieved.id == "proj-001"
+    assert retrieved.name == "test-project"
+    assert retrieved.github_org == "test-org"
     assert retrieved.version == 1
-    assert retrieved.created_at is not None
-    assert retrieved.updated_at is not None
 
 
-@pytest.mark.integration
 @pytest.mark.asyncio
-async def test_get_project_config_by_name(config_storage, sample_project_config, es_client):
-    """Test retrieving a project configuration by name."""
-    # Save project config
-    await config_storage.save_project_config(sample_project_config)
-
-    # Wait for indexing
-    await wait_for_elasticsearch_indexing(es_client)
-
-    # Retrieve by name
-    retrieved = await config_storage.get_project_config_by_name(sample_project_config.name)
-
-    assert retrieved.id == sample_project_config.id
-    assert retrieved.name == sample_project_config.name
-
-
-@pytest.mark.integration
-@pytest.mark.asyncio
-async def test_update_project_config_versioning(config_storage, sample_project_config, es_client):
-    """Test that updating a project config increments version."""
-    # Save initial version
-    await config_storage.save_project_config(sample_project_config)
-
-    # Wait for indexing
-    await wait_for_elasticsearch_indexing(es_client)
-
-    # Update config with new tech_stacks
-    updated_tech_stacks = dict(sample_project_config.tech_stacks)
-    updated_tech_stacks["typescript"] = "5.0"
-    updated_config = dataclasses.replace(
-        sample_project_config,
-        tech_stacks=MappingProxyType(updated_tech_stacks),
-    )
-    await config_storage.save_project_config(updated_config)
-
-    # Wait for indexing
-    await wait_for_elasticsearch_indexing(es_client)
-
-    # Retrieve updated config
-    retrieved = await config_storage.get_project_config(sample_project_config.id)
-
-    assert retrieved.version == 2
-    assert "typescript" in retrieved.tech_stacks
-
-
-@pytest.mark.integration
-@pytest.mark.asyncio
-async def test_get_nonexistent_project_raises_error(config_storage):
-    """Test that getting a nonexistent project raises ConfigNotFoundError."""
+async def test_project_config_not_found(config_storage):
+    """Test that ConfigNotFoundError is raised for missing project."""
     with pytest.raises(ConfigNotFoundError):
-        await config_storage.get_project_config("nonexistent-project")
+        await config_storage.get_project_config("nonexistent")
 
 
-@pytest.mark.integration
 @pytest.mark.asyncio
-async def test_save_and_get_agent_config(config_storage, sample_agent_config, es_client):
-    """Test saving and retrieving an agent configuration."""
-    # Save agent config
+async def test_save_and_retrieve_agent_config(config_storage, sample_agent_config):
+    """Test saving and retrieving agent configuration."""
+    # Save config
     await config_storage.save_agent_config(sample_agent_config)
 
     # Wait for indexing
-    await wait_for_elasticsearch_indexing(es_client)
+    await wait_for_elasticsearch_indexing(config_storage.client)
 
-    # Retrieve agent config
-    retrieved = await config_storage.get_agent_config(sample_agent_config.project_id, sample_agent_config.agent_name)
+    # Retrieve config
+    retrieved = await config_storage.get_agent_config("proj-001", "code-agent")
 
-    assert retrieved.project_id == sample_agent_config.project_id
-    assert retrieved.agent_name == sample_agent_config.agent_name
-    assert retrieved.invocation.model == sample_agent_config.invocation.model
-    assert retrieved.invocation.timeout_seconds == sample_agent_config.invocation.timeout_seconds
-    assert retrieved.invocation.mode == sample_agent_config.invocation.mode
-    assert retrieved.mcp_servers == sample_agent_config.mcp_servers
-    assert retrieved.version == 1
+    assert retrieved.agent_name == "code-agent"
+    assert retrieved.makes_code_changes is True
+    assert len(retrieved.mcp_servers) == 2
 
 
-@pytest.mark.integration
 @pytest.mark.asyncio
-async def test_save_and_get_pipeline_config(config_storage, sample_pipeline_config, es_client):
-    """Test saving and retrieving a pipeline configuration."""
-    # Save pipeline config
+async def test_agent_config_not_found(config_storage):
+    """Test that ConfigNotFoundError is raised for missing agent."""
+    with pytest.raises(ConfigNotFoundError):
+        await config_storage.get_agent_config("proj-001", "nonexistent")
+
+
+@pytest.mark.asyncio
+async def test_save_and_retrieve_pipeline_config(config_storage, sample_pipeline_config):
+    """Test saving and retrieving pipeline configuration."""
+    # Save config
     await config_storage.save_pipeline_config(sample_pipeline_config)
 
     # Wait for indexing
-    await wait_for_elasticsearch_indexing(es_client)
+    await wait_for_elasticsearch_indexing(config_storage.client)
 
-    # Retrieve pipeline config
-    retrieved = await config_storage.get_pipeline_config(sample_pipeline_config.project_id, sample_pipeline_config.name)
+    # Retrieve config
+    retrieved = await config_storage.get_pipeline_config("proj-001", "test-pipeline")
 
-    assert retrieved.id == sample_pipeline_config.id
-    assert retrieved.project_id == sample_pipeline_config.project_id
-    assert retrieved.name == sample_pipeline_config.name
+    assert retrieved.name == "test-pipeline"
     assert len(retrieved.stages) == 3
-    assert retrieved.triggers == sample_pipeline_config.triggers
-    assert retrieved.version == 1
 
 
-@pytest.mark.integration
 @pytest.mark.asyncio
-async def test_save_and_get_workflow_template(config_storage, sample_workflow_template, es_client):
-    """Test saving and retrieving a workflow template."""
-    # Save workflow template
+async def test_pipeline_config_not_found(config_storage):
+    """Test that ConfigNotFoundError is raised for missing pipeline."""
+    with pytest.raises(ConfigNotFoundError):
+        await config_storage.get_pipeline_config("proj-001", "nonexistent")
+
+
+@pytest.mark.asyncio
+async def test_save_and_retrieve_workflow_template(config_storage, sample_workflow_template):
+    """Test saving and retrieving workflow template."""
+    # Save template
     await config_storage.save_workflow_template(sample_workflow_template)
 
     # Wait for indexing
-    await wait_for_elasticsearch_indexing(es_client)
+    await wait_for_elasticsearch_indexing(config_storage.client)
 
-    # Retrieve workflow template
-    retrieved = await config_storage.get_workflow_template(sample_workflow_template.name)
+    # Retrieve template
+    retrieved = await config_storage.get_workflow_template("code-review-workflow")
 
-    assert retrieved.id == sample_workflow_template.id
-    assert retrieved.name == sample_workflow_template.name
-    assert retrieved.description == sample_workflow_template.description
-    assert len(retrieved.stages) == 5
+    assert retrieved.name == "code-review-workflow"
+    assert retrieved.description == "Automated code review workflow"
+    assert len(retrieved.stages) == 3
+
+
+@pytest.mark.asyncio
+async def test_workflow_template_not_found(config_storage):
+    """Test that ConfigNotFoundError is raised for missing workflow template."""
+    with pytest.raises(ConfigNotFoundError):
+        await config_storage.get_workflow_template("nonexistent")
+
+
+@pytest.mark.asyncio
+async def test_update_project_config_increments_version(config_storage, sample_project_config):
+    """Test that updating project config increments version."""
+    # Save initial config
+    await config_storage.save_project_config(sample_project_config)
+    await wait_for_elasticsearch_indexing(config_storage.client)
+
+    # Retrieve and verify version
+    retrieved = await config_storage.get_project_config("proj-001")
     assert retrieved.version == 1
 
-
-@pytest.mark.integration
-@pytest.mark.asyncio
-async def test_list_projects(config_storage, sample_project_config, es_client):
-    """Test listing all projects."""
-    # Save multiple projects
-    project1 = sample_project_config
-    await config_storage.save_project_config(project1)
-
-    project2 = ProjectConfig(
-        id=f"project-{uuid4().hex[:8]}",
-        name=f"Another Project {uuid4().hex[:8]}",
-        github_org="test-org",
-        github_repo="another-repo",
-    )
-    await config_storage.save_project_config(project2)
-
-    # Wait for indexing
-    await wait_for_elasticsearch_indexing(es_client)
-
-    # List projects
-    projects = await config_storage.list_projects()
-
-    assert len(projects) >= 2
-    project_ids = [p.id for p in projects]
-    assert project1.id in project_ids
-    assert project2.id in project_ids
-
-
-@pytest.mark.integration
-@pytest.mark.asyncio
-async def test_list_agents(config_storage, sample_agent_config, es_client):
-    """Test listing agents for a project."""
-    # Save multiple agents for same project
-    agent1 = sample_agent_config
-    await config_storage.save_agent_config(agent1)
-
-    agent2 = AgentConfig(
-        project_id=agent1.project_id,
-        agent_name="another-agent",
-        makes_code_changes=False,
-        invocation=_test_inv(model="claude-opus-4", timeout_seconds=600, requires_docker=False),
-        coding_agent="",
-    )
-    await config_storage.save_agent_config(agent2)
-
-    # Wait for indexing
-    await wait_for_elasticsearch_indexing(es_client)
-
-    # List agents
-    agents = await config_storage.list_agents(agent1.project_id)
-
-    assert len(agents) == 2
-    agent_names = [a.agent_name for a in agents]
-    assert agent1.agent_name in agent_names
-    assert agent2.agent_name in agent_names
-
-
-@pytest.mark.integration
-@pytest.mark.asyncio
-async def test_search_configs(config_storage, sample_project_config, es_client):
-    """Test searching configurations."""
-    # Create a project with unique name
-    unique_name = f"Unique Project Name {uuid4().hex[:8]}"
-    project = dataclasses.replace(sample_project_config, name=unique_name)
-    await config_storage.save_project_config(project)
-
-    # Wait for indexing
-    await wait_for_elasticsearch_indexing(es_client, timeout=10.0)
-
-    # Search for project
-    results = await config_storage.search_configs(query="Unique Project", config_type="project")
-
-    assert len(results) > 0
-    assert any(r.get("id") == project.id for r in results)
-
-
-@pytest.mark.integration
-@pytest.mark.asyncio
-async def test_config_version_history(config_storage, sample_project_config, es_client):
-    """Test configuration version history tracking."""
-    # Save initial version
-    await config_storage.save_project_config(sample_project_config)
-    await wait_for_elasticsearch_indexing(es_client)
-
-    # Update config multiple times
-    current_config = sample_project_config
-    for i in range(3):
-        updated_tech_stacks = dict(current_config.tech_stacks)
-        updated_tech_stacks[f"tool{i}"] = f"v{i}"
-        current_config = dataclasses.replace(
-            current_config,
-            tech_stacks=MappingProxyType(updated_tech_stacks),
-        )
-        await config_storage.save_project_config(current_config)
-        await wait_for_elasticsearch_indexing(es_client)
-
-    # Get version history
-    versions = await config_storage.list_config_versions(sample_project_config.id)
-
-    assert len(versions) >= 4  # Initial + 3 updates
-    assert all(isinstance(v.version, int) for v in versions)
-    assert versions[0].version > versions[-1].version  # Newest first
-
-
-@pytest.mark.integration
-@pytest.mark.asyncio
-async def test_get_specific_config_version(config_storage, sample_project_config, es_client):
-    """Test retrieving a specific version of a configuration."""
-    # Save initial version
-    await config_storage.save_project_config(sample_project_config)
-    await wait_for_elasticsearch_indexing(es_client)
-
     # Update config
-    updated_tech_stacks = dict(sample_project_config.tech_stacks)
-    updated_tech_stacks["new_tool"] = "1.0"
-    updated_config = dataclasses.replace(
-        sample_project_config,
-        tech_stacks=MappingProxyType(updated_tech_stacks),
+    updated = ProjectConfig(
+        id="proj-001",
+        name="test-project-updated",
+        github_org="test-org",
+        github_repo="test-repo",
+        version=1,
+        created_at=retrieved.created_at,
+        updated_at=datetime.now(UTC),
     )
-    await config_storage.save_project_config(updated_config)
-    await wait_for_elasticsearch_indexing(es_client)
+    await config_storage.save_project_config(updated)
+    await wait_for_elasticsearch_indexing(config_storage.client)
 
-    # Get version 1
-    version_1 = await config_storage.get_config_version(sample_project_config.id, 1)
+    # Verify version incremented
+    retrieved = await config_storage.get_project_config("proj-001")
+    assert retrieved.version == 2
+    assert retrieved.name == "test-project-updated"
 
-    assert version_1 is not None
-    assert "new_tool" not in version_1.get("tech_stacks", {})
 
-
-@pytest.mark.integration
 @pytest.mark.asyncio
-async def test_delete_project_config(config_storage, sample_project_config, es_client):
-    """Test deleting a project configuration."""
-    # Save project
+async def test_delete_project_config(config_storage, sample_project_config):
+    """Test deleting project configuration."""
+    # Save config
     await config_storage.save_project_config(sample_project_config)
-    await wait_for_elasticsearch_indexing(es_client)
+    await wait_for_elasticsearch_indexing(config_storage.client)
 
     # Verify it exists
-    assert await config_storage.exists(sample_project_config.id)
+    retrieved = await config_storage.get_project_config("proj-001")
+    assert retrieved is not None
 
-    # Delete project
-    await config_storage.delete_project_config(sample_project_config.id)
-    await wait_for_elasticsearch_indexing(es_client)
+    # Delete config
+    await config_storage.delete_project_config("proj-001")
+    await wait_for_elasticsearch_indexing(config_storage.client)
 
     # Verify it's deleted
-    assert not await config_storage.exists(sample_project_config.id)
-
-    # Try to get deleted project
     with pytest.raises(ConfigNotFoundError):
-        await config_storage.get_project_config(sample_project_config.id)
+        await config_storage.get_project_config("proj-001")
 
 
-@pytest.mark.integration
 @pytest.mark.asyncio
-async def test_delete_agent_config(config_storage, sample_agent_config, es_client):
-    """Test deleting an agent configuration."""
-    # Save agent
+async def test_delete_agent_config(config_storage, sample_agent_config):
+    """Test deleting agent configuration."""
+    # Save config
     await config_storage.save_agent_config(sample_agent_config)
-    await wait_for_elasticsearch_indexing(es_client)
+    await wait_for_elasticsearch_indexing(config_storage.client)
 
-    # Delete agent
-    await config_storage.delete_agent_config(sample_agent_config.project_id, sample_agent_config.agent_name)
-    await wait_for_elasticsearch_indexing(es_client)
+    # Verify it exists
+    retrieved = await config_storage.get_agent_config("proj-001", "code-agent")
+    assert retrieved is not None
 
-    # Try to get deleted agent
+    # Delete config
+    await config_storage.delete_agent_config("proj-001", "code-agent")
+    await wait_for_elasticsearch_indexing(config_storage.client)
+
+    # Verify it's deleted
     with pytest.raises(ConfigNotFoundError):
-        await config_storage.get_agent_config(sample_agent_config.project_id, sample_agent_config.agent_name)
+        await config_storage.get_agent_config("proj-001", "code-agent")
 
 
-@pytest.mark.integration
 @pytest.mark.asyncio
-async def test_exists_returns_true_for_existing_project(config_storage, sample_project_config, es_client):
-    """Test that exists() returns True for existing project."""
+async def test_list_projects(config_storage):
+    """Test listing all projects."""
+    # Save multiple projects
+    projects = [
+        ProjectConfig(
+            id=f"proj-{i}",
+            name=f"project-{i}",
+            github_org="org",
+            github_repo=f"repo-{i}",
+            version=1,
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+        for i in range(3)
+    ]
+
+    for project in projects:
+        await config_storage.save_project_config(project)
+
+    await wait_for_elasticsearch_indexing(config_storage.client)
+
+    # List projects
+    retrieved = await config_storage.list_projects()
+
+    assert len(retrieved) >= 3
+    retrieved_ids = {p.id for p in retrieved}
+    assert "proj-0" in retrieved_ids
+    assert "proj-1" in retrieved_ids
+    assert "proj-2" in retrieved_ids
+
+
+@pytest.mark.asyncio
+async def test_list_agents(config_storage):
+    """Test listing agents for a project."""
+    # Save multiple agents
+    agents = [
+        AgentConfig(
+            project_id="proj-001",
+            agent_name=f"agent-{i}",
+            makes_code_changes=True,
+            coding_agent="claude",
+            version=1,
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+            invocation=AgentInvocationConfig(
+                mode=InvocationMode.HOST,
+                model="claude-sonnet-4",
+                timeout_seconds=3600,
+            ),
+        )
+        for i in range(3)
+    ]
+
+    for agent in agents:
+        await config_storage.save_agent_config(agent)
+
+    await wait_for_elasticsearch_indexing(config_storage.client)
+
+    # List agents
+    retrieved = await config_storage.list_agents("proj-001")
+
+    assert len(retrieved) >= 3
+    retrieved_names = {a.agent_name for a in retrieved}
+    assert "agent-0" in retrieved_names
+
+
+@pytest.mark.asyncio
+async def test_list_pipelines(config_storage):
+    """Test listing pipelines for a project."""
+    # Save multiple pipelines
+    pipelines = [
+        PipelineConfig(
+            id=f"pipe-{i}",
+            project_id="proj-001",
+            name=f"pipeline-{i}",
+            stages=[],
+            triggers=[],
+            version=1,
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+        for i in range(3)
+    ]
+
+    for pipeline in pipelines:
+        await config_storage.save_pipeline_config(pipeline)
+
+    await wait_for_elasticsearch_indexing(config_storage.client)
+
+    # List pipelines
+    retrieved = await config_storage.list_pipelines("proj-001")
+
+    assert len(retrieved) >= 3
+
+
+@pytest.mark.asyncio
+async def test_search_configs(config_storage, sample_project_config):
+    """Test searching configurations."""
+    # Save config
+    await config_storage.save_project_config(sample_project_config)
+    await wait_for_elasticsearch_indexing(config_storage.client)
+
+    # Search
+    results = await config_storage.search_configs("test-project")
+
+    assert len(results) > 0
+    assert any(r.get("name") == "test-project" for r in results)
+
+
+@pytest.mark.asyncio
+async def test_config_versions(config_storage, sample_project_config):
+    """Test configuration versioning."""
+    # Save initial config
+    await config_storage.save_project_config(sample_project_config)
+    await wait_for_elasticsearch_indexing(config_storage.client)
+
+    # Update config
+    updated = ProjectConfig(
+        id="proj-001",
+        name="test-project-v2",
+        github_org="test-org",
+        github_repo="test-repo",
+        version=1,
+        created_at=sample_project_config.created_at,
+        updated_at=datetime.now(UTC),
+    )
+    await config_storage.save_project_config(updated)
+    await wait_for_elasticsearch_indexing(config_storage.client)
+
+    # List versions
+    versions = await config_storage.list_config_versions("proj-001")
+
+    assert len(versions) >= 2
+    assert versions[0].version >= 2
+
+
+@pytest.mark.asyncio
+async def test_exists_project(config_storage, sample_project_config):
+    """Test checking if project exists."""
+    # Initially should not exist
+    exists = await config_storage.exists("proj-001")
+    assert exists is False
+
     # Save project
     await config_storage.save_project_config(sample_project_config)
-    await wait_for_elasticsearch_indexing(es_client)
+    await wait_for_elasticsearch_indexing(config_storage.client)
 
-    # Check existence
-    assert await config_storage.exists(sample_project_config.id)
+    # Should exist now
+    exists = await config_storage.exists("proj-001")
+    assert exists is True
 
 
-@pytest.mark.integration
 @pytest.mark.asyncio
-async def test_exists_returns_false_for_nonexistent_project(config_storage):
-    """Test that exists() returns False for nonexistent project."""
-    assert not await config_storage.exists("nonexistent-project")
-
-
-@pytest.mark.integration
-@pytest.mark.asyncio
-async def test_concurrent_updates_increment_versions(config_storage, sample_project_config, es_client):
-    """Test that concurrent updates properly increment versions."""
-    # Save initial version
-    await config_storage.save_project_config(sample_project_config)
-    await wait_for_elasticsearch_indexing(es_client)
-
-    # Perform multiple updates
-    async def update_config(field_name: str):
-        config = await config_storage.get_project_config(sample_project_config.id)
-        updated_tech_stacks = dict(config.tech_stacks)
-        updated_tech_stacks[field_name] = "1.0"
-        updated_config = dataclasses.replace(
-            config,
-            tech_stacks=MappingProxyType(updated_tech_stacks),
+async def test_multiple_projects(config_storage):
+    """Test handling multiple distinct projects."""
+    # Create and save multiple projects
+    for i in range(3):
+        project = ProjectConfig(
+            id=f"proj-{i}",
+            name=f"project-{i}",
+            github_org=f"org-{i}",
+            github_repo=f"repo-{i}",
+            version=1,
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
-        await config_storage.save_project_config(updated_config)
+        await config_storage.save_project_config(project)
 
-    # Run updates sequentially (concurrent updates would need optimistic locking)
-    await update_config("tool1")
-    await asyncio.sleep(0.05)
-    await update_config("tool2")
-    await asyncio.sleep(0.05)
-    await update_config("tool3")
-    await wait_for_elasticsearch_indexing(es_client)
+    await wait_for_elasticsearch_indexing(config_storage.client)
 
-    # Check final version
-    final = await config_storage.get_project_config(sample_project_config.id)
-    assert final.version >= 4  # Initial + 3 updates
+    # Verify each project is independent
+    for i in range(3):
+        project = await config_storage.get_project_config(f"proj-{i}")
+        assert project.name == f"project-{i}"
+        assert project.github_org == f"org-{i}"
 
 
-@pytest.mark.integration
 @pytest.mark.asyncio
-async def test_initialize_with_existing_indices_is_idempotent(es_client):
-    """Test that initializing with existing indices doesn't fail (idempotent behavior)."""
-    # Create and initialize first storage instance
-    storage1 = ElasticsearchConfigStorage(
-        es_client=es_client,
-        create_index_templates=True,
-        shard_count=1,
-        replica_count=0,
+async def test_agent_config_serialization(config_storage, sample_agent_config):
+    """Test that agent config with complex types survives round-trip."""
+    # Save agent with cost limit (Decimal) and invocation config
+    await config_storage.save_agent_config(sample_agent_config)
+    await wait_for_elasticsearch_indexing(config_storage.client)
+
+    # Retrieve and verify
+    retrieved = await config_storage.get_agent_config("proj-001", "code-agent")
+
+    assert retrieved.invocation.model == "claude-sonnet-4"
+    assert retrieved.invocation.timeout_seconds == 3600
+    assert retrieved.invocation.mode == InvocationMode.CONTAINERIZED
+    assert retrieved.invocation.cost_limit_usd == Decimal("5.00")
+
+
+@pytest.mark.asyncio
+async def test_project_config_with_complex_metadata(config_storage):
+    """Test project config with complex nested metadata."""
+    project = ProjectConfig(
+        id="proj-001",
+        name="complex-project",
+        github_org="org",
+        github_repo="repo",
+        tech_stacks={
+            "languages": ["python", "javascript"],
+            "frameworks": {"backend": "fastapi", "frontend": "react"},
+        },
+        testing={
+            "unit": {"framework": "pytest", "coverage": 85},
+            "integration": {"framework": "testcontainers"},
+        },
+        environment_variables={
+            "API_KEYS": "secret-key-1,secret-key-2",
+            "DEBUG": "false",
+        },
+        version=1,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        metadata={
+            "team": "platform",
+            "sla": {"uptime": "99.9", "response_time_ms": 200},
+        },
     )
-    await storage1.initialize()
 
-    # Wait for indices to be ready
-    async def indices_ready():
-        try:
-            health = await es_client.cluster.health()
-            return health.get("active_shards", 0) > 0
-        except Exception:
-            return False
+    # Save and retrieve
+    await config_storage.save_project_config(project)
+    await wait_for_elasticsearch_indexing(config_storage.client)
 
-    await wait_for_condition(indices_ready, timeout=10.0)
+    retrieved = await config_storage.get_project_config("proj-001")
 
-    # Create and initialize a second storage instance with the same indices
-    # This should not fail even though indices already exist
-    storage2 = ElasticsearchConfigStorage(
-        es_client=es_client,
-        create_index_templates=True,
-        shard_count=1,
-        replica_count=0,
-    )
-
-    # This should succeed without raising any errors
-    await storage2.initialize()
-
-    # Verify indices exist and are accessible
-    indices_exist = await es_client.indices.exists(
-        index=[
-            storage2.INDEX_PROJECTS,
-            storage2.INDEX_AGENTS,
-            storage2.INDEX_PIPELINES,
-            storage2.INDEX_WORKFLOWS,
-            storage2.INDEX_HISTORY,
-        ]
-    )
-    assert indices_exist
-
-    await storage1.close()
-    await storage2.close()
+    assert retrieved.tech_stacks["frameworks"]["backend"] == "fastapi"
+    assert retrieved.testing["unit"]["coverage"] == 85
+    assert retrieved.metadata["sla"]["uptime"] == "99.9"

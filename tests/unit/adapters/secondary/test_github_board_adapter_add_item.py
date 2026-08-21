@@ -46,7 +46,7 @@ def _make_adapter() -> GitHubBoardAdapter:
         project_id="rounds",
         columns=(BoardColumn(id="OPT_backlog", name="Backlog", position=0, work_item_ids=()),),
     )
-    adapter.get_board = AsyncMock(return_value=board)  # type: ignore[method-assign]
+    adapter.get_board = AsyncMock(return_value=board)
     # Poll baseline present so the add path keeps it in sync (double-trigger guard).
     adapter._last_known_state["rounds:PVT_board"] = {}
     return adapter
@@ -66,7 +66,7 @@ async def test_add_item_to_column_adds_issue_then_sets_status():
     ]
 
     emitted: list = []
-    adapter.emit = MagicMock(side_effect=lambda e: emitted.append(e))  # type: ignore[method-assign]
+    adapter.emit = MagicMock(side_effect=lambda e: emitted.append(e))
 
     result = await adapter.add_item_to_column("wi-uuid-1", "Backlog", MovedByType.GITHUB_WEBHOOK)
 

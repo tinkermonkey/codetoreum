@@ -91,13 +91,13 @@ class TestRepairTestFailure:
             message="Failed",
         )
         with pytest.raises(FrozenInstanceError):
-            failure.file = "test_other.py"  # type: ignore[misc]
+            failure.file = "test_other.py"
 
         with pytest.raises(FrozenInstanceError):
-            failure.test = "test_other"  # type: ignore[misc]
+            failure.test = "test_other"
 
         with pytest.raises(FrozenInstanceError):
-            failure.message = "Different message"  # type: ignore[misc]
+            failure.message = "Different message"
 
     def test_empty_file_raises_error(self):
         """Test that empty file raises ValueError."""
@@ -179,10 +179,10 @@ class TestRepairTestWarning:
             message="DeprecationWarning",
         )
         with pytest.raises(FrozenInstanceError):
-            warning.file = "other.py"  # type: ignore[misc]
+            warning.file = "other.py"
 
         with pytest.raises(FrozenInstanceError):
-            warning.message = "Different warning"  # type: ignore[misc]
+            warning.message = "Different warning"
 
     def test_empty_file_raises_error(self):
         """Test that empty file raises ValueError."""
@@ -278,7 +278,7 @@ class TestRepairTestResult:
             timestamp="2025-01-22T10:00:00Z",
         )
         with pytest.raises((TypeError, AttributeError)):
-            result.failures.append(None)  # type: ignore[attr-defined]
+            result.failures.append(None)
 
     def test_result_immutability_raises_frozen_error(self):
         """Test that frozen dataclass prevents modification."""
@@ -294,10 +294,10 @@ class TestRepairTestResult:
             timestamp="2025-01-22T10:00:00Z",
         )
         with pytest.raises(FrozenInstanceError):
-            result.passed = 11  # type: ignore[misc]
+            result.passed = 11
 
         with pytest.raises(FrozenInstanceError):
-            result.iteration = 2  # type: ignore[misc]
+            result.iteration = 2
 
     def test_invalid_iteration_raises_error(self):
         """Test that iteration < 1 raises ValueError."""
@@ -494,10 +494,10 @@ class TestCycleResult:
             duration_seconds=5.5,
         )
         with pytest.raises(FrozenInstanceError):
-            cycle.passed = False  # type: ignore[misc]
+            cycle.passed = False
 
         with pytest.raises(FrozenInstanceError):
-            cycle.iterations = 2  # type: ignore[misc]
+            cycle.iterations = 2
 
     def test_negative_iterations_raises_error(self):
         """Test that negative iterations raises ValueError."""
@@ -686,7 +686,7 @@ class TestRepairCycleResult:
             timestamp="2025-01-22T10:00:00Z",
         )
         with pytest.raises((TypeError, AttributeError)):
-            result.test_results.append(None)  # type: ignore[attr-defined]
+            result.test_results.append(None)
 
     def test_cycle_result_immutability_raises_frozen_error(self):
         """Test that frozen dataclass prevents modification."""
@@ -699,10 +699,10 @@ class TestRepairCycleResult:
             timestamp="2025-01-22T10:00:00Z",
         )
         with pytest.raises(FrozenInstanceError):
-            result.overall_success = False  # type: ignore[misc]
+            result.overall_success = False
 
         with pytest.raises(FrozenInstanceError):
-            result.total_agent_calls = 10  # type: ignore[misc]
+            result.total_agent_calls = 10
 
     def test_empty_stage_raises_error(self):
         """Test that empty stage raises ValueError."""
@@ -886,10 +886,10 @@ class TestRepairTestRunConfig:
         """Test that frozen dataclass prevents modification."""
         config = RepairTestRunConfig(test_type=RepairTestType.UNIT)
         with pytest.raises(FrozenInstanceError):
-            config.timeout = 1800  # type: ignore[misc]
+            config.timeout = 1800
 
         with pytest.raises(FrozenInstanceError):
-            config.max_iterations = 10  # type: ignore[misc]
+            config.max_iterations = 10
 
     def test_invalid_timeout_raises_error(self):
         """Test that invalid timeout raises ValueError."""
@@ -992,7 +992,7 @@ class TestRepairCycleStageConfig:
             test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
         )
         with pytest.raises((TypeError, AttributeError)):
-            config.test_configs.append(None)  # type: ignore[attr-defined]
+            config.test_configs.append(None)
 
     def test_config_immutability_raises_frozen_error(self):
         """Test that frozen dataclass prevents modification."""
@@ -1001,10 +1001,10 @@ class TestRepairCycleStageConfig:
             test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
         )
         with pytest.raises(FrozenInstanceError):
-            config.name = "fix_warnings"  # type: ignore[misc]
+            config.name = "fix_warnings"
 
         with pytest.raises(FrozenInstanceError):
-            config.max_total_agent_calls = 50  # type: ignore[misc]
+            config.max_total_agent_calls = 50
 
     def test_empty_name_raises_error(self):
         """Test that empty name raises ValueError."""
@@ -1093,7 +1093,7 @@ class TestRepairCycleStageConfig:
             ),
         )
         with pytest.raises(FrozenInstanceError):
-            config.environment_repair_config = EnvironmentRepairConfig(max_env_rebuilds=5)  # type: ignore[misc]
+            config.environment_repair_config = EnvironmentRepairConfig(max_env_rebuilds=5)
 
 
 # ============================================================================
@@ -1176,16 +1176,16 @@ class TestSystemicAnalysisResult:
             cross_cutting=False,
         )
         with pytest.raises(FrozenInstanceError):
-            result.classification = FailureClassification.ENVIRONMENT_ISSUE  # type: ignore[misc]
+            result.classification = FailureClassification.ENVIRONMENT_ISSUE
 
         with pytest.raises(FrozenInstanceError):
-            result.confidence = 0.95  # type: ignore[misc]
+            result.confidence = 0.95
 
         with pytest.raises(FrozenInstanceError):
-            result.reasoning = "Different reasoning"  # type: ignore[misc]
+            result.reasoning = "Different reasoning"
 
         with pytest.raises(FrozenInstanceError):
-            result.recommended_action = "Different action"  # type: ignore[misc]
+            result.recommended_action = "Different action"
 
     def test_confidence_boundary_0_0_passes(self):
         """Test that confidence=0.0 is valid."""
@@ -1251,7 +1251,7 @@ class TestSystemicAnalysisResult:
         """Test that non-FailureClassification value raises ValueError."""
         with pytest.raises(ValueError, match="classification must be a FailureClassification"):
             SystemicAnalysisResult(
-                classification="invalid",  # type: ignore[arg-type]
+                classification="invalid",
                 confidence=0.5,
                 reasoning="Valid reasoning",
                 affected_files=(),
@@ -1294,7 +1294,7 @@ class TestSystemicAnalysisResult:
             cross_cutting=False,
         )
         with pytest.raises((TypeError, AttributeError)):
-            result.affected_files.append("file3.py")  # type: ignore[attr-defined]
+            result.affected_files.append("file3.py")
 
     def test_equality(self):
         """Test value object equality."""
@@ -1371,7 +1371,7 @@ class TestSystemicAnalysisResult:
             cross_cutting=True,
         )
         with pytest.raises(FrozenInstanceError):
-            result.cross_cutting = False  # type: ignore[misc]
+            result.cross_cutting = False
 
     def test_cross_cutting_false_explicit(self):
         """Test explicitly setting cross_cutting=False."""
@@ -1499,13 +1499,13 @@ class TestAnalysisContext:
             workflow_run_id="WR-456",
         )
         with pytest.raises(FrozenInstanceError):
-            context.work_item_id = "WI-999"  # type: ignore[misc]
+            context.work_item_id = "WI-999"
 
         with pytest.raises(FrozenInstanceError):
-            context.iteration = 5  # type: ignore[misc]
+            context.iteration = 5
 
         with pytest.raises(FrozenInstanceError):
-            context.workflow_run_id = "WR-999"  # type: ignore[misc]
+            context.workflow_run_id = "WR-999"
 
     def test_empty_work_item_id_raises_error(self):
         """Test that empty work_item_id raises ValueError."""
@@ -1552,7 +1552,7 @@ class TestAnalysisContext:
             prior_fix_attempts=("Attempt 1", "Attempt 2"),
         )
         with pytest.raises((TypeError, AttributeError)):
-            context.prior_fix_attempts.append("Attempt 3")  # type: ignore[attr-defined]
+            context.prior_fix_attempts.append("Attempt 3")
 
     def test_prior_classifications_tuple_immutable(self):
         """Test that prior_classifications tuple is immutable."""
@@ -1571,7 +1571,7 @@ class TestAnalysisContext:
             prior_classifications=(result,),
         )
         with pytest.raises((TypeError, AttributeError)):
-            context.prior_classifications.append(result)  # type: ignore[attr-defined]
+            context.prior_classifications.append(result)
 
     def test_equality(self):
         """Test value object equality."""
@@ -1746,13 +1746,13 @@ class TestRepairCycleAgentConfig:
         """Test that frozen dataclass prevents modification."""
         config = RepairCycleAgentConfig(test_execution="qa_engineer")
         with pytest.raises(FrozenInstanceError):
-            config.test_execution = "senior_software_engineer"  # type: ignore[misc]
+            config.test_execution = "senior_software_engineer"
 
         with pytest.raises(FrozenInstanceError):
-            config.code_fix = "senior_software_engineer"  # type: ignore[misc]
+            config.code_fix = "senior_software_engineer"
 
         with pytest.raises(FrozenInstanceError):
-            config.env_rebuild = "devops_engineer"  # type: ignore[misc]
+            config.env_rebuild = "devops_engineer"
 
     def test_resolve_agent_returns_configured_value(self):
         """Test resolve_agent returns configured value when set."""
@@ -1948,7 +1948,7 @@ class TestSystemicFixResult:
         """Test that files_modified list is coerced to tuple."""
         result = SystemicFixResult(
             success=True,
-            files_modified=["file1.py", "file2.py"],  # type: ignore[arg-type]
+            files_modified=["file1.py", "file2.py"],
             root_cause_addressed="Root cause addressed",
             duration_seconds=60.0,
         )
@@ -1964,13 +1964,13 @@ class TestSystemicFixResult:
             duration_seconds=100.0,
         )
         with pytest.raises(FrozenInstanceError):
-            result.success = False  # type: ignore[misc]
+            result.success = False
 
         with pytest.raises(FrozenInstanceError):
-            result.duration_seconds = 200.0  # type: ignore[misc]
+            result.duration_seconds = 200.0
 
         with pytest.raises(FrozenInstanceError):
-            result.root_cause_addressed = "Different cause"  # type: ignore[misc]
+            result.root_cause_addressed = "Different cause"
 
     def test_negative_duration_raises_error(self):
         """Test that negative duration_seconds raises ValueError."""
@@ -2011,7 +2011,7 @@ class TestSystemicFixResult:
             duration_seconds=100.0,
         )
         with pytest.raises((TypeError, AttributeError)):
-            result.files_modified.append("file3.py")  # type: ignore[attr-defined]
+            result.files_modified.append("file3.py")
 
     def test_equality(self):
         """Test value object equality."""
@@ -2136,13 +2136,13 @@ class TestEnvironmentRepairConfig:
         """Test that frozen dataclass prevents modification."""
         config = EnvironmentRepairConfig()
         with pytest.raises(FrozenInstanceError):
-            config.max_env_rebuilds = 5  # type: ignore[misc]
+            config.max_env_rebuilds = 5
 
         with pytest.raises(FrozenInstanceError):
-            config.env_rebuild_timeout_seconds = 3600  # type: ignore[misc]
+            config.env_rebuild_timeout_seconds = 3600
 
         with pytest.raises(FrozenInstanceError):
-            config.env_verification_timeout_seconds = 180  # type: ignore[misc]
+            config.env_verification_timeout_seconds = 180
 
     def test_zero_max_env_rebuilds_raises_error(self):
         """Test that max_env_rebuilds=0 raises ValueError."""
@@ -2271,7 +2271,7 @@ class TestRebuildResult:
         result = RebuildResult(
             success=True,
             duration_seconds=30.0,
-            actions_taken=["action1", "action2"],  # type: ignore[arg-type]
+            actions_taken=["action1", "action2"],
             error=None,
         )
         assert isinstance(result.actions_taken, tuple)
@@ -2286,13 +2286,13 @@ class TestRebuildResult:
             error=None,
         )
         with pytest.raises(FrozenInstanceError):
-            result.success = False  # type: ignore[misc]
+            result.success = False
 
         with pytest.raises(FrozenInstanceError):
-            result.duration_seconds = 60.0  # type: ignore[misc]
+            result.duration_seconds = 60.0
 
         with pytest.raises(FrozenInstanceError):
-            result.error = "Some error"  # type: ignore[misc]
+            result.error = "Some error"
 
     def test_negative_duration_raises_error(self):
         """Test that negative duration_seconds raises ValueError."""
@@ -2388,7 +2388,7 @@ class TestVerificationResult:
         """Test that checks_passed list is coerced to tuple."""
         result = VerificationResult(
             healthy=True,
-            checks_passed=["check1", "check2"],  # type: ignore[arg-type]
+            checks_passed=["check1", "check2"],
             checks_failed=[],
             duration_seconds=5.0,
         )
@@ -2400,7 +2400,7 @@ class TestVerificationResult:
         result = VerificationResult(
             healthy=False,
             checks_passed=[],
-            checks_failed=["check1", "check2"],  # type: ignore[arg-type]
+            checks_failed=["check1", "check2"],
             duration_seconds=5.0,
         )
         assert isinstance(result.checks_failed, tuple)
@@ -2415,10 +2415,10 @@ class TestVerificationResult:
             duration_seconds=5.0,
         )
         with pytest.raises(FrozenInstanceError):
-            result.healthy = False  # type: ignore[misc]
+            result.healthy = False
 
         with pytest.raises(FrozenInstanceError):
-            result.duration_seconds = 10.0  # type: ignore[misc]
+            result.duration_seconds = 10.0
 
     def test_negative_duration_raises_error(self):
         """Test that negative duration_seconds raises ValueError."""

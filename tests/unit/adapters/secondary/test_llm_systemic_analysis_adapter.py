@@ -119,7 +119,7 @@ async def _rendered_task_text(builder: _SystemicAnalysisPromptBuilder) -> str:
     structured = await builder.build(
         workspace_context=MagicMock(),
     )
-    return structured.task_description
+    return structured.task_description  # type: ignore[no-any-return]
 
 
 # ---------------------------------------------------------------------------

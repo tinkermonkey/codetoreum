@@ -13,7 +13,9 @@ Both sets use Python Abstract Base Classes (ABCs) with type-annotated methods. A
 
 ## Port Organization
 
-With 60 total port interfaces (20 input + 40 output), individual files per port would create navigational overhead. Instead, ports are grouped by **functional domain** — related interfaces that address the same problem area.
+With 63 total port interfaces (21 input + 42 output), individual files per port would create navigational overhead. Instead, ports are grouped by **functional domain** — related interfaces that address the same problem area.
+
+> Count verified 2026-08-12 via exhaustive port ABC scan (`src/codetoreum/ports/input/` and `src/codetoreum/ports/output/`). Recount when ports are added or removed.
 
 This strategy:
 - Keeps related interfaces together for context
@@ -31,7 +33,7 @@ This strategy:
 ## Contents
 
 ### [input/](./input/)
-**20 input port interfaces** across 6 documentation files:
+**21 input port interfaces** across 6 documentation files:
 
 1. **agent-management.md** — Agent command/query operations
 2. **work-item-management.md** — Work item and task operations
@@ -50,9 +52,9 @@ Each input port documentation file includes:
 - Class diagram
 
 ### [output/](./output/)
-**40 output port interfaces** across 7 documentation files:
+**42 output port interfaces** across 7 documentation files:
 
-1. **core-system.md** — Fundamental operations (tickets, VCS, containers, LLM)
+1. **core-system.md** — Fundamental operations (tickets, VCS, containers, coding agent)
 2. **board-management.md** — Project board operations
 3. **code-review.md** — Pull request and review lifecycle
 4. **work-coordination.md** — Work item coordination and workflow
@@ -144,7 +146,7 @@ This mapping ensures that every adapter is documented and traceable to its port(
 - **Elasticsearch**: `ElasticsearchEventStore`
 - **Redis**: `RedisPubSubAdapter` (for messaging)
 - **Prometheus**: `PrometheusMetricsAdapter`
-- **Claude**: `ClaudeCodeAdapter` (LLM provider)
+- **Claude**: `ClaudeCodeAdapter` (coding agent)
 - **Branch Resolution**: `BranchResolutionAdapter`
 - **Environment Repair**: `ProductionEnvironmentRepairAdapter`
 - **Repair Cycles**: `ProductionRepairCycleAdapter`

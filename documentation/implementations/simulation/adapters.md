@@ -1,18 +1,21 @@
 # Simulation Adapters Reference
 
-Complete mapping of all 52 simulation/mock adapters to their port interfaces.
+Complete mapping of all 57 simulation/mock adapters to their port interfaces.
+
+> **Counting Methodology**: One concrete class explicitly inheriting one port ABC = one counted implementation. Abstract bases, decorators, mixins, and helper dataclasses are excluded.
 
 ## Overview
 
 The Simulation Implementation provides:
-- **34 Testing Adapters**: Mock/in-memory implementations of output ports
+- **37 Testing Adapters**: Mock/in-memory implementations of output ports
+- **2 Secondary Adapters**: In-memory identity service and event emitter
 - **18 Input Port Adapters**: Mock adapters wrapping application services for HTTP endpoints
 
 All adapters implement the same port contracts as production adapters, ensuring the simulation exercises identical business logic.
 
 > **DEF-015 (Phase D5) retired three slots**: `ILLMProvider` (with `MockLLMAdapter`), `IAgentLauncher`, and `IStorage` (with `InMemoryStorageAdapter`). The simulation now wires a single `MockClaudeCodeAdapter` implementing the new `ICodingAgent` port — see entry #2 below and the dedicated section [MockClaudeCodeAdapter design](#mockclaudecodeadapter-design).
 
-## Output Port Adapters (34 Testing Adapters)
+## Output Port Adapters (37 Testing Adapters)
 
 Complete list of mock implementations for all output ports in `adapters/testing/`.
 
@@ -49,18 +52,21 @@ Complete list of mock implementations for all output ports in `adapters/testing/
 | 29 | `ISystemicAnalysisService` | `MockSystemicAnalysisAdapter` | `adapters/testing/mock_systemic_analysis_adapter.py` | Simulates systemic failure analysis |
 | 30 | `IEnvironmentRepairService` | `MockEnvironmentRepairAdapter` | `adapters/testing/mock_environment_repair_adapter.py` | Simulates environment repair — dependency fixes |
 | 31 | `IBranchResolutionService` | `MockBranchResolutionAdapter` | `adapters/testing/mock_branch_resolution_adapter.py` | Simulates intelligent branch resolution |
-| 32 | `IAgentExecutor` | `ExecutionServiceAgentExecutor` | `adapters/testing/execution_service_agent_executor.py` | Real agent executor wrapper — integrates with execution service |
-| 33 | `ITracer` | `InMemoryTracer` | `adapters/testing/in_memory_tracer.py` | In-memory distributed tracing — trace propagation |
-| 34 | `IAgentExecutor` | `MockAgentExecutor` | `adapters/testing/mock_agent_executor.py` | Mock agent executor — simulates agent execution without invoking a coding agent |
+| 32 | `ITracer` | `InMemoryTracer` | `adapters/testing/in_memory_tracer.py` | In-memory distributed tracing — trace propagation |
+| 33 | `IAgentExecutor` | `MockAgentExecutor` | `adapters/testing/mock_agent_executor.py` | Mock agent executor — simulates agent execution without invoking a coding agent |
+| 34 | `IDistributedLock` | `InMemoryDistributedLock` | `adapters/testing/in_memory_distributed_lock.py` | In-memory distributed locking — task coordination |
+| 35 | `IFailedEventStore` | `InMemoryFailedEventStore` | `adapters/testing/in_memory_failed_event_store.py` | In-memory dead-letter queue — failed event capture |
+| 36 | `IOrphanScanRegistry` | `InMemoryOrphanScanRegistry` | `adapters/testing/in_memory_orphan_scan_registry.py` | In-memory orphan scan tracking — container recovery |
+| 37 | `IPipelineQueue` | `InMemoryPipelineQueue` | `adapters/testing/in_memory_pipeline_queue.py` | In-memory FIFO queue — work item coordination |
 
 ## Secondary Adapters (2 Adapters in `adapters/secondary/`)
 
-These adapters are located in `adapters/secondary/` but are used in simulation testing:
+Adapters located in `adapters/secondary/` but used in simulation testing:
 
 | # | Port Interface | Adapter Class | File | Purpose |
 |---|---|---|---|---|
-| 1 | `IPipelineLockService` | `InMemoryLockService` | `adapters/secondary/in_memory_queue_lock_service.py` | In-memory distributed locking — deadlock prevention |
-| 2 | `IIdentityService` | `ConfigurableIdentityService` | `adapters/secondary/configurable_identity_service.py` | Simulates identity — bot/human user detection |
+| 1 | `IIdentityService` | `ConfigurableIdentityService` | `adapters/secondary/configurable_identity_service.py` | Simulates identity — bot/human user detection |
+| 2 | `IEventEmitter` | `MockEventEmitter` | `adapters/secondary/mock_event_emitter.py` | In-memory event emitter for testing — handles event subscription and synchronous dispatch |
 
 ## Input Port Adapters (18 Mock Adapters)
 
@@ -92,7 +98,7 @@ Mock implementations of input ports that wrap application services for HTTP endp
 ### Testing Adapters Location
 ```
 src/codetoreum/adapters/testing/
-├── in_memory_*.py          (15 files) - In-memory backing stores
+├── in_memory_*.py          (19 files) - In-memory backing stores
 ├── mock_*.py               (15 files) - Mock external systems (incl. mock_claude_code_adapter.py)
 ├── fake_*.py               (1 file)  - Fake implementations
 ├── simple_*.py             (1 file)  - Simple implementations
@@ -112,7 +118,7 @@ src/codetoreum/adapters/primary/input_port_adapters/mock/
 
 ## Key Adapter Characteristics
 
-### In-Memory Adapters (15)
+### In-Memory Adapters (19)
 - **Purpose**: Backing stores without external services
 - **Thread-Safe**: Protected by locks for concurrent test execution
 - **Persisted During Session**: Data survives for event replay
@@ -124,8 +130,7 @@ src/codetoreum/adapters/primary/input_port_adapters/mock/
 - **Configurable**: Responses set via YAML or programmatically
 - **Examples**: `MockClaudeCodeAdapter`, `MockBoardAdapter`, `MockRepairCycleAdapter`
 
-### Special Adapters (2)
-- **`ExecutionServiceAgentExecutor`**: Real integration with execution service, not a mock
+### Special Adapters (1)
 - **`SimpleEncryptionAdapter`**: Basic encryption (base64) for testing, not secure for production
 
 ## Adapter Relationships and Dependencies
@@ -148,7 +153,6 @@ src/codetoreum/adapters/primary/input_port_adapters/mock/
              ├─── IBoardService ─────────────── MockBoardAdapter
              ├─── IRepairCycle ──────────────── MockRepairCycleAdapter
              ├─── IProjectManagerService ────── MockProjectManagerAdapter
-             ├─── IPipelineLockService ──────── InMemoryLockService
              ├─── IWorkflowConfigService ────── InMemoryWorkflowConfigService
              ├─── IPipelineQueueService ─────── InMemoryQueueService
              ├─── IEventEmitter ─────────────── CapturingMockEventEmitter
@@ -170,7 +174,8 @@ src/codetoreum/adapters/primary/input_port_adapters/mock/
              ├─── ISystemicAnalysisService ──── MockSystemicAnalysisAdapter
              ├─── IEnvironmentRepairService ─── MockEnvironmentRepairAdapter
              ├─── IBranchResolutionService ──── MockBranchResolutionAdapter
-             └─── IAgentExecutor ────────────── ExecutionServiceAgentExecutor
+             ├─── ITracer ────────────────────── InMemoryTracer
+             └─── IAgentExecutor ────────────── MockAgentExecutor
 
 ┌──────────────────────────────────┐
 │   HTTP Input Ports               │
@@ -484,6 +489,6 @@ See `~/.claude/plans/coding-agent-port-redesign.md` §3a–§3c for the producti
 
 ---
 
-**Total Adapter Count**: 34 testing + 18 input port = **52 adapters**
+**Total Adapter Count**: 37 testing + 2 secondary + 18 input port = **57 adapters**
 
 All adapters implement port contracts to provide a complete, testable implementation of the Codetoreum architecture.

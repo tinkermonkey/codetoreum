@@ -30,7 +30,7 @@ from codetoreum.domain.events.coding_agent_events import (
 )
 
 
-async def _bytes_iter(lines: list[dict | str]) -> AsyncIterator[bytes]:
+async def _bytes_iter(lines: list[str] | list[dict]) -> AsyncIterator[bytes]:
     for line in lines:
         if isinstance(line, str):
             yield line.encode("utf-8")

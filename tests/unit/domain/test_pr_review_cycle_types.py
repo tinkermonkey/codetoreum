@@ -9,6 +9,7 @@ Tests cover:
 """
 
 from datetime import UTC, datetime
+from typing import cast
 
 import pytest
 
@@ -39,7 +40,8 @@ class TestPRReviewOutcome:
         # String representation includes the enum member name
         assert str(outcome) == "PRReviewOutcome.APPROVED"
         # But the value is the lowercase snake_case
-        assert outcome.value == "approved"
+        # Cast back to Enum to access .value
+        assert cast("PRReviewOutcome", outcome).value == "approved"
 
 
 class TestPRReviewStatus:
@@ -377,7 +379,7 @@ class TestPRReviewCycleConfig:
         """Test sub_issue_labels must be a tuple."""
         with pytest.raises(ValueError, match="sub_issue_labels must be a tuple"):
             PRReviewCycleConfig(
-                sub_issue_labels=["bug", "enhancement"],  # type: ignore
+                sub_issue_labels=["bug", "enhancement"],
                 code_review_agent="agent-1",
                 verifier_agent="agent-2",
                 consolidation_agent="agent-3",
@@ -782,7 +784,7 @@ class TestPRReviewCycleState:
         """Test findings list is mutable."""
         now = datetime.now(UTC)
         config = self._create_test_config()
-        findings = []
+        findings: list[dict[str, object]] = []
         state = PRReviewCycleState(
             id="cycle-123",
             pr_id="pr-456",

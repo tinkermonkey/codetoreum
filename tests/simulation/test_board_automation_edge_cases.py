@@ -166,7 +166,7 @@ class TestBoardReconciliation:
         config_service.register_template("board-1", new_template)
 
         # Create reconciliation config from template
-        expected_columns = [col.name for col in new_template.columns]
+        expected_columns = tuple(col.name for col in new_template.columns)
         board_config = BoardConfig(
             board_id="board-1",
             expected_columns=expected_columns,
@@ -265,7 +265,7 @@ class TestBoardReconciliation:
         config_service.register_template("board-1", new_template)
 
         # Create reconciliation config from template
-        expected_columns = [col.name for col in new_template.columns]
+        expected_columns = tuple(col.name for col in new_template.columns)
         board_config = BoardConfig(
             board_id="board-1",
             expected_columns=expected_columns,
@@ -355,7 +355,7 @@ class TestBoardReconciliation:
         config_service.register_template("board-1", new_template)
 
         # Create reconciliation config from template
-        expected_columns = [col.name for col in new_template.columns]
+        expected_columns = tuple(col.name for col in new_template.columns)
         board_config = BoardConfig(
             board_id="board-1",
             expected_columns=expected_columns,
@@ -432,7 +432,7 @@ class TestBoardReconciliation:
         config_service.register_template("board-1", new_template)
 
         # Create reconciliation config from template
-        expected_columns = [col.name for col in new_template.columns]
+        expected_columns = tuple(col.name for col in new_template.columns)
         board_config = BoardConfig(
             board_id="board-1",
             expected_columns=expected_columns,
@@ -514,7 +514,7 @@ class TestBoardReconciliation:
         config_service.register_template("board-1", new_template)
 
         # Create reconciliation config from template
-        expected_columns = [col.name for col in new_template.columns]
+        expected_columns = tuple(col.name for col in new_template.columns)
         board_config = BoardConfig(
             board_id="board-1",
             expected_columns=expected_columns,

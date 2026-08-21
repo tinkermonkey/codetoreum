@@ -130,6 +130,7 @@ async def test_on_issue_opened_success():
     assert board_service.get_all_boards_called
     assert config_service.get_board_workflow_template_called
     assert board_service.add_item_to_column_called
+    assert board_service.last_add_item_call is not None
     assert board_service.last_add_item_call["work_item_id"] == "wi-uuid-42"
     assert board_service.last_add_item_call["target_column"] == "Backlog"
 

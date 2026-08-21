@@ -43,7 +43,7 @@ def _register_event_types() -> None:
 @pytest.fixture
 def ts() -> str:
     """A valid ISO 8601 timestamp string."""
-    return now_iso()
+    return now_iso()  # type: ignore[no-any-return]
 
 
 # ---------------------------------------------------------------------------
@@ -95,7 +95,7 @@ class TestCodingAgentInvokedEvent:
     def test_immutable(self, ts: str) -> None:
         e = self._make(ts)
         with pytest.raises(FrozenInstanceError):
-            e.execution_id = "other"  # type: ignore[misc]
+            e.execution_id = "other"
 
     def test_missing_execution_id(self, ts: str) -> None:
         with pytest.raises(ValueError, match="execution_id is required"):
@@ -152,7 +152,7 @@ class TestCodingAgentReadyEvent:
     def test_immutable(self, ts: str) -> None:
         e = self._make(ts)
         with pytest.raises(FrozenInstanceError):
-            e.ready_at = "other"  # type: ignore[misc]
+            e.ready_at = "other"
 
     def test_event_id_unique(self, ts: str) -> None:
         a, b = self._make(ts), self._make(ts)
@@ -203,7 +203,7 @@ class TestCodingAgentToolCallEvent:
 
     def test_immutable(self, ts: str) -> None:
         with pytest.raises(FrozenInstanceError):
-            self._make(ts).tool_name = "Edit"  # type: ignore[misc]
+            self._make(ts).tool_name = "Edit"
 
     def test_event_id_unique(self, ts: str) -> None:
         a, b = self._make(ts), self._make(ts)
@@ -259,7 +259,7 @@ class TestCodingAgentToolResultEvent:
 
     def test_immutable(self, ts: str) -> None:
         with pytest.raises(FrozenInstanceError):
-            self._make(ts).result_content = "boom"  # type: ignore[misc]
+            self._make(ts).result_content = "boom"
 
     def test_event_id_unique(self, ts: str) -> None:
         a, b = self._make(ts), self._make(ts)
@@ -379,7 +379,7 @@ class TestCodingAgentTextOutputEvent:
 
     def test_immutable(self, ts: str) -> None:
         with pytest.raises(FrozenInstanceError):
-            self._make(ts).content = "other"  # type: ignore[misc]
+            self._make(ts).content = "other"
 
     def test_event_id_unique(self, ts: str) -> None:
         a, b = self._make(ts), self._make(ts)
@@ -422,7 +422,7 @@ class TestCodingAgentThinkingEvent:
 
     def test_immutable(self, ts: str) -> None:
         with pytest.raises(FrozenInstanceError):
-            self._make(ts).content = "other"  # type: ignore[misc]
+            self._make(ts).content = "other"
 
     def test_event_id_unique(self, ts: str) -> None:
         a, b = self._make(ts), self._make(ts)
@@ -472,7 +472,7 @@ class TestCodingAgentRateLimitEvent:
 
     def test_immutable(self, ts: str) -> None:
         with pytest.raises(FrozenInstanceError):
-            self._make(ts).status = "hit"  # type: ignore[misc]
+            self._make(ts).status = "hit"
 
     def test_event_id_unique(self, ts: str) -> None:
         a, b = self._make(ts), self._make(ts)
@@ -525,7 +525,7 @@ class TestCodingAgentApiRetryEvent:
 
     def test_immutable(self, ts: str) -> None:
         with pytest.raises(FrozenInstanceError):
-            self._make(ts).attempt = 99  # type: ignore[misc]
+            self._make(ts).attempt = 99
 
     def test_event_id_unique(self, ts: str) -> None:
         a, b = self._make(ts), self._make(ts)
@@ -592,7 +592,7 @@ class TestCodingAgentOtlpSpanEvent:
 
     def test_immutable(self, ts: str) -> None:
         with pytest.raises(FrozenInstanceError):
-            self._make(ts).name = "other"  # type: ignore[misc]
+            self._make(ts).name = "other"
 
     def test_event_id_unique(self, ts: str) -> None:
         a, b = self._make(ts), self._make(ts)
@@ -656,7 +656,7 @@ class TestCodingAgentTokensUsedEvent:
 
     def test_immutable(self, ts: str) -> None:
         with pytest.raises(FrozenInstanceError):
-            self._make(ts).input_tokens = 999  # type: ignore[misc]
+            self._make(ts).input_tokens = 999
 
     def test_event_id_unique(self, ts: str) -> None:
         a, b = self._make(ts), self._make(ts)
@@ -718,7 +718,7 @@ class TestCodingAgentCompletedEvent:
 
     def test_immutable(self, ts: str) -> None:
         with pytest.raises(FrozenInstanceError):
-            self._make(ts).success = False  # type: ignore[misc]
+            self._make(ts).success = False
 
     def test_event_id_unique(self, ts: str) -> None:
         a, b = self._make(ts), self._make(ts)

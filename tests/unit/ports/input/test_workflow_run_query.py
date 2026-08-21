@@ -65,7 +65,7 @@ class TestWorkflowRunFilters:
 
         # Attempt to modify should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            filters.project_id = "new-value"  # type: ignore
+            filters.project_id = "new-value"
 
 
 class TestWorkflowRunPaginationParams:

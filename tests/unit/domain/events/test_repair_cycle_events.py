@@ -142,7 +142,7 @@ class TestRepairCycleStartedEvent:
         )
 
         with pytest.raises(FrozenInstanceError):
-            event.stage_name = "fix_warnings"  # type: ignore
+            event.stage_name = "fix_warnings"
 
 
 class TestRepairCycleTestExecutionStartedEvent:
@@ -758,7 +758,7 @@ class TestRepairCycleEventsImmutability:
         )
 
         with pytest.raises(FrozenInstanceError):
-            event.test_type = RepairTestType.INTEGRATION  # type: ignore
+            event.test_type = RepairTestType.INTEGRATION
 
     def test_file_fix_started_is_frozen(self):
         """Test that file fix started event is immutable."""
@@ -774,7 +774,7 @@ class TestRepairCycleEventsImmutability:
         )
 
         with pytest.raises(FrozenInstanceError):
-            event.test_file = "service.py"  # type: ignore
+            event.test_file = "service.py"
 
     def test_fast_fail_is_frozen(self):
         """Test that fast fail event is immutable."""
@@ -788,7 +788,7 @@ class TestRepairCycleEventsImmutability:
         )
 
         with pytest.raises(FrozenInstanceError):
-            event.reason = "timeout"  # type: ignore
+            event.reason = "timeout"
 
     def test_environment_rebuild_started_is_frozen(self):
         """Test that environment rebuild started event is immutable."""
@@ -803,7 +803,7 @@ class TestRepairCycleEventsImmutability:
         )
 
         with pytest.raises(FrozenInstanceError):
-            event.test_type = RepairTestType.INTEGRATION  # type: ignore
+            event.test_type = RepairTestType.INTEGRATION
 
     def test_environment_rebuild_completed_is_frozen(self):
         """Test that environment rebuild completed event is immutable."""
@@ -822,7 +822,7 @@ class TestRepairCycleEventsImmutability:
         )
 
         with pytest.raises(FrozenInstanceError):
-            event.success = False  # type: ignore
+            event.success = False
 
     def test_environment_verification_started_is_frozen(self):
         """Test that environment verification started event is immutable."""
@@ -837,7 +837,7 @@ class TestRepairCycleEventsImmutability:
         )
 
         with pytest.raises(FrozenInstanceError):
-            event.test_type = RepairTestType.UNIT  # type: ignore
+            event.test_type = RepairTestType.UNIT
 
     def test_environment_verification_completed_is_frozen(self):
         """Test that environment verification completed event is immutable."""
@@ -856,7 +856,7 @@ class TestRepairCycleEventsImmutability:
         )
 
         with pytest.raises(FrozenInstanceError):
-            event.healthy = False  # type: ignore
+            event.healthy = False
 
 
 class TestRepairCycleEventsSerialization:
@@ -1464,7 +1464,7 @@ class TestSystemicFixCompletedEvent:
             work_item_id="issue-123",
             workflow_run_id="run-456",
             success=True,
-            files_modified=["file1.py", "file2.py"],  # type: ignore[arg-type]
+            files_modified=["file1.py", "file2.py"],
             root_cause_addressed="Root cause",
             duration_seconds=10.0,
         )
@@ -1592,7 +1592,7 @@ class TestSystemicFixStartedEventEdgeCases:
         event = SystemicFixStartedEvent.from_dict(d)
 
         with pytest.raises(FrozenInstanceError):
-            event.work_item_id = "WI-999"  # type: ignore[misc]
+            event.work_item_id = "WI-999"
 
 
 # ============================================================================
@@ -1684,10 +1684,10 @@ class TestSystemicFixCompletedEventEdgeCases:
         event = SystemicFixCompletedEvent.from_dict(d)
 
         with pytest.raises(FrozenInstanceError):
-            event.success = False  # type: ignore[misc]
+            event.success = False
 
         with pytest.raises(FrozenInstanceError):
-            event.root_cause_addressed = "Different cause"  # type: ignore[misc]
+            event.root_cause_addressed = "Different cause"
 
 
 class TestRebuildResultType:
@@ -1752,7 +1752,7 @@ class TestRebuildResultType:
         )
 
         with pytest.raises(FrozenInstanceError):
-            result.success = False  # type: ignore
+            result.success = False
 
 
 class TestVerificationResultType:
@@ -1818,7 +1818,7 @@ class TestVerificationResultType:
         )
 
         with pytest.raises(FrozenInstanceError):
-            result.healthy = False  # type: ignore
+            result.healthy = False
 
 
 class TestEnvironmentRebuildStartedEvent:
@@ -2356,7 +2356,7 @@ class TestEnvironmentRebuildExhaustedEvent:
             error_message="Failed",
         )
         with pytest.raises(FrozenInstanceError):
-            event.work_item_id = "issue-999"  # type: ignore[misc]
+            event.work_item_id = "issue-999"
 
     def test_missing_work_item_id_raises_error(self):
         """Test that missing work_item_id raises ValueError."""

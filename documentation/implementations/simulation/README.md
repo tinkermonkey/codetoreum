@@ -28,16 +28,17 @@ The simulation implementation serves multiple purposes:
 Overview of the Simulation Implementation as a complete port contract implementation:
 
 - How it fulfills all architecture contracts with mock adapters
-- Configuration and behavior of 54 adapters
+- Configuration and behavior of 57 adapters
 - Time control (100x fast-forward) and determinism
 - Purpose, architecture, quick start guide
 - Limitations and integration pattern
 
 ### [adapters.md](./adapters.md)
 
-Complete reference for all 52 adapters:
+Complete reference for all 57 adapters:
 
-- **34 Testing Adapters**: Mock implementations of output ports (InMemoryTicketAdapter, MockClaudeCodeAdapter, FakeContainerAdapter, etc.)
+- **37 Testing Adapters**: Mock implementations of output ports (InMemoryTicketAdapter, MockClaudeCodeAdapter, FakeContainerAdapter, etc.)
+- **2 Secondary Adapters**: In-memory identity service and event emitter
 - **18 Input Port Adapters**: HTTP endpoint wrappers (MockOrchestrationCommand, MockWorkItem, etc.)
 - Full mapping table with port interface → adapter class → file path
 - Adapter organization and characteristics

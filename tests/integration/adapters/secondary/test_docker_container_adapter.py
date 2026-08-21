@@ -25,7 +25,7 @@ def docker_config():
     """Create Docker configuration with resource limits to prevent memory exhaustion."""
     return DockerConfig(
         default_timeout=30,
-        remove_on_completion=True,
+        remove_on_completion=False,  # Disable auto-removal to avoid race condition in exit code retrieval
         memory_limit="256m",  # Limit test containers to 256MB RAM
         cpu_limit=0.5,  # Limit to 0.5 CPU cores
         agent_network="bridge",
@@ -33,7 +33,7 @@ def docker_config():
 
 
 @pytest.fixture
-def docker_adapter(docker_config):
+def docker_adapter(docker_config, ensure_alpine_image):
     """Create Docker adapter instance with proper cleanup."""
     adapter = DockerContainerAdapter(docker_config)
 
@@ -307,7 +307,7 @@ async def test_exec_on_stopped_container(docker_adapter):
 
 
 @pytest.mark.asyncio
-async def test_context_manager(docker_config):
+async def test_context_manager(docker_config, ensure_alpine_image):
     """Test using adapter as async context manager."""
     try:
         async with DockerContainerAdapter(docker_config) as adapter:
@@ -324,6 +324,8 @@ async def test_context_manager(docker_config):
                 environment={},
             )
             assert result.exit_code == 0
+            # Clean up the container since remove_on_completion=False
+            await adapter.remove(result.container_id)
     finally:
         # Force garbage collection after test to close any remaining socket connections
         gc.collect()

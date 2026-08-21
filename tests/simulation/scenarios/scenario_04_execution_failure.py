@@ -68,7 +68,7 @@ async def run_scenario(runner: SimulationRunner) -> None:
     # First execution attempt
     await runner.advance_time(timedelta(minutes=2))
 
-    event = AgentExecutionStarted(
+    event = AgentExecutionStarted(  # type: ignore[assignment]
         aggregate_id="exec-1",
         payload={"agent_id": "flaky-agent", "attempt": 1},
     )
@@ -77,7 +77,7 @@ async def run_scenario(runner: SimulationRunner) -> None:
     await runner.advance_time(timedelta(minutes=3))
 
     # First execution fails
-    event = AgentExecutionFailed(
+    event = AgentExecutionFailed(  # type: ignore[assignment]
         aggregate_id="exec-1",
         payload={"status": "failed", "error": "Network timeout"},
     )
@@ -88,7 +88,7 @@ async def run_scenario(runner: SimulationRunner) -> None:
     # Retry scheduled
     await runner.advance_time(timedelta(minutes=1))
 
-    event = ExecutionRetryScheduled(
+    event = ExecutionRetryScheduled(  # type: ignore[assignment]
         aggregate_id="exec-1",
         payload={"retry_attempt": 1},
     )
@@ -97,7 +97,7 @@ async def run_scenario(runner: SimulationRunner) -> None:
     # Second execution attempt
     await runner.advance_time(timedelta(minutes=2))
 
-    event = AgentExecutionStarted(
+    event = AgentExecutionStarted(  # type: ignore[assignment]
         aggregate_id="exec-2",
         payload={"agent_id": "flaky-agent", "attempt": 2},
     )
@@ -106,7 +106,7 @@ async def run_scenario(runner: SimulationRunner) -> None:
     await runner.advance_time(timedelta(minutes=3))
 
     # Second execution succeeds
-    event = AgentExecutionCompleted(
+    event = AgentExecutionCompleted(  # type: ignore[assignment]
         aggregate_id="exec-2",
         payload={"status": "completed"},
     )
@@ -115,7 +115,7 @@ async def run_scenario(runner: SimulationRunner) -> None:
     runner.assert_event_occurred("AgentExecutionCompleted", assertion_name="retry_succeeded")
 
     # Workflow completes
-    event = WorkflowCompleted(
+    event = WorkflowCompleted(  # type: ignore[assignment]
         aggregate_id=work_item_id,
         payload={"total_attempts": 2},
     )

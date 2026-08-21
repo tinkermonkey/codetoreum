@@ -73,7 +73,7 @@ async def test_circuit_breaker_calls_into_inner_pipeline():
     wrapped.execute.return_value = _result()
 
     class _PassThroughCB:
-        async def call(self, fn, name, *args, **kwargs):  # type: ignore[no-untyped-def]
+        async def call(self, fn, name, *args, **kwargs):
             return await fn(*args, **kwargs)
 
     deco = ResilientCodingAgentDecorator(
@@ -90,7 +90,7 @@ async def test_circuit_breaker_short_circuits_when_open():
     wrapped = AsyncMock()
 
     class _OpenCB:
-        async def call(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        async def call(self, *args, **kwargs):
             raise RuntimeError("circuit open")
 
     deco = ResilientCodingAgentDecorator(wrapped=wrapped, circuit_breaker=_OpenCB())
@@ -108,7 +108,7 @@ async def test_retry_policy_wraps_inner_pipeline():
         def __init__(self) -> None:
             self.calls = 0
 
-        async def execute(self, fn, name):  # type: ignore[no-untyped-def]
+        async def execute(self, fn, name):
             self.calls += 1
             return await fn()
 
@@ -126,7 +126,7 @@ async def test_timeout_invoked_with_per_call_buffer():
     captured_timeouts: list[float] = []
 
     class _CapturingTimeout:
-        async def execute(self, fn, timeout, name):  # type: ignore[no-untyped-def]
+        async def execute(self, fn, timeout, name):
             captured_timeouts.append(timeout)
             return await fn()
 

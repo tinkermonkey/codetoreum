@@ -480,13 +480,13 @@ class TestWorkItemColumnChangedEventImmutability:
         # WorkItemColumnChangedEvent is a frozen dataclass, so attempting to modify
         # any attribute should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            event.work_item_id = "456"  # type: ignore
+            event.work_item_id = "456"
 
         with pytest.raises(FrozenInstanceError):
-            event.from_column = "Done"  # type: ignore
+            event.from_column = "Done"
 
         with pytest.raises(FrozenInstanceError):
-            event.to_column = "Review"  # type: ignore
+            event.to_column = "Review"
 
 
 class TestBoardReconciledEventImmutability:
@@ -511,10 +511,10 @@ class TestBoardReconciledEventImmutability:
         # BoardReconciledEvent is a frozen dataclass, so attempting to modify
         # any attribute should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            event.board_id = "board-2"  # type: ignore
+            event.board_id = "board-2"
 
         with pytest.raises(FrozenInstanceError):
-            event.project_id = "proj-2"  # type: ignore
+            event.project_id = "proj-2"
 
     def test_board_reconciled_event_columns_immutable(self):
         """Test that BoardReconciledEvent column tuples are immutable."""
@@ -817,10 +817,10 @@ class TestWorkItemPositionChangedEvent:
         # WorkItemPositionChangedEvent is a frozen dataclass, so attempting to modify
         # any attribute should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            event.old_position = 0  # type: ignore
+            event.old_position = 0
 
         with pytest.raises(FrozenInstanceError):
-            event.new_position = 5  # type: ignore
+            event.new_position = 5
 
         with pytest.raises(FrozenInstanceError):
-            event.work_item_id = "item-2"  # type: ignore
+            event.work_item_id = "item-2"

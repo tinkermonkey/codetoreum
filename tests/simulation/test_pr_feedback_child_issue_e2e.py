@@ -168,5 +168,5 @@ def _find_work_item_id(seeder: SimulationDataSeeder, title_prefix: str) -> str |
     for item_id in seeder.created_items.work_items:
         work_item = seeder._ticket_adapter._work_items.get(item_id)
         if work_item and work_item.title.startswith(title_prefix):
-            return item_id
+            return item_id  # type: ignore[no-any-return]
     return None

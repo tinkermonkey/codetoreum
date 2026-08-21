@@ -665,10 +665,10 @@ class TestReviewFeedbackValueObject:
         )
 
         with pytest.raises(FrozenInstanceError):
-            feedback.comment = "Changed"  # type: ignore[misc]
+            feedback.comment = "Changed"
 
         with pytest.raises(FrozenInstanceError):
-            feedback.decision = ReviewDecision.REQUEST_CHANGES  # type: ignore[misc]
+            feedback.decision = ReviewDecision.REQUEST_CHANGES
 
     def test_review_feedback_issues_are_tuples(self):
         """Test that ReviewFeedback converts list issues to immutable tuples."""
@@ -687,7 +687,7 @@ class TestReviewFeedbackValueObject:
 
         # Tuples prevent mutation attempts
         with pytest.raises((TypeError, AttributeError)):
-            feedback.issues.append("new_issue")  # type: ignore[union-attr]
+            feedback.issues.append("new_issue")  # type: ignore[attr-defined]
 
 
 class TestIdentityFieldProtection:
@@ -704,22 +704,22 @@ class TestIdentityFieldProtection:
 
         # Try to modify identity fields
         with pytest.raises(AttributeError, match="Cannot modify identity field 'id'"):
-            cycle.id = "hacked"  # type: ignore[misc]
+            cycle.id = "hacked"
 
         with pytest.raises(AttributeError, match="Cannot modify identity field 'workflow_id'"):
-            cycle.workflow_id = "hacked"  # type: ignore[misc]
+            cycle.workflow_id = "hacked"
 
         with pytest.raises(AttributeError, match="Cannot modify identity field 'stage_name'"):
-            cycle.stage_name = "hacked"  # type: ignore[misc]
+            cycle.stage_name = "hacked"
 
         with pytest.raises(AttributeError, match="Cannot modify identity field 'maker_agent_id'"):
-            cycle.maker_agent_id = "hacked"  # type: ignore[misc]
+            cycle.maker_agent_id = "hacked"
 
         with pytest.raises(AttributeError, match="Cannot modify identity field 'reviewer_agent_id'"):
-            cycle.reviewer_agent_id = "hacked"  # type: ignore[misc]
+            cycle.reviewer_agent_id = "hacked"
 
         with pytest.raises(AttributeError, match="Cannot modify identity field 'max_iterations'"):
-            cycle.max_iterations = 999  # type: ignore[misc]
+            cycle.max_iterations = 999
 
     def test_identity_fields_set_during_creation(self):
         """Test that identity fields can be set during creation (via __init__)."""

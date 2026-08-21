@@ -28,9 +28,12 @@ import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root / "src"))
+
+from types import MappingProxyType
 
 from elasticsearch import AsyncElasticsearch
 
@@ -41,9 +44,12 @@ from codetoreum.domain.coding_agent_types import AgentInvocationConfig, Invocati
 from codetoreum.ports.output.config_store import AgentConfig, ProjectConfig
 
 
-def _load_config(config_path: Path) -> dict:
+def _load_config(config_path: Path) -> dict[str, Any]:
     with open(config_path) as f:
-        return json.load(f)
+        config = json.load(f)
+        if not isinstance(config, dict):
+            raise ValueError("Configuration must be a dictionary")
+        return config
 
 
 async def _register(config: dict, es_url: str) -> None:
@@ -76,11 +82,11 @@ async def _register(config: dict, es_url: str) -> None:
             version=1,
             created_at=now,
             updated_at=now,
-            metadata={
+            metadata=MappingProxyType({
                 "description": project.get("description", ""),
                 "default_branch": project.get("default_branch", "main"),
                 "repository_url": (f"https://github.com/{project['github_org']}/{project['github_repo']}.git"),
-            },
+            }),
         )
         await store.save_project_config(project_config)
         print(f"  [OK] project '{project_config.id}'  ({project_config.github_org}/{project_config.github_repo})")
@@ -106,16 +112,16 @@ async def _register(config: dict, es_url: str) -> None:
                 project_id=project["id"],
                 agent_name=agent_def["name"],
                 makes_code_changes=agent_def.get("makes_code_changes", True),
-                capabilities=agent_def.get("capabilities", ["code_generation"]),
+                capabilities=tuple(agent_def.get("capabilities", ["code_generation"])),
                 version=1,
                 created_at=now,
                 updated_at=now,
                 coding_agent=agent_def.get("coding_agent", "claude-code"),
                 invocation=invocation,
-                metadata={
+                metadata=MappingProxyType({
                     "description": agent_def.get("description", ""),
                     "commit_policy": agent_def.get("commit_policy", "on_success"),
-                },
+                }),
             )
             await store.save_agent_config(agent_config)
             print(

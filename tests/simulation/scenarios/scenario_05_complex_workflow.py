@@ -86,14 +86,14 @@ async def run_scenario(runner: SimulationRunner) -> None:
     # Stage 1: Analysis
     await runner.advance_time(timedelta(minutes=5))
 
-    event = AgentExecutionCompleted(
+    event = AgentExecutionCompleted(  # type: ignore[assignment]
         aggregate_id="exec-1",
         payload={"agent_id": "analyzer", "stage": "analysis"},
     )
     runner.capture_event(event)
 
     # Branch decision
-    event = WorkflowBranchSelected(
+    event = WorkflowBranchSelected(  # type: ignore[assignment]
         aggregate_id=work_item_id,
         payload={"branch": "refactoring", "reason": "Complex codebase"},
     )
@@ -104,7 +104,7 @@ async def run_scenario(runner: SimulationRunner) -> None:
     # Stage 2a: Refactoring (Branch B)
     await runner.advance_time(timedelta(minutes=10))
 
-    event = AgentExecutionCompleted(
+    event = AgentExecutionCompleted(  # type: ignore[assignment]
         aggregate_id="exec-2",
         payload={"agent_id": "refactorer", "stage": "refactoring"},
     )
@@ -113,7 +113,7 @@ async def run_scenario(runner: SimulationRunner) -> None:
     # Stage 3: Testing
     await runner.advance_time(timedelta(minutes=8))
 
-    event = AgentExecutionCompleted(
+    event = AgentExecutionCompleted(  # type: ignore[assignment]
         aggregate_id="exec-3",
         payload={"agent_id": "tester", "stage": "testing"},
     )
@@ -122,14 +122,14 @@ async def run_scenario(runner: SimulationRunner) -> None:
     # Stage 4: Validation
     await runner.advance_time(timedelta(minutes=5))
 
-    event = AgentExecutionCompleted(
+    event = AgentExecutionCompleted(  # type: ignore[assignment]
         aggregate_id="exec-4",
         payload={"agent_id": "validator", "stage": "validation"},
     )
     runner.capture_event(event)
 
     # Workflow completes
-    event = WorkflowCompleted(
+    event = WorkflowCompleted(  # type: ignore[assignment]
         aggregate_id=work_item_id,
         payload={
             "total_stages": 4,

@@ -6,8 +6,8 @@ The implementations tier documents concrete implementations that fulfill the arc
 
 An implementation is a complete, working configuration of adapters that together satisfy all output ports. For example:
 
-- **Simulation Implementation**: Uses mock adapters to simulate the entire system in-memory. Used for testing, development, and scenario testing. (Currently the only complete implementation.)
-- **Production Implementation**: Would use real adapters for GitHub, Docker, Claude Code, etc. (Planned for future development.)
+- **Simulation Implementation**: Uses mock adapters to simulate the entire system in-memory. Used for testing, development, and scenario testing.
+- **Production Implementation**: Uses real adapters for GitHub, Docker, Claude Code, etc. See [production-bootstrap.md](./production-bootstrap.md) for the wiring sequence and validation run.
 
 Each implementation includes:
 - A bootstrap function that instantiates and wires all adapters
@@ -29,7 +29,7 @@ The simulation system is a full, working implementation of Codetoreum using mock
 
 **Documentation Files**:
 - **[overview.md](./simulation/overview.md)** — Simulation as complete port contract implementation, time control, determinism
-- **[adapters.md](./simulation/adapters.md)** — All 54 adapters (36 testing + 18 input mock) mapped to port interfaces with file paths
+- **[adapters.md](./simulation/adapters.md)** — All 56 adapters (37 testing + 1 secondary + 18 input mock) mapped to port interfaces with file paths
 - **[bootstrap-wiring.md](./simulation/bootstrap-wiring.md)** — 6-phase bootstrap sequence with Level 4 Mermaid wiring diagram
 - **[scenarios.md](./simulation/scenarios.md)** — All 10 scenario directories with YAML files, format guide, and execution instructions
 
@@ -91,7 +91,7 @@ Architecture remains stable while implementations can be added or evolved. A new
 ## Available and Planned Implementations
 
 - **Simulation** — ✅ Complete mock implementation with in-memory services
-- **Production** (Planned) — Real GitHub, Docker, Claude Code, and external services
+- **Production** — Real GitHub, Docker, Claude Code, and external services
 - **Staging** (Planned) — Real systems with test GitHub organization
 - **Cloud-Hosted** (Planned) — Kubernetes-based deployment with cloud storage
 

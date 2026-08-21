@@ -26,7 +26,9 @@ class TestDevelopmentMockReturnTypes:
         import importlib.util
 
         spec = importlib.util.find_spec("codetoreum.adapters.primary.fastapi_app")
+        assert spec is not None, "Could not find codetoreum.adapters.primary.fastapi_app"
         fastapi_app_path = spec.origin
+        assert fastapi_app_path is not None, "Could not determine fastapi_app path"
         with open(fastapi_app_path) as f:
             content = f.read()
 
@@ -47,7 +49,9 @@ class TestDevelopmentMockReturnTypes:
         import importlib.util
 
         spec = importlib.util.find_spec("codetoreum.adapters.primary.fastapi_app")
+        assert spec is not None, "Could not find codetoreum.adapters.primary.fastapi_app"
         fastapi_app_path = spec.origin
+        assert fastapi_app_path is not None, "Could not determine fastapi_app path"
         with open(fastapi_app_path) as f:
             content = f.read()
 

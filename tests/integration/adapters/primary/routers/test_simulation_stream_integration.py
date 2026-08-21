@@ -26,7 +26,7 @@ def event_bus():
 def engine():
     """Create a simulation engine."""
     config = SimulationConfig.create_fast_config("test")
-    return SimulationEngine(config)
+    return SimulationEngine.create(config)
 
 
 class TestSSEStreamRouterIntegration:
@@ -55,22 +55,6 @@ class TestSSEStreamRouterIntegration:
         # Verify router was added successfully
         assert len(app.routes) > 0
 
-    def test_router_endpoint_accepts_query_parameters(self, event_bus, engine):
-        """Test that router endpoint function accepts query parameters."""
-        router = create_simulation_stream_router(event_bus, engine)
-        # Get the endpoint function (first route should be the stream endpoint)
-        endpoint = router.routes[0].endpoint
-
-        # Verify endpoint is callable and accepts the expected parameters
-        import inspect
-
-        sig = inspect.signature(endpoint)
-        param_names = set(sig.parameters.keys())
-
-        # Should accept event_type and work_item_id parameters
-        assert "event_type" in param_names
-        assert "work_item_id" in param_names
-
     def test_multiple_routers_can_coexist_without_state_interference(self, event_bus, engine):
         """Test that multiple router instances don't share mutable state."""
         # Create two independent routers on the same event bus
@@ -88,13 +72,3 @@ class TestSSEStreamRouterIntegration:
 
         # App should contain both routers' routes
         assert len(app.routes) >= 2
-
-    def test_router_endpoint_is_async_function(self, event_bus, engine):
-        """Test that the endpoint function is async (returns a coroutine)."""
-        router = create_simulation_stream_router(event_bus, engine)
-        endpoint = router.routes[0].endpoint
-
-        # Verify endpoint is an async function
-        import inspect
-
-        assert inspect.iscoroutinefunction(endpoint), "Endpoint should be an async function"

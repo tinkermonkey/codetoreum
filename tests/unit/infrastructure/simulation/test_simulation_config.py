@@ -107,7 +107,7 @@ class TestAdapterSelectionConfig:
         """Test that AdapterSelectionConfig is immutable."""
         config = AdapterSelectionConfig()
         with pytest.raises(AttributeError):
-            config.board = "github"  # type: ignore
+            config.board = "github"
 
     def test_validation_fails_for_empty_string(self) -> None:
         """Test that empty string value raises ValueError."""
@@ -117,12 +117,12 @@ class TestAdapterSelectionConfig:
     def test_validation_fails_for_none(self) -> None:
         """Test that None value raises ValueError."""
         with pytest.raises(ValueError, match="must be a non-empty string"):
-            AdapterSelectionConfig(board=None)  # type: ignore
+            AdapterSelectionConfig(board=None)
 
     def test_validation_fails_for_non_string_type(self) -> None:
         """Test that non-string type raises ValueError."""
         with pytest.raises(ValueError, match="must be a non-empty string"):
-            AdapterSelectionConfig(board=123)  # type: ignore
+            AdapterSelectionConfig(board=123)
 
     def test_validation_fails_for_whitespace_only_string(self) -> None:
         """Test that whitespace-only string value raises ValueError."""

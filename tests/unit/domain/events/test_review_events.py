@@ -333,13 +333,13 @@ class TestReviewStatusChangedEventImmutability:
         # ReviewStatusChangedEvent is a frozen dataclass, so attempting to modify
         # any attribute should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            event.review_id = "pr-456"  # type: ignore
+            event.review_id = "pr-456"
 
         with pytest.raises(FrozenInstanceError):
-            event.previous_status = "closed"  # type: ignore
+            event.previous_status = "closed"
 
         with pytest.raises(FrozenInstanceError):
-            event.new_status = "rejected"  # type: ignore
+            event.new_status = "rejected"
 
 
 class TestReviewCommentAddedEventImmutability:
@@ -372,10 +372,10 @@ class TestReviewCommentAddedEventImmutability:
         # ReviewCommentAddedEvent is a frozen dataclass, so attempting to modify
         # any attribute should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            event.review_id = "pr-456"  # type: ignore
+            event.review_id = "pr-456"
 
         with pytest.raises(FrozenInstanceError):
-            event.comment = Comment("rc-2", "bob", "Different comment", now_iso())  # type: ignore
+            event.comment = Comment("rc-2", "bob", "Different comment", now_iso())
 
     def test_review_comment_added_nested_comment_immutability(self):
         """Test that nested Comment object in ReviewCommentAddedEvent is immutable."""
@@ -406,7 +406,7 @@ class TestReviewCommentAddedEventImmutability:
         # Comment is a frozen dataclass, so attempting to modify
         # its attributes should raise FrozenInstanceError
         with pytest.raises(FrozenInstanceError):
-            event_comment.author = "bob"  # type: ignore
+            event_comment.author = "bob"
 
         with pytest.raises(FrozenInstanceError):
-            event_comment.body = "Different feedback"  # type: ignore
+            event_comment.body = "Different feedback"

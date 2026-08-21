@@ -62,7 +62,7 @@ async def run_scenario(runner: SimulationRunner) -> None:
 
     # All items start execution
     for i, work_item_id in enumerate(work_items):
-        event = AgentExecutionStarted(
+        event = AgentExecutionStarted(  # type: ignore[assignment]
             aggregate_id=f"exec-{i + 1}",
             payload={"work_item_id": work_item_id},
         )
@@ -74,7 +74,7 @@ async def run_scenario(runner: SimulationRunner) -> None:
     await runner.advance_time(timedelta(minutes=10))
 
     for i in range(3):
-        event = AgentExecutionCompleted(
+        event = AgentExecutionCompleted(  # type: ignore[assignment]
             aggregate_id=f"exec-{i + 1}",
             payload={"status": "completed"},
         )
@@ -84,7 +84,7 @@ async def run_scenario(runner: SimulationRunner) -> None:
 
     # All workflows complete
     for work_item_id in work_items:
-        event = WorkflowCompleted(
+        event = WorkflowCompleted(  # type: ignore[assignment]
             aggregate_id=work_item_id,
             payload={"workflow_id": "basic-workflow"},
         )

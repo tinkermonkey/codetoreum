@@ -134,11 +134,49 @@ fi || true
 if [ -n "${GITHUB_TOKEN:-}" ]; then
     mkdir -p /home/orchestrator/.config 2>/dev/null || true
 
-    # Authenticate via token (fallback to gh auth, but don't fail if it errors)
+    # Authenticate via token with proper error handling for operator visibility
     if command -v gh >/dev/null 2>&1; then
-        echo "$GITHUB_TOKEN" | gh auth login --with-token >/dev/null 2>&1 || true
+        if ! echo "$GITHUB_TOKEN" | gh auth login --with-token 2>&1; then
+            echo "[agent-entrypoint] ERROR: Failed to authenticate GitHub CLI with provided token." >&2
+            echo "[agent-entrypoint] ERROR: The token may be expired, malformed, or GitHub API may be unreachable." >&2
+            echo "[agent-entrypoint] ERROR: Downstream 'gh' commands will fail." >&2
+        fi
     fi
 fi || true
+
+# --- Validate Docker socket access (needed by testcontainers) -------------
+# Integration tests use testcontainers to spin up Redis/Elasticsearch
+# containers. The socket must be bind-mounted and the orchestrator user
+# must have group-level access. Warn loudly if either condition fails so
+# the operator can fix the mount / GID mismatch instead of chasing
+# "Connection refused" timeouts 60 seconds into the test suite.
+if [ -S /var/run/docker.sock ]; then
+    if python3 -c "import docker; docker.from_env().ping()" 2>/dev/null; then
+        echo "[agent-entrypoint] Docker socket access: OK" >&2
+    else
+        echo "[agent-entrypoint] WARNING: /var/run/docker.sock exists but is not accessible." >&2
+        echo "[agent-entrypoint] WARNING: Testcontainers integration tests will fail." >&2
+        echo "[agent-entrypoint] WARNING: Check that DOCKER_GID build arg matches the host docker group GID" >&2
+        echo "[agent-entrypoint] WARNING:   Host GID: $(stat -c '%g' /var/run/docker.sock 2>/dev/null || echo 'unknown')" >&2
+        echo "[agent-entrypoint] WARNING:   Container docker group GID: $(getent group docker 2>/dev/null | cut -d: -f3 || echo 'not found')" >&2
+        echo "[agent-entrypoint] WARNING:   Current user groups: $(id)" >&2
+    fi
+else
+    echo "[agent-entrypoint] INFO: /var/run/docker.sock not mounted. Testcontainers tests will be skipped." >&2
+fi
+
+# --- Pre-pull alpine:latest for workspace verification ---------------------
+# The DockerContainerAdapter._verify_workspace_writable() method runs a
+# throwaway alpine:latest container. If the image is missing and the daemon
+# has no network access, the verification (and thus the whole agent run)
+# fails. Pull it eagerly when the Docker socket is available.
+if [ -S /var/run/docker.sock ] && command -v docker >/dev/null 2>&1; then
+    if ! docker image inspect alpine:latest >/dev/null 2>&1; then
+        echo "[agent-entrypoint] Pre-pulling alpine:latest for workspace verification..." >&2
+        docker pull alpine:latest >/dev/null 2>&1 || \
+            echo "[agent-entrypoint] WARNING: Could not pull alpine:latest. Workspace verification may fail." >&2
+    fi
+fi
 
 # --- Hand off to the requested command --------------------------------------
 exec "$@"

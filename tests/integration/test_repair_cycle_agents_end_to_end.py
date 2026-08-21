@@ -74,7 +74,7 @@ async def test_repair_cycle_handler_extracts_agents_from_column_template(
         captured_contexts.append(context)
         return await original_execute(context)
 
-    adapters.repair_cycle.execute = capture_execute  # type: ignore
+    adapters.repair_cycle.execute = capture_execute
 
     # Publish a WorkItemColumnChanged event for an item entering Testing column
     event = WorkItemColumnChangedEvent(

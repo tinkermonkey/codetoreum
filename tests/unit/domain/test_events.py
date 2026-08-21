@@ -81,7 +81,7 @@ class TestCodetoreumEvent:
         )
 
         with pytest.raises(FrozenInstanceError):
-            event.type = "mutated"  # type: ignore[misc]
+            event.type = "mutated"
 
     def test_event_type_property_returns_class_name(self):
         """Test that event_type property returns class name."""
@@ -418,7 +418,7 @@ class TestExecutionEvents:
         assert event.cancelled_at == ts
 
         with pytest.raises(Exception):  # FrozenInstanceError
-            event.execution_id = "mutated"  # type: ignore[misc]
+            event.execution_id = "mutated"
 
         restored = ExecutionCancelledEvent.from_dict(event.to_dict())
         assert restored.execution_id == event.execution_id
@@ -446,7 +446,7 @@ class TestExecutionEvents:
         assert event.paused_at == ts
 
         with pytest.raises(Exception):  # FrozenInstanceError
-            event.execution_id = "mutated"  # type: ignore[misc]
+            event.execution_id = "mutated"
 
         restored = ExecutionPausedEvent.from_dict(event.to_dict())
         assert restored.execution_id == event.execution_id
@@ -473,7 +473,7 @@ class TestExecutionEvents:
         assert event.resumed_at == ts
 
         with pytest.raises(Exception):  # FrozenInstanceError
-            event.execution_id = "mutated"  # type: ignore[misc]
+            event.execution_id = "mutated"
 
         restored = ExecutionResumedEvent.from_dict(event.to_dict())
         assert restored.execution_id == event.execution_id
@@ -502,7 +502,7 @@ class TestExecutionEvents:
         assert event.retry_at == ts
 
         with pytest.raises(Exception):  # FrozenInstanceError
-            event.execution_id = "mutated"  # type: ignore[misc]
+            event.execution_id = "mutated"
 
         restored = ExecutionRetryScheduledEvent.from_dict(event.to_dict())
         assert restored.execution_id == event.execution_id

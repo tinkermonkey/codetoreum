@@ -77,7 +77,7 @@ async def run_scenario(runner: SimulationRunner) -> None:
     # First code generation
     await runner.advance_time(timedelta(minutes=5))
 
-    event = AgentExecutionCompleted(
+    event = AgentExecutionCompleted(  # type: ignore[assignment]
         aggregate_id="exec-1",
         payload={"agent_id": "code-generator", "iteration": 1},
     )
@@ -86,7 +86,7 @@ async def run_scenario(runner: SimulationRunner) -> None:
     # Review rejects
     await runner.advance_time(timedelta(minutes=3))
 
-    event = ReviewRejected(
+    event = ReviewRejected(  # type: ignore[assignment]
         aggregate_id="review-1",
         payload={"decision": "rejected", "feedback": "Add error handling"},
     )
@@ -97,7 +97,7 @@ async def run_scenario(runner: SimulationRunner) -> None:
     # Code regeneration with feedback
     await runner.advance_time(timedelta(minutes=5))
 
-    event = AgentExecutionCompleted(
+    event = AgentExecutionCompleted(  # type: ignore[assignment]
         aggregate_id="exec-2",
         payload={"agent_id": "code-generator", "iteration": 2, "with_feedback": True},
     )
@@ -106,7 +106,7 @@ async def run_scenario(runner: SimulationRunner) -> None:
     # Review approves
     await runner.advance_time(timedelta(minutes=3))
 
-    event = ReviewApproved(
+    event = ReviewApproved(  # type: ignore[assignment]
         aggregate_id="review-2",
         payload={"decision": "approved"},
     )
@@ -115,7 +115,7 @@ async def run_scenario(runner: SimulationRunner) -> None:
     runner.assert_event_occurred("ReviewApproved", assertion_name="second_review_approved")
 
     # Workflow completes
-    event = WorkflowCompleted(
+    event = WorkflowCompleted(  # type: ignore[assignment]
         aggregate_id=work_item_id,
         payload={"iterations": 2},
     )

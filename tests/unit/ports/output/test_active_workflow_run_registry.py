@@ -59,4 +59,4 @@ class TestActiveRunInfo:
             work_item_id="wi-1", run_id="run-1", stage_name="coding", project_id="proj-1", board_id="board-1", started_at=datetime.now(UTC).isoformat()
         )
         with pytest.raises(FrozenInstanceError):
-            info.work_item_id = "wi-2"  # type: ignore
+            info.work_item_id = "wi-2"

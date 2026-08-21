@@ -32,14 +32,14 @@ class FlakyTicketSystem(ITicketSystem):
         self.fail_count = fail_count
         self.call_count = 0
 
-    async def get_work_item(self, item_id: WorkItemId) -> WorkItem:
+    async def get_work_item(self, item_id: WorkItemId, project_id: ProjectId | None = None) -> WorkItem:
         self.call_count += 1
         if self.call_count <= self.fail_count:
             raise Exception("Simulated transient failure")
 
         return WorkItem(
             id=item_id,
-            project_id=ProjectId("test-project"),
+            project_id=project_id or ProjectId("test-project"),
             title="Test Item",
             description="Test description",
             status=WorkItemStatus.NEW,
@@ -114,13 +114,24 @@ class FlakyTicketSystem(ITicketSystem):
     ) -> Comment:
         raise NotImplementedError
 
-    async def get_comments(self, item_id: WorkItemId, since: datetime | None = None, limit: int = 100) -> list[Comment]:
+    async def get_comments(
+        self,
+        item_id: WorkItemId,
+        since: datetime | None = None,
+        limit: int = 100,
+        project_id: ProjectId | None = None,
+    ) -> list[Comment]:
         raise NotImplementedError
 
     async def link_work_items(self, source_id: WorkItemId, target_id: WorkItemId, relationship: str) -> None:
         raise NotImplementedError
 
-    async def get_related_items(self, item_id: WorkItemId, relationship: str | None = None) -> list[WorkItem]:
+    async def get_related_items(
+        self,
+        item_id: WorkItemId,
+        relationship: str | None = None,
+        project_id: ProjectId | None = None,
+    ) -> list[WorkItem]:
         raise NotImplementedError
 
     async def register_webhook(self, url: str, events: list[str], project_id: ProjectId | None = None) -> str:

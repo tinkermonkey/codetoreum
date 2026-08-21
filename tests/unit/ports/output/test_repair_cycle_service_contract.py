@@ -419,7 +419,7 @@ class TestRepairCycleDomainTypesContract(ABC):
 
         # Verify immutability (frozen) - modification should fail
         with pytest.raises((AttributeError, Exception)):
-            config1.timeout = 500  # type: ignore
+            config1.timeout = 500
 
     @pytest.mark.asyncio
     async def test_failure_collection_thread_safe(self) -> None:
@@ -458,7 +458,7 @@ class TestRepairCycleDomainTypesContract(ABC):
 
         # Attempting to modify should raise FrozenInstanceError or similar
         with pytest.raises((AttributeError, Exception)):
-            result.stage = "modified"  # type: ignore
+            result.stage = "modified"
 
     @pytest.mark.asyncio
     async def test_repair_test_result_immutable(self) -> None:
@@ -477,7 +477,7 @@ class TestRepairCycleDomainTypesContract(ABC):
 
         # Attempting to modify should raise FrozenInstanceError or similar
         with pytest.raises((AttributeError, Exception)):
-            result.passed = 10  # type: ignore
+            result.passed = 10
 
     @pytest.mark.asyncio
     async def test_repair_test_failure_immutable(self) -> None:
@@ -490,7 +490,7 @@ class TestRepairCycleDomainTypesContract(ABC):
 
         # Attempting to modify should raise FrozenInstanceError or similar
         with pytest.raises((AttributeError, Exception)):
-            failure.file = "other.py"  # type: ignore
+            failure.file = "other.py"
 
     @pytest.mark.asyncio
     async def test_cycle_result_immutable(self) -> None:
@@ -520,7 +520,7 @@ class TestRepairCycleDomainTypesContract(ABC):
 
         # Attempting to modify should raise FrozenInstanceError
         with pytest.raises((AttributeError, Exception)):
-            cycle.passed = False  # type: ignore
+            cycle.passed = False
 
 
 # =============================================================================

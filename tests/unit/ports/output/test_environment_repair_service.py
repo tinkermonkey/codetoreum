@@ -19,7 +19,7 @@ class TestIEnvironmentRepairServiceInterface:
     def test_interface_cannot_be_instantiated_directly(self):
         """Test that the interface cannot be instantiated directly."""
         with pytest.raises(TypeError, match="Can't instantiate abstract class"):
-            IEnvironmentRepairService()  # type: ignore[abstract]
+            IEnvironmentRepairService()
 
     def test_interface_is_abstract_base_class(self):
         """Test that IEnvironmentRepairService is an ABC."""
@@ -47,7 +47,7 @@ class TestIEnvironmentRepairServiceInterface:
 
         # Should raise TypeError because verify_environment is not implemented
         with pytest.raises(TypeError, match="Can't instantiate abstract class"):
-            PartialImplementation()  # type: ignore[abstract]
+            PartialImplementation()
 
     def test_concrete_implementation_with_both_methods_succeeds(self):
         """Test that concrete implementations work with both methods."""
