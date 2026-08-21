@@ -34,24 +34,26 @@ from codetoreum.infrastructure.simulation.simulation_config import (
 )
 from codetoreum.ports.output.coding_agent import (
     CodingAgentResult,
+    ICodingAgent,
 )
 from codetoreum.ports.output.failed_event_store import (
     IFailedEventStore,
     FailureReason,
+    FailedEventStoreStats,
 )
 from tests.simulation.scenarios.scenario_07_repair_cycle import (
     create_repair_context,
 )
 
 
-class MockCodingAgent:
+class MockCodingAgent(ICodingAgent):
     """Mock coding agent that conforms to ICodingAgent interface."""
 
     def supported_invocation_modes(self) -> frozenset[InvocationMode]:
         """Return supported invocation modes."""
         return frozenset({InvocationMode.CONTAINERIZED, InvocationMode.HOST})
 
-    async def execute(self, execution, workspace_context, options) -> CodingAgentResult:
+    async def execute(self, execution: "AgentExecution", workspace_context: "WorkspaceContext", options: "CodingAgentInvocationOptions") -> CodingAgentResult:
         """Execute mock coding agent with successful test result."""
         return CodingAgentResult(
             success=True,
@@ -65,6 +67,51 @@ class MockCodingAgent:
         )
 
 
+class SimpleFailedEventStore(IFailedEventStore):
+    """Minimal test implementation of IFailedEventStore."""
+
+    async def add_failed_event(
+        self,
+        event_type: str,
+        event_data: dict,
+        failure_reason: FailureReason,
+        error_message: str,
+        metadata: dict | None = None,
+    ) -> str:
+        """Add failed event (mock implementation)."""
+        return "mock_event_id"
+
+    def get_stats(self) -> FailedEventStoreStats:
+        """Get store statistics (mock implementation)."""
+        return FailedEventStoreStats(
+            total_failed_events=0,
+            pending_retries=0,
+            exhausted_retries=0,
+            total_retries_attempted=0,
+            total_retries_succeeded=0,
+            total_retries_failed=0,
+        )
+
+    def list_events(
+        self,
+        failure_reason: FailureReason | None = None,
+        can_retry: bool | None = None,
+        limit: int | None = None,
+    ) -> list:
+        """List events (mock implementation)."""
+        return []
+
+    def get_event(self, event_id: str):
+        """Get event (mock implementation)."""
+        return None
+
+    def remove_event(self, event_id: str) -> bool:
+        """Remove event (mock implementation)."""
+        return False
+
+    def clear(self) -> None:
+        """Clear events (mock implementation)."""
+        pass
 
 
 class TestRepairCycleBootstrapResolution:
@@ -121,53 +168,6 @@ class TestRepairCycleBootstrapResolution:
         event_emitter = CapturingMockEventEmitter()
 
         # Create a minimal failed event store (required by resolver)
-        class SimpleFailedEventStore(IFailedEventStore):
-            """Minimal test implementation of IFailedEventStore."""
-
-            async def add_failed_event(
-                self,
-                event_type: str,
-                event_data: dict,
-                failure_reason: FailureReason,
-                error_message: str,
-                metadata: dict | None = None,
-            ) -> str:
-                """Add failed event (mock implementation)."""
-                return "mock_event_id"
-
-            def get_stats(self):
-                """Get store statistics (mock implementation)."""
-                from codetoreum.ports.output.failed_event_store import FailedEventStoreStats
-                return FailedEventStoreStats(
-                    total_failed_events=0,
-                    pending_retries=0,
-                    exhausted_retries=0,
-                    total_retries_attempted=0,
-                    total_retries_succeeded=0,
-                    total_retries_failed=0,
-                )
-
-            def list_events(
-                self,
-                failure_reason: FailureReason | None = None,
-                can_retry: bool | None = None,
-                limit: int | None = None,
-            ) -> list:
-                """List events (mock implementation)."""
-                return []
-
-            def get_event(self, event_id: str):
-                """Get event (mock implementation)."""
-                return None
-
-            def remove_event(self, event_id: str) -> bool:
-                """Remove event (mock implementation)."""
-                return False
-
-            def clear(self) -> None:
-                """Clear events (mock implementation)."""
-                pass
-
         failed_event_store = SimpleFailedEventStore()
 
         adapter_deps = AdapterDependencies(
@@ -239,53 +239,7 @@ class TestRepairCycleBootstrapResolution:
         factory = AdapterFactory()
         event_emitter = CapturingMockEventEmitter()
 
-        class SimpleFailedEventStore(IFailedEventStore):
-            """Minimal test implementation of IFailedEventStore."""
-
-            async def add_failed_event(
-                self,
-                event_type: str,
-                event_data: dict,
-                failure_reason: FailureReason,
-                error_message: str,
-                metadata: dict | None = None,
-            ) -> str:
-                """Add failed event (mock implementation)."""
-                return "mock_event_id"
-
-            def get_stats(self):
-                """Get store statistics (mock implementation)."""
-                from codetoreum.ports.output.failed_event_store import FailedEventStoreStats
-                return FailedEventStoreStats(
-                    total_failed_events=0,
-                    pending_retries=0,
-                    exhausted_retries=0,
-                    total_retries_attempted=0,
-                    total_retries_succeeded=0,
-                    total_retries_failed=0,
-                )
-
-            def list_events(
-                self,
-                failure_reason: FailureReason | None = None,
-                can_retry: bool | None = None,
-                limit: int | None = None,
-            ) -> list:
-                """List events (mock implementation)."""
-                return []
-
-            def get_event(self, event_id: str):
-                """Get event (mock implementation)."""
-                return None
-
-            def remove_event(self, event_id: str) -> bool:
-                """Remove event (mock implementation)."""
-                return False
-
-            def clear(self) -> None:
-                """Clear events (mock implementation)."""
-                pass
-
+        # Create a minimal failed event store (required by resolver)
         failed_event_store = SimpleFailedEventStore()
 
         adapter_deps = AdapterDependencies(
