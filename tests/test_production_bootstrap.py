@@ -348,6 +348,7 @@ def test_non_critical_adapter_slots_defined() -> None:
         "pr_review_cycle",
         "systemic_analysis",
         "environment_repair",
+        "repair_cycle",
     }
 
     assert expected_non_critical == NON_CRITICAL_SLOTS
@@ -593,3 +594,104 @@ async def test_board_reconciliation_runs_at_bootstrap() -> None:
     assert board_id == "board-1"
     assert board_config.board_id == "board-1"
     assert board_config.expected_columns == ("Backlog", "In Progress")
+
+
+@pytest.mark.asyncio
+async def test_repair_cycle_resolver_production_promotion() -> None:
+    """Verify that resolve_repair_cycle() produces ProductionRepairCycleAdapter with checkpoint_store when repair_cycle='production'.
+
+    This test verifies the promotion of repair_cycle to production adapter by:
+    1. Creating a config with repair_cycle="production"
+    2. Verifying that the resolver takes the non-mock branch
+    3. Confirming the returned adapter is ProductionRepairCycleAdapter
+    4. Ensuring checkpoint_store is passed to the factory and is non-None in the resolved adapter
+    """
+    from unittest.mock import MagicMock
+
+    from codetoreum.adapters.secondary.production_repair_cycle_adapter import (
+        ProductionRepairCycleAdapter,
+    )
+    from codetoreum.infrastructure.adapters.resolver import (
+        AdapterDependencies,
+        AdapterResolver,
+    )
+    from codetoreum.infrastructure.simulation.simulation_config import AdapterSelectionConfig
+
+    # Create config with repair_cycle="production"
+    config = AdapterSelectionConfig(repair_cycle="production")
+
+    # Create minimal mock dependencies
+    mock_event_bus = MagicMock()
+    mock_factory = MagicMock()
+    mock_container = MagicMock()
+    mock_config_store = MagicMock()
+    mock_checkpoint_store = MagicMock()
+    mock_systemic_analysis_service = MagicMock()
+    mock_environment_repair_service = MagicMock()
+
+    # Create a mock production repair cycle adapter instance
+    mock_repair_cycle_adapter = MagicMock(spec=ProductionRepairCycleAdapter)
+    mock_repair_cycle_adapter.checkpoint_store = mock_checkpoint_store
+
+    # Set up the factory to return our mock adapter
+    mock_factory.create_repair_cycle = MagicMock(return_value=mock_repair_cycle_adapter)
+
+    # Create a mock dependencies object with required attributes
+    mock_deps = MagicMock(spec=AdapterDependencies)
+    mock_deps.event_bus = mock_event_bus
+    mock_deps.failed_event_store = MagicMock()
+    mock_deps.engine = MagicMock()
+
+    # Create the resolver with correct parameters
+    resolver = AdapterResolver(
+        adapter_config=config,
+        factory=mock_factory,
+        dependencies=mock_deps,
+    )
+
+    # Manually set up the resolver's internal state as if resolve_all() was called
+    resolver._factory = mock_factory
+    resolver._resolved = {
+        "container": mock_container,
+        "config_store": mock_config_store,
+        "checkpoint_store": mock_checkpoint_store,
+        "systemic_analysis_service": mock_systemic_analysis_service,
+        "environment_repair_service": mock_environment_repair_service,
+        "event_emitter": MagicMock(),
+    }
+
+    # Resolve the repair_cycle adapter
+    result = resolver.resolve_repair_cycle()
+
+    # Verify that the factory's create_repair_cycle method was called
+    mock_factory.create_repair_cycle.assert_called_once()
+
+    # Verify the call included checkpoint_store parameter
+    call_kwargs = mock_factory.create_repair_cycle.call_args[1]
+    assert "checkpoint_store" in call_kwargs, "checkpoint_store should be passed to create_repair_cycle"
+    assert call_kwargs["checkpoint_store"] is mock_checkpoint_store, "checkpoint_store should be the resolved instance"
+
+    # Verify adapter_name is set to "production"
+    assert call_kwargs["adapter_name"] == "production"
+
+    # Verify the returned adapter is what the factory returned
+    assert result is mock_repair_cycle_adapter
+
+    # Verify checkpoint_store is not None on the adapter
+    assert result.checkpoint_store is not None
+
+
+def test_repair_cycle_in_production_adapter_selection_config() -> None:
+    """Verify that the default ProductionApplicationBootstrap config sets repair_cycle='production'."""
+    from codetoreum.infrastructure.bootstrap.production_bootstrap import ProductionApplicationBootstrap
+
+    bootstrap = ProductionApplicationBootstrap()
+
+    # Verify the config includes repair_cycle="production"
+    assert bootstrap.config.repair_cycle == "production", (
+        "ProductionApplicationBootstrap should set repair_cycle='production' in default config"
+    )
+
+    # Verify it matches the sibling repair adapters
+    assert bootstrap.config.systemic_analysis == "production"
+    assert bootstrap.config.environment_repair == "production"

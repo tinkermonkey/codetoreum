@@ -673,6 +673,7 @@ class AdapterResolver:
             systemic_analysis_service=systemic_analysis_service,
             environment_repair_service=environment_repair_service,
             invocation_defaults_resolver=self._create_invocation_defaults_resolver(),
+            checkpoint_store=self._resolved.get("checkpoint_store"),
         )
 
     def resolve_code_review(self) -> ICodeReviewService:
