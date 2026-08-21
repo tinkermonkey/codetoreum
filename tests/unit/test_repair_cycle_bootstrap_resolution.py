@@ -6,6 +6,7 @@ resolved adapter can execute repair-cycle scenarios end-to-end.
 """
 
 import pytest
+from decimal import Decimal
 
 from codetoreum.adapters.secondary.production_repair_cycle_adapter import (
     ProductionRepairCycleAdapter,
@@ -14,6 +15,7 @@ from codetoreum.adapters.secondary.production_repair_cycle_adapter import (
 from codetoreum.adapters.testing.in_memory_checkpoint_store import (
     InMemoryCheckpointStore,
 )
+from codetoreum.domain.coding_agent_types import InvocationMode
 from codetoreum.domain.repair_cycle_types import (
     RepairTestRunConfig,
     RepairTestType,
@@ -30,30 +32,39 @@ from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.simulation.simulation_config import (
     AdapterSelectionConfig,
 )
+from codetoreum.ports.output.coding_agent import (
+    CodingAgentResult,
+)
+from codetoreum.ports.output.failed_event_store import (
+    IFailedEventStore,
+    FailureReason,
+)
 from tests.simulation.scenarios.scenario_07_repair_cycle import (
     create_repair_context,
 )
 
 
 class MockCodingAgent:
-    """Mock coding agent that simulates successful test execution."""
+    """Mock coding agent that conforms to ICodingAgent interface."""
 
-    async def __call__(self, *args, **kwargs):
-        """Return mock success response."""
-        return MockAgentResponse(
-            stdout='{"passed": 10, "failed": 0, "warnings": [], "failures": []}',
-            stderr="",
-            exit_code=0,
+    def supported_invocation_modes(self) -> frozenset[InvocationMode]:
+        """Return supported invocation modes."""
+        return frozenset({InvocationMode.CONTAINERIZED, InvocationMode.HOST})
+
+    async def execute(self, execution, workspace_context, options) -> CodingAgentResult:
+        """Execute mock coding agent with successful test result."""
+        return CodingAgentResult(
+            success=True,
+            summary_text='{"passed": 10, "failed": 0, "warnings": [], "failures": []}',
+            total_cost_usd=Decimal("0.01"),
+            total_input_tokens=100,
+            total_output_tokens=50,
+            tool_call_count=2,
+            duration_ms=1000,
+            error_summary=None,
         )
 
 
-class MockAgentResponse:
-    """Mock response from coding agent."""
-
-    def __init__(self, stdout: str, stderr: str, exit_code: int):
-        self.stdout = stdout
-        self.stderr = stderr
-        self.exit_code = exit_code
 
 
 class TestRepairCycleBootstrapResolution:
@@ -110,10 +121,51 @@ class TestRepairCycleBootstrapResolution:
         event_emitter = CapturingMockEventEmitter()
 
         # Create a minimal failed event store (required by resolver)
-        class SimpleFailedEventStore:
-            """Minimal implementation for testing."""
+        class SimpleFailedEventStore(IFailedEventStore):
+            """Minimal test implementation of IFailedEventStore."""
 
-            async def record_failed_event(self, event):
+            async def add_failed_event(
+                self,
+                event_type: str,
+                event_data: dict,
+                failure_reason: FailureReason,
+                error_message: str,
+                metadata: dict | None = None,
+            ) -> str:
+                """Add failed event (mock implementation)."""
+                return "mock_event_id"
+
+            def get_stats(self):
+                """Get store statistics (mock implementation)."""
+                from codetoreum.ports.output.failed_event_store import FailedEventStoreStats
+                return FailedEventStoreStats(
+                    total_failed_events=0,
+                    pending_retries=0,
+                    exhausted_retries=0,
+                    total_retries_attempted=0,
+                    total_retries_succeeded=0,
+                    total_retries_failed=0,
+                )
+
+            def list_events(
+                self,
+                failure_reason: FailureReason | None = None,
+                can_retry: bool | None = None,
+                limit: int | None = None,
+            ) -> list:
+                """List events (mock implementation)."""
+                return []
+
+            def get_event(self, event_id: str):
+                """Get event (mock implementation)."""
+                return None
+
+            def remove_event(self, event_id: str) -> bool:
+                """Remove event (mock implementation)."""
+                return False
+
+            def clear(self) -> None:
+                """Clear events (mock implementation)."""
                 pass
 
         failed_event_store = SimpleFailedEventStore()
@@ -124,7 +176,7 @@ class TestRepairCycleBootstrapResolution:
             logger=None,  # type: ignore
             engine=engine_stub,
             config=None,  # type: ignore
-            failed_event_store=failed_event_store,  # type: ignore
+            failed_event_store=failed_event_store,
         )
 
         # Create resolver with production config
@@ -187,8 +239,51 @@ class TestRepairCycleBootstrapResolution:
         factory = AdapterFactory()
         event_emitter = CapturingMockEventEmitter()
 
-        class SimpleFailedEventStore:
-            async def record_failed_event(self, event):
+        class SimpleFailedEventStore(IFailedEventStore):
+            """Minimal test implementation of IFailedEventStore."""
+
+            async def add_failed_event(
+                self,
+                event_type: str,
+                event_data: dict,
+                failure_reason: FailureReason,
+                error_message: str,
+                metadata: dict | None = None,
+            ) -> str:
+                """Add failed event (mock implementation)."""
+                return "mock_event_id"
+
+            def get_stats(self):
+                """Get store statistics (mock implementation)."""
+                from codetoreum.ports.output.failed_event_store import FailedEventStoreStats
+                return FailedEventStoreStats(
+                    total_failed_events=0,
+                    pending_retries=0,
+                    exhausted_retries=0,
+                    total_retries_attempted=0,
+                    total_retries_succeeded=0,
+                    total_retries_failed=0,
+                )
+
+            def list_events(
+                self,
+                failure_reason: FailureReason | None = None,
+                can_retry: bool | None = None,
+                limit: int | None = None,
+            ) -> list:
+                """List events (mock implementation)."""
+                return []
+
+            def get_event(self, event_id: str):
+                """Get event (mock implementation)."""
+                return None
+
+            def remove_event(self, event_id: str) -> bool:
+                """Remove event (mock implementation)."""
+                return False
+
+            def clear(self) -> None:
+                """Clear events (mock implementation)."""
                 pass
 
         failed_event_store = SimpleFailedEventStore()
@@ -199,7 +294,7 @@ class TestRepairCycleBootstrapResolution:
             logger=None,  # type: ignore
             engine=engine_stub,
             config=None,  # type: ignore
-            failed_event_store=failed_event_store,  # type: ignore
+            failed_event_store=failed_event_store,
         )
 
         resolver = AdapterResolver(
