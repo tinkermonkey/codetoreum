@@ -10,6 +10,7 @@ Tests the RedisConfigCache class which provides:
 
 import asyncio
 from datetime import UTC, datetime
+from types import MappingProxyType
 
 import pytest
 from redis import asyncio as aioredis
@@ -82,11 +83,11 @@ def sample_project_config():
         github_org="org",
         github_repo="repo",
         tech_stacks={"lang": "python"},
-        pipelines=[],
+        pipelines=(),
         testing={"framework": "pytest"},
         environment_variables={"KEY": "value"},
-        mounted_commands={},
-        mounted_subagents={},
+        mounted_commands=MappingProxyType({}),
+        mounted_subagents=MappingProxyType({}),
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
         version=1,
