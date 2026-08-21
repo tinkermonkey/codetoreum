@@ -119,7 +119,7 @@ class TestFileBackedPipelineQueue(TestPipelineQueueContract):
         queue = await self.create_queue()
 
         # Write some entries
-        entry1 = QueueEntry("item-1", "In Progress", 0, now, {"meta": "data"})
+        entry1 = QueueEntry("item-1", "In Progress", 0, now, MappingProxyType({"meta": "data"}))
         entry2 = QueueEntry("item-2", "In Progress", 1, now, MappingProxyType({}))
 
         await queue.enqueue("queue-1", entry1)

@@ -62,7 +62,7 @@ class TestPipelineQueueContract(ABC):
             stage_name="In Progress",
             board_position=0,
             enqueued_at=now,
-            metadata={},
+            metadata=MappingProxyType({}),
         )
 
         result1 = await queue.enqueue("queue-1", entry)
@@ -110,7 +110,7 @@ class TestPipelineQueueContract(ABC):
         """Metadata should be preserved."""
         queue = await self.create_queue()
         now = datetime.now(UTC)
-        metadata = {"project_id": "proj-1", "board_id": "board-1"}
+        metadata = MappingProxyType({"project_id": "proj-1", "board_id": "board-1"})
         entry = QueueEntry("item-1", "In Progress", 0, now, metadata)
 
         await queue.enqueue("queue-1", entry)

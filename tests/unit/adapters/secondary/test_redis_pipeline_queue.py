@@ -195,7 +195,7 @@ class TestRedisPipelineQueue(TestPipelineQueueContract):
         queue = RedisPipelineQueue(redis_client=redis, event_bus=event_bus)
 
         now = datetime.now(UTC)
-        entry = QueueEntry("item-1", "In Progress", 0, now, {"board_id": "board-1"})
+        entry = QueueEntry("item-1", "In Progress", 0, now, MappingProxyType({"board_id": "board-1"}))
 
         await queue.enqueue("queue-1", entry)
 
@@ -212,7 +212,7 @@ class TestRedisPipelineQueue(TestPipelineQueueContract):
         queue = RedisPipelineQueue(redis_client=redis, event_bus=event_bus)
 
         now = datetime.now(UTC)
-        entry = QueueEntry("item-1", "In Progress", 0, now, {"board_id": "board-1"})
+        entry = QueueEntry("item-1", "In Progress", 0, now, MappingProxyType({"board_id": "board-1"}))
         await queue.enqueue("queue-1", entry)
 
         event_bus.reset_mock()
@@ -231,7 +231,7 @@ class TestRedisPipelineQueue(TestPipelineQueueContract):
         queue = RedisPipelineQueue(redis_client=redis, event_bus=event_bus)
 
         now = datetime.now(UTC)
-        entry = QueueEntry("item-1", "In Progress", 0, now, {"board_id": "board-1"})
+        entry = QueueEntry("item-1", "In Progress", 0, now, MappingProxyType({"board_id": "board-1"}))
         await queue.enqueue("queue-1", entry)
 
         event_bus.reset_mock()
@@ -286,11 +286,11 @@ class TestRedisPipelineQueue(TestPipelineQueueContract):
         queue = RedisPipelineQueue(redis_client=redis, event_bus=event_bus)
 
         now = datetime.now(UTC)
-        metadata = {
+        metadata = MappingProxyType({
             "project_id": "proj-123",
             "board_id": "board-456",
             "custom_key": "custom_value",
-        }
+        })
         entry = QueueEntry("item-1", "In Progress", 0, now, metadata)
 
         await queue.enqueue("queue-1", entry)
@@ -393,7 +393,7 @@ class TestRedisPipelineQueue(TestPipelineQueueContract):
         queue = RedisPipelineQueue(redis_client=redis, event_bus=event_bus)
 
         now = datetime.now(UTC)
-        entry = QueueEntry("item-1", "In Progress", 0, now, {"board_id": "board-456"})
+        entry = QueueEntry("item-1", "In Progress", 0, now, MappingProxyType({"board_id": "board-456"}))
 
         await queue.enqueue("queue-1", entry)
 
@@ -411,7 +411,7 @@ class TestRedisPipelineQueue(TestPipelineQueueContract):
         queue = RedisPipelineQueue(redis_client=redis, event_bus=event_bus)
 
         now = datetime.now(UTC)
-        entry = QueueEntry("item-1", "In Progress", 0, now, {"board_id": "board-456"})
+        entry = QueueEntry("item-1", "In Progress", 0, now, MappingProxyType({"board_id": "board-456"}))
 
         # Enqueue normally
         await queue.enqueue("queue-1", entry)
@@ -449,7 +449,7 @@ class TestRedisPipelineQueue(TestPipelineQueueContract):
         queue = RedisPipelineQueue(redis_client=redis, event_bus=event_bus)
 
         now = datetime.now(UTC)
-        entry = QueueEntry("item-1", "In Progress", 0, now, {"board_id": "board-456"})
+        entry = QueueEntry("item-1", "In Progress", 0, now, MappingProxyType({"board_id": "board-456"}))
 
         # Enqueue normally
         await queue.enqueue("queue-1", entry)
