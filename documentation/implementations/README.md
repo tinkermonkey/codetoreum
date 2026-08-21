@@ -29,7 +29,7 @@ The simulation system is a full, working implementation of Codetoreum using mock
 
 **Documentation Files**:
 - **[overview.md](./simulation/overview.md)** — Simulation as complete port contract implementation, time control, determinism
-- **[adapters.md](./simulation/adapters.md)** — All 58 adapters (38 testing + 2 secondary + 18 input mock) mapped to port interfaces with file paths
+- **[adapters.md](./simulation/adapters.md)** — All 56 adapters (37 testing + 1 secondary + 18 input mock) mapped to port interfaces with file paths
 - **[bootstrap-wiring.md](./simulation/bootstrap-wiring.md)** — 6-phase bootstrap sequence with Level 4 Mermaid wiring diagram
 - **[scenarios.md](./simulation/scenarios.md)** — All 10 scenario directories with YAML files, format guide, and execution instructions
 
