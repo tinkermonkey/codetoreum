@@ -7,7 +7,7 @@ Tests cover:
 """
 
 import os
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import docker.errors
 import pytest
@@ -109,8 +109,8 @@ class TestTryReloadForExitCodeNotFound:
             # Check that error_id is in the extra dict
             assert call_args.kwargs["extra"]["error_id"] == ErrorRegistry.ERR_CONTAINER_AUTO_REMOVED_AFTER_STREAMING
 
-    def test_reload_not_found_with_none_container(self):
-        """Should handle None container gracefully in NotFound case."""
+    def test_reload_not_found_with_none_short_id(self):
+        """Should handle None short_id gracefully in NotFound case."""
         config = DockerConfig()
         adapter = DockerContainerAdapter(config)
 
@@ -123,6 +123,8 @@ class TestTryReloadForExitCodeNotFound:
 
         error_msg = str(exc_info.value)
         assert "auto-removed" in error_msg.lower()
+        # When short_id is None, container_id_str becomes the string "None"
+        assert "None" in error_msg
 
 
 class TestTryReloadForExitCodeFailureWithPriorError:
@@ -550,7 +552,7 @@ class TestExitCodeErrorMessages:
         assert "OOM-killed" in error_msg or "force-removed" in error_msg
 
     def test_dual_failure_error_includes_both_errors(self):
-        """Error message should mention both wait() and reload() failures."""
+        """Log message should mention both wait() and reload() failures."""
         config = DockerConfig()
         adapter = DockerContainerAdapter(config)
 
@@ -559,9 +561,18 @@ class TestExitCodeErrorMessages:
         wait_error = Exception("wait failed")
         mock_container.reload.side_effect = Exception("reload failed")
 
-        with patch("codetoreum.adapters.secondary.docker_container_adapter.logger"):
+        with patch("codetoreum.adapters.secondary.docker_container_adapter.logger") as mock_logger:
             with pytest.raises(ContainerExecutionError):
                 adapter._try_reload_for_exit_code(mock_container, prior_wait_error=wait_error)
+
+            # Verify that both errors are mentioned in the log message
+            mock_logger.error.assert_called_once()
+            call_args = mock_logger.error.call_args
+            log_message = call_args[0][0]
+            assert "wait()" in log_message
+            assert "reload()" in log_message
+            assert "wait failed" in log_message
+            assert "reload failed" in log_message
 
 
 class TestExitCodeEdgeCases:
