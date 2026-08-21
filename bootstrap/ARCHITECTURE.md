@@ -736,7 +736,7 @@ Naming reinforces the wrong model: `IAgentLauncher` is an implementation detail 
 | D7 | Bootstrap end-to-end validation against `tinkermonkey/rounds` (**complete**: DEF-016/017/018 fixed, 67+ `CodingAgent*` events landed in ES) |
 | D8 | Implementation docs update (**complete**) |
 | D9 | Design validation of `GitHubCopilotAdapter` and `CodexAdapter` shapes, no code (**complete**: `documentation/architecture/adapters/planned/` directory + README + two adapter design specs + port-validation summary; port shape holds; four additive enhancements recommended) |
-| D10 (proposed, optional) | Pre-Copilot port enhancements: `CodingAgentResourceUsage` discriminated union; `CodingAgentToolCallEvent.tool_category` optional field; event-catalog tiering + INV-19; `CodingAgentCostLimitNotEnforceableEvent` advisory event. All additive, no breaking changes. See `documentation/architecture/adapters/planned/coding-agent-port-validation.md` §Recommended Changes. |
+| D10 (proposed, optional) | Pre-Copilot port enhancements: `CodingAgentResourceUsage` discriminated union; `CodingAgentToolCallEvent.tool_category` optional field; event-catalog tiering + INV-22; `CodingAgentCostLimitNotEnforceableEvent` advisory event. All additive, no breaking changes. See `documentation/architecture/adapters/planned/coding-agent-port-validation.md` §Recommended Changes. |
 
 **Reference**: `~/.claude/plans/coding-agent-port-redesign.md` (the authoritative design proposal).
 
