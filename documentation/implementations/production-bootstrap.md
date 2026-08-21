@@ -46,16 +46,18 @@ adapter_config = AdapterSelectionConfig(
 - If `repair_cycle == "production"`: Factory creates production adapter with full dependency injection
 
 **Dependencies wired into ProductionRepairCycleAdapter**:
+In `AdapterResolver.resolve_repair_cycle()` (line 670), the factory call mirrors what the resolver has already prepared:
 ```python
-adapter = factory.create_repair_cycle(
-    adapter_name="production",
-    coding_agent_factory=_create_coding_agent_factory(),  # Per-call factory for LLM agents
-    systemic_analysis_service=resolver.resolve_systemic_analysis_service(),  # For failure analysis
-    environment_repair_service=resolver.resolve_environment_repair_service(),  # For env rebuild
-    invocation_defaults_resolver=_create_invocation_defaults_resolver(),  # Per-workflow-step config
-    checkpoint_store=resolver.resolve_repair_cycle_checkpoint_store(),  # Phase 1 fix: wired here
+return self._factory.create_repair_cycle(
+    adapter_name=self._config.repair_cycle,
+    coding_agent_factory=self._create_coding_agent_factory(),  # Per-call factory for LLM agents
+    systemic_analysis_service=self._resolved.get("systemic_analysis_service"),  # For failure analysis
+    environment_repair_service=self._resolved.get("environment_repair_service"),  # For env rebuild
+    invocation_defaults_resolver=self._create_invocation_defaults_resolver(),  # Per-workflow-step config
+    checkpoint_store=self._resolved.get("checkpoint_store"),  # Phase 1 fix: wired here (non-None)
 )
 ```
+The `checkpoint_store` is resolved first (step 6, line 944) before repair_cycle is resolved (step 10, line 967).
 
 **Key dependencies**:
 - **checkpoint_store**: `IRepairCycleCheckpointStore` instance (in-memory or persistent). Phase 1 fix wired this as non-None during Phase 2; previously was missing, causing `AttributeError` on checkpoint save.
@@ -67,9 +69,11 @@ adapter = factory.create_repair_cycle(
 **Classification**: `repair_cycle` is in `NON_CRITICAL_SLOTS` (not CRITICAL_ADAPTER_SLOTS). Repair cycles are background/optional repair workflows, not on the critical path of work-item creation or execution. Promotion to CRITICAL_ADAPTER_SLOTS is a future decision (see Issue #940 Phase 3).
 
 **Validation outcome** (Issue #940 Phase 2):
-- Test suite `test_repair_cycle_bootstrap_validation.py` runs repair-cycle scenarios using the bootstrap-resolved adapter (not mock)
-- Scenarios confirm: checkpoint_store is wired (non-None), dependencies are injected correctly, and end-to-end execution succeeds
-- `MockRepairCycleAdapter` comparison: production adapter handles full repair workflows with failure analysis and systemic fixes; mock adapter used only in simulation with fast deterministic time
+Tests in `test_repair_cycle_bootstrap_resolution.py` verify:
+- `test_adapter_resolver_resolves_production_repair_cycle()`: Confirms AdapterResolver.resolve_repair_cycle() with `repair_cycle="production"` returns a ProductionRepairCycleAdapter (not mock) and verifies checkpoint_store is wired (non-None).
+- `test_resolved_repair_cycle_adapter_executes_scenario()`: Confirms the resolver-created adapter can execute a repair-cycle scenario end-to-end with mocked coding agent, verifying checkpoint_store remains accessible after execute().
+- `test_repair_cycle_is_non_critical_slot()`: Confirms repair_cycle is in NON_CRITICAL_SLOTS (background workflows, not critical path).
+- The Phase 1 fix (checkpoint_store wiring) is validated via the resolver's cached resolution (`self._resolved.get("checkpoint_store")`) before passing to the adapter.
 
 ### Phase 4c — `ICodingAgent` resolution (DEF-015 D3/D4)
 
