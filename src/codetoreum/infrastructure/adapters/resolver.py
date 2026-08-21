@@ -664,8 +664,19 @@ class AdapterResolver:
                 container_adapter=container_adapter,
             )
 
-        systemic_analysis_service = self._resolved.get("systemic_analysis_service")
-        environment_repair_service = self._resolved.get("environment_repair_service")
+        # Production branch requires these dependencies; hard key access catches ordering bugs
+        # at bootstrap time instead of silent None propagation at runtime
+        try:
+            systemic_analysis_service = self._resolved["systemic_analysis_service"]
+            environment_repair_service = self._resolved["environment_repair_service"]
+            checkpoint_store = self._resolved["checkpoint_store"]
+        except KeyError as e:
+            raise AdapterConfigurationError(
+                [
+                    f"repair_cycle='production' requires {e.args[0]} to be resolved first; "
+                    f"ensure resolve_all() dependency ordering is correct."
+                ]
+            ) from e
 
         return self._factory.create_repair_cycle(
             adapter_name=self._config.repair_cycle,
@@ -673,7 +684,7 @@ class AdapterResolver:
             systemic_analysis_service=systemic_analysis_service,
             environment_repair_service=environment_repair_service,
             invocation_defaults_resolver=self._create_invocation_defaults_resolver(),
-            checkpoint_store=self._resolved.get("checkpoint_store"),
+            checkpoint_store=checkpoint_store,
         )
 
     def resolve_code_review(self) -> ICodeReviewService:

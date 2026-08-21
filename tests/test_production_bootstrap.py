@@ -681,6 +681,60 @@ async def test_repair_cycle_resolver_production_promotion() -> None:
     assert result.checkpoint_store is not None
 
 
+async def test_repair_cycle_production_missing_dependencies() -> None:
+    """Verify that resolve_repair_cycle() raises AdapterConfigurationError when production dependencies are missing.
+
+    This test validates that hard key access for production repair_cycle dependencies catches
+    ordering bugs at bootstrap time instead of silently passing None to the adapter.
+    """
+    from unittest.mock import MagicMock
+
+    from codetoreum.infrastructure.adapters.resolver import (
+        AdapterConfigurationError,
+        AdapterDependencies,
+        AdapterResolver,
+    )
+    from codetoreum.infrastructure.simulation.simulation_config import AdapterSelectionConfig
+
+    # Create config with repair_cycle="production"
+    config = AdapterSelectionConfig(repair_cycle="production")
+
+    # Create minimal mock dependencies
+    mock_event_bus = MagicMock()
+    mock_factory = MagicMock()
+
+    # Create a mock dependencies object with required attributes
+    mock_deps = MagicMock(spec=AdapterDependencies)
+    mock_deps.event_bus = mock_event_bus
+    mock_deps.failed_event_store = MagicMock()
+    mock_deps.engine = MagicMock()
+
+    # Create the resolver
+    resolver = AdapterResolver(
+        adapter_config=config,
+        factory=mock_factory,
+        dependencies=mock_deps,
+    )
+
+    # Set up resolver's internal state with MISSING dependencies (not in _resolved dict)
+    resolver._factory = mock_factory
+    resolver._resolved = {
+        "event_emitter": MagicMock(),
+        # Missing: checkpoint_store, systemic_analysis_service, environment_repair_service
+    }
+
+    # Attempt to resolve repair_cycle should raise AdapterConfigurationError
+    import pytest
+    with pytest.raises(AdapterConfigurationError) as exc_info:
+        resolver.resolve_repair_cycle()
+
+    # Verify error message mentions the missing dependency and proper dependency ordering
+    error_msg = str(exc_info.value)
+    assert "repair_cycle='production' requires" in error_msg
+    assert "to be resolved first" in error_msg
+    assert "resolve_all() dependency ordering" in error_msg
+
+
 def test_repair_cycle_in_production_adapter_selection_config() -> None:
     """Verify that the default ProductionApplicationBootstrap config sets repair_cycle='production'."""
     from codetoreum.infrastructure.bootstrap.production_bootstrap import ProductionApplicationBootstrap
