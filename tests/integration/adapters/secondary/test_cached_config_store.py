@@ -10,6 +10,7 @@ with Redis caching, providing:
 
 import asyncio
 from datetime import UTC, datetime
+from types import MappingProxyType
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -101,16 +102,16 @@ def sample_project_config():
         name="test-project",
         github_org="org",
         github_repo="repo",
-        tech_stacks={"lang": "python"},
-        pipelines=[],
-        testing={"framework": "pytest"},
-        environment_variables={"KEY": "value"},
-        mounted_commands={},
-        mounted_subagents={},
+        tech_stacks=MappingProxyType({"lang": "python"}),
+        pipelines=(),
+        testing=MappingProxyType({"framework": "pytest"}),
+        environment_variables=MappingProxyType({"KEY": "value"}),
+        mounted_commands=MappingProxyType({}),
+        mounted_subagents=MappingProxyType({}),
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
         version=1,
-        metadata={"type": "test"},
+        metadata=MappingProxyType({"type": "test"}),
     )
 
 
@@ -439,6 +440,13 @@ async def test_list_projects_bypasses_cache(cached_store, mock_storage):
             version=1,
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),
+            tech_stacks=MappingProxyType({}),
+            pipelines=(),
+            testing=MappingProxyType({}),
+            environment_variables=MappingProxyType({}),
+            mounted_commands=MappingProxyType({}),
+            mounted_subagents=MappingProxyType({}),
+            metadata=MappingProxyType({}),
         )
         for i in range(3)
     ]
