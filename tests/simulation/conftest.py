@@ -442,6 +442,8 @@ async def simulation_seeder(
     """
     from codetoreum.infrastructure.simulation.seeding import SimulationDataSeeder
 
+    if not simulation_bootstrap.adapters:
+        raise RuntimeError("Bootstrap adapters not initialized")
     adapters = simulation_bootstrap.adapters
     seeder = SimulationDataSeeder(
         simulation_bootstrap,

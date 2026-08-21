@@ -8,12 +8,12 @@ import json
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
+from types import MappingProxyType
 
 import pytest
 
 from codetoreum.adapters.secondary.file_backed_pipeline_queue import FileBackedPipelineQueue
 from tests.unit.ports.output.test_pipeline_queue_contract import TestPipelineQueueContract
-from types import MappingProxyType
 
 
 class TestFileBackedPipelineQueue(TestPipelineQueueContract):

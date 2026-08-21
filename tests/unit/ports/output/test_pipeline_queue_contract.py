@@ -7,11 +7,11 @@ to test via create_queue().
 
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime
+from types import MappingProxyType
 
 import pytest
 
 from codetoreum.ports.output.pipeline_queue import IPipelineQueue, QueueEntry
-from types import MappingProxyType
 
 
 class TestPipelineQueueContract(ABC):

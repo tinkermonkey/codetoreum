@@ -41,7 +41,7 @@ class TestPRReviewOutcome:
         assert str(outcome) == "PRReviewOutcome.APPROVED"
         # But the value is the lowercase snake_case
         # Cast back to Enum to access .value
-        assert cast(PRReviewOutcome, outcome).value == "approved"
+        assert cast("PRReviewOutcome", outcome).value == "approved"
 
 
 class TestPRReviewStatus:

@@ -9,6 +9,7 @@ Tests the Redis-backed pipeline queue adapter, including:
 """
 
 from datetime import UTC, datetime
+from types import MappingProxyType
 from unittest.mock import AsyncMock
 
 import pytest
@@ -17,7 +18,6 @@ from codetoreum.adapters.secondary.redis_pipeline_queue import RedisPipelineQueu
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.ports.output.pipeline_queue import IPipelineQueue, QueueEntry
 from tests.unit.ports.output.test_pipeline_queue_contract import TestPipelineQueueContract
-from types import MappingProxyType
 
 
 class MockRedis:
