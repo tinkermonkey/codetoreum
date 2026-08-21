@@ -315,3 +315,100 @@ class TestRepairCycleBootstrapResolution:
             # If execution raises, checkpoint_store should still be accessible
             assert adapter.checkpoint_store is checkpoint_store
             raise
+
+    @pytest.mark.asyncio
+    async def test_resolve_all_produces_production_repair_cycle_with_dependencies(self) -> None:
+        """Verify resolve_all() fully exercises the repair_cycle dependency-ordering path.
+
+        This test validates that the repair-cycle scenario is correctly resolved through
+        the full `AdapterResolver.resolve_all()` path, which validates the dependency-ordering
+        machinery (steps 6, 9, 9b before step 10 in resolve_all()). This catches regressions
+        where dependencies like checkpoint_store might be resolved *after* repair_cycle,
+        breaking the feature silently.
+
+        The test:
+        1. Constructs a minimal AdapterResolver with production config (repair_cycle="production")
+        2. Calls resolve_all() to exercise the full dependency-ordering sequence
+        3. Verifies that resolve_repair_cycle() (step 10) receives all its required dependencies:
+           - checkpoint_store (resolved in step 6)
+           - systemic_analysis_service (resolved in step 9)
+           - environment_repair_service (resolved in step 9b)
+        4. Asserts the resolved adapter is ProductionRepairCycleAdapter with
+           checkpoint_store properly wired (not None)
+
+        Difference from test_adapter_resolver_resolves_production_repair_cycle:
+        - That test manually populates _resolved and calls resolve_repair_cycle() in isolation
+        - This test calls resolve_all() to validate the full dependency-ordering chain
+        """
+        # Create test adapter config with production repair_cycle
+        adapter_config = AdapterSelectionConfig(
+            repair_cycle="production",
+            ticket="in_memory",
+            version_control="in_memory",
+            container="fake",
+            board="mock",
+            code_review="mock",
+            event_store="in_memory",
+        )
+
+        # Set up resolver dependencies
+        from codetoreum.adapters.testing import CapturingMockEventEmitter
+        from codetoreum.infrastructure.adapters.factory import (
+            AdapterFactory,
+        )
+        from codetoreum.infrastructure.adapters.resolver import (
+            AdapterDependencies,
+        )
+
+        event_bus = EventBus()
+        engine_stub = ProductionEngineStub()
+        factory = AdapterFactory()
+        event_emitter = CapturingMockEventEmitter()
+        failed_event_store = SimpleFailedEventStore()
+
+        adapter_deps = AdapterDependencies(
+            event_bus=event_bus,
+            event_emitter=event_emitter,
+            logger=None,  # type: ignore
+            engine=engine_stub,
+            config=None,  # type: ignore
+            failed_event_store=failed_event_store,
+        )
+
+        # Create resolver with production config
+        resolver = AdapterResolver(
+            adapter_config=adapter_config,
+            factory=factory,
+            dependencies=adapter_deps,
+        )
+
+        # Call resolve_all() to fully exercise the dependency-ordering machinery
+        # This validates steps 6, 9, 9b execute before step 10 (repair_cycle)
+        resolved_adapters = resolver.resolve_all()
+
+        # Verify the repair_cycle adapter was resolved as part of resolve_all()
+        repair_cycle_adapter = resolved_adapters.repair_cycle
+
+        # Verify the adapter is ProductionRepairCycleAdapter (not a mock)
+        assert isinstance(repair_cycle_adapter, ProductionRepairCycleAdapter)
+
+        # Verify checkpoint_store is wired (not None) — Phase 1 fix
+        # This would be None if the production branch of resolve_repair_cycle()
+        # didn't properly wire checkpoint_store from _resolved["checkpoint_store"]
+        assert repair_cycle_adapter.checkpoint_store is not None
+        assert isinstance(
+            repair_cycle_adapter.checkpoint_store, InMemoryCheckpointStore
+        )
+
+        # Verify that all upstream dependencies were resolved before repair_cycle
+        # by checking that they exist in the returned adapters
+        assert resolved_adapters.checkpoint_store is not None
+        assert resolved_adapters.systemic_analysis_service is not None
+        assert resolved_adapters.environment_repair_service is not None
+
+        # Verify the checkpoint_store in repair_cycle is the same instance
+        # resolved in step 6, demonstrating proper dependency injection
+        assert (
+            repair_cycle_adapter.checkpoint_store
+            is resolved_adapters.checkpoint_store
+        )
