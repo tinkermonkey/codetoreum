@@ -7,9 +7,12 @@ Implements ICIPipelineService interface for GitHub, supporting:
 - Monitoring state lifecycle management
 """
 
+import asyncio
 import logging
+import os
 from collections.abc import Callable
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from codetoreum.adapters.secondary.github_ticket_adapter import GitHubTicketAdapter
@@ -342,10 +345,12 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
             raise ExternalServiceError(service="GitHub", message=f"Failed to query PR CI status: {e}") from e
 
     async def run_ci_checks(self, project_id: str, working_directory: str, timeout_seconds: int = 600) -> CIRunResult:
-        """Execute CI checks locally in a working directory.
+        """Execute CI checks via the open PR for the current branch.
 
-        This method is not yet implemented. Use get_pr_ci_status to query CI status
-        from GitHub.
+        Resolves the open PR for the branch checked out at working_directory,
+        then queries GitHub for the PR's CI status and returns it as a CIRunResult.
+        Pending/in-progress checks return a CIRunResult with passed=False rather than
+        raising an exception.
 
         Args:
             project_id: Project being checked
@@ -356,10 +361,215 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
             CIRunResult: Summary of check results with failures and warnings
 
         Raises:
-            NotImplementedError: Feature not yet implemented
+            ValidationError: If working_directory is not a git repo or git is unavailable
+            ResourceNotFoundError: If no open PR exists for the branch
+            ExternalServiceError: If GitHub API call fails
         """
-        msg = "Local CI execution is not yet implemented. Use get_pr_ci_status to query CI status from GitHub."
-        raise NotImplementedError(msg)
+        try:
+            # Resolve the open PR for the branch checked out at working_directory
+            pr_number = await self._resolve_pr_for_branch(working_directory)
+
+            # Query GitHub for the PR's CI status
+            ci_status = await self.get_pr_ci_status(pr_number, project_id, timeout_seconds)
+
+            # Convert CIPipelineStatus to CIRunResult
+            run_result = self._convert_ci_status_to_run_result(ci_status)
+
+            return run_result
+
+        except (ValidationError, ResourceNotFoundError, ExternalServiceError):
+            raise
+        except Exception as e:
+            msg = f"Failed to run CI checks: {e}"
+            raise ExternalServiceError(service="GitHub", message=msg) from e
+
+    async def _resolve_pr_for_branch(self, working_directory: str) -> str:
+        """Resolve the open PR for the branch checked out at working_directory.
+
+        Executes a local, credential-free `git rev-parse --abbrev-ref HEAD` to get
+        the current branch name, then queries GitHub GraphQL for the open PR with
+        that branch name (headRefName). Returns the PR number or raises an error.
+
+        Args:
+            working_directory: Directory containing the git repository
+
+        Returns:
+            PR number as a string (e.g., "123")
+
+        Raises:
+            ValidationError: If working_directory is not a git repo or git is unavailable
+            ResourceNotFoundError: If no open PR exists for the branch
+            ExternalServiceError: If GitHub API call fails
+        """
+        # Validate working_directory exists
+        work_path = Path(working_directory)
+        if not work_path.is_dir():
+            msg = f"working_directory does not exist: {working_directory}"
+            raise ValidationError(msg)
+
+        # Get current branch name via git rev-parse
+        try:
+            process = await asyncio.create_subprocess_exec(
+                "git",
+                "rev-parse",
+                "--abbrev-ref",
+                "HEAD",
+                cwd=working_directory,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=10.0)
+
+            if process.returncode != 0:
+                error_msg = stderr.decode("utf-8", errors="replace").strip()
+                if "not a git repository" in error_msg.lower():
+                    msg = f"{working_directory} is not a git repository"
+                    raise ValidationError(msg)
+                msg = f"Failed to get current branch: {error_msg}"
+                raise ValidationError(msg)
+
+            branch_name = stdout.decode("utf-8", errors="replace").strip()
+            if not branch_name:
+                msg = "Failed to determine current branch name"
+                raise ValidationError(msg)
+
+        except asyncio.TimeoutError:
+            msg = "git rev-parse command timed out"
+            raise ValidationError(msg)
+        except FileNotFoundError:
+            msg = "git is not available or not in PATH"
+            raise ValidationError(msg)
+
+        # Query GitHub for open PRs with this branch name
+        try:
+            owner, repo = await self._get_owner_repo()
+
+            query = """
+            query GetPullRequestByBranch($owner: String!, $repo: String!, $headRefName: String!) {
+              repository(owner: $owner, name: $repo) {
+                pullRequests(headRefName: $headRefName, states: OPEN, first: 1, orderBy: {field: UPDATED_AT, direction: DESC}) {
+                  nodes {
+                    number
+                  }
+                }
+              }
+            }
+            """
+
+            result = await self._graphql.execute(
+                query,
+                {
+                    "owner": owner,
+                    "repo": repo,
+                    "headRefName": branch_name,
+                },
+            )
+
+            pr_nodes = result.get("repository", {}).get("pullRequests", {}).get("nodes", [])
+
+            if not pr_nodes:
+                msg = f"No open PR found for branch '{branch_name}'"
+                raise ResourceNotFoundError("PullRequest", branch_name)
+
+            # Return the PR number of the first (most recently updated) PR
+            pr_number = str(pr_nodes[0].get("number", ""))
+            if not pr_number:
+                msg = f"PR node missing number field for branch '{branch_name}'"
+                raise ExternalServiceError(service="GitHub", message=msg)
+
+            logger.info(f"Resolved branch '{branch_name}' to PR #{pr_number}")
+            return pr_number
+
+        except (ValidationError, ResourceNotFoundError, ExternalServiceError):
+            raise
+        except Exception as e:
+            msg = f"Failed to query GitHub for PR: {e}"
+            raise ExternalServiceError(service="GitHub", message=msg) from e
+
+    def _convert_ci_status_to_run_result(self, ci_status: CIPipelineStatus) -> CIRunResult:
+        """Convert CIPipelineStatus to CIRunResult.
+
+        Maps the status and check results from a queried PR CI status into the
+        CIRunResult format. Pending/in-progress checks are converted to FAILED status
+        to satisfy the contract that passed=False requires failed > 0. This represents
+        "checks that haven't passed yet" from the perspective of run_ci_checks().
+
+        Args:
+            ci_status: CI pipeline status from GitHub
+
+        Returns:
+            CIRunResult with converted status and check results
+
+        Raises:
+            ExternalServiceError: If conversion fails due to invalid data
+        """
+        try:
+            # Determine overall passed status: True if all checks are PASSED/SKIPPED and none are PENDING/RUNNING
+            # SKIPPED is treated as passing (no failures), PENDING/RUNNING as not yet passed
+            passed = (
+                ci_status.failed == 0
+                and ci_status.pending == 0
+                and ci_status.status in (CICheckStatus.PASSED, CICheckStatus.SKIPPED)
+            )
+
+            # Convert check results: PENDING/RUNNING checks become FAILED for contract compliance
+            # This represents "not yet passed" from run_ci_checks() perspective
+            converted_checks: list[CICheckResult] = []
+            failures: list[str] = []
+
+            for check in ci_status.check_results:
+                if check.status == CICheckStatus.FAILED:
+                    converted_checks.append(check)
+                    failure_desc = f"{check.name}: {check.conclusion}" if check.conclusion else check.name
+                    failures.append(failure_desc)
+                elif check.status in (CICheckStatus.PENDING, CICheckStatus.RUNNING):
+                    # Convert pending/running to FAILED to satisfy contract
+                    converted_check = CICheckResult(
+                        name=check.name,
+                        status=CICheckStatus.FAILED,
+                        conclusion="pending/in-progress",
+                        url=check.url,
+                    )
+                    converted_checks.append(converted_check)
+                    failure_desc = f"{check.name}: pending/in-progress"
+                    failures.append(failure_desc)
+                else:
+                    # PASSED and SKIPPED checks pass through unchanged
+                    converted_checks.append(check)
+
+            # Count FAILED checks in converted results (includes converted pending)
+            effective_failed_count = sum(
+                1 for c in converted_checks if c.status == CICheckStatus.FAILED
+            )
+
+            # Build summary output
+            summary_parts = [
+                f"CI Pipeline Status: {ci_status.status.value}",
+                f"Total checks: {ci_status.total_checks}",
+                f"Passed: {ci_status.passed}",
+                f"Failed: {ci_status.failed}",
+                f"Pending/Running: {ci_status.pending}",
+            ]
+            if ci_status.pipeline_url:
+                summary_parts.append(f"Pipeline URL: {ci_status.pipeline_url}")
+
+            output = "\n".join(summary_parts)
+
+            # Create and return CIRunResult
+            run_result = CIRunResult(
+                passed=passed,
+                failed=effective_failed_count,
+                check_results=tuple(converted_checks),
+                failures=tuple(failures),
+                warnings=(),
+                output=output,
+            )
+
+            return run_result
+
+        except Exception as e:
+            msg = f"Failed to convert CI status to run result: {e}"
+            raise ExternalServiceError(service="GitHub", message=msg) from e
 
     # ===== Helper Methods =====
 

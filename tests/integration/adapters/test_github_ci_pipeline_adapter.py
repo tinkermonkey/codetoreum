@@ -27,7 +27,11 @@ from codetoreum.ports.exceptions import (
     ResourceNotFoundError,
     ValidationError,
 )
-from codetoreum.ports.output.ci_pipeline_service import CICheckStatus
+from codetoreum.ports.output.ci_pipeline_service import (
+    CICheckResult,
+    CICheckStatus,
+    CIPipelineStatus,
+)
 from codetoreum.ports.output.monitoring import MonitoringConfig, MonitoringState
 
 
@@ -852,3 +856,331 @@ class TestGetPRCIStatus:
             or record.__dict__.get("error_id") == "ERR_EVENT_PUBLICATION_ERROR"
             for record in caplog.records
         )
+
+
+class TestRunCIChecks:
+    """Test run_ci_checks method and conversion utilities."""
+
+    async def test_run_ci_checks_happy_path(self, adapter, mock_graphql_client, tmp_path):
+        """Test happy path: branch with open PR → CI status → CIRunResult."""
+        import subprocess
+
+        # Initialize a real git repo
+        repo_dir = tmp_path / "repo"
+        repo_dir.mkdir()
+        subprocess.run(["git", "init"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=repo_dir, check=True, capture_output=True)
+
+        # Create initial commit on main so we can create a feature branch
+        (repo_dir / "README.md").write_text("# Test")
+        subprocess.run(["git", "add", "README.md"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=repo_dir, check=True, capture_output=True)
+
+        # Create and checkout a feature branch
+        subprocess.run(["git", "checkout", "-b", "feature-branch"], cwd=repo_dir, check=True, capture_output=True)
+
+        # Mock GraphQL responses
+        # First query: resolve PR by branch name
+        mock_graphql_client.responses["GetPullRequestByBranch"] = {
+            "repository": {
+                "pullRequests": {
+                    "nodes": [
+                        {
+                            "number": 456,
+                        }
+                    ]
+                }
+            }
+        }
+
+        # Second query: get PR CI status
+        mock_graphql_client.responses["GetPullRequestCheckRuns"] = {
+            "repository": {
+                "pullRequest": {
+                    "number": 456,
+                    "commits": {
+                        "nodes": [
+                            {
+                                "commit": {
+                                    "oid": "def456",
+                                    "checkSuites": {
+                                        "nodes": [
+                                            {
+                                                "status": "COMPLETED",
+                                                "conclusion": "SUCCESS",
+                                                "checkRuns": {
+                                                    "nodes": [
+                                                        {
+                                                            "name": "unit-tests",
+                                                            "status": "COMPLETED",
+                                                            "conclusion": "SUCCESS",
+                                                            "detailsUrl": "https://github.com/tests",
+                                                        }
+                                                    ]
+                                                },
+                                            }
+                                        ]
+                                    },
+                                }
+                            }
+                        ]
+                    },
+                }
+            }
+        }
+
+        async def mock_execute(query: str, variables: dict | None = None) -> dict:
+            """Route to appropriate response."""
+            if "GetPullRequestByBranch" in query:
+                return mock_graphql_client.responses.get("GetPullRequestByBranch", {})
+            elif "GetPullRequestCheckRuns" in query:
+                return mock_graphql_client.responses.get("GetPullRequestCheckRuns", {})
+            return {}
+
+        mock_graphql_client.execute = mock_execute
+
+        result = await adapter.run_ci_checks("proj-1", str(repo_dir), timeout_seconds=600)
+
+        assert result.passed is True
+        assert result.failed == 0
+        assert len(result.check_results) == 1
+        assert result.check_results[0].name == "unit-tests"
+        assert result.check_results[0].status == CICheckStatus.PASSED
+
+    async def test_run_ci_checks_no_pr_for_branch(self, adapter, mock_graphql_client, tmp_path):
+        """Test ResourceNotFoundError when no open PR exists for branch."""
+        import subprocess
+
+        repo_dir = tmp_path / "repo"
+        repo_dir.mkdir()
+        subprocess.run(["git", "init"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=repo_dir, check=True, capture_output=True)
+
+        # Create initial commit
+        (repo_dir / "README.md").write_text("# Test")
+        subprocess.run(["git", "add", "README.md"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=repo_dir, check=True, capture_output=True)
+
+        subprocess.run(["git", "checkout", "-b", "orphan-branch"], cwd=repo_dir, check=True, capture_output=True)
+
+        # Mock response: no PR found
+        async def mock_execute(query: str, variables: dict | None = None) -> dict:
+            return {
+                "repository": {
+                    "pullRequests": {
+                        "nodes": []  # No PRs found
+                    }
+                }
+            }
+
+        mock_graphql_client.execute = mock_execute
+
+        with pytest.raises(ResourceNotFoundError) as exc_info:
+            await adapter.run_ci_checks("proj-1", str(repo_dir))
+
+        assert exc_info.value.resource_type == "PullRequest"
+
+    async def test_run_ci_checks_not_a_git_repo(self, adapter, tmp_path):
+        """Test ValidationError when working_directory is not a git repo."""
+        non_repo_dir = tmp_path / "not-repo"
+        non_repo_dir.mkdir()
+
+        with pytest.raises(ValidationError) as exc_info:
+            await adapter.run_ci_checks("proj-1", str(non_repo_dir))
+
+        assert "not a git repository" in str(exc_info.value)
+
+    async def test_run_ci_checks_directory_not_exist(self, adapter):
+        """Test ValidationError when working_directory doesn't exist."""
+        with pytest.raises(ValidationError) as exc_info:
+            await adapter.run_ci_checks("proj-1", "/nonexistent/path/to/repo")
+
+        assert "does not exist" in str(exc_info.value)
+
+    async def test_run_ci_checks_propagates_ci_status_exception(self, adapter, mock_graphql_client, tmp_path):
+        """Test that exceptions from get_pr_ci_status propagate unchanged."""
+        import subprocess
+
+        repo_dir = tmp_path / "repo"
+        repo_dir.mkdir()
+        subprocess.run(["git", "init"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=repo_dir, check=True, capture_output=True)
+
+        # Create initial commit
+        (repo_dir / "README.md").write_text("# Test")
+        subprocess.run(["git", "add", "README.md"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=repo_dir, check=True, capture_output=True)
+
+        subprocess.run(["git", "checkout", "-b", "test-branch"], cwd=repo_dir, check=True, capture_output=True)
+
+        # First call succeeds (resolve PR)
+        async def mock_execute(query: str, variables: dict | None = None) -> dict:
+            if "GetPullRequestByBranch" in query:
+                return {
+                    "repository": {
+                        "pullRequests": {
+                            "nodes": [{"number": 789}]
+                        }
+                    }
+                }
+            # Second call raises
+            raise ExternalServiceError(service="GitHub", message="API unavailable")
+
+        mock_graphql_client.execute = mock_execute
+
+        with pytest.raises(ExternalServiceError) as exc_info:
+            await adapter.run_ci_checks("proj-1", str(repo_dir))
+
+        assert exc_info.value.service == "GitHub"
+
+
+class TestConvertCIStatusToRunResult:
+    """Test CIPipelineStatus to CIRunResult conversion."""
+
+    def test_convert_all_passed(self, adapter):
+        """Test conversion when all checks passed."""
+        ci_status = CIPipelineStatus(
+            pr_id="123",
+            status=CICheckStatus.PASSED,
+            check_results=(
+                CICheckResult(name="test-1", status=CICheckStatus.PASSED, conclusion="success"),
+                CICheckResult(name="test-2", status=CICheckStatus.PASSED, conclusion="success"),
+            ),
+            total_checks=2,
+            passed=2,
+            failed=0,
+            pending=0,
+            pipeline_url="https://github.com/runs/123",
+        )
+
+        result = adapter._convert_ci_status_to_run_result(ci_status)
+
+        assert result.passed is True
+        assert result.failed == 0
+        assert len(result.failures) == 0
+        assert len(result.check_results) == 2
+        assert result.warnings == ()
+        assert "Pipeline Status: passed" in result.output
+        assert "Total checks: 2" in result.output
+        assert "Passed: 2" in result.output
+
+    def test_convert_mixed_pass_fail(self, adapter):
+        """Test conversion with mixed pass/fail results."""
+        ci_status = CIPipelineStatus(
+            pr_id="123",
+            status=CICheckStatus.FAILED,
+            check_results=(
+                CICheckResult(name="test-1", status=CICheckStatus.PASSED, conclusion="success"),
+                CICheckResult(name="test-2", status=CICheckStatus.FAILED, conclusion="failure"),
+                CICheckResult(name="test-3", status=CICheckStatus.FAILED, conclusion="timeout"),
+            ),
+            total_checks=3,
+            passed=1,
+            failed=2,
+            pending=0,
+            pipeline_url="",
+        )
+
+        result = adapter._convert_ci_status_to_run_result(ci_status)
+
+        assert result.passed is False
+        assert result.failed == 2
+        assert len(result.failures) == 2
+        assert "test-2: failure" in result.failures
+        assert "test-3: timeout" in result.failures
+        assert "Failed: 2" in result.output
+
+    def test_convert_pending_checks(self, adapter):
+        """Test conversion with pending checks treats as not passed."""
+        ci_status = CIPipelineStatus(
+            pr_id="123",
+            status=CICheckStatus.PENDING,
+            check_results=(
+                CICheckResult(name="test-1", status=CICheckStatus.PASSED, conclusion="success"),
+                CICheckResult(name="test-2", status=CICheckStatus.PENDING, conclusion=None),
+            ),
+            total_checks=2,
+            passed=1,
+            failed=0,
+            pending=1,
+            pipeline_url="",
+        )
+
+        result = adapter._convert_ci_status_to_run_result(ci_status)
+
+        assert result.passed is False
+        # Pending count added to failed count to satisfy contract (passed=False requires failed > 0)
+        assert result.failed == 1
+        # Pending checks are included in failures list to represent "not yet passed"
+        assert len(result.failures) == 1
+        assert "test-2" in result.failures[0]
+        assert "pending/in-progress" in result.failures[0]
+        assert "Pending/Running: 1" in result.output
+
+    def test_convert_empty_checks(self, adapter):
+        """Test conversion with no checks (skipped status) - treated as passed since nothing to check."""
+        ci_status = CIPipelineStatus(
+            pr_id="123",
+            status=CICheckStatus.SKIPPED,
+            check_results=(),
+            total_checks=0,
+            passed=0,
+            failed=0,
+            pending=0,
+            pipeline_url="",
+        )
+
+        result = adapter._convert_ci_status_to_run_result(ci_status)
+
+        # With no checks at all, it's not failed (nothing failed), so passed=True
+        # This matches the "no failing conditions" semantic
+        assert result.passed is True
+        assert result.failed == 0
+        assert len(result.check_results) == 0
+        assert len(result.failures) == 0
+
+    def test_convert_running_checks(self, adapter):
+        """Test conversion with running checks treats as not passed."""
+        ci_status = CIPipelineStatus(
+            pr_id="123",
+            status=CICheckStatus.PENDING,
+            check_results=(CICheckResult(name="test-1", status=CICheckStatus.RUNNING, conclusion=None),),
+            total_checks=1,
+            passed=0,
+            failed=0,
+            pending=1,
+            pipeline_url="https://github.com/runs/456",
+        )
+
+        result = adapter._convert_ci_status_to_run_result(ci_status)
+
+        assert result.passed is False
+        # Running checks are converted to FAILED for contract compliance (passed=False requires failed > 0)
+        assert result.failed == 1
+        assert len(result.failures) == 1
+        assert "test-1" in result.failures[0]
+        assert "pending/in-progress" in result.failures[0]
+        assert "Pipeline URL: https://github.com/runs/456" in result.output
+
+    def test_convert_failure_without_conclusion(self, adapter):
+        """Test conversion handles failed checks without conclusion gracefully."""
+        ci_status = CIPipelineStatus(
+            pr_id="123",
+            status=CICheckStatus.FAILED,
+            check_results=(CICheckResult(name="mysterious-check", status=CICheckStatus.FAILED, conclusion=None),),
+            total_checks=1,
+            passed=0,
+            failed=1,
+            pending=0,
+            pipeline_url="",
+        )
+
+        result = adapter._convert_ci_status_to_run_result(ci_status)
+
+        assert result.passed is False
+        assert result.failed == 1
+        assert len(result.failures) == 1
+        assert "mysterious-check" in result.failures[0]
