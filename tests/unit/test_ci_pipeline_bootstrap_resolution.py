@@ -9,8 +9,9 @@ import pytest
 
 from codetoreum.adapters.secondary.github_ci_pipeline_adapter import GitHubCIPipelineAdapter
 from codetoreum.adapters.secondary.github_ticket_adapter import GitHubTicketAdapter
+from codetoreum.adapters.testing import CapturingMockEventEmitter
 from codetoreum.adapters.testing.mock_ci_pipeline_adapter import MockCIPipelineAdapter
-from codetoreum.infrastructure.adapters.resolver import AdapterResolver, AdapterDependencies
+from codetoreum.infrastructure.adapters.resolver import AdapterDependencies, AdapterResolver
 from codetoreum.infrastructure.bootstrap.production_engine_stub import (
     ProductionEngineStub,
 )
@@ -23,7 +24,6 @@ from codetoreum.ports.output.failed_event_store import (
     FailureReason,
     IFailedEventStore,
 )
-from codetoreum.adapters.testing import CapturingMockEventEmitter
 
 
 class SimpleFailedEventStore(IFailedEventStore):
