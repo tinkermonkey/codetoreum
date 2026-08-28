@@ -9,6 +9,7 @@ Tests verify:
 - Proper encapsulation of ticket adapter configuration
 """
 
+import shutil
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -872,17 +873,17 @@ class TestRunCIChecks:
         # Initialize a real git repo
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
-        subprocess.run(["git", "init"], cwd=repo_dir, check=True, capture_output=True)
-        subprocess.run(["git", "config", "user.name", "Test"], cwd=repo_dir, check=True, capture_output=True)
-        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run([shutil.which("git"), "init"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run([shutil.which("git"), "config", "user.name", "Test"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run([shutil.which("git"), "config", "user.email", "test@test.com"], cwd=repo_dir, check=True, capture_output=True)
 
         # Create initial commit on main so we can create a feature branch
         (repo_dir / "README.md").write_text("# Test")
-        subprocess.run(["git", "add", "README.md"], cwd=repo_dir, check=True, capture_output=True)
-        subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run([shutil.which("git"), "add", "README.md"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run([shutil.which("git"), "commit", "-m", "Initial commit"], cwd=repo_dir, check=True, capture_output=True)
 
         # Create and checkout a feature branch
-        subprocess.run(["git", "checkout", "-b", "feature-branch"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run([shutil.which("git"), "checkout", "-b", "feature-branch"], cwd=repo_dir, check=True, capture_output=True)
 
         # Mock GraphQL responses
         # First query: resolve PR by branch name
@@ -958,16 +959,16 @@ class TestRunCIChecks:
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
-        subprocess.run(["git", "init"], cwd=repo_dir, check=True, capture_output=True)
-        subprocess.run(["git", "config", "user.name", "Test"], cwd=repo_dir, check=True, capture_output=True)
-        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run([shutil.which("git"), "init"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run([shutil.which("git"), "config", "user.name", "Test"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run([shutil.which("git"), "config", "user.email", "test@test.com"], cwd=repo_dir, check=True, capture_output=True)
 
         # Create initial commit
         (repo_dir / "README.md").write_text("# Test")
-        subprocess.run(["git", "add", "README.md"], cwd=repo_dir, check=True, capture_output=True)
-        subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run([shutil.which("git"), "add", "README.md"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run([shutil.which("git"), "commit", "-m", "Initial commit"], cwd=repo_dir, check=True, capture_output=True)
 
-        subprocess.run(["git", "checkout", "-b", "orphan-branch"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run([shutil.which("git"), "checkout", "-b", "orphan-branch"], cwd=repo_dir, check=True, capture_output=True)
 
         # Mock response: no PR found
         async def mock_execute(query: str, variables: dict | None = None) -> dict:
@@ -1009,16 +1010,16 @@ class TestRunCIChecks:
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
-        subprocess.run(["git", "init"], cwd=repo_dir, check=True, capture_output=True)
-        subprocess.run(["git", "config", "user.name", "Test"], cwd=repo_dir, check=True, capture_output=True)
-        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run([shutil.which("git"), "init"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run([shutil.which("git"), "config", "user.name", "Test"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run([shutil.which("git"), "config", "user.email", "test@test.com"], cwd=repo_dir, check=True, capture_output=True)
 
         # Create initial commit
         (repo_dir / "README.md").write_text("# Test")
-        subprocess.run(["git", "add", "README.md"], cwd=repo_dir, check=True, capture_output=True)
-        subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run([shutil.which("git"), "add", "README.md"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run([shutil.which("git"), "commit", "-m", "Initial commit"], cwd=repo_dir, check=True, capture_output=True)
 
-        subprocess.run(["git", "checkout", "-b", "test-branch"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run([shutil.which("git"), "checkout", "-b", "test-branch"], cwd=repo_dir, check=True, capture_output=True)
 
         # First call succeeds (resolve PR)
         async def mock_execute(query: str, variables: dict | None = None) -> dict:
@@ -1047,17 +1048,17 @@ class TestRunCIChecks:
         # Initialize a real git repo
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
-        subprocess.run(["git", "init"], cwd=repo_dir, check=True, capture_output=True)
-        subprocess.run(["git", "config", "user.name", "Test"], cwd=repo_dir, check=True, capture_output=True)
-        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run([shutil.which("git"), "init"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run([shutil.which("git"), "config", "user.name", "Test"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run([shutil.which("git"), "config", "user.email", "test@test.com"], cwd=repo_dir, check=True, capture_output=True)
 
         # Create initial commit on main so we can create a feature branch
         (repo_dir / "README.md").write_text("# Test")
-        subprocess.run(["git", "add", "README.md"], cwd=repo_dir, check=True, capture_output=True)
-        subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run([shutil.which("git"), "add", "README.md"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run([shutil.which("git"), "commit", "-m", "Initial commit"], cwd=repo_dir, check=True, capture_output=True)
 
         # Create and checkout a feature branch
-        subprocess.run(["git", "checkout", "-b", "feature-branch"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run([shutil.which("git"), "checkout", "-b", "feature-branch"], cwd=repo_dir, check=True, capture_output=True)
 
         # Mock GraphQL responses
         async def mock_execute(query: str, variables: dict | None = None) -> dict:

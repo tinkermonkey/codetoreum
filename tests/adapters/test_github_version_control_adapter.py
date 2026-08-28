@@ -1,5 +1,6 @@
 """Tests for GitHubVersionControlAdapter."""
 
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -49,9 +50,9 @@ class TestGitHubVersionControlAdapter:
             path = Path(tmpdir)
 
             # Initialize a git repo
-            subprocess.run(["git", "init"], cwd=path, check=True, capture_output=True)  # noqa: S607
+            subprocess.run([shutil.which("git"), "init"], cwd=path, check=True, capture_output=True)
             subprocess.run(
-                ["git", "remote", "add", "origin", "https://github.com/example/repo.git"],  # noqa: S607
+                [shutil.which("git"), "remote", "add", "origin", "https://github.com/example/repo.git"],
                 cwd=path,
                 check=True,
                 capture_output=True,
@@ -74,7 +75,7 @@ class TestGitHubVersionControlAdapter:
             path = Path(tmpdir)
 
             # Initialize git repo without remote
-            subprocess.run(["git", "init"], cwd=path, check=True, capture_output=True)  # noqa: S607
+            subprocess.run([shutil.which("git"), "init"], cwd=path, check=True, capture_output=True)
 
             # Call the adapter method
             repo = await adapter.get_repository(str(path))
