@@ -349,6 +349,7 @@ def test_non_critical_adapter_slots_defined() -> None:
         "systemic_analysis",
         "environment_repair",
         "repair_cycle",
+        "ci_pipeline",
     }
 
     assert expected_non_critical == NON_CRITICAL_SLOTS
@@ -807,3 +808,147 @@ def test_repair_cycle_in_production_adapter_selection_config() -> None:
     # Verify it matches the sibling repair adapters
     assert bootstrap.config.systemic_analysis == "production"
     assert bootstrap.config.environment_repair == "production"
+
+
+def test_ci_pipeline_in_production_adapter_selection_config() -> None:
+    """Verify that the default ProductionApplicationBootstrap config sets ci_pipeline='github'."""
+    from codetoreum.infrastructure.bootstrap.production_bootstrap import ProductionApplicationBootstrap
+
+    bootstrap = ProductionApplicationBootstrap()
+
+    # Verify the config includes ci_pipeline="github"
+    assert bootstrap.config.ci_pipeline == "github", (
+        "ProductionApplicationBootstrap should set ci_pipeline='github' in default config"
+    )
+
+
+def test_ci_pipeline_in_non_critical_slots() -> None:
+    """Verify that ci_pipeline is in NON_CRITICAL_SLOTS (not on critical path)."""
+    from codetoreum.infrastructure.bootstrap.production_bootstrap import (
+        CRITICAL_ADAPTER_SLOTS,
+        NON_CRITICAL_SLOTS,
+    )
+
+    # Verify ci_pipeline is not in critical slots
+    assert "ci_pipeline" not in CRITICAL_ADAPTER_SLOTS, "ci_pipeline should not be on critical path"
+    # Verify ci_pipeline is in non-critical slots
+    assert "ci_pipeline" in NON_CRITICAL_SLOTS, "ci_pipeline should be in non-critical slots"
+
+
+@pytest.mark.asyncio
+async def test_ci_pipeline_resolver_verifies_github_adapter() -> None:
+    """Verify that AdapterResolver.resolve_all() correctly resolves GitHubCIPipelineAdapter.
+
+    This test validates Phase 2 resolution: when adapter_config.ci_pipeline="github",
+    the resolver constructs a real GitHubCIPipelineAdapter, not MockCIPipelineAdapter.
+    """
+    from codetoreum.adapters.secondary.github_ci_pipeline_adapter import GitHubCIPipelineAdapter
+    from codetoreum.adapters.testing import CapturingMockEventEmitter
+    from codetoreum.infrastructure.adapters.factory import AdapterFactory
+    from codetoreum.infrastructure.adapters.resolver import AdapterDependencies, AdapterResolver
+    from codetoreum.infrastructure.bootstrap.production_engine_stub import ProductionEngineStub
+    from codetoreum.infrastructure.event_bus import EventBus
+    from codetoreum.infrastructure.simulation.simulation_config import AdapterSelectionConfig
+    from codetoreum.ports.output.failed_event_store import IFailedEventStore, FailedEventStoreStats, FailureReason
+
+    class MinimalFailedEventStore(IFailedEventStore):
+        """Minimal test implementation of IFailedEventStore."""
+
+        async def add_failed_event(
+            self,
+            event_type: str,
+            event_data: dict,
+            failure_reason: FailureReason,
+            error_message: str,
+            metadata: dict | None = None,
+        ) -> str:
+            return "test_event_id"
+
+        def get_stats(self) -> FailedEventStoreStats:
+            return FailedEventStoreStats(
+                total_failed_events=0,
+                pending_retries=0,
+                exhausted_retries=0,
+                total_retries_attempted=0,
+                total_retries_succeeded=0,
+                total_retries_failed=0,
+            )
+
+        def list_events(
+            self,
+            failure_reason: FailureReason | None = None,
+            can_retry: bool | None = None,
+            limit: int | None = None,
+        ) -> list:
+            return []
+
+        def get_event(self, event_id: str):
+            return None
+
+        def remove_event(self, event_id: str) -> bool:
+            return False
+
+        def clear(self) -> None:
+            pass
+
+    # Create adapter config with ci_pipeline="github"
+    adapter_config = AdapterSelectionConfig(
+        board="mock",
+        ticket="in_memory",  # Use in-memory for testing (no GitHub credentials needed)
+        version_control="in_memory",
+        container="fake",
+        code_review="mock",
+        event_store="in_memory",
+        ci_pipeline="github",  # This is the key: GitHub CI adapter
+    )
+
+    # Create resolver with minimal dependencies
+    event_bus = EventBus()
+    factory = AdapterFactory()
+    engine_stub = ProductionEngineStub()
+    event_emitter = CapturingMockEventEmitter()
+    failed_event_store = MinimalFailedEventStore()
+
+    adapter_deps = AdapterDependencies(
+        event_bus=event_bus,
+        event_emitter=event_emitter,
+        logger=None,  # type: ignore
+        engine=engine_stub,
+        config=None,  # type: ignore
+        failed_event_store=failed_event_store,
+    )
+
+    resolver = AdapterResolver(
+        adapter_config=adapter_config,
+        factory=factory,
+        dependencies=adapter_deps,
+    )
+
+    # Resolve all adapters
+    adapters = resolver.resolve_all()
+
+    # Verify ci_pipeline is GitHubCIPipelineAdapter (not Mock)
+    assert adapters.ci_pipeline is not None, "ci_pipeline should be resolved"
+    assert isinstance(
+        adapters.ci_pipeline, GitHubCIPipelineAdapter
+    ), f"Expected GitHubCIPipelineAdapter, got {type(adapters.ci_pipeline).__name__}"
+
+
+def test_production_bootstrap_default_config_has_ci_pipeline_github() -> None:
+    """Verify that creating ProductionApplicationBootstrap with default config has ci_pipeline='github'.
+
+    This test validates Phase 3 acceptance criteria: that the default ProductionApplicationBootstrap
+    configuration selects the GitHub CI pipeline adapter for production.
+    """
+    bootstrap = ProductionApplicationBootstrap()
+
+    # Verify the default config has all the production settings
+    assert bootstrap.config.ci_pipeline == "github", "Default config should use GitHub CI pipeline"
+    assert bootstrap.config.repair_cycle == "production", "repair_cycle should be production"
+    assert bootstrap.config.systemic_analysis == "production", "systemic_analysis should be production"
+    assert bootstrap.config.environment_repair == "production", "environment_repair should be production"
+
+    # Verify ci_pipeline is treated consistently with other repair adapters
+    assert bootstrap.config.board == "github", "board should be github"
+    assert bootstrap.config.ticket == "github", "ticket should be github"
+    assert bootstrap.config.code_review == "github", "code_review should be github"
