@@ -938,7 +938,7 @@ class TestRunCIChecks:
             """Route to appropriate response."""
             if "GetPullRequestByBranch" in query:
                 return mock_graphql_client.responses.get("GetPullRequestByBranch", {})
-            elif "GetPullRequestCheckRuns" in query:
+            if "GetPullRequestCheckRuns" in query:
                 return mock_graphql_client.responses.get("GetPullRequestCheckRuns", {})
             return {}
 
@@ -1074,7 +1074,7 @@ class TestRunCIChecks:
                         }
                     }
                 }
-            elif "GetPullRequestCheckRuns" in query:
+            if "GetPullRequestCheckRuns" in query:
                 return {
                     "repository": {
                         "pullRequest": {

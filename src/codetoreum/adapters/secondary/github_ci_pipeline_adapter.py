@@ -467,7 +467,7 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
                 msg = "Failed to determine current branch name"
                 raise ValidationError(msg)
 
-        except asyncio.TimeoutError as e:
+        except TimeoutError as e:
             msg = "git rev-parse command timed out"
             raise ValidationError(msg) from e
         except FileNotFoundError as e:
