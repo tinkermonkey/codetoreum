@@ -21,7 +21,11 @@ from codetoreum.adapters.secondary.github_ticket_adapter import (
     GitHubConfig,
     GitHubTicketAdapter,
 )
-from codetoreum.domain.events.ci_pipeline_events import CIPipelineStatusCheckedEvent
+from codetoreum.domain.events.ci_pipeline_events import (
+    CIPipelineStatusCheckedEvent,
+    CIRunCompletedEvent,
+    CIRunStartedEvent,
+)
 from codetoreum.ports.exceptions import (
     ExternalServiceError,
     ResourceNotFoundError,
@@ -1035,6 +1039,119 @@ class TestRunCIChecks:
             await adapter.run_ci_checks("proj-1", str(repo_dir))
 
         assert exc_info.value.service == "GitHub"
+
+    async def test_run_ci_checks_emits_started_and_completed_events(self, adapter, mock_graphql_client, tmp_path):
+        """Test that run_ci_checks emits both CIRunStartedEvent and CIRunCompletedEvent."""
+        import subprocess
+
+        # Initialize a real git repo
+        repo_dir = tmp_path / "repo"
+        repo_dir.mkdir()
+        subprocess.run(["git", "init"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=repo_dir, check=True, capture_output=True)
+
+        # Create initial commit on main so we can create a feature branch
+        (repo_dir / "README.md").write_text("# Test")
+        subprocess.run(["git", "add", "README.md"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=repo_dir, check=True, capture_output=True)
+
+        # Create and checkout a feature branch
+        subprocess.run(["git", "checkout", "-b", "feature-branch"], cwd=repo_dir, check=True, capture_output=True)
+
+        # Mock GraphQL responses
+        async def mock_execute(query: str, variables: dict | None = None) -> dict:
+            """Route to appropriate response."""
+            if "GetPullRequestByBranch" in query:
+                return {
+                    "repository": {
+                        "pullRequests": {
+                            "nodes": [
+                                {
+                                    "number": 456,
+                                }
+                            ]
+                        }
+                    }
+                }
+            elif "GetPullRequestCheckRuns" in query:
+                return {
+                    "repository": {
+                        "pullRequest": {
+                            "number": 456,
+                            "commits": {
+                                "nodes": [
+                                    {
+                                        "commit": {
+                                            "oid": "def456",
+                                            "checkSuites": {
+                                                "nodes": [
+                                                    {
+                                                        "status": "COMPLETED",
+                                                        "conclusion": "SUCCESS",
+                                                        "checkRuns": {
+                                                            "nodes": [
+                                                                {
+                                                                    "name": "unit-tests",
+                                                                    "status": "COMPLETED",
+                                                                    "conclusion": "SUCCESS",
+                                                                    "detailsUrl": "https://github.com/tests",
+                                                                }
+                                                            ]
+                                                        },
+                                                    }
+                                                ]
+                                            },
+                                        }
+                                    }
+                                ]
+                            },
+                        }
+                    }
+                }
+            return {}
+
+        mock_graphql_client.execute = mock_execute
+
+        # Capture events
+        started_event = None
+        completed_event = None
+
+        def capture_started(event):
+            nonlocal started_event
+            started_event = event
+
+        def capture_completed(event):
+            nonlocal completed_event
+            completed_event = event
+
+        adapter.on("ci.run_started", capture_started)
+        adapter.on("ci.run_completed", capture_completed)
+
+        # Execute
+        result = await adapter.run_ci_checks("proj-1", str(repo_dir), timeout_seconds=600)
+
+        # Verify both events were emitted
+        assert started_event is not None
+        assert isinstance(started_event, CIRunStartedEvent)
+        assert started_event.type == "ci.run_started"
+        assert started_event.project_id == "proj-1"
+        assert started_event.working_directory == str(repo_dir)
+        assert started_event.timeout_seconds == 600
+
+        assert completed_event is not None
+        assert isinstance(completed_event, CIRunCompletedEvent)
+        assert completed_event.type == "ci.run_completed"
+        assert completed_event.project_id == "proj-1"
+        assert completed_event.passed_count == 1
+        assert completed_event.failure_count == 0
+
+        # Verify same workflow_run_id in both events
+        assert started_event.workflow_run_id == completed_event.workflow_run_id
+
+        # Verify result is correct
+        assert result.passed is True
+        assert result.failed == 0
 
 
 class TestConvertCIStatusToRunResult:

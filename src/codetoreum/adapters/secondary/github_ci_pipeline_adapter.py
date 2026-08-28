@@ -9,14 +9,18 @@ Implements ICIPipelineService interface for GitHub, supporting:
 
 import asyncio
 import logging
-import os
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from codetoreum.adapters.secondary.github_ticket_adapter import GitHubTicketAdapter
-from codetoreum.domain.events.ci_pipeline_events import CIPipelineStatusCheckedEvent
+from codetoreum.domain.events.ci_pipeline_events import (
+    CIPipelineStatusCheckedEvent,
+    CIRunCompletedEvent,
+    CIRunStartedEvent,
+)
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.http.github_graphql_client import (
     GitHubGraphQLClient,
@@ -364,7 +368,23 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
             ValidationError: If working_directory is not a git repo or git is unavailable
             ResourceNotFoundError: If no open PR exists for the branch
             ExternalServiceError: If GitHub API call fails
+            AuthenticationError: If authentication fails (permanent)
         """
+        workflow_run_id = str(uuid4())
+
+        # Emit run started event
+        started_event = CIRunStartedEvent(
+            type="ci.run_started",
+            project_id=project_id,
+            workflow_run_id=workflow_run_id,
+            working_directory=working_directory,
+            timeout_seconds=timeout_seconds,
+            checks_planned=0,
+            timestamp=datetime.now(UTC).isoformat(),
+            source="github",
+        )
+        self.emit(started_event)
+
         try:
             # Resolve the open PR for the branch checked out at working_directory
             pr_number = await self._resolve_pr_for_branch(working_directory)
@@ -375,9 +395,23 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
             # Convert CIPipelineStatus to CIRunResult
             run_result = self._convert_ci_status_to_run_result(ci_status)
 
+            # Emit run completed event
+            completed_event = CIRunCompletedEvent(
+                type="ci.run_completed",
+                project_id=project_id,
+                workflow_run_id=workflow_run_id,
+                passed_count=sum(1 for r in run_result.check_results if r.status == CICheckStatus.PASSED),
+                failure_count=run_result.failed,
+                warning_count=len(run_result.warnings),
+                output=run_result.output,
+                timestamp=datetime.now(UTC).isoformat(),
+                source="github",
+            )
+            self.emit(completed_event)
+
             return run_result
 
-        except (ValidationError, ResourceNotFoundError, ExternalServiceError):
+        except (ValidationError, ResourceNotFoundError, AuthenticationError, ExternalServiceError):
             raise
         except Exception as e:
             msg = f"Failed to run CI checks: {e}"
@@ -433,12 +467,12 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
                 msg = "Failed to determine current branch name"
                 raise ValidationError(msg)
 
-        except asyncio.TimeoutError:
+        except asyncio.TimeoutError as e:
             msg = "git rev-parse command timed out"
-            raise ValidationError(msg)
-        except FileNotFoundError:
+            raise ValidationError(msg) from e
+        except FileNotFoundError as e:
             msg = "git is not available or not in PATH"
-            raise ValidationError(msg)
+            raise ValidationError(msg) from e
 
         # Query GitHub for open PRs with this branch name
         try:
@@ -468,7 +502,6 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
             pr_nodes = result.get("repository", {}).get("pullRequests", {}).get("nodes", [])
 
             if not pr_nodes:
-                msg = f"No open PR found for branch '{branch_name}'"
                 raise ResourceNotFoundError("PullRequest", branch_name)
 
             # Return the PR number of the first (most recently updated) PR
