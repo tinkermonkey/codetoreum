@@ -485,6 +485,8 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
                 raise ValidationError(msg)
 
         except TimeoutError as e:
+            process.kill()
+            await process.wait()
             msg = "git rev-parse command timed out"
             raise ValidationError(msg) from e
         except FileNotFoundError as e:
@@ -522,10 +524,11 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
                 raise ResourceNotFoundError("PullRequest", branch_name)
 
             # Return the PR number of the first (most recently updated) PR
-            pr_number = str(pr_nodes[0].get("number", ""))
-            if not pr_number:
+            pr_number_value = pr_nodes[0].get("number")
+            if pr_number_value is None:
                 msg = f"PR node missing number field for branch '{branch_name}'"
                 raise ExternalServiceError(service="GitHub", message=msg)
+            pr_number = str(pr_number_value)
 
             logger.info(f"Resolved branch '{branch_name}' to PR #{pr_number}")
             return pr_number
