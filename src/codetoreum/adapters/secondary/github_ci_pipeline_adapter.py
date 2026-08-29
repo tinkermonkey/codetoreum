@@ -385,37 +385,30 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
         )
         self.emit(started_event)
 
-        try:
-            # Resolve the open PR for the branch checked out at working_directory
-            pr_number = await self._resolve_pr_for_branch(working_directory)
+        # Resolve the open PR for the branch checked out at working_directory
+        pr_number = await self._resolve_pr_for_branch(working_directory)
 
-            # Query GitHub for the PR's CI status
-            ci_status = await self.get_pr_ci_status(pr_number, project_id, timeout_seconds)
+        # Query GitHub for the PR's CI status
+        ci_status = await self.get_pr_ci_status(pr_number, project_id, timeout_seconds)
 
-            # Convert CIPipelineStatus to CIRunResult
-            run_result = self._convert_ci_status_to_run_result(ci_status)
+        # Convert CIPipelineStatus to CIRunResult (pure in-memory conversion, propagates errors)
+        run_result = self._convert_ci_status_to_run_result(ci_status)
 
-            # Emit run completed event
-            completed_event = CIRunCompletedEvent(
-                type="ci.run_completed",
-                project_id=project_id,
-                workflow_run_id=workflow_run_id,
-                passed_count=sum(1 for r in run_result.check_results if r.status == CICheckStatus.PASSED),
-                failure_count=run_result.failed,
-                warning_count=len(run_result.warnings),
-                output=run_result.output,
-                timestamp=datetime.now(UTC).isoformat(),
-                source="github",
-            )
-            self.emit(completed_event)
+        # Emit run completed event
+        completed_event = CIRunCompletedEvent(
+            type="ci.run_completed",
+            project_id=project_id,
+            workflow_run_id=workflow_run_id,
+            passed_count=sum(1 for r in run_result.check_results if r.status == CICheckStatus.PASSED),
+            failure_count=run_result.failed,
+            warning_count=len(run_result.warnings),
+            output=run_result.output,
+            timestamp=datetime.now(UTC).isoformat(),
+            source="github",
+        )
+        self.emit(completed_event)
 
-            return run_result
-
-        except (ValidationError, ResourceNotFoundError, AuthenticationError, ExternalServiceError):
-            raise
-        except Exception as e:
-            msg = f"Failed to run CI checks: {e}"
-            raise ExternalServiceError(service="GitHub", message=msg) from e
+        return run_result
 
     async def _resolve_pr_for_branch(self, working_directory: str) -> str:
         """Resolve the open PR for the branch checked out at working_directory.
@@ -523,86 +516,83 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
         """Convert CIPipelineStatus to CIRunResult.
 
         Maps the status and check results from a queried PR CI status into the
-        CIRunResult format. Pending/in-progress checks are converted to FAILED status
-        to satisfy the contract that passed=False requires failed > 0. This represents
-        "checks that haven't passed yet" from the perspective of run_ci_checks().
+        CIRunResult format. Passes through check results verbatim and uses actual
+        failed count per spec: CIRunResult.check_results ← status.check_results,
+        CIRunResult.failed ← status.failed.
+
+        When the invariant would be violated (passed=False but failed=0),
+        creates a synthetic check to represent pending/running checks.
+        This ensures the invariant that passed=False requires failed > 0 is satisfied.
 
         Args:
             ci_status: CI pipeline status from GitHub
 
         Returns:
-            CIRunResult with converted status and check results
+            CIRunResult with verbatim check results and actual failed count
 
         Raises:
-            ExternalServiceError: If conversion fails due to invalid data
+            ValueError: If check_results or failed count are invalid (programming bug)
+            KeyError: If required fields are missing (programming bug)
         """
-        try:
-            # Determine overall passed status: True if all checks are PASSED/SKIPPED and none are PENDING/RUNNING
-            # SKIPPED is treated as passing (no failures), PENDING/RUNNING as not yet passed
-            passed = (
-                ci_status.failed == 0
-                and ci_status.pending == 0
-                and ci_status.status in (CICheckStatus.PASSED, CICheckStatus.SKIPPED)
+        # Determine overall passed status: True only if all checks actually passed
+        # and status confirms completion
+        passed = (
+            ci_status.failed == 0
+            and ci_status.pending == 0
+            and ci_status.status in (CICheckStatus.PASSED, CICheckStatus.SKIPPED)
+        )
+
+        # Pass through check results verbatim per spec
+        check_results = list(ci_status.check_results)
+
+        # Collect failure descriptions from actual failed checks only
+        failures: list[str] = []
+        for check in check_results:
+            if check.status == CICheckStatus.FAILED:
+                failure_desc = f"{check.name}: {check.conclusion}" if check.conclusion else check.name
+                failures.append(failure_desc)
+
+        # Use actual failed count from status per spec
+        failed_count = ci_status.failed
+
+        # Handle invariant violation: when passed=False but failed_count=0 (e.g., pending checks)
+        # Create a synthetic check to represent the pending state and satisfy the invariant
+        # that passed=False requires failed > 0
+        if not passed and failed_count == 0:
+            synthetic_check = CICheckResult(
+                name="checks-pending",
+                status=CICheckStatus.FAILED,
+                conclusion="CI checks are pending or in progress",
+                url=None,
             )
+            check_results.append(synthetic_check)
+            failed_count = 1
+            failures.append("checks-pending: CI checks are pending or in progress")
 
-            # Convert check results: PENDING/RUNNING checks become FAILED for contract compliance
-            # This represents "not yet passed" from run_ci_checks() perspective
-            converted_checks: list[CICheckResult] = []
-            failures: list[str] = []
+        # Build summary output
+        summary_parts = [
+            f"CI Pipeline Status: {ci_status.status.value}",
+            f"Total checks: {ci_status.total_checks}",
+            f"Passed: {ci_status.passed}",
+            f"Failed: {ci_status.failed}",
+            f"Pending/Running: {ci_status.pending}",
+        ]
+        if ci_status.pipeline_url:
+            summary_parts.append(f"Pipeline URL: {ci_status.pipeline_url}")
 
-            for check in ci_status.check_results:
-                if check.status == CICheckStatus.FAILED:
-                    converted_checks.append(check)
-                    failure_desc = f"{check.name}: {check.conclusion}" if check.conclusion else check.name
-                    failures.append(failure_desc)
-                elif check.status in (CICheckStatus.PENDING, CICheckStatus.RUNNING):
-                    # Convert pending/running to FAILED to satisfy contract
-                    converted_check = CICheckResult(
-                        name=check.name,
-                        status=CICheckStatus.FAILED,
-                        conclusion="pending/in-progress",
-                        url=check.url,
-                    )
-                    converted_checks.append(converted_check)
-                    failure_desc = f"{check.name}: pending/in-progress"
-                    failures.append(failure_desc)
-                else:
-                    # PASSED and SKIPPED checks pass through unchanged
-                    converted_checks.append(check)
+        output = "\n".join(summary_parts)
 
-            # Count FAILED checks in converted results (includes converted pending)
-            effective_failed_count = sum(
-                1 for c in converted_checks if c.status == CICheckStatus.FAILED
-            )
+        # Create and return CIRunResult with verbatim check results and actual failed count
+        run_result = CIRunResult(
+            passed=passed,
+            failed=failed_count,
+            check_results=tuple(check_results),
+            failures=tuple(failures),
+            warnings=(),
+            output=output,
+        )
 
-            # Build summary output
-            summary_parts = [
-                f"CI Pipeline Status: {ci_status.status.value}",
-                f"Total checks: {ci_status.total_checks}",
-                f"Passed: {ci_status.passed}",
-                f"Failed: {ci_status.failed}",
-                f"Pending/Running: {ci_status.pending}",
-            ]
-            if ci_status.pipeline_url:
-                summary_parts.append(f"Pipeline URL: {ci_status.pipeline_url}")
-
-            output = "\n".join(summary_parts)
-
-            # Create and return CIRunResult
-            run_result = CIRunResult(
-                passed=passed,
-                failed=effective_failed_count,
-                check_results=tuple(converted_checks),
-                failures=tuple(failures),
-                warnings=(),
-                output=output,
-            )
-
-            return run_result
-
-        except Exception as e:
-            msg = f"Failed to convert CI status to run result: {e}"
-            raise ExternalServiceError(service="GitHub", message=msg) from e
+        return run_result
 
     # ===== Helper Methods =====
 

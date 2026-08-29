@@ -1230,12 +1230,21 @@ class TestConvertCIStatusToRunResult:
         result = adapter._convert_ci_status_to_run_result(ci_status)
 
         assert result.passed is False
-        # Pending count added to failed count to satisfy contract (passed=False requires failed > 0)
+        # Synthetic check added to satisfy invariant (passed=False requires failed > 0)
+        # Original checks passed through verbatim per spec
         assert result.failed == 1
-        # Pending checks are included in failures list to represent "not yet passed"
+        assert len(result.check_results) == 3  # 2 original + 1 synthetic
+        # First 2 checks are verbatim
+        assert result.check_results[0].name == "test-1"
+        assert result.check_results[0].status == CICheckStatus.PASSED
+        assert result.check_results[1].name == "test-2"
+        assert result.check_results[1].status == CICheckStatus.PENDING
+        # Third is synthetic check for pending state
+        assert result.check_results[2].name == "checks-pending"
+        assert result.check_results[2].status == CICheckStatus.FAILED
+        # Failures include synthetic check description
         assert len(result.failures) == 1
-        assert "test-2" in result.failures[0]
-        assert "pending/in-progress" in result.failures[0]
+        assert "checks-pending" in result.failures[0]
         assert "Pending/Running: 1" in result.output
 
     def test_convert_empty_checks(self, adapter):
@@ -1276,11 +1285,19 @@ class TestConvertCIStatusToRunResult:
         result = adapter._convert_ci_status_to_run_result(ci_status)
 
         assert result.passed is False
-        # Running checks are converted to FAILED for contract compliance (passed=False requires failed > 0)
+        # Synthetic check added to satisfy invariant (passed=False requires failed > 0)
+        # Original RUNNING check passed through verbatim per spec
         assert result.failed == 1
+        assert len(result.check_results) == 2  # 1 original RUNNING + 1 synthetic
+        # First check is verbatim
+        assert result.check_results[0].name == "test-1"
+        assert result.check_results[0].status == CICheckStatus.RUNNING
+        # Second is synthetic check for pending state
+        assert result.check_results[1].name == "checks-pending"
+        assert result.check_results[1].status == CICheckStatus.FAILED
+        # Failures include synthetic check description
         assert len(result.failures) == 1
-        assert "test-1" in result.failures[0]
-        assert "pending/in-progress" in result.failures[0]
+        assert "checks-pending" in result.failures[0]
         assert "Pipeline URL: https://github.com/runs/456" in result.output
 
     def test_convert_failure_without_conclusion(self, adapter):
