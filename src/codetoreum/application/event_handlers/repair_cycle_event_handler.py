@@ -35,12 +35,11 @@ from codetoreum.infrastructure.observability.instrumentation import (
 )
 from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
 from codetoreum.ports.exceptions import (
+    AuthenticationError,
     ExternalServiceError,
     ResourceNotFoundError,
-    ValidationError,
-)
-from codetoreum.ports.exceptions import (
     TimeoutError as PortTimeoutError,
+    ValidationError,
 )
 from codetoreum.ports.output.ci_pipeline_service import ICIPipelineService
 from codetoreum.ports.output.repair_cycle_service import IRepairCycle
@@ -323,6 +322,7 @@ class RepairCycleEventHandler(EventHandler):
                         f"passed={ci_run_result.passed}, failed={ci_run_result.failed}"
                     )
                 except (
+                    AuthenticationError,
                     ResourceNotFoundError,
                     ValidationError,
                     ExternalServiceError,
