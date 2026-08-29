@@ -296,12 +296,20 @@ class CIRunCompletedEvent(CodetoreumEvent):
     def from_dict(cls, data: dict[str, Any]) -> "CIRunCompletedEvent":
         """Deserialize from dictionary.
 
+        For backward compatibility with historical events that lack check_count,
+        derives check_count from the sum of passed_count + failure_count + pending_count.
+
         Raises:
             KeyError: If required fields (project_id, workflow_run_id, passed_count,
                      failure_count) are missing.
             ValueError: If timestamp/source are empty, or if validation fails
                        (counts must be non-negative, sum consistency, etc.).
         """
+        # Backward compatibility: derive check_count from count sum if absent
+        check_count = data.get("check_count")
+        if check_count is None:
+            check_count = data["passed_count"] + data["failure_count"] + data.get("pending_count", 0)
+
         return cls(
             type=data.get("type", "ci.run_completed"),
             timestamp=data.get("timestamp", ""),
@@ -310,7 +318,7 @@ class CIRunCompletedEvent(CodetoreumEvent):
             event_id=data.get("event_id") or str(uuid4()),
             project_id=data["project_id"],
             workflow_run_id=data["workflow_run_id"],
-            check_count=data.get("check_count", 0),
+            check_count=check_count,
             passed_count=data["passed_count"],
             failure_count=data["failure_count"],
             pending_count=data.get("pending_count", 0),

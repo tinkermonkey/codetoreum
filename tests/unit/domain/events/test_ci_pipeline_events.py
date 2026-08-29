@@ -1088,3 +1088,27 @@ class TestCIRunCompletedEvent:
         assert event.passed_count == 2
         assert event.failure_count == 1
         assert event.pending_count == 2
+
+    def test_from_dict_legacy_event_without_check_count(self):
+        """Legacy events without check_count/pending_count must deserialize successfully.
+
+        This test ensures backward compatibility for events persisted to Elasticsearch
+        before the check_count field was added. The check_count should be derived from
+        the sum of passed_count + failure_count + pending_count (defaulting to 0).
+        """
+        d = {
+            "type": "ci.run_completed",
+            "timestamp": now_iso(),
+            "source": "orchestrator",
+            "project_id": "proj-1",
+            "workflow_run_id": "wf-123",
+            "passed_count": 5,
+            "failure_count": 2,
+            "warning_count": 0,
+            "output": "legacy output",
+        }
+        event = CIRunCompletedEvent.from_dict(d)
+        assert event.check_count == 7  # derived from passed + failure
+        assert event.pending_count == 0  # defaulted
+        assert event.passed_count == 5
+        assert event.failure_count == 2
