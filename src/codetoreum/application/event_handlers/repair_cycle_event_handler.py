@@ -38,8 +38,10 @@ from codetoreum.ports.exceptions import (
     AuthenticationError,
     ExternalServiceError,
     ResourceNotFoundError,
-    TimeoutError as PortTimeoutError,
     ValidationError,
+)
+from codetoreum.ports.exceptions import (
+    TimeoutError as PortTimeoutError,
 )
 from codetoreum.ports.output.ci_pipeline_service import ICIPipelineService
 from codetoreum.ports.output.repair_cycle_service import IRepairCycle
