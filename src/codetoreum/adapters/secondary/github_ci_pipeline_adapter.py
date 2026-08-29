@@ -522,7 +522,11 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
                 raise ValidationError(msg)
 
         except TimeoutError as e:
-            process.kill()
+            if process.returncode is None:
+                try:
+                    process.kill()
+                except ProcessLookupError:
+                    pass
             await process.wait()
             msg = "git rev-parse command timed out"
             raise ValidationError(msg) from e
@@ -570,7 +574,7 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
             logger.info(f"Resolved branch '{branch_name}' to PR #{pr_number}")
             return pr_number
 
-        except (ValidationError, ResourceNotFoundError, ExternalServiceError):
+        except (AuthenticationError, ValidationError, ResourceNotFoundError, ExternalServiceError):
             raise
         except Exception as e:
             msg = f"Failed to query GitHub for PR: {e}"
