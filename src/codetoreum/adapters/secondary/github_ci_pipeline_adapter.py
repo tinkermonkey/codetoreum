@@ -411,7 +411,7 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
                 passed_count=0,
                 failure_count=1,
                 warning_count=0,
-                output=f"CI checks failed: {type(e).__name__}: {str(e)}",
+                output=f"CI checks failed: {type(e).__name__}: {e!s}",
                 timestamp=datetime.now(UTC).isoformat(),
                 source="github",
             )
