@@ -1269,6 +1269,41 @@ class TestConvertCIStatusToRunResult:
         assert len(result.check_results) == 0
         assert len(result.failures) == 0
 
+    def test_convert_zero_commit_pr_pending_headline_bug(self, adapter):
+        """Test conversion for zero-commit PR with pending status - the headline bug scenario.
+
+        This is the exact case from the issue: when a PR has no commits,
+        _parse_check_runs() returns status=PENDING with zero checks and pending=0.
+        The conversion previously would create CIRunResult(passed=False, failed=0),
+        which violates the invariant that passed=False requires failed > 0.
+        The fix creates a synthetic check to satisfy the invariant.
+        """
+        ci_status = CIPipelineStatus(
+            pr_id="123",
+            status=CICheckStatus.PENDING,
+            check_results=(),
+            total_checks=0,
+            passed=0,
+            failed=0,
+            pending=0,
+            pipeline_url="",
+        )
+
+        result = adapter._convert_ci_status_to_run_result(ci_status)
+
+        # Should not pass since no commits mean CI can't complete
+        assert result.passed is False
+        # Synthetic check added to satisfy invariant: passed=False requires failed > 0
+        assert result.failed == 1
+        assert len(result.check_results) == 1
+        # The synthetic check represents the pending state
+        assert result.check_results[0].name == "checks-pending"
+        assert result.check_results[0].status == CICheckStatus.FAILED
+        assert result.check_results[0].conclusion == "CI checks are pending or in progress"
+        # Failures contain the synthetic check
+        assert len(result.failures) == 1
+        assert "checks-pending" in result.failures[0]
+
     def test_convert_running_checks(self, adapter):
         """Test conversion with running checks treats as not passed."""
         ci_status = CIPipelineStatus(

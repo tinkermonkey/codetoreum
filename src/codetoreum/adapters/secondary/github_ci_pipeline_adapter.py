@@ -385,14 +385,27 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
         )
         self.emit(started_event)
 
-        # Resolve the open PR for the branch checked out at working_directory
-        pr_number = await self._resolve_pr_for_branch(working_directory)
+        try:
+            # Resolve the open PR for the branch checked out at working_directory
+            pr_number = await self._resolve_pr_for_branch(working_directory)
 
-        # Query GitHub for the PR's CI status
-        ci_status = await self.get_pr_ci_status(pr_number, project_id, timeout_seconds)
+            # Query GitHub for the PR's CI status
+            ci_status = await self.get_pr_ci_status(pr_number, project_id, timeout_seconds)
 
-        # Convert CIPipelineStatus to CIRunResult (pure in-memory conversion, propagates errors)
-        run_result = self._convert_ci_status_to_run_result(ci_status)
+            # Convert CIPipelineStatus to CIRunResult (pure in-memory conversion, propagates errors)
+            run_result = self._convert_ci_status_to_run_result(ci_status)
+        except Exception as e:
+            logger.error(
+                f"Error running CI checks for project {project_id}",
+                exc_info=True,
+                extra={
+                    "error_id": ErrorRegistry.ERR_EXTERNAL_SERVICE_ERROR,
+                    "project_id": project_id,
+                    "working_directory": working_directory,
+                    "error_type": type(e).__name__,
+                },
+            )
+            raise
 
         # Emit run completed event
         completed_event = CIRunCompletedEvent(
@@ -532,7 +545,6 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
 
         Raises:
             ValueError: If check_results or failed count are invalid (programming bug)
-            KeyError: If required fields are missing (programming bug)
         """
         # Determine overall passed status: True only if all checks actually passed
         # and status confirms completion
