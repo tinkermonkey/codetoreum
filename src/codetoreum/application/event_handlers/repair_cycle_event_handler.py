@@ -306,11 +306,11 @@ class RepairCycleEventHandler(EventHandler):
                     # Always preserve final_result with failure details for systemic analysis
                     ci_cycle_result = CycleResult(
                         test_type=RepairTestType.CI,
-                        passed=ci_run_result.failed == 0,
+                        passed=ci_run_result.passed,
                         iterations=1,
                         final_result=ci_test_result,
                         error=(
-                            None if ci_run_result.failed == 0 else f"CI checks failed: {ci_run_result.failed} failures"
+                            None if ci_run_result.passed else f"CI checks failed: {ci_run_result.failed} failures"
                         ),
                         files_fixed=0,
                         warnings_reviewed=0,

@@ -385,17 +385,24 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
         )
         self.emit(started_event)
 
-        # Resolve the open PR for the branch checked out at working_directory
-        # (external service call, errors propagate)
-        pr_number = await self._resolve_pr_for_branch(working_directory)
+        try:
+            pr_number = await self._resolve_pr_for_branch(working_directory)
 
-        # Query GitHub for the PR's CI status
-        # (external service call, errors propagate)
-        ci_status = await self.get_pr_ci_status(pr_number, project_id, timeout_seconds)
+            ci_status = await self.get_pr_ci_status(pr_number, project_id, timeout_seconds)
 
-        # Convert CIPipelineStatus to CIRunResult
-        # Pure in-memory conversion — programming bugs propagate uncaught to caller
-        run_result = self._convert_ci_status_to_run_result(ci_status)
+            run_result = self._convert_ci_status_to_run_result(ci_status)
+        except Exception as e:
+            logger.error(
+                f"Error running CI checks for project {project_id}",
+                exc_info=True,
+                extra={
+                    "error_id": ErrorRegistry.ERR_EXTERNAL_SERVICE_ERROR,
+                    "project_id": project_id,
+                    "working_directory": working_directory,
+                    "error_type": type(e).__name__,
+                },
+            )
+            raise
 
         # Emit run completed event
         completed_event = CIRunCompletedEvent(
@@ -576,9 +583,6 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
 
         output = "\n".join(summary_parts)
 
-        # Create and return CIRunResult with verbatim check results and actual failed count
-        # The updated CIRunResult invariant allows passed=False with failed=0 when
-        # there are pending/running checks in check_results
         run_result = CIRunResult(
             passed=passed,
             failed=failed_count,

@@ -762,3 +762,20 @@ class TestCIRunResult:
 
         error_msg = str(exc_info.value)
         assert "passed is False but failed count is 0" in error_msg
+
+    def test_cross_field_consistency_passed_false_allowed_with_pending_checks(self) -> None:
+        """Test that passed=False with failed=0 is allowed when pending/running checks exist."""
+        check_results = [
+            CICheckResult(name="check-1", status=CICheckStatus.PENDING),
+            CICheckResult(name="check-2", status=CICheckStatus.RUNNING),
+        ]
+
+        result = CIRunResult(
+            passed=False,  # Not passed because checks are still pending/running
+            failed=0,  # No failures yet, checks still running
+            check_results=check_results,
+        )
+
+        assert result.passed is False
+        assert result.failed == 0
+        assert len(result.check_results) == 2
