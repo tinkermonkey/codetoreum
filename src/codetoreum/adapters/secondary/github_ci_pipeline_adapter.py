@@ -442,12 +442,18 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
             raise ExternalServiceError(service="GitHub", message=f"Failed to run CI checks: {e}") from e
 
         # Emit run completed event
+        passed_count = sum(1 for r in run_result.check_results if r.status == CICheckStatus.PASSED)
+        pending_count = sum(1 for r in run_result.check_results if r.status in (CICheckStatus.PENDING, CICheckStatus.RUNNING))
+        check_count = len(run_result.check_results)
+
         completed_event = CIRunCompletedEvent(
             type="ci.run_completed",
             project_id=project_id,
             workflow_run_id=workflow_run_id,
-            passed_count=sum(1 for r in run_result.check_results if r.status == CICheckStatus.PASSED),
+            check_count=check_count,
+            passed_count=passed_count,
             failure_count=run_result.failed,
+            pending_count=pending_count,
             warning_count=len(run_result.warnings),
             output=run_result.output,
             timestamp=datetime.now(UTC).isoformat(),
@@ -476,8 +482,10 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
                 type="ci.run_completed",
                 project_id=project_id,
                 workflow_run_id=workflow_run_id,
+                check_count=1,
                 passed_count=0,
                 failure_count=1,
+                pending_count=0,
                 warning_count=0,
                 output=f"CI checks failed: {type(error).__name__}: {error!s}",
                 timestamp=datetime.now(UTC).isoformat(),

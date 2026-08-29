@@ -564,12 +564,17 @@ class MockCIPipelineAdapter(ICIPipelineService):
             self._ci_run_calls[project_id].append(result)
 
         # Emit run completed event
+        check_count = len(check_results)
+        pending_count = sum(1 for r in check_results if r.status in (CICheckStatus.PENDING, CICheckStatus.RUNNING))
+
         completed_event = CIRunCompletedEvent(
             type="ci.run_completed",
             project_id=project_id,
             workflow_run_id=workflow_run_id,
+            check_count=check_count,
             passed_count=passed_count,
             failure_count=failed_count,
+            pending_count=pending_count,
             warning_count=len(result.warnings),
             output=result.output,
             timestamp=self._get_iso_timestamp(),
