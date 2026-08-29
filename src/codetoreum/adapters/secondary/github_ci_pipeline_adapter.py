@@ -391,35 +391,36 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
             ci_status = await self.get_pr_ci_status(pr_number, project_id, timeout_seconds)
 
             run_result = self._convert_ci_status_to_run_result(ci_status)
-        except (AuthenticationError, ResourceNotFoundError, ValidationError, ExternalServiceError) as e:
-            # Known errors - log and re-raise
+        except (AuthenticationError, ResourceNotFoundError, ValidationError) as e:
+            # Permanent errors - log and re-raise
             logger.error(
-                f"Error running CI checks for project {project_id}: {type(e).__name__}",
+                f"Permanent error running CI checks for project {project_id}",
                 exc_info=True,
                 extra={
                     "error_id": ErrorRegistry.ERR_EXTERNAL_SERVICE_ERROR,
                     "project_id": project_id,
                     "working_directory": working_directory,
-                    "error_type": type(e).__name__,
+                    "error_type": "permanent",
                 },
             )
-
-            # Emit run completed event on error path (INV-10: all state changes emit events)
-            error_event = CIRunCompletedEvent(
-                type="ci.run_completed",
-                project_id=project_id,
-                workflow_run_id=workflow_run_id,
-                passed_count=0,
-                failure_count=1,
-                warning_count=0,
-                output=f"CI checks failed: {type(e).__name__}: {e!s}",
-                timestamp=datetime.now(UTC).isoformat(),
-                source="github",
+            self._emit_ci_error_event(project_id, workflow_run_id, e)
+            raise
+        except ExternalServiceError as e:
+            # Transient errors - log at warning level and re-raise
+            logger.warning(
+                f"Transient error running CI checks for project {project_id}: {e}",
+                exc_info=True,
+                extra={
+                    "error_id": ErrorRegistry.ERR_EXTERNAL_SERVICE_ERROR,
+                    "project_id": project_id,
+                    "working_directory": working_directory,
+                    "error_type": "transient",
+                },
             )
-            self.emit(error_event)
+            self._emit_ci_error_event(project_id, workflow_run_id, e)
             raise
         except Exception as e:
-            # Unexpected errors - log critically with full context and wrap as ExternalServiceError
+            # Unexpected errors - log critically and wrap as ExternalServiceError
             logger.critical(
                 f"Unexpected error running CI checks for project {project_id}: {e}",
                 exc_info=True,
@@ -427,23 +428,10 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
                     "error_id": ErrorRegistry.ERR_EXTERNAL_SERVICE_ERROR,
                     "project_id": project_id,
                     "working_directory": working_directory,
-                    "error_type": type(e).__name__,
+                    "error_type": "unexpected",
                 },
             )
-
-            # Emit run completed event on error path (INV-10: all state changes emit events)
-            error_event = CIRunCompletedEvent(
-                type="ci.run_completed",
-                project_id=project_id,
-                workflow_run_id=workflow_run_id,
-                passed_count=0,
-                failure_count=1,
-                warning_count=0,
-                output=f"CI checks failed: {type(e).__name__}: {e!s}",
-                timestamp=datetime.now(UTC).isoformat(),
-                source="github",
-            )
-            self.emit(error_event)
+            self._emit_ci_error_event(project_id, workflow_run_id, e)
             raise ExternalServiceError(service="GitHub", message=f"Failed to run CI checks: {e}") from e
 
         # Emit run completed event
@@ -461,6 +449,27 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
         self.emit(completed_event)
 
         return run_result
+
+    def _emit_ci_error_event(self, project_id: str, workflow_run_id: str, error: Exception) -> None:
+        """Emit CIRunCompletedEvent for an error path.
+
+        Args:
+            project_id: The project ID
+            workflow_run_id: The workflow run ID
+            error: The exception that occurred
+        """
+        error_event = CIRunCompletedEvent(
+            type="ci.run_completed",
+            project_id=project_id,
+            workflow_run_id=workflow_run_id,
+            passed_count=0,
+            failure_count=1,
+            warning_count=0,
+            output=f"CI checks failed: {type(error).__name__}: {error!s}",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="github",
+        )
+        self.emit(error_event)
 
     async def _resolve_pr_for_branch(self, working_directory: str) -> str:
         """Resolve the open PR for the branch checked out at working_directory.

@@ -1004,6 +1004,106 @@ class TestRunCIChecks:
 
         assert "does not exist" in str(exc_info.value)
 
+    async def test_run_ci_checks_wraps_unexpected_exception(self, adapter, mock_graphql_client, tmp_path, caplog):
+        """Test that unexpected exceptions are wrapped as ExternalServiceError with proper logging.
+
+        This tests the exception wrapping path added to run_ci_checks() — when an
+        unexpected exception (not a known domain exception) occurs, it should be:
+        1. Logged with error_type="unexpected" and full context
+        2. Wrapped as ExternalServiceError with proper exception chaining
+        3. Have a CIRunCompletedEvent emitted for audit trail
+        """
+        import subprocess
+
+        repo_dir = tmp_path / "repo"
+        repo_dir.mkdir()
+        subprocess.run([shutil.which("git"), "init"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run([shutil.which("git"), "config", "user.name", "Test"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run([shutil.which("git"), "config", "user.email", "test@test.com"], cwd=repo_dir, check=True, capture_output=True)
+
+        # Create initial commit
+        (repo_dir / "README.md").write_text("# Test")
+        subprocess.run([shutil.which("git"), "add", "README.md"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run([shutil.which("git"), "commit", "-m", "Initial commit"], cwd=repo_dir, check=True, capture_output=True)
+
+        subprocess.run([shutil.which("git"), "checkout", "-b", "test-branch"], cwd=repo_dir, check=True, capture_output=True)
+
+        # Update the async mock to handle both calls
+        async def mock_execute_async(query: str, variables: dict | None = None) -> dict:
+            if "GetPullRequestByBranch" in query:
+                return {
+                    "repository": {
+                        "pullRequests": {
+                            "nodes": [{"number": 789}]
+                        }
+                    }
+                }
+            if "GetPullRequestCheckRuns" in query:
+                return {
+                    "repository": {
+                        "pullRequest": {
+                            "number": 789,
+                            "commits": {
+                                "nodes": [
+                                    {
+                                        "commit": {
+                                            "oid": "abc123",
+                                            "checkSuites": {"nodes": []},
+                                        }
+                                    }
+                                ]
+                            },
+                        }
+                    }
+                }
+            return {}
+
+        mock_graphql_client.execute = mock_execute_async
+
+        # Mock _convert_ci_status_to_run_result to raise an unexpected exception
+        original_convert = adapter._convert_ci_status_to_run_result
+
+        def raise_unexpected(*args, **kwargs):
+            raise RuntimeError("Unexpected conversion error")
+
+        adapter._convert_ci_status_to_run_result = raise_unexpected
+
+        # Capture event
+        completed_event = None
+
+        def capture_completed(event):
+            nonlocal completed_event
+            completed_event = event
+
+        adapter.on("ci.run_completed", capture_completed)
+
+        # Should raise ExternalServiceError, not RuntimeError
+        with pytest.raises(ExternalServiceError) as exc_info:
+            await adapter.run_ci_checks("proj-1", str(repo_dir))
+
+        # Verify wrapping and chaining
+        assert exc_info.value.service == "GitHub"
+        assert "Failed to run CI checks" in str(exc_info.value)
+        assert isinstance(exc_info.value.__cause__, RuntimeError)
+        assert str(exc_info.value.__cause__) == "Unexpected conversion error"
+
+        # Verify event was emitted
+        assert completed_event is not None
+        assert isinstance(completed_event, CIRunCompletedEvent)
+        assert completed_event.project_id == "proj-1"
+        assert completed_event.failure_count == 1
+
+        # Verify logging with semantic error_type
+        assert any(
+            record.levelname == "CRITICAL"
+            and "Unexpected error" in record.getMessage()
+            and record.__dict__.get("error_type") == "unexpected"
+            for record in caplog.records
+        ), "Should log at CRITICAL level with error_type='unexpected'"
+
+        # Restore original method
+        adapter._convert_ci_status_to_run_result = original_convert
+
     async def test_run_ci_checks_propagates_ci_status_exception(self, adapter, mock_graphql_client, tmp_path):
         """Test that exceptions from get_pr_ci_status propagate unchanged."""
         import subprocess
