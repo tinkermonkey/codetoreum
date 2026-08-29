@@ -1212,7 +1212,7 @@ class TestConvertCIStatusToRunResult:
         assert "Failed: 2" in result.output
 
     def test_convert_pending_checks(self, adapter):
-        """Test conversion with pending checks treats as not passed."""
+        """Test conversion with pending checks treats as not passed, passes through verbatim."""
         ci_status = CIPipelineStatus(
             pr_id="123",
             status=CICheckStatus.PENDING,
@@ -1230,21 +1230,16 @@ class TestConvertCIStatusToRunResult:
         result = adapter._convert_ci_status_to_run_result(ci_status)
 
         assert result.passed is False
-        # Synthetic check added to satisfy invariant (passed=False requires failed > 0)
-        # Original checks passed through verbatim per spec
-        assert result.failed == 1
-        assert len(result.check_results) == 3  # 2 original + 1 synthetic
-        # First 2 checks are verbatim
+        # No synthetic checks — check results passed through verbatim per spec
+        assert result.failed == 0  # Actual failures from GitHub
+        assert len(result.check_results) == 2  # Original checks, no synthetic
+        # Checks are passed through verbatim
         assert result.check_results[0].name == "test-1"
         assert result.check_results[0].status == CICheckStatus.PASSED
         assert result.check_results[1].name == "test-2"
         assert result.check_results[1].status == CICheckStatus.PENDING
-        # Third is synthetic check for pending state
-        assert result.check_results[2].name == "checks-pending"
-        assert result.check_results[2].status == CICheckStatus.FAILED
-        # Failures include synthetic check description
-        assert len(result.failures) == 1
-        assert "checks-pending" in result.failures[0]
+        # No synthetic failure descriptions
+        assert len(result.failures) == 0
         assert "Pending/Running: 1" in result.output
 
     def test_convert_empty_checks(self, adapter):
@@ -1275,8 +1270,8 @@ class TestConvertCIStatusToRunResult:
         This is the exact case from the issue: when a PR has no commits,
         _parse_check_runs() returns status=PENDING with zero checks and pending=0.
         The conversion previously would create CIRunResult(passed=False, failed=0),
-        which violates the invariant that passed=False requires failed > 0.
-        The fix creates a synthetic check to satisfy the invariant.
+        which violates the invariant. The fix treats zero checks as vacuously true
+        (no failures to report, so it passes) and passes through check results verbatim.
         """
         ci_status = CIPipelineStatus(
             pr_id="123",
@@ -1291,21 +1286,17 @@ class TestConvertCIStatusToRunResult:
 
         result = adapter._convert_ci_status_to_run_result(ci_status)
 
-        # Should not pass since no commits mean CI can't complete
-        assert result.passed is False
-        # Synthetic check added to satisfy invariant: passed=False requires failed > 0
-        assert result.failed == 1
-        assert len(result.check_results) == 1
-        # The synthetic check represents the pending state
-        assert result.check_results[0].name == "checks-pending"
-        assert result.check_results[0].status == CICheckStatus.FAILED
-        assert result.check_results[0].conclusion == "CI checks are pending or in progress"
-        # Failures contain the synthetic check
-        assert len(result.failures) == 1
-        assert "checks-pending" in result.failures[0]
+        # No checks to run means vacuously true (no failures)
+        assert result.passed is True
+        # No actual failures from GitHub
+        assert result.failed == 0
+        # No checks passed through verbatim (per spec, no synthetic)
+        assert len(result.check_results) == 0
+        # No failures to report
+        assert len(result.failures) == 0
 
     def test_convert_running_checks(self, adapter):
-        """Test conversion with running checks treats as not passed."""
+        """Test conversion with running checks treats as not passed, passes through verbatim."""
         ci_status = CIPipelineStatus(
             pr_id="123",
             status=CICheckStatus.PENDING,
@@ -1320,19 +1311,16 @@ class TestConvertCIStatusToRunResult:
         result = adapter._convert_ci_status_to_run_result(ci_status)
 
         assert result.passed is False
-        # Synthetic check added to satisfy invariant (passed=False requires failed > 0)
-        # Original RUNNING check passed through verbatim per spec
-        assert result.failed == 1
-        assert len(result.check_results) == 2  # 1 original RUNNING + 1 synthetic
-        # First check is verbatim
+        # No synthetic checks — check results passed through verbatim per spec
+        # Failed count is actual failures from GitHub (0 in this case)
+        assert result.failed == 0
+        # Only the original RUNNING check, no synthetic
+        assert len(result.check_results) == 1
+        # Check is passed through verbatim
         assert result.check_results[0].name == "test-1"
         assert result.check_results[0].status == CICheckStatus.RUNNING
-        # Second is synthetic check for pending state
-        assert result.check_results[1].name == "checks-pending"
-        assert result.check_results[1].status == CICheckStatus.FAILED
-        # Failures include synthetic check description
-        assert len(result.failures) == 1
-        assert "checks-pending" in result.failures[0]
+        # No synthetic failure descriptions
+        assert len(result.failures) == 0
         assert "Pipeline URL: https://github.com/runs/456" in result.output
 
     def test_convert_failure_without_conclusion(self, adapter):

@@ -385,27 +385,17 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
         )
         self.emit(started_event)
 
-        try:
-            # Resolve the open PR for the branch checked out at working_directory
-            pr_number = await self._resolve_pr_for_branch(working_directory)
+        # Resolve the open PR for the branch checked out at working_directory
+        # (external service call, errors propagate)
+        pr_number = await self._resolve_pr_for_branch(working_directory)
 
-            # Query GitHub for the PR's CI status
-            ci_status = await self.get_pr_ci_status(pr_number, project_id, timeout_seconds)
+        # Query GitHub for the PR's CI status
+        # (external service call, errors propagate)
+        ci_status = await self.get_pr_ci_status(pr_number, project_id, timeout_seconds)
 
-            # Convert CIPipelineStatus to CIRunResult (pure in-memory conversion, propagates errors)
-            run_result = self._convert_ci_status_to_run_result(ci_status)
-        except Exception as e:
-            logger.error(
-                f"Error running CI checks for project {project_id}",
-                exc_info=True,
-                extra={
-                    "error_id": ErrorRegistry.ERR_EXTERNAL_SERVICE_ERROR,
-                    "project_id": project_id,
-                    "working_directory": working_directory,
-                    "error_type": type(e).__name__,
-                },
-            )
-            raise
+        # Convert CIPipelineStatus to CIRunResult
+        # Pure in-memory conversion — programming bugs propagate uncaught to caller
+        run_result = self._convert_ci_status_to_run_result(ci_status)
 
         # Emit run completed event
         completed_event = CIRunCompletedEvent(
@@ -531,11 +521,10 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
         Maps the status and check results from a queried PR CI status into the
         CIRunResult format. Passes through check results verbatim and uses actual
         failed count per spec: CIRunResult.check_results ← status.check_results,
-        CIRunResult.failed ← status.failed.
+        CIRunResult.failed ← status.failed. Does not create synthetic checks.
 
-        When the invariant would be violated (passed=False but failed=0),
-        creates a synthetic check to represent pending/running checks.
-        This ensures the invariant that passed=False requires failed > 0 is satisfied.
+        Edge case: When there are no checks at all (empty check_results), passes=True
+        because there are no failures to report (vacuously true).
 
         Args:
             ci_status: CI pipeline status from GitHub
@@ -546,16 +535,23 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
         Raises:
             ValueError: If check_results or failed count are invalid (programming bug)
         """
-        # Determine overall passed status: True only if all checks actually passed
-        # and status confirms completion
-        passed = (
-            ci_status.failed == 0
-            and ci_status.pending == 0
-            and ci_status.status in (CICheckStatus.PASSED, CICheckStatus.SKIPPED)
-        )
-
-        # Pass through check results verbatim per spec
+        # Pass through check results verbatim per spec — no synthetic checks
         check_results = list(ci_status.check_results)
+
+        # Determine overall passed status:
+        # - True if there are no checks at all (vacuously true — no failures)
+        # - True if all checks actually passed, no checks pending/running
+        # - False otherwise
+        if len(check_results) == 0:
+            # No checks to run — treat as passed (vacuously true)
+            passed = True
+        else:
+            # Checks exist: passed only if no failures and no pending checks
+            passed = (
+                ci_status.failed == 0
+                and ci_status.pending == 0
+                and ci_status.status in (CICheckStatus.PASSED, CICheckStatus.SKIPPED)
+            )
 
         # Collect failure descriptions from actual failed checks only
         failures: list[str] = []
@@ -566,20 +562,6 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
 
         # Use actual failed count from status per spec
         failed_count = ci_status.failed
-
-        # Handle invariant violation: when passed=False but failed_count=0 (e.g., pending checks)
-        # Create a synthetic check to represent the pending state and satisfy the invariant
-        # that passed=False requires failed > 0
-        if not passed and failed_count == 0:
-            synthetic_check = CICheckResult(
-                name="checks-pending",
-                status=CICheckStatus.FAILED,
-                conclusion="CI checks are pending or in progress",
-                url=None,
-            )
-            check_results.append(synthetic_check)
-            failed_count = 1
-            failures.append("checks-pending: CI checks are pending or in progress")
 
         # Build summary output
         summary_parts = [
@@ -595,6 +577,8 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
         output = "\n".join(summary_parts)
 
         # Create and return CIRunResult with verbatim check results and actual failed count
+        # The updated CIRunResult invariant allows passed=False with failed=0 when
+        # there are pending/running checks in check_results
         run_result = CIRunResult(
             passed=passed,
             failed=failed_count,

@@ -248,13 +248,22 @@ class CIRunResult:
             msg = f"failed count ({self.failed}) does not match check_results ({failed_results} checks are FAILED)"
             raise ValueError(msg)
 
-        # Validate that passed boolean is consistent with failed count
+        # Validate that passed boolean is consistent with failed count and pending/running checks
+        pending_or_running = sum(
+            1 for r in self.check_results if r.status in (CICheckStatus.PENDING, CICheckStatus.RUNNING)
+        )
+
         if self.passed and self.failed != 0:
             msg = f"passed is True but failed count is {self.failed} (should be 0)"
             raise ValueError(msg)
 
-        if not self.passed and self.failed == 0:
-            msg = "passed is False but failed count is 0 (should be > 0)"
+        if self.passed and pending_or_running > 0:
+            msg = f"passed is True but {pending_or_running} checks are still pending/running"
+            raise ValueError(msg)
+
+        # Allow passed=False with failed=0 only if there are pending/running checks
+        if not self.passed and self.failed == 0 and pending_or_running == 0:
+            msg = "passed is False but failed count is 0 and no checks are pending/running (should have failed checks or pending checks)"
             raise ValueError(msg)
 
 
