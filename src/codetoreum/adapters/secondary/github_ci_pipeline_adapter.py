@@ -391,9 +391,10 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
             ci_status = await self.get_pr_ci_status(pr_number, project_id, timeout_seconds)
 
             run_result = self._convert_ci_status_to_run_result(ci_status)
-        except Exception as e:
+        except (AuthenticationError, ResourceNotFoundError, ValidationError, ExternalServiceError) as e:
+            # Known errors - log and re-raise
             logger.error(
-                f"Error running CI checks for project {project_id}",
+                f"Error running CI checks for project {project_id}: {type(e).__name__}",
                 exc_info=True,
                 extra={
                     "error_id": ErrorRegistry.ERR_EXTERNAL_SERVICE_ERROR,
@@ -417,6 +418,33 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
             )
             self.emit(error_event)
             raise
+        except Exception as e:
+            # Unexpected errors - log critically with full context and wrap as ExternalServiceError
+            logger.critical(
+                f"Unexpected error running CI checks for project {project_id}: {e}",
+                exc_info=True,
+                extra={
+                    "error_id": ErrorRegistry.ERR_EXTERNAL_SERVICE_ERROR,
+                    "project_id": project_id,
+                    "working_directory": working_directory,
+                    "error_type": type(e).__name__,
+                },
+            )
+
+            # Emit run completed event on error path (INV-10: all state changes emit events)
+            error_event = CIRunCompletedEvent(
+                type="ci.run_completed",
+                project_id=project_id,
+                workflow_run_id=workflow_run_id,
+                passed_count=0,
+                failure_count=1,
+                warning_count=0,
+                output=f"CI checks failed: {type(e).__name__}: {e!s}",
+                timestamp=datetime.now(UTC).isoformat(),
+                source="github",
+            )
+            self.emit(error_event)
+            raise ExternalServiceError(service="GitHub", message=f"Failed to run CI checks: {e}") from e
 
         # Emit run completed event
         completed_event = CIRunCompletedEvent(
