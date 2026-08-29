@@ -1,10 +1,11 @@
 """CI pipeline service port interface with event emission.
 
 This interface defines contracts for CI pipeline integration, including
-querying CI status for pull requests and executing local CI checks.
+querying CI status for pull requests and running CI checks.
 
 CI pipelines are vendor-agnostic abstractions over GitHub Actions, GitLab CI,
-Jenkins, CircleCI, and other CI/CD platforms.
+Jenkins, CircleCI, and other CI/CD platforms. Implementations may query
+external CI systems or execute checks locally.
 """
 
 from abc import ABC, abstractmethod
@@ -341,7 +342,7 @@ class ICIPipelineService(IEventEmitter, IMonitoredService, ABC):
 
         Args:
             project_id: Project being checked
-            working_directory: Directory containing project code to check
+            working_directory: Working directory for the project. Adapters may use this as the execution root for local checks, or to resolve branch/PR context for remote CI queries.
             timeout_seconds: How long to allow check execution (default 600s / 10min)
 
         Returns:
