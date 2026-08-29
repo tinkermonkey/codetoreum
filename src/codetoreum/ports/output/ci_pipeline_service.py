@@ -166,14 +166,14 @@ class CIPipelineStatus:
 
 @dataclass(frozen=True)
 class CIRunResult:
-    """Result of running CI checks locally.
+    """Result of CI check execution via the CI system.
 
-    Represents the outcome of executing CI checks in a local environment
-    (typically in a container). All fields are validated at construction to
-    ensure contract boundary integrity. Frozen to prevent accidental mutation
-    after creation. Check results are converted to a tuple for true immutability.
-    Cross-field consistency is enforced: the passed boolean must match
-    the actual check results.
+    Represents the outcome of querying CI checks from an external CI system
+    (GitHub Actions, GitLab CI, etc.) or executing checks in a local environment.
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation. Check results are
+    converted to a tuple for true immutability. Cross-field consistency is enforced:
+    the passed boolean must match the actual check results.
 
     Attributes:
         passed: Boolean indicating whether all CI checks passed (True) or any failed (False)
@@ -181,7 +181,7 @@ class CIRunResult:
         check_results: Tuple of detailed results for each CI check
         failures: Tuple of failure descriptions from failed checks
         warnings: Tuple of non-fatal warnings from CI execution
-        output: Full output/logs from CI execution
+        output: Full output/logs from CI execution or external CI system
     """
 
     passed: bool
@@ -272,17 +272,21 @@ class ICIPipelineService(IEventEmitter, IMonitoredService, ABC):
 
     Provides vendor-agnostic abstraction for CI systems (GitHub Actions, GitLab CI,
     Jenkins, CircleCI, etc.). Enables:
-    1. Querying CI status for pull requests
-    2. Executing local CI checks within containers
+    1. Querying CI status for pull requests from external CI systems
+    2. Executing CI checks via external systems or local containers
     3. Monitoring CI pipeline completion and status changes
+
+    Implementations may vary: some adapters query external CI systems (e.g.,
+    GitHub Actions), while others may execute checks locally. Consult the adapter
+    documentation for specific behavior.
 
     Events emitted:
         - 'ci.pipeline_status_checked' → CIPipelineStatusCheckedEvent
                                         When PR CI status is queried
         - 'ci.run_started' → CIRunStartedEvent
-                            When local CI execution starts
+                            When CI execution starts
         - 'ci.run_completed' → CIRunCompletedEvent
-                              When local CI execution completes
+                              When CI execution completes
 
     Example:
         # Get PR CI status from external system
@@ -290,7 +294,7 @@ class ICIPipelineService(IEventEmitter, IMonitoredService, ABC):
         if status.status == CICheckStatus.PASSED:
             print(f"PR {status.pr_id} passed all checks ({status.passed}/{status.total_checks})")
 
-        # Run local CI checks
+        # Execute or query CI checks
         result = await service.run_ci_checks("proj-123", "/workspace", 600)
         if result.passed:
             print("All checks passed!")
@@ -327,11 +331,13 @@ class ICIPipelineService(IEventEmitter, IMonitoredService, ABC):
 
     @abstractmethod
     async def run_ci_checks(self, project_id: str, working_directory: str, timeout_seconds: int = 600) -> CIRunResult:
-        """Execute CI checks locally in a working directory.
+        """Query or execute CI checks and return results.
 
-        Runs CI checks within the provided working directory (typically in a
-        container with the project code mounted). This allows local validation
-        of changes before pushing to the remote repository.
+        Runs CI checks by either executing them locally within the provided working
+        directory (typically in a container with the project code mounted), or by
+        querying an external CI system for CI status. The specific strategy depends
+        on the adapter implementation. This allows validation of changes before
+        pushing to the remote repository.
 
         Args:
             project_id: Project being checked
