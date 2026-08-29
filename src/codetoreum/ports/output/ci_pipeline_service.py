@@ -1,11 +1,11 @@
-"""CI pipeline service port interface with event emission.
+"""CI pipeline service port interface for querying external CI status.
 
 This interface defines contracts for CI pipeline integration, including
-querying CI status for pull requests and running CI checks.
+querying CI status for pull requests and resolving branches to PRs for CI status.
 
 CI pipelines are vendor-agnostic abstractions over GitHub Actions, GitLab CI,
-Jenkins, CircleCI, and other CI/CD platforms. Implementations may query
-external CI systems or execute checks locally.
+Jenkins, CircleCI, and other CI/CD platforms. All implementations query
+external CI systems for the current status—they do not execute checks locally.
 """
 
 from abc import ABC, abstractmethod
@@ -167,22 +167,22 @@ class CIPipelineStatus:
 
 @dataclass(frozen=True)
 class CIRunResult:
-    """Result of CI check execution via the CI system.
+    """Result of querying CI checks from an external CI system.
 
-    Represents the outcome of querying CI checks from an external CI system
-    (GitHub Actions, GitLab CI, etc.) or executing checks in a local environment.
-    All fields are validated at construction to ensure contract boundary integrity.
-    Frozen to prevent accidental mutation after creation. Check results are
-    converted to a tuple for true immutability. Cross-field consistency is enforced:
-    the passed boolean must match the actual check results.
+    Represents the outcome of querying CI status from an external CI system
+    (GitHub Actions, GitLab CI, Jenkins, CircleCI, etc.). All fields are validated
+    at construction to ensure contract boundary integrity. Frozen to prevent
+    accidental mutation after creation. Check results are converted to a tuple
+    for true immutability. Cross-field consistency is enforced: the passed boolean
+    must match the actual check results.
 
     Attributes:
         passed: Boolean indicating whether all CI checks passed (True) or any failed (False)
         failed: Number of checks that failed
         check_results: Tuple of detailed results for each CI check
         failures: Tuple of failure descriptions from failed checks
-        warnings: Tuple of non-fatal warnings from CI execution
-        output: Full output/logs from CI execution or external CI system
+        warnings: Tuple of non-fatal warnings from CI query
+        output: Full output/logs from the external CI system
     """
 
     passed: bool
@@ -269,25 +269,26 @@ class CIRunResult:
 
 
 class ICIPipelineService(IEventEmitter, IMonitoredService, ABC):
-    """CI pipeline management with event emission and monitoring.
+    """CI pipeline status queries from external CI systems.
 
-    Provides vendor-agnostic abstraction for CI systems (GitHub Actions, GitLab CI,
-    Jenkins, CircleCI, etc.). Enables:
+    Provides vendor-agnostic abstraction for querying CI pipeline status from
+    external systems (GitHub Actions, GitLab CI, Jenkins, CircleCI, etc.). Enables:
     1. Querying CI status for pull requests from external CI systems
-    2. Executing CI checks via external systems or local containers
+    2. Checking CI status for projects by resolving branches to PRs
     3. Monitoring CI pipeline completion and status changes
 
-    Implementations may vary: some adapters query external CI systems (e.g.,
-    GitHub Actions), while others may execute checks locally. Consult the adapter
-    documentation for specific behavior.
+    All implementations query external CI systems for the current status.
+    Adapters may differ in details (e.g., how they resolve branches to PRs),
+    but do not execute CI checks locally. Consult adapter documentation
+    for specific behavior.
 
     Events emitted:
         - 'ci.pipeline_status_checked' → CIPipelineStatusCheckedEvent
                                         When PR CI status is queried
         - 'ci.run_started' → CIRunStartedEvent
-                            When CI execution starts
+                            When CI status query begins
         - 'ci.run_completed' → CIRunCompletedEvent
-                              When CI execution completes
+                              When CI status query completes
 
     Example:
         # Get PR CI status from external system
@@ -295,7 +296,7 @@ class ICIPipelineService(IEventEmitter, IMonitoredService, ABC):
         if status.status == CICheckStatus.PASSED:
             print(f"PR {status.pr_id} passed all checks ({status.passed}/{status.total_checks})")
 
-        # Execute or query CI checks
+        # Query CI status by resolving branch to PR
         result = await service.run_ci_checks("proj-123", "/workspace", 600)
         if result.passed:
             print("All checks passed!")
@@ -332,29 +333,29 @@ class ICIPipelineService(IEventEmitter, IMonitoredService, ABC):
 
     @abstractmethod
     async def run_ci_checks(self, project_id: str, working_directory: str, timeout_seconds: int = 600) -> CIRunResult:
-        """Query or execute CI checks and return results.
+        """Query CI status from external system by resolving branch to PR.
 
-        Runs CI checks by either executing them locally within the provided working
-        directory (typically in a container with the project code mounted), or by
-        querying an external CI system for CI status. The specific strategy depends
-        on the adapter implementation. This allows validation of changes before
-        pushing to the remote repository.
+        Queries the CI status from an external CI system (GitHub Actions, GitLab CI,
+        etc.) for a project. The implementation resolves the current branch from the
+        working directory to locate the corresponding PR/MR, then queries the external
+        system for that PR's CI status. This allows checking CI results without
+        executing checks locally.
 
         Args:
             project_id: Project being checked
-            working_directory: Working directory for the project. Adapters may use this as the execution root for local checks, or to resolve branch/PR context for remote CI queries.
-            timeout_seconds: How long to allow check execution (default 600s / 10min)
+            working_directory: Working directory containing project code. Used to determine the current branch for resolving to a PR/MR in the external CI system.
+            timeout_seconds: How long to wait for CI status from external system (default 600s / 10min)
 
         Returns:
-            CIRunResult: Summary of check results with failures and warnings
+            CIRunResult: Summary of check results queried from external CI system
 
         Raises:
-            ResourceNotFoundError: Project doesn't exist
-            ValidationError: Invalid working directory or check configuration
+            ResourceNotFoundError: Project doesn't exist or no open PR for the branch
+            ValidationError: Invalid working directory or unable to read branch
             ExternalServiceError: Service communication failure
-            TimeoutError: CI checks didn't complete within timeout
+            TimeoutError: CI status not available within timeout
 
         Events:
-            Emits 'ci.run_started' event when execution begins
-            Emits 'ci.run_completed' event when execution finishes
+            Emits 'ci.run_started' event when query begins
+            Emits 'ci.run_completed' event when query completes
         """
