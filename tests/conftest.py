@@ -469,6 +469,13 @@ class ModernElasticsearchContainer(DockerContainer):
         self.with_env("http.host", "0.0.0.0")
         self.with_env("xpack.security.enabled", "false")
         self.with_env("discovery.type", "single-node")
+        # Without an explicit heap cap, Elasticsearch auto-sizes to ~50% of the
+        # HOST's visible memory (not any container limit) — on a 30GB host that's
+        # a ~15.8GB heap, pre-touched on startup, per ephemeral test container.
+        # Match the modest heap already used for the real service in
+        # docker-compose.yml so test runs can't individually or collectively
+        # exhaust host memory/swap.
+        self.with_env("ES_JAVA_OPTS", "-Xms512m -Xmx512m")
 
     def get_url(self) -> str:
         """Get the URL to access Elasticsearch.
