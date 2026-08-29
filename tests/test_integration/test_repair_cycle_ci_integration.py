@@ -852,8 +852,9 @@ class TestRepairCycleEventHandlerWithGitHubCIPipeline:
         ci_result = ci_results[0]
         # Verify: RepairTestResult contains GitHub CI data
         assert ci_result.final_result.test_type == RepairTestType.CI
-        assert ci_result.final_result.passed >= 0
-        assert ci_result.final_result.failed >= 0
+        # Mock returns 2 successful checks (unit-tests, linting) with SUCCESS conclusion
+        assert ci_result.final_result.passed == 2, f"Expected 2 passed checks, got {ci_result.final_result.passed}"
+        assert ci_result.final_result.failed == 0, f"Expected 0 failed checks, got {ci_result.final_result.failed}"
 
     @pytest.mark.asyncio
     async def test_github_ci_failing_checks_reach_repair_test_result(self, git_repo_with_feature_branch):
@@ -999,4 +1000,8 @@ class TestRepairCycleEventHandlerWithGitHubCIPipeline:
         ci_result = ci_results[0]
         # Verify: RepairTestResult reflects failed checks
         assert ci_result.final_result.test_type == RepairTestType.CI
-        assert ci_result.final_result.failed >= 0
+        # Mock returns 2 checks: unit-tests (FAILURE) and integration-tests (SUCCESS)
+        assert ci_result.final_result.failed == 1, f"Expected 1 failed check, got {ci_result.final_result.failed}"
+        assert ci_result.final_result.passed == 1, f"Expected 1 passed check, got {ci_result.final_result.passed}"
+        # Verify that failure details are captured
+        assert len(ci_result.final_result.failures) >= 1, "Should have at least one failure entry"
