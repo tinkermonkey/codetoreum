@@ -370,22 +370,29 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
             ExternalServiceError: If GitHub API call fails
             AuthenticationError: If authentication fails (permanent)
         """
+        # Validate inputs before event construction to prevent unhandled ValueError
+        if not project_id or not isinstance(project_id, str):
+            msg = "project_id must be a non-empty string"
+            raise ValidationError(msg)
+        if timeout_seconds <= 0:
+            msg = "timeout_seconds must be a positive integer"
+            raise ValidationError(msg)
+
         workflow_run_id = str(uuid4())
 
-        # Emit run started event
-        started_event = CIRunStartedEvent(
-            type="ci.run_started",
-            project_id=project_id,
-            workflow_run_id=workflow_run_id,
-            working_directory=working_directory,
-            timeout_seconds=timeout_seconds,
-            checks_planned=0,
-            timestamp=datetime.now(UTC).isoformat(),
-            source="github",
-        )
-        self.emit(started_event)
-
         try:
+            # Emit run started event — construction/emission errors won't mask the original exception
+            started_event = CIRunStartedEvent(
+                type="ci.run_started",
+                project_id=project_id,
+                workflow_run_id=workflow_run_id,
+                working_directory=working_directory,
+                timeout_seconds=timeout_seconds,
+                checks_planned=0,
+                timestamp=datetime.now(UTC).isoformat(),
+                source="github",
+            )
+            self.emit(started_event)
             pr_number = await self._resolve_pr_for_branch(working_directory)
 
             ci_status = await self.get_pr_ci_status(pr_number, project_id, timeout_seconds)
@@ -453,23 +460,42 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
     def _emit_ci_error_event(self, project_id: str, workflow_run_id: str, error: Exception) -> None:
         """Emit CIRunCompletedEvent for an error path.
 
+        Wraps both event construction and emission in try/except to prevent failures
+        from masking the original exception. Failures during construction or emission
+        are logged for diagnostics but don't propagate to the caller. This ensures
+        the original error is always raised even if the completion event cannot be
+        created or emitted.
+
         Args:
             project_id: The project ID
             workflow_run_id: The workflow run ID
             error: The exception that occurred
         """
-        error_event = CIRunCompletedEvent(
-            type="ci.run_completed",
-            project_id=project_id,
-            workflow_run_id=workflow_run_id,
-            passed_count=0,
-            failure_count=1,
-            warning_count=0,
-            output=f"CI checks failed: {type(error).__name__}: {error!s}",
-            timestamp=datetime.now(UTC).isoformat(),
-            source="github",
-        )
-        self.emit(error_event)
+        try:
+            error_event = CIRunCompletedEvent(
+                type="ci.run_completed",
+                project_id=project_id,
+                workflow_run_id=workflow_run_id,
+                passed_count=0,
+                failure_count=1,
+                warning_count=0,
+                output=f"CI checks failed: {type(error).__name__}: {error!s}",
+                timestamp=datetime.now(UTC).isoformat(),
+                source="github",
+            )
+            self.emit(error_event)
+        except Exception as emit_error:
+            logger.error(
+                f"Failed to construct or emit CI run completed event for workflow {workflow_run_id}",
+                extra={
+                    "error_id": ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR,
+                    "project_id": project_id,
+                    "workflow_run_id": workflow_run_id,
+                    "original_error": str(error),
+                    "emission_error": str(emit_error),
+                },
+                exc_info=True,
+            )
 
     async def _resolve_pr_for_branch(self, working_directory: str) -> str:
         """Resolve the open PR for the branch checked out at working_directory.
