@@ -402,6 +402,20 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
                     "error_type": type(e).__name__,
                 },
             )
+
+            # Emit run completed event on error path (INV-10: all state changes emit events)
+            error_event = CIRunCompletedEvent(
+                type="ci.run_completed",
+                project_id=project_id,
+                workflow_run_id=workflow_run_id,
+                passed_count=0,
+                failure_count=1,
+                warning_count=0,
+                output=f"CI checks failed: {type(e).__name__}: {str(e)}",
+                timestamp=datetime.now(UTC).isoformat(),
+                source="github",
+            )
+            self.emit(error_event)
             raise
 
         # Emit run completed event
