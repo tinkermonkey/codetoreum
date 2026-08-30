@@ -167,6 +167,7 @@ NON_CRITICAL_SLOTS = {
     "systemic_analysis",
     "environment_repair",
     "repair_cycle",
+    "ci_pipeline",
 }
 
 
@@ -300,6 +301,7 @@ class ProductionApplicationBootstrap:
                 systemic_analysis="production",
                 environment_repair="production",
                 repair_cycle="production",
+                ci_pipeline="github",
             )
 
         self.config = adapter_config

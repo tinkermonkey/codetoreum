@@ -702,8 +702,10 @@ class TestCIRunCompletedEvent:
             source="orchestrator",
             project_id="proj-1",
             workflow_run_id="wf-123",
+            check_count=5,
             passed_count=5,
             failure_count=0,
+            pending_count=0,
         )
 
         with pytest.raises(FrozenInstanceError):
@@ -724,16 +726,20 @@ class TestCIRunCompletedEvent:
             source="orchestrator",
             project_id="proj-1",
             workflow_run_id="wf-123",
+            check_count=5,
             passed_count=5,
             failure_count=0,
+            pending_count=0,
             warning_count=0,
             output="All tests passed!",
         )
 
         assert event.project_id == "proj-1"
         assert event.workflow_run_id == "wf-123"
+        assert event.check_count == 5
         assert event.passed_count == 5
         assert event.failure_count == 0
+        assert event.pending_count == 0
         assert event.warning_count == 0
         assert event.output == "All tests passed!"
 
@@ -745,14 +751,18 @@ class TestCIRunCompletedEvent:
             source="orchestrator",
             project_id="proj-1",
             workflow_run_id="wf-123",
+            check_count=5,
             passed_count=3,
             failure_count=2,
+            pending_count=0,
             warning_count=1,
             output="Some tests failed",
         )
 
+        assert event.check_count == 5
         assert event.passed_count == 3
         assert event.failure_count == 2
+        assert event.pending_count == 0
         assert event.warning_count == 1
 
     def test_run_completed_empty_output(self):
@@ -763,8 +773,10 @@ class TestCIRunCompletedEvent:
             source="orchestrator",
             project_id="proj-1",
             workflow_run_id="wf-123",
+            check_count=0,
             passed_count=0,
             failure_count=0,
+            pending_count=0,
             warning_count=0,
             output="",
         )
@@ -780,8 +792,10 @@ class TestCIRunCompletedEvent:
                 source="orchestrator",
                 project_id="",  # Empty
                 workflow_run_id="wf-123",
+                check_count=5,
                 passed_count=5,
                 failure_count=0,
+                pending_count=0,
             )
 
     def test_missing_workflow_run_id(self):
@@ -793,8 +807,10 @@ class TestCIRunCompletedEvent:
                 source="orchestrator",
                 project_id="proj-1",
                 workflow_run_id="",  # Empty
+                check_count=5,
                 passed_count=5,
                 failure_count=0,
+                pending_count=0,
             )
 
     def test_negative_passed(self):
@@ -806,8 +822,10 @@ class TestCIRunCompletedEvent:
                 source="orchestrator",
                 project_id="proj-1",
                 workflow_run_id="wf-123",
+                check_count=1,
                 passed_count=-1,  # Invalid
                 failure_count=0,
+                pending_count=0,
             )
 
     def test_negative_failed(self):
@@ -819,8 +837,10 @@ class TestCIRunCompletedEvent:
                 source="orchestrator",
                 project_id="proj-1",
                 workflow_run_id="wf-123",
+                check_count=5,
                 passed_count=5,
                 failure_count=-1,  # Invalid
+                pending_count=0,
             )
 
     def test_negative_warning_count(self):
@@ -832,8 +852,10 @@ class TestCIRunCompletedEvent:
                 source="orchestrator",
                 project_id="proj-1",
                 workflow_run_id="wf-123",
+                check_count=5,
                 passed_count=5,
                 failure_count=0,
+                pending_count=0,
                 warning_count=-1,  # Invalid
             )
 
@@ -847,8 +869,10 @@ class TestCIRunCompletedEvent:
             correlation_id="corr-123",
             project_id="proj-1",
             workflow_run_id="wf-123",
+            check_count=5,
             passed_count=5,
             failure_count=0,
+            pending_count=0,
             warning_count=0,
             output="All tests passed!",
         )
@@ -858,8 +882,10 @@ class TestCIRunCompletedEvent:
         assert d["type"] == "ci.run_completed"
         assert d["project_id"] == "proj-1"
         assert d["workflow_run_id"] == "wf-123"
+        assert d["check_count"] == 5
         assert d["passed_count"] == 5
         assert d["failure_count"] == 0
+        assert d["pending_count"] == 0
         assert d["warning_count"] == 0
         assert d["output"] == "All tests passed!"
 
@@ -873,8 +899,10 @@ class TestCIRunCompletedEvent:
             "correlation_id": "corr-123",
             "project_id": "proj-1",
             "workflow_run_id": "wf-123",
+            "check_count": 5,
             "passed_count": 5,
             "failure_count": 0,
+            "pending_count": 0,
             "warning_count": 0,
             "output": "All tests passed!",
         }
@@ -884,8 +912,10 @@ class TestCIRunCompletedEvent:
         assert event.type == "ci.run_completed"
         assert event.project_id == "proj-1"
         assert event.workflow_run_id == "wf-123"
+        assert event.check_count == 5
         assert event.passed_count == 5
         assert event.failure_count == 0
+        assert event.pending_count == 0
         assert event.warning_count == 0
         assert event.output == "All tests passed!"
 
@@ -899,8 +929,10 @@ class TestCIRunCompletedEvent:
             correlation_id="corr-123",
             project_id="proj-1",
             workflow_run_id="wf-123",
+            check_count=5,
             passed_count=5,
             failure_count=0,
+            pending_count=0,
             warning_count=0,
             output="All tests passed!",
         )
@@ -910,8 +942,10 @@ class TestCIRunCompletedEvent:
 
         assert restored.project_id == original.project_id
         assert restored.workflow_run_id == original.workflow_run_id
+        assert restored.check_count == original.check_count
         assert restored.passed_count == original.passed_count
         assert restored.failure_count == original.failure_count
+        assert restored.pending_count == original.pending_count
         assert restored.warning_count == original.warning_count
         assert restored.output == original.output
 
@@ -956,3 +990,125 @@ class TestCIRunCompletedEvent:
 
         with pytest.raises(KeyError):
             CIRunCompletedEvent.from_dict(d)
+
+    def test_negative_check_count(self):
+        """Test that check_count must be non-negative."""
+        with pytest.raises(ValueError, match="check_count"):
+            CIRunCompletedEvent(
+                type="ci.run_completed",
+                timestamp=now_iso(),
+                source="orchestrator",
+                project_id="proj-1",
+                workflow_run_id="wf-123",
+                check_count=-1,  # Invalid
+                passed_count=0,
+                failure_count=0,
+                pending_count=0,
+            )
+
+    def test_negative_pending_count(self):
+        """Test that pending_count must be non-negative."""
+        with pytest.raises(ValueError, match="pending_count"):
+            CIRunCompletedEvent(
+                type="ci.run_completed",
+                timestamp=now_iso(),
+                source="orchestrator",
+                project_id="proj-1",
+                workflow_run_id="wf-123",
+                check_count=3,
+                passed_count=0,
+                failure_count=0,
+                pending_count=-1,  # Invalid
+            )
+
+    def test_count_consistency_exceeded(self):
+        """Test that sum of counts cannot exceed check_count."""
+        with pytest.raises(ValueError, match="exceeds check_count"):
+            CIRunCompletedEvent(
+                type="ci.run_completed",
+                timestamp=now_iso(),
+                source="orchestrator",
+                project_id="proj-1",
+                workflow_run_id="wf-123",
+                check_count=2,
+                passed_count=3,  # Impossible: exceeds check_count
+                failure_count=0,
+                pending_count=0,
+            )
+
+    def test_count_consistency_valid(self):
+        """Test that valid count combinations are accepted."""
+        # Sum equals check_count
+        event = CIRunCompletedEvent(
+            type="ci.run_completed",
+            timestamp=now_iso(),
+            source="orchestrator",
+            project_id="proj-1",
+            workflow_run_id="wf-123",
+            check_count=5,
+            passed_count=2,
+            failure_count=1,
+            pending_count=2,
+        )
+        assert event.check_count == 5
+        assert event.passed_count + event.failure_count + event.pending_count == 5
+
+        # Sum is less than check_count (skipped checks)
+        event2 = CIRunCompletedEvent(
+            type="ci.run_completed",
+            timestamp=now_iso(),
+            source="orchestrator",
+            project_id="proj-1",
+            workflow_run_id="wf-123",
+            check_count=5,
+            passed_count=2,
+            failure_count=1,
+            pending_count=1,  # Sum is 4, less than 5
+        )
+        assert event2.check_count == 5
+        assert event2.passed_count + event2.failure_count + event2.pending_count == 4
+
+    def test_run_completed_with_pending_checks(self):
+        """Test CI run completed with pending checks."""
+        event = CIRunCompletedEvent(
+            type="ci.run_completed",
+            timestamp=now_iso(),
+            source="orchestrator",
+            project_id="proj-1",
+            workflow_run_id="wf-123",
+            check_count=5,
+            passed_count=2,
+            failure_count=1,
+            pending_count=2,
+            warning_count=0,
+            output="Some checks still running",
+        )
+
+        assert event.check_count == 5
+        assert event.passed_count == 2
+        assert event.failure_count == 1
+        assert event.pending_count == 2
+
+    def test_from_dict_legacy_event_without_check_count(self):
+        """Legacy events without check_count/pending_count must deserialize successfully.
+
+        This test ensures backward compatibility for events persisted to Elasticsearch
+        before the check_count field was added. The check_count should be derived from
+        the sum of passed_count + failure_count + pending_count (defaulting to 0).
+        """
+        d = {
+            "type": "ci.run_completed",
+            "timestamp": now_iso(),
+            "source": "orchestrator",
+            "project_id": "proj-1",
+            "workflow_run_id": "wf-123",
+            "passed_count": 5,
+            "failure_count": 2,
+            "warning_count": 0,
+            "output": "legacy output",
+        }
+        event = CIRunCompletedEvent.from_dict(d)
+        assert event.check_count == 7  # derived from passed + failure
+        assert event.pending_count == 0  # defaulted
+        assert event.passed_count == 5
+        assert event.failure_count == 2

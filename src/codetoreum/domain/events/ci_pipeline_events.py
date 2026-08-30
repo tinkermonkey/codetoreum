@@ -219,14 +219,17 @@ class CIRunCompletedEvent(CodetoreumEvent):
     integrity. Attempting to modify any field will raise `FrozenInstanceError`.
 
     Tracks the completion of CI check execution with results summary, including
-    the number of passed, failed, and warning counts.
+    the number of passed, failed, pending, and warning counts for accurate
+    audit trail information in event-sourced systems.
 
     Attributes:
         type (str): Fixed to "ci.run_completed"
         project_id (str): Project that was checked
         workflow_run_id (str): ID of the workflow run this is part of
+        check_count (int): Total number of CI checks in pipeline
         passed_count (int): Number of checks that passed
         failure_count (int): Number of checks that failed
+        pending_count (int): Number of checks still pending or running
         warning_count (int): Number of non-fatal warnings during CI execution
         output (str): Full output/logs from CI execution
         timestamp (str): ISO 8601 timestamp when execution completed
@@ -234,8 +237,10 @@ class CIRunCompletedEvent(CodetoreumEvent):
 
     project_id: str = ""
     workflow_run_id: str = ""
+    check_count: int = 0
     passed_count: int = 0
     failure_count: int = 0
+    pending_count: int = 0
     warning_count: int = 0
     output: str = ""
 
@@ -248,14 +253,26 @@ class CIRunCompletedEvent(CodetoreumEvent):
         if not self.workflow_run_id:
             msg = "workflow_run_id is required"
             raise ValueError(msg)
+        if self.check_count < 0:
+            msg = "check_count must be a non-negative integer"
+            raise ValueError(msg)
         if self.passed_count < 0:
             msg = "passed_count must be a non-negative integer"
             raise ValueError(msg)
         if self.failure_count < 0:
             msg = "failure_count must be a non-negative integer"
             raise ValueError(msg)
+        if self.pending_count < 0:
+            msg = "pending_count must be a non-negative integer"
+            raise ValueError(msg)
         if self.warning_count < 0:
             msg = "warning_count must be a non-negative integer"
+            raise ValueError(msg)
+
+        # Cross-field consistency: validate that sum of counts does not exceed total checks
+        sum_of_counts = self.passed_count + self.failure_count + self.pending_count
+        if sum_of_counts > self.check_count:
+            msg = f"Sum of passed_count ({self.passed_count}) + failure_count ({self.failure_count}) + pending_count ({self.pending_count}) = {sum_of_counts} exceeds check_count ({self.check_count})"
             raise ValueError(msg)
 
     def to_dict(self) -> dict[str, Any]:
@@ -265,8 +282,10 @@ class CIRunCompletedEvent(CodetoreumEvent):
             {
                 "project_id": self.project_id,
                 "workflow_run_id": self.workflow_run_id,
+                "check_count": self.check_count,
                 "passed_count": self.passed_count,
                 "failure_count": self.failure_count,
+                "pending_count": self.pending_count,
                 "warning_count": self.warning_count,
                 "output": self.output,
             }
@@ -277,12 +296,20 @@ class CIRunCompletedEvent(CodetoreumEvent):
     def from_dict(cls, data: dict[str, Any]) -> "CIRunCompletedEvent":
         """Deserialize from dictionary.
 
+        For backward compatibility with historical events that lack check_count,
+        derives check_count from the sum of passed_count + failure_count + pending_count.
+
         Raises:
             KeyError: If required fields (project_id, workflow_run_id, passed_count,
                      failure_count) are missing.
             ValueError: If timestamp/source are empty, or if validation fails
-                       (counts must be non-negative, etc.).
+                       (counts must be non-negative, sum consistency, etc.).
         """
+        # Backward compatibility: derive check_count from count sum if absent
+        check_count = data.get("check_count")
+        if check_count is None:
+            check_count = data["passed_count"] + data["failure_count"] + data.get("pending_count", 0)
+
         return cls(
             type=data.get("type", "ci.run_completed"),
             timestamp=data.get("timestamp", ""),
@@ -291,8 +318,10 @@ class CIRunCompletedEvent(CodetoreumEvent):
             event_id=data.get("event_id") or str(uuid4()),
             project_id=data["project_id"],
             workflow_run_id=data["workflow_run_id"],
+            check_count=check_count,
             passed_count=data["passed_count"],
             failure_count=data["failure_count"],
+            pending_count=data.get("pending_count", 0),
             warning_count=data.get("warning_count", 0),
             output=data.get("output", ""),
         )

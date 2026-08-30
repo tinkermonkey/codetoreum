@@ -7,13 +7,20 @@ Implements ICIPipelineService interface for GitHub, supporting:
 - Monitoring state lifecycle management
 """
 
+import asyncio
 import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from codetoreum.adapters.secondary.github_ticket_adapter import GitHubTicketAdapter
-from codetoreum.domain.events.ci_pipeline_events import CIPipelineStatusCheckedEvent
+from codetoreum.domain.events.ci_pipeline_events import (
+    CIPipelineStatusCheckedEvent,
+    CIRunCompletedEvent,
+    CIRunStartedEvent,
+)
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.http.github_graphql_client import (
     GitHubGraphQLClient,
@@ -342,10 +349,12 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
             raise ExternalServiceError(service="GitHub", message=f"Failed to query PR CI status: {e}") from e
 
     async def run_ci_checks(self, project_id: str, working_directory: str, timeout_seconds: int = 600) -> CIRunResult:
-        """Execute CI checks locally in a working directory.
+        """Execute CI checks via the open PR for the current branch.
 
-        This method is not yet implemented. Use get_pr_ci_status to query CI status
-        from GitHub.
+        Resolves the open PR for the branch checked out at working_directory,
+        then queries GitHub for the PR's CI status and returns it as a CIRunResult.
+        Pending/in-progress checks return a CIRunResult with passed=False rather than
+        raising an exception.
 
         Args:
             project_id: Project being checked
@@ -356,10 +365,326 @@ class GitHubCIPipelineAdapter(ICIPipelineService):
             CIRunResult: Summary of check results with failures and warnings
 
         Raises:
-            NotImplementedError: Feature not yet implemented
+            ValidationError: If working_directory is not a git repo or git is unavailable
+            ResourceNotFoundError: If no open PR exists for the branch
+            ExternalServiceError: If GitHub API call fails
+            AuthenticationError: If authentication fails (permanent)
         """
-        msg = "Local CI execution is not yet implemented. Use get_pr_ci_status to query CI status from GitHub."
-        raise NotImplementedError(msg)
+        # Validate inputs before event construction to prevent unhandled ValueError
+        if not project_id or not isinstance(project_id, str):
+            msg = "project_id must be a non-empty string"
+            raise ValidationError(msg)
+        if timeout_seconds <= 0:
+            msg = "timeout_seconds must be a positive integer"
+            raise ValidationError(msg)
+
+        workflow_run_id = str(uuid4())
+
+        try:
+            # Emit run started event — construction/emission errors won't mask the original exception
+            started_event = CIRunStartedEvent(
+                type="ci.run_started",
+                project_id=project_id,
+                workflow_run_id=workflow_run_id,
+                working_directory=working_directory,
+                timeout_seconds=timeout_seconds,
+                checks_planned=0,
+                timestamp=datetime.now(UTC).isoformat(),
+                source="github",
+            )
+            self.emit(started_event)
+            pr_number = await self._resolve_pr_for_branch(working_directory)
+
+            ci_status = await self.get_pr_ci_status(pr_number, project_id, timeout_seconds)
+
+            run_result = self._convert_ci_status_to_run_result(ci_status)
+        except (AuthenticationError, ResourceNotFoundError, ValidationError) as e:
+            # Permanent errors - log and re-raise
+            logger.error(
+                f"Permanent error running CI checks for project {project_id}",
+                exc_info=True,
+                extra={
+                    "error_id": ErrorRegistry.ERR_EXTERNAL_SERVICE_ERROR,
+                    "project_id": project_id,
+                    "working_directory": working_directory,
+                    "error_type": "permanent",
+                },
+            )
+            self._emit_ci_error_event(project_id, workflow_run_id, e)
+            raise
+        except ExternalServiceError as e:
+            # Transient errors - log at warning level and re-raise
+            logger.warning(
+                f"Transient error running CI checks for project {project_id}: {e}",
+                exc_info=True,
+                extra={
+                    "error_id": ErrorRegistry.ERR_EXTERNAL_SERVICE_ERROR,
+                    "project_id": project_id,
+                    "working_directory": working_directory,
+                    "error_type": "transient",
+                },
+            )
+            self._emit_ci_error_event(project_id, workflow_run_id, e)
+            raise
+        except Exception as e:
+            # Unexpected errors - log critically and wrap as ExternalServiceError
+            logger.critical(
+                f"Unexpected error running CI checks for project {project_id}: {e}",
+                exc_info=True,
+                extra={
+                    "error_id": ErrorRegistry.ERR_EXTERNAL_SERVICE_ERROR,
+                    "project_id": project_id,
+                    "working_directory": working_directory,
+                    "error_type": "unexpected",
+                },
+            )
+            self._emit_ci_error_event(project_id, workflow_run_id, e)
+            raise ExternalServiceError(service="GitHub", message=f"Failed to run CI checks: {e}") from e
+
+        # Emit run completed event
+        passed_count = sum(1 for r in run_result.check_results if r.status == CICheckStatus.PASSED)
+        pending_count = sum(1 for r in run_result.check_results if r.status in (CICheckStatus.PENDING, CICheckStatus.RUNNING))
+        check_count = len(run_result.check_results)
+
+        completed_event = CIRunCompletedEvent(
+            type="ci.run_completed",
+            project_id=project_id,
+            workflow_run_id=workflow_run_id,
+            check_count=check_count,
+            passed_count=passed_count,
+            failure_count=run_result.failed,
+            pending_count=pending_count,
+            warning_count=len(run_result.warnings),
+            output=run_result.output,
+            timestamp=datetime.now(UTC).isoformat(),
+            source="github",
+        )
+        self.emit(completed_event)
+
+        return run_result
+
+    def _emit_ci_error_event(self, project_id: str, workflow_run_id: str, error: Exception) -> None:
+        """Emit CIRunCompletedEvent for an error path.
+
+        Wraps both event construction and emission in try/except to prevent failures
+        from masking the original exception. Failures during construction or emission
+        are logged for diagnostics but don't propagate to the caller. This ensures
+        the original error is always raised even if the completion event cannot be
+        created or emitted.
+
+        Args:
+            project_id: The project ID
+            workflow_run_id: The workflow run ID
+            error: The exception that occurred
+        """
+        try:
+            error_event = CIRunCompletedEvent(
+                type="ci.run_completed",
+                project_id=project_id,
+                workflow_run_id=workflow_run_id,
+                check_count=1,
+                passed_count=0,
+                failure_count=1,
+                pending_count=0,
+                warning_count=0,
+                output=f"CI checks failed: {type(error).__name__}: {error!s}",
+                timestamp=datetime.now(UTC).isoformat(),
+                source="github",
+            )
+            self.emit(error_event)
+        except Exception as emit_error:
+            logger.error(
+                f"Failed to construct or emit CI run completed event for workflow {workflow_run_id}",
+                extra={
+                    "error_id": ErrorRegistry.ERR_EVENT_PUBLICATION_ERROR,
+                    "project_id": project_id,
+                    "workflow_run_id": workflow_run_id,
+                    "original_error": str(error),
+                    "emission_error": str(emit_error),
+                },
+                exc_info=True,
+            )
+
+    async def _resolve_pr_for_branch(self, working_directory: str) -> str:
+        """Resolve the open PR for the branch checked out at working_directory.
+
+        Executes a local, credential-free `git rev-parse --abbrev-ref HEAD` to get
+        the current branch name, then queries GitHub GraphQL for the open PR with
+        that branch name (headRefName). Returns the PR number or raises an error.
+
+        Args:
+            working_directory: Directory containing the git repository
+
+        Returns:
+            PR number as a string (e.g., "123")
+
+        Raises:
+            ValidationError: If working_directory is not a git repo or git is unavailable
+            ResourceNotFoundError: If no open PR exists for the branch
+            ExternalServiceError: If GitHub API call fails
+        """
+        # Validate working_directory exists
+        work_path = Path(working_directory)
+        if not work_path.is_dir():
+            msg = f"working_directory does not exist: {working_directory}"
+            raise ValidationError(msg)
+
+        # Get current branch name via git rev-parse
+        try:
+            process = await asyncio.create_subprocess_exec(
+                "git",
+                "rev-parse",
+                "--abbrev-ref",
+                "HEAD",
+                cwd=working_directory,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=10.0)
+
+            if process.returncode != 0:
+                error_msg = stderr.decode("utf-8", errors="replace").strip()
+                if "not a git repository" in error_msg.lower():
+                    msg = f"{working_directory} is not a git repository"
+                    raise ValidationError(msg)
+                msg = f"Failed to get current branch: {error_msg}"
+                raise ValidationError(msg)
+
+            branch_name = stdout.decode("utf-8", errors="replace").strip()
+            if not branch_name:
+                msg = "Failed to determine current branch name"
+                raise ValidationError(msg)
+
+        except TimeoutError as e:
+            if process.returncode is None:
+                try:
+                    process.kill()
+                except ProcessLookupError:
+                    pass
+            await process.wait()
+            msg = "git rev-parse command timed out"
+            raise ValidationError(msg) from e
+        except FileNotFoundError as e:
+            msg = "git is not available or not in PATH"
+            raise ValidationError(msg) from e
+
+        # Query GitHub for open PRs with this branch name
+        try:
+            owner, repo = await self._get_owner_repo()
+
+            query = """
+            query GetPullRequestByBranch($owner: String!, $repo: String!, $headRefName: String!) {
+              repository(owner: $owner, name: $repo) {
+                pullRequests(headRefName: $headRefName, states: OPEN, first: 1, orderBy: {field: UPDATED_AT, direction: DESC}) {
+                  nodes {
+                    number
+                  }
+                }
+              }
+            }
+            """
+
+            result = await self._graphql.execute(
+                query,
+                {
+                    "owner": owner,
+                    "repo": repo,
+                    "headRefName": branch_name,
+                },
+            )
+
+            pr_nodes = result.get("repository", {}).get("pullRequests", {}).get("nodes", [])
+
+            if not pr_nodes:
+                raise ResourceNotFoundError("PullRequest", branch_name)
+
+            # Return the PR number of the first (most recently updated) PR
+            pr_number_value = pr_nodes[0].get("number")
+            if pr_number_value is None:
+                msg = f"PR node missing number field for branch '{branch_name}'"
+                raise ExternalServiceError(service="GitHub", message=msg)
+            pr_number = str(pr_number_value)
+
+            logger.info(f"Resolved branch '{branch_name}' to PR #{pr_number}")
+            return pr_number
+
+        except (AuthenticationError, ValidationError, ResourceNotFoundError, ExternalServiceError):
+            raise
+        except Exception as e:
+            msg = f"Failed to query GitHub for PR: {e}"
+            raise ExternalServiceError(service="GitHub", message=msg) from e
+
+    def _convert_ci_status_to_run_result(self, ci_status: CIPipelineStatus) -> CIRunResult:
+        """Convert CIPipelineStatus to CIRunResult.
+
+        Maps the status and check results from a queried PR CI status into the
+        CIRunResult format. Passes through check results verbatim and uses actual
+        failed count per spec: CIRunResult.check_results ← status.check_results,
+        CIRunResult.failed ← status.failed. Does not create synthetic checks.
+
+        Edge case: When there are no checks at all (empty check_results), passes=True
+        because there are no failures to report (vacuously true).
+
+        Args:
+            ci_status: CI pipeline status from GitHub
+
+        Returns:
+            CIRunResult with verbatim check results and actual failed count
+
+        Raises:
+            ValueError: If check_results or failed count are invalid (programming bug)
+        """
+        # Pass through check results verbatim per spec — no synthetic checks
+        check_results = list(ci_status.check_results)
+
+        # Determine overall passed status:
+        # - True if there are no checks at all (vacuously true — no failures)
+        # - True if all checks actually passed, no checks pending/running
+        # - False otherwise
+        if len(check_results) == 0:
+            # No checks to run — treat as passed (vacuously true)
+            passed = True
+        else:
+            # Checks exist: passed only if no failures and no pending checks
+            passed = (
+                ci_status.failed == 0
+                and ci_status.pending == 0
+                and ci_status.status in (CICheckStatus.PASSED, CICheckStatus.SKIPPED)
+            )
+
+        # Collect failure descriptions from actual failed checks only
+        failures: list[str] = []
+        for check in check_results:
+            if check.status == CICheckStatus.FAILED:
+                failure_desc = f"{check.name}: {check.conclusion}" if check.conclusion else check.name
+                failures.append(failure_desc)
+
+        # Use actual failed count from status per spec
+        failed_count = ci_status.failed
+
+        # Build summary output
+        summary_parts = [
+            f"CI Pipeline Status: {ci_status.status.value}",
+            f"Total checks: {ci_status.total_checks}",
+            f"Passed: {ci_status.passed}",
+            f"Failed: {ci_status.failed}",
+            f"Pending/Running: {ci_status.pending}",
+        ]
+        if ci_status.pipeline_url:
+            summary_parts.append(f"Pipeline URL: {ci_status.pipeline_url}")
+
+        output = "\n".join(summary_parts)
+
+        run_result = CIRunResult(
+            passed=passed,
+            failed=failed_count,
+            check_results=tuple(check_results),
+            failures=tuple(failures),
+            warnings=(),
+            output=output,
+        )
+
+        return run_result
 
     # ===== Helper Methods =====
 

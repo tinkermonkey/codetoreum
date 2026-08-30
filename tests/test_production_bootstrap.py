@@ -349,6 +349,7 @@ def test_non_critical_adapter_slots_defined() -> None:
         "systemic_analysis",
         "environment_repair",
         "repair_cycle",
+        "ci_pipeline",
     }
 
     assert expected_non_critical == NON_CRITICAL_SLOTS
@@ -807,3 +808,30 @@ def test_repair_cycle_in_production_adapter_selection_config() -> None:
     # Verify it matches the sibling repair adapters
     assert bootstrap.config.systemic_analysis == "production"
     assert bootstrap.config.environment_repair == "production"
+
+
+def test_ci_pipeline_in_production_adapter_selection_config() -> None:
+    """Verify that the default ProductionApplicationBootstrap config sets ci_pipeline='github'."""
+    from codetoreum.infrastructure.bootstrap.production_bootstrap import ProductionApplicationBootstrap
+
+    bootstrap = ProductionApplicationBootstrap()
+
+    # Verify the config includes ci_pipeline="github"
+    assert bootstrap.config.ci_pipeline == "github", (
+        "ProductionApplicationBootstrap should set ci_pipeline='github' in default config"
+    )
+
+
+def test_ci_pipeline_in_non_critical_slots() -> None:
+    """Verify that ci_pipeline is in NON_CRITICAL_SLOTS (not on critical path)."""
+    from codetoreum.infrastructure.bootstrap.production_bootstrap import (
+        CRITICAL_ADAPTER_SLOTS,
+        NON_CRITICAL_SLOTS,
+    )
+
+    # Verify ci_pipeline is not in critical slots
+    assert "ci_pipeline" not in CRITICAL_ADAPTER_SLOTS, "ci_pipeline should not be on critical path"
+    # Verify ci_pipeline is in non-critical slots
+    assert "ci_pipeline" in NON_CRITICAL_SLOTS, "ci_pipeline should be in non-critical slots"
+
+

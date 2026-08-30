@@ -1,10 +1,11 @@
-"""CI pipeline service port interface with event emission.
+"""CI pipeline service port interface for querying external CI status.
 
 This interface defines contracts for CI pipeline integration, including
-querying CI status for pull requests and executing local CI checks.
+querying CI status for pull requests and resolving branches to PRs for CI status.
 
 CI pipelines are vendor-agnostic abstractions over GitHub Actions, GitLab CI,
-Jenkins, CircleCI, and other CI/CD platforms.
+Jenkins, CircleCI, and other CI/CD platforms. All implementations query
+external CI systems for the current status—they do not execute checks locally.
 """
 
 from abc import ABC, abstractmethod
@@ -166,22 +167,22 @@ class CIPipelineStatus:
 
 @dataclass(frozen=True)
 class CIRunResult:
-    """Result of running CI checks locally.
+    """Result of querying CI checks from an external CI system.
 
-    Represents the outcome of executing CI checks in a local environment
-    (typically in a container). All fields are validated at construction to
-    ensure contract boundary integrity. Frozen to prevent accidental mutation
-    after creation. Check results are converted to a tuple for true immutability.
-    Cross-field consistency is enforced: the passed boolean must match
-    the actual check results.
+    Represents the outcome of querying CI status from an external CI system
+    (GitHub Actions, GitLab CI, Jenkins, CircleCI, etc.). All fields are validated
+    at construction to ensure contract boundary integrity. Frozen to prevent
+    accidental mutation after creation. Check results are converted to a tuple
+    for true immutability. Cross-field consistency is enforced: the passed boolean
+    must match the actual check results.
 
     Attributes:
         passed: Boolean indicating whether all CI checks passed (True) or any failed (False)
         failed: Number of checks that failed
         check_results: Tuple of detailed results for each CI check
         failures: Tuple of failure descriptions from failed checks
-        warnings: Tuple of non-fatal warnings from CI execution
-        output: Full output/logs from CI execution
+        warnings: Tuple of non-fatal warnings from CI query
+        output: Full output/logs from the external CI system
     """
 
     passed: bool
@@ -248,32 +249,46 @@ class CIRunResult:
             msg = f"failed count ({self.failed}) does not match check_results ({failed_results} checks are FAILED)"
             raise ValueError(msg)
 
-        # Validate that passed boolean is consistent with failed count
+        # Validate that passed boolean is consistent with failed count and pending/running checks
+        pending_or_running = sum(
+            1 for r in self.check_results if r.status in (CICheckStatus.PENDING, CICheckStatus.RUNNING)
+        )
+
         if self.passed and self.failed != 0:
             msg = f"passed is True but failed count is {self.failed} (should be 0)"
             raise ValueError(msg)
 
-        if not self.passed and self.failed == 0:
-            msg = "passed is False but failed count is 0 (should be > 0)"
+        if self.passed and pending_or_running > 0:
+            msg = f"passed is True but {pending_or_running} checks are still pending/running"
+            raise ValueError(msg)
+
+        # Allow passed=False with failed=0 only if there are pending/running checks
+        if not self.passed and self.failed == 0 and pending_or_running == 0:
+            msg = "passed is False but failed count is 0 and no checks are pending/running (should have failed checks or pending checks)"
             raise ValueError(msg)
 
 
 class ICIPipelineService(IEventEmitter, IMonitoredService, ABC):
-    """CI pipeline management with event emission and monitoring.
+    """CI pipeline status queries from external CI systems.
 
-    Provides vendor-agnostic abstraction for CI systems (GitHub Actions, GitLab CI,
-    Jenkins, CircleCI, etc.). Enables:
-    1. Querying CI status for pull requests
-    2. Executing local CI checks within containers
+    Provides vendor-agnostic abstraction for querying CI pipeline status from
+    external systems (GitHub Actions, GitLab CI, Jenkins, CircleCI, etc.). Enables:
+    1. Querying CI status for pull requests from external CI systems
+    2. Checking CI status for projects by resolving branches to PRs
     3. Monitoring CI pipeline completion and status changes
+
+    All implementations query external CI systems for the current status.
+    Adapters may differ in details (e.g., how they resolve branches to PRs),
+    but do not execute CI checks locally. Consult adapter documentation
+    for specific behavior.
 
     Events emitted:
         - 'ci.pipeline_status_checked' → CIPipelineStatusCheckedEvent
                                         When PR CI status is queried
         - 'ci.run_started' → CIRunStartedEvent
-                            When local CI execution starts
+                            When CI status query begins
         - 'ci.run_completed' → CIRunCompletedEvent
-                              When local CI execution completes
+                              When CI status query completes
 
     Example:
         # Get PR CI status from external system
@@ -281,7 +296,7 @@ class ICIPipelineService(IEventEmitter, IMonitoredService, ABC):
         if status.status == CICheckStatus.PASSED:
             print(f"PR {status.pr_id} passed all checks ({status.passed}/{status.total_checks})")
 
-        # Run local CI checks
+        # Query CI status by resolving branch to PR
         result = await service.run_ci_checks("proj-123", "/workspace", 600)
         if result.passed:
             print("All checks passed!")
@@ -318,27 +333,29 @@ class ICIPipelineService(IEventEmitter, IMonitoredService, ABC):
 
     @abstractmethod
     async def run_ci_checks(self, project_id: str, working_directory: str, timeout_seconds: int = 600) -> CIRunResult:
-        """Execute CI checks locally in a working directory.
+        """Query CI status from external system by resolving branch to PR.
 
-        Runs CI checks within the provided working directory (typically in a
-        container with the project code mounted). This allows local validation
-        of changes before pushing to the remote repository.
+        Queries the CI status from an external CI system (GitHub Actions, GitLab CI,
+        etc.) for a project. The implementation resolves the current branch from the
+        working directory to locate the corresponding PR/MR, then queries the external
+        system for that PR's CI status. This allows checking CI results without
+        executing checks locally.
 
         Args:
             project_id: Project being checked
-            working_directory: Directory containing project code to check
-            timeout_seconds: How long to allow check execution (default 600s / 10min)
+            working_directory: Working directory containing project code. Used to determine the current branch for resolving to a PR/MR in the external CI system.
+            timeout_seconds: How long to wait for CI status from external system (default 600s / 10min)
 
         Returns:
-            CIRunResult: Summary of check results with failures and warnings
+            CIRunResult: Summary of check results queried from external CI system
 
         Raises:
-            ResourceNotFoundError: Project doesn't exist
-            ValidationError: Invalid working directory or check configuration
+            ResourceNotFoundError: Project doesn't exist or no open PR for the branch
+            ValidationError: Invalid working directory or unable to read branch
             ExternalServiceError: Service communication failure
-            TimeoutError: CI checks didn't complete within timeout
+            TimeoutError: CI status not available within timeout
 
         Events:
-            Emits 'ci.run_started' event when execution begins
-            Emits 'ci.run_completed' event when execution finishes
+            Emits 'ci.run_started' event when query begins
+            Emits 'ci.run_completed' event when query completes
         """

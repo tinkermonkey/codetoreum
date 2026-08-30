@@ -719,6 +719,24 @@ class AdapterResolver:
 
     def resolve_ci_pipeline(self) -> ICIPipelineService:
         """Resolve CI pipeline service adapter."""
+        if self._config.ci_pipeline == "github":
+            import os
+
+            from codetoreum.adapters.secondary.github_ci_pipeline_adapter import GitHubCIPipelineAdapter
+            from codetoreum.infrastructure.http.github_graphql_client import GitHubGraphQLClient, GitHubGraphQLConfig
+
+            # Use credentials injected at bootstrap; fall back to os.environ only when
+            # running outside production bootstrap (e.g. integration tests).
+            if self._credentials is not None:
+                github_token = self._credentials.github_token
+            else:
+                github_token = os.environ.get("GITHUB_TOKEN", "")
+
+            graphql_client = GitHubGraphQLClient(GitHubGraphQLConfig(token=github_token))
+            return GitHubCIPipelineAdapter(
+                ticket_adapter=self._resolved.get("ticket"),
+                graphql_client=graphql_client,
+            )
         return self._factory.create_ci_pipeline_service(
             adapter_name=self._config.ci_pipeline,
             event_emitter=self._resolved["event_emitter"],
@@ -943,10 +961,12 @@ class AdapterResolver:
         self._resolved["version_control"] = self.resolve_version_control()
         self._resolved["board"] = self.resolve_board()
         self._resolved["queue_service"] = self.resolve_queue_service()
-        self._resolved["ci_pipeline"] = self.resolve_ci_pipeline()
 
         # 4. External system adapters
         self._resolved["ticket"] = self.resolve_ticket()
+
+        # 4b. CI pipeline (depends on ticket for GitHub variant)
+        self._resolved["ci_pipeline"] = self.resolve_ci_pipeline()
         # The ``ICodingAgent`` adapter is constructed in Phase 4c by
         # ``ProductionApplicationBootstrap``, not via this resolver.
 

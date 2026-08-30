@@ -51,10 +51,6 @@ os.environ.setdefault("OTEL_TRACES_ENABLED", "false")
 # This is important for systems with Docker socket proxies or unusual network configs
 os.environ.setdefault("TESTCONTAINERS_RYUK_PRIVILEGED", "true")
 os.environ.setdefault("TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE", "/var/run/docker.sock")
-# Disable Ryuk resource reaper in environments where it can't reach the
-# Docker daemon (e.g. nested containers, restricted network modes).
-# Session-level cleanup in pytest_sessionfinish handles leaked containers.
-os.environ.setdefault("TESTCONTAINERS_RYUK_DISABLED", "true")
 
 # Patch testcontainers Reaper to handle connection failures gracefully
 # This prevents testcontainers from failing when Reaper can't connect
@@ -77,7 +73,8 @@ try:
             """No-op cleanup."""
 
     # Patch get_instance to catch connection errors
-    def _patched_get_instance(cls) -> object:
+    @classmethod
+    def _patched_get_instance(cls):
         """Get or create Reaper instance, falling back to NullReaper on connection failure."""
         if cls._instance is not None:
             return cls._instance
@@ -96,8 +93,8 @@ try:
             # Other exceptions should still fail
             raise
 
-    # Apply the patch as a classmethod
-    Reaper.get_instance = classmethod(_patched_get_instance)
+    # Apply the patch
+    Reaper.get_instance = _patched_get_instance
 
 except ImportError:
     # testcontainers not available yet, will be imported later
@@ -469,6 +466,13 @@ class ModernElasticsearchContainer(DockerContainer):
         self.with_env("http.host", "0.0.0.0")
         self.with_env("xpack.security.enabled", "false")
         self.with_env("discovery.type", "single-node")
+        # Without an explicit heap cap, Elasticsearch auto-sizes to ~50% of the
+        # HOST's visible memory (not any container limit) — on a 30GB host that's
+        # a ~15.8GB heap, pre-touched on startup, per ephemeral test container.
+        # Match the modest heap already used for the real service in
+        # docker-compose.yml so test runs can't individually or collectively
+        # exhaust host memory/swap.
+        self.with_env("ES_JAVA_OPTS", "-Xms512m -Xmx512m")
 
     def get_url(self) -> str:
         """Get the URL to access Elasticsearch.
@@ -521,13 +525,45 @@ class ModernElasticsearchContainer(DockerContainer):
                     # Check if we got a 200 response from Elasticsearch
                     if b"HTTP/1.1 200" in response or b"HTTP/2 200" in response:
                         return
-                    last_error = f"Got unexpected response: {response[:100].decode('utf-8', errors='replace')}"
+                    last_error = f"Got unexpected response: {response[:100]}"
             except OSError as e:
                 last_error = str(e)
             time.sleep(0.1)
 
         raise TimeoutError(f"Elasticsearch on {host}:{port} did not respond within 60s. " f"Last error: {last_error}")
 
+
+
+class _RedisPingWaitStrategy(WaitStrategy):  # type: ignore
+    """Wait strategy that verifies Redis is ready by issuing a PING command.
+
+    PortWaitStrategy only checks that the TCP port accepts connections, which can
+    succeed before Redis has finished initializing and is ready to process commands.
+    This strategy connects via raw socket and sends a Redis PING, retrying until
+    Redis responds with +PONG.
+    """
+
+    def __init__(self, port: int = 6379) -> None:
+        super().__init__()
+        self.port = port
+
+    def wait_until_ready(self, container: "DockerContainer") -> None:
+        import socket
+
+        host = container.get_container_host_ip()
+        mapped_port = int(container.get_exposed_port(self.port))
+        deadline = time.monotonic() + self._startup_timeout
+        while time.monotonic() < deadline:
+            try:
+                with socket.create_connection((host, mapped_port), timeout=1.0) as sock:
+                    sock.sendall(b"PING\r\n")
+                    response = sock.recv(16)
+                    if response.startswith(b"+PONG"):
+                        return
+            except OSError:
+                pass
+            time.sleep(self._poll_interval)
+        raise TimeoutError(f"Redis on {host}:{mapped_port} did not respond to PING within {self._startup_timeout}s")
 
 
 class ModernRedisContainer(DockerContainer):
@@ -579,6 +615,8 @@ class ModernRedisContainer(DockerContainer):
         # Register with the session-level safety net before the readiness
         # wait, which can itself raise and skip past a fixture's cleanup.
         _track_started_container(self)
+        # Give Redis time to start inside the container
+        time.sleep(1.0)
         self._wait_for_redis()
         return self
 
@@ -610,7 +648,7 @@ class ModernRedisContainer(DockerContainer):
                     if response.startswith(b"+PONG"):
                         mod_logging.getLogger(__name__).info(f"Redis ready after {attempt} attempts")
                         return
-                    last_error = f"Got unexpected response: {response[:100].decode('utf-8', errors='replace')}"
+                    last_error = f"Got unexpected response: {response[:100]}"
             except (ConnectionRefusedError, OSError) as e:
                 # Port not yet available or connection failed, will retry
                 last_error = str(e)
