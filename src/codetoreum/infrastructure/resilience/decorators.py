@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 from codetoreum.domain.comment import Comment
 from codetoreum.domain.types import ProjectId, UserId, WorkItemId
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
+from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.output.board_service import (
     BoardColumn,
     BoardConfig,
@@ -845,7 +846,7 @@ class BestEffortExecutionTrackerDecorator(IWorkExecutionStateTracker):
                 f"Failed to update execution state tracker for project={project} "
                 f"work_item_id={work_item_id} agent={agent}: {e}",
                 exc_info=True,
-                extra={"error_id": "ERR_EXECUTION_TRACKER_UPDATE_FAILURE"},
+                extra={"error_id": ErrorRegistry.ERR_EXECUTION_TRACKER_UPDATE_FAILURE},
             )
 
     async def mark_execution_failed(
