@@ -378,15 +378,57 @@ class IWorkExecutionStateTracker(ABC):
     """
 
     @abstractmethod
-    async def load_state(self, project: str, work_item_id: str) -> dict[str, Any] | None:
-        """Load execution state from storage."""
+    async def load_state(self, project: str, work_item_id: str) -> ExecutionState | None:
+        """Load execution state from storage.
+
+        Retrieves the execution state for a specific work item. Returns None
+        if no state exists or the state has expired.
+
+        Returns:
+            ExecutionState instance if found and not expired, None otherwise
+        """
+        pass
+
+    @abstractmethod
+    async def mark_execution_started(self, project: str, work_item_id: str, agent: str) -> None:
+        """Mark an execution as started (in_progress).
+
+        Records that an execution has begun, enabling recovery decisions
+        at startup. The execution_tracker is read-only during recovery;
+        this write happens at execution start before the container runs.
+
+        Args:
+            project: Project identifier
+            work_item_id: Work item identifier
+            agent: Agent identifier executing
+
+        Contract:
+            - State record is persisted atomically
+            - Record has TTL of 4 hours
+            - outcome field set to "in_progress" for recovery validation
+        """
         pass
 
     @abstractmethod
     async def mark_execution_failed(
         self, project: str, work_item_id: str, agent: str, reason: str
     ) -> None:
-        """Mark an execution as failed with a reason."""
+        """Mark an execution as failed with a reason.
+
+        Records that an execution has failed, typically during recovery
+        operations when a container cannot be reconnected.
+
+        Args:
+            project: Project identifier
+            work_item_id: Work item identifier
+            agent: Agent identifier that was executing
+            reason: Reason for the failure
+
+        Contract:
+            - Failure record is persisted atomically
+            - Record has TTL of 4 hours
+            - Multiple marks are idempotent
+        """
         pass
 ```
 
@@ -433,7 +475,7 @@ class IContainerRecoveryTrackingStore(ABC):
 | IProjectManagerService | `create_project()`, `get_project()`, `update_project()`, `delete_project()` | Project lifecycle |
 | ISystemicAnalysisService | `analyze_system_health()`, `analyze_bottlenecks()`, `generate_diagnostics_report()` | System diagnostics |
 | IAgentContainerRecoveryService | `recover_or_cleanup_containers()`, `assess_container()`, `execute_recovery_action()` | Container recovery |
-| IWorkExecutionStateTracker | `load_state()`, `mark_execution_failed()` | Execution state hints |
+| IWorkExecutionStateTracker | `load_state()`, `mark_execution_started()`, `mark_execution_failed()` | Execution state hints |
 | IContainerRecoveryTrackingStore | `set()`, `get()`, `scan()` | Container tracking storage |
 
 ## Events Emitted
@@ -514,7 +556,8 @@ classDiagram
 
     class IWorkExecutionStateTracker {
         <<interface>>
-        +load_state(project, work_item_id) dict
+        +load_state(project, work_item_id) ExecutionState
+        +mark_execution_started(project, work_item_id, agent) None
         +mark_execution_failed(project, work_item_id, agent, reason) None
     }
 
