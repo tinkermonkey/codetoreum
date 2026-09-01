@@ -62,10 +62,12 @@ from codetoreum.ports.output.coding_agent import (
     ICodingAgent,
 )
 from codetoreum.ports.output.event_store import IEventStore
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.ports.output.identity_service import (
     BotIdentityConfig,
     IIdentityService,
 )
+from codetoreum.ports.output.monitoring import MonitoringStatus, MonitoringState
 from codetoreum.ports.output.prompt_builder import IPromptBuilder, StructuredPrompt
 from codetoreum.ports.output.work_item_service import IWorkItemService
 
@@ -146,11 +148,15 @@ class _MockAgentRepository(IAgentRepository):
     def __init__(self, agent: Agent):
         self._agent = agent
 
-    async def get_by_name(self, name: str) -> Agent | None:
-        return self._agent if name == self._agent.name else None
+    async def get_by_name(self, name: str) -> Agent:
+        if name == self._agent.name:
+            return self._agent
+        raise ValueError(f"Agent not found: {name}")
 
-    async def get_by_id(self, agent_id: str) -> Agent | None:
-        return self._agent if agent_id == self._agent.id else None
+    async def get_by_id(self, agent_id: str) -> Agent:
+        if agent_id == self._agent.id:
+            return self._agent
+        raise ValueError(f"Agent not found: {agent_id}")
 
     async def save(self, agent: Agent, project_id: str | None = None) -> None:
         pass
@@ -161,15 +167,13 @@ class _MockAgentRepository(IAgentRepository):
     async def get_all(self) -> list[Agent]:
         return [self._agent]
 
-    async def delete(self, agent_id: str) -> None:
-        pass
-
 
 class _MockWorkItemService(IWorkItemService):
     """Mock work item service."""
 
     def __init__(self, work_item: WorkItem):
         self._work_item = work_item
+        self._handlers: dict[str, list] = {}
 
     async def get_work_item(self, item_id) -> WorkItem:
         return self._work_item
@@ -193,9 +197,15 @@ class _MockWorkItemService(IWorkItemService):
         pass
 
     def on(self, event_type: str, handler) -> None:
-        pass
+        if event_type not in self._handlers:
+            self._handlers[event_type] = []
+        self._handlers[event_type].append(handler)
 
-    def emit(self, event_type: str, event_data: dict) -> None:
+    def off(self, event_type: str, handler) -> None:
+        if event_type in self._handlers:
+            self._handlers[event_type].remove(handler)
+
+    def emit(self, event: CodetoreumEvent) -> None:
         pass
 
     async def start_monitoring(self, project_id, config) -> None:
@@ -203,6 +213,13 @@ class _MockWorkItemService(IWorkItemService):
 
     async def stop_monitoring(self, project_id) -> None:
         pass
+
+    async def get_monitoring_status(self, project_id: str) -> MonitoringStatus:
+        return MonitoringStatus(
+            state=MonitoringState.ACTIVE,
+            project_id=project_id,
+            started_at=datetime.now(UTC).isoformat(),
+        )
 
 
 class _MockPromptBuilder(IPromptBuilder):
@@ -354,7 +371,7 @@ def test_agent():
         id="agent-e2e-test",
         name="e2e-conversational-agent",
         display_name="E2E Test Conversational Agent",
-        agent_type=AgentType.GENERAL_PURPOSE,
+        agent_type=AgentType.DEVELOPER,
         capabilities={"conversation": AgentCapability(skill="conversation", proficiency=1.0)},
         role_description="Test agent for end-to-end conversational loop verification",
         max_retries=1,
