@@ -716,6 +716,32 @@ class AdapterResolver:
             failed_event_store=self._deps.failed_event_store,
         )
 
+    def resolve_execution_tracker(self) -> IWorkExecutionStateTracker:
+        """
+        Resolve work execution state tracker.
+
+        Used by ExecutionService to write execution state when a run starts,
+        and by the recovery adapter to read state at startup for reconnect
+        vs. kill decisions.
+        """
+        if self._config.container_recovery == "docker":
+            import redis.asyncio as aioredis
+
+            from codetoreum.adapters.secondary.redis_execution_state_tracker import (
+                RedisExecutionStateTracker,
+            )
+
+            redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+            redis_client = aioredis.from_url(redis_url)
+
+            return RedisExecutionStateTracker(redis_client=redis_client)
+
+        from codetoreum.adapters.testing.in_memory_work_execution_state_tracker import (
+            InMemoryWorkExecutionStateTracker,
+        )
+
+        return InMemoryWorkExecutionStateTracker()
+
     def resolve_container_recovery(self) -> IAgentContainerRecoveryService:
         """
         Resolve container recovery adapter.
@@ -734,16 +760,11 @@ class AdapterResolver:
             from codetoreum.adapters.secondary.redis_container_recovery_tracking_store import (
                 RedisContainerRecoveryTrackingStore,
             )
-            from codetoreum.adapters.secondary.redis_execution_state_tracker import (
-                RedisExecutionStateTracker,
-            )
 
             redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
             redis_client = aioredis.from_url(redis_url)
 
-            execution_tracker: IWorkExecutionStateTracker = RedisExecutionStateTracker(
-                redis_client=redis_client,
-            )
+            execution_tracker = self._resolved.get("execution_tracker")
             tracking_storage: IContainerRecoveryTrackingStore = RedisContainerRecoveryTrackingStore(
                 redis_client=redis_client,
             )
@@ -1046,6 +1067,7 @@ class AdapterResolver:
 
         # 11. Code review and container recovery adapters
         self._resolved["code_review"] = self.resolve_code_review()
+        self._resolved["execution_tracker"] = self.resolve_execution_tracker()
         self._resolved["container_recovery"] = self.resolve_container_recovery()
 
         logger.info(
@@ -1095,6 +1117,8 @@ class AdapterResolver:
             ),  # Created in bootstrap post-processing
             # Container recovery
             container_recovery=self._resolved["container_recovery"],
+            # Execution state tracker
+            execution_tracker=self._resolved["execution_tracker"],
             # Systemic analysis service (resolved in phase 9)
             systemic_analysis_service=self._resolved["systemic_analysis_service"],
             # Environment repair service (resolved in phase 9b)

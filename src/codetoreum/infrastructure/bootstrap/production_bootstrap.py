@@ -1014,6 +1014,7 @@ class ProductionApplicationBootstrap:
         execution_service = ExecutionService(
             coding_agent=self.adapters.coding_agent,
             event_store=self.adapters.event_store,
+            execution_tracker=self.adapters.execution_tracker,
             vcs=self.adapters.version_control,
         )
 

@@ -34,6 +34,28 @@ class InMemoryWorkExecutionStateTracker(IWorkExecutionStateTracker):
         key = (project, work_item_id)
         return self._state.get(key)
 
+    async def mark_execution_started(
+        self, project: str, work_item_id: str, agent: str
+    ) -> None:
+        """Mark an execution as started (in_progress).
+
+        Records that an execution has begun, enabling recovery decisions
+        at startup.
+
+        Args:
+            project: Project identifier
+            work_item_id: Work item identifier
+            agent: Agent identifier executing
+
+        Raises:
+            StorageError: If storage write fails
+        """
+        key = (project, work_item_id)
+        self._state[key] = {
+            "outcome": "in_progress",
+            "agent": agent,
+        }
+
     async def mark_execution_failed(
         self, project: str, work_item_id: str, agent: str, reason: str
     ) -> None:

@@ -243,6 +243,9 @@ from codetoreum.ports.output.review_cycle_service import IReviewCycle
 from codetoreum.ports.output.systemic_analysis_service import ISystemicAnalysisService
 from codetoreum.ports.output.ticket_system import ITicketSystem
 from codetoreum.ports.output.version_control_service import IVersionControlService
+from codetoreum.ports.output.work_execution_state_tracker import (
+    IWorkExecutionStateTracker,
+)
 from codetoreum.ports.output.work_item_branch_tracker import IWorkItemBranchTracker
 from codetoreum.ports.output.work_item_service import IWorkItemService
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
@@ -359,6 +362,9 @@ class SimulationAdapters:
 
     # Container recovery adapter
     container_recovery: IAgentContainerRecoveryService
+
+    # Execution state tracker (for recovery fast-path lookups)
+    execution_tracker: IWorkExecutionStateTracker
 
     # Systemic analysis service (for failure classification in repair cycle)
     systemic_analysis_service: ISystemicAnalysisService
@@ -1653,6 +1659,7 @@ class SimulationApplicationBootstrap:
         execution_service = ExecutionService(
             coding_agent=self.adapters.coding_agent,
             event_store=self.adapters.event_store,
+            execution_tracker=self.adapters.execution_tracker,
             vcs=self.adapters.version_control,
         )
 

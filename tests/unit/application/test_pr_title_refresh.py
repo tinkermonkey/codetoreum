@@ -16,6 +16,9 @@ from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
 from codetoreum.adapters.testing.in_memory_version_control_service import (
     InMemoryVersionControlService,
 )
+from codetoreum.adapters.testing.in_memory_work_execution_state_tracker import (
+    InMemoryWorkExecutionStateTracker,
+)
 from codetoreum.application.execution_service import ExecutionService
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType, CommitPolicy
 from codetoreum.domain.agent_execution import AgentExecution
@@ -50,6 +53,11 @@ def vcs_service() -> InMemoryVersionControlService:
 
 
 @pytest.fixture
+def execution_tracker() -> InMemoryWorkExecutionStateTracker:
+    return InMemoryWorkExecutionStateTracker()
+
+
+@pytest.fixture
 def coding_agent_mock() -> AsyncMock:
     """Mock ICodingAgent that returns success."""
     mock = AsyncMock()
@@ -74,12 +82,14 @@ def coding_agent_mock() -> AsyncMock:
 @pytest.fixture
 def execution_service(
     event_store: InMemoryEventStore,
+    execution_tracker: InMemoryWorkExecutionStateTracker,
     coding_agent_mock: AsyncMock,
     vcs_service: InMemoryVersionControlService,
 ) -> ExecutionService:
     return ExecutionService(
         coding_agent=coding_agent_mock,
         event_store=event_store,
+        execution_tracker=execution_tracker,
         vcs=vcs_service,
     )
 

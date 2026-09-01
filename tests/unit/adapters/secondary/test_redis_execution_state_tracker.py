@@ -103,6 +103,39 @@ class TestRedisExecutionStateTrackerPersistence:
         assert state["agent"] == "claude"
 
 
+class TestRedisExecutionStateTrackerStarted:
+    @pytest.mark.asyncio
+    async def test_mark_execution_started_stores_in_progress_state(self, tracker):
+        await tracker.mark_execution_started(
+            project="myproject",
+            work_item_id="item-123",
+            agent="claude",
+        )
+        state = await tracker.load_state("myproject", "item-123")
+        assert state is not None
+        assert state["outcome"] == "in_progress"
+        assert state["agent"] == "claude"
+
+    @pytest.mark.asyncio
+    async def test_mark_execution_started_overwrites_failed_state(self, tracker):
+        await tracker.mark_execution_failed(
+            project="myproject",
+            work_item_id="item-123",
+            agent="claude",
+            reason="Previous failure",
+        )
+        await tracker.mark_execution_started(
+            project="myproject",
+            work_item_id="item-123",
+            agent="claude",
+        )
+        state = await tracker.load_state("myproject", "item-123")
+        assert state is not None
+        assert state["outcome"] == "in_progress"
+        assert state["agent"] == "claude"
+        assert "reason" not in state
+
+
 class TestRedisExecutionStateTrackerCorruption:
     @pytest.mark.asyncio
     async def test_corrupt_json_returns_none(self, tracker, redis_client):

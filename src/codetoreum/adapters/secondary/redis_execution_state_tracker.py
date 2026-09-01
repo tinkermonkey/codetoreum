@@ -81,6 +81,40 @@ class RedisExecutionStateTracker(IWorkExecutionStateTracker):
             )
             raise
 
+    async def mark_execution_started(
+        self, project: str, work_item_id: str, agent: str
+    ) -> None:
+        """Mark an execution as started (in_progress).
+
+        Records that an execution has begun, enabling recovery decisions
+        at startup.
+
+        Args:
+            project: Project identifier
+            work_item_id: Work item identifier
+            agent: Agent identifier executing
+
+        Raises:
+            StorageError: If storage write fails
+        """
+        try:
+            payload = json.dumps(
+                {
+                    "outcome": "in_progress",
+                    "agent": agent,
+                }
+            )
+            await self._redis.set(
+                self._key(project, work_item_id), payload, ex=self._ttl_seconds
+            )
+        except Exception:
+            logger.error(
+                f"Failed to mark execution as started for project={project}, work_item_id={work_item_id}, agent={agent}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
+            )
+            raise
+
     async def mark_execution_failed(
         self, project: str, work_item_id: str, agent: str, reason: str
     ) -> None:

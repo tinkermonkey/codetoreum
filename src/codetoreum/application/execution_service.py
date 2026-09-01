@@ -32,6 +32,9 @@ from codetoreum.ports.output.coding_agent import (
     ICodingAgent,
 )
 from codetoreum.ports.output.version_control_service import IVersionControlService
+from codetoreum.ports.output.work_execution_state_tracker import (
+    IWorkExecutionStateTracker,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +107,7 @@ class ExecutionService:
         self,
         coding_agent: ICodingAgent,
         event_store: IEventStore,
+        execution_tracker: IWorkExecutionStateTracker,
         max_retries: int = 1,
         retry_delay_seconds: float = 5,
         vcs: IVersionControlService | None = None,
@@ -116,6 +120,7 @@ class ExecutionService:
                 Owns invocation-mode selection, prompt rendering, and the
                 emission of granular ``CodingAgent*`` events.
             event_store: Event store for domain events
+            execution_tracker: Execution state tracker for recovery hints
             max_retries: Maximum number of retry attempts (reserved — the
                 new execute() path does not yet implement retries).
             retry_delay_seconds: Delay between retry attempts (reserved —
@@ -126,6 +131,7 @@ class ExecutionService:
         """
         self.coding_agent: ICodingAgent = coding_agent
         self.event_store = event_store
+        self.execution_tracker = execution_tracker
         self.max_retries = max_retries
         self.retry_delay_seconds = retry_delay_seconds
         self.vcs = vcs
@@ -242,6 +248,24 @@ class ExecutionService:
             for event in events:
                 await self.event_store.append(execution.id, [event])
             execution.clear_events()
+
+            # Write execution state for recovery fast-path lookups.
+            # The recovery adapter uses this hint store to assess containers
+            # at startup without replaying the full event stream.
+            try:
+                await self.execution_tracker.mark_execution_started(
+                    project=context.project_id,
+                    work_item_id=context.work_item_id,
+                    agent=context.agent_id,
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to update execution state tracker for execution {execution.id}: {e}",
+                    exc_info=True,
+                    extra={"error_id": "ERR_EXECUTION_TRACKER_UPDATE_FAILURE"},
+                )
+                # Don't fail the execution if tracking fails — it's only a hint.
+                # Recovery will safely default to kill if no hint is found.
 
             logger.info(f"Started execution {execution.id}")
 

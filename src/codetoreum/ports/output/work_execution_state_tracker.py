@@ -62,6 +62,34 @@ class IWorkExecutionStateTracker(ABC):
         """
 
     @abstractmethod
+    async def mark_execution_started(
+        self, project: str, work_item_id: str, agent: str
+    ) -> None:
+        """Mark an execution as started (in_progress).
+
+        Records that an execution has begun, enabling recovery decisions
+        at startup. The execution_tracker is read-only during recovery;
+        this write happens at execution start before the container runs.
+
+        Args:
+            project: Project identifier
+            work_item_id: Work item identifier
+            agent: Agent identifier executing
+
+        Returns:
+            None (void operation)
+
+        Raises:
+            StorageError: If storage write fails
+
+        Contract:
+            - State record is persisted atomically
+            - Record has TTL of 4 hours
+            - State persists until TTL expires or execution completes
+            - outcome field set to "in_progress" for recovery validation
+        """
+
+    @abstractmethod
     async def mark_execution_failed(
         self, project: str, work_item_id: str, agent: str, reason: str
     ) -> None:
