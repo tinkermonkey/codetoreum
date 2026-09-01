@@ -17,12 +17,6 @@ from codetoreum.adapters.secondary.docker_container_adapter import (
     DockerConfig,
     DockerContainerAdapter,
 )
-from codetoreum.adapters.secondary.redis_container_recovery_tracking_store import (
-    RedisContainerRecoveryTrackingStore,
-)
-from codetoreum.adapters.secondary.redis_execution_state_tracker import (
-    RedisExecutionStateTracker,
-)
 from codetoreum.adapters.secondary.elasticsearch_config_storage import (
     ElasticsearchConfigStorage,
 )
@@ -50,6 +44,12 @@ from codetoreum.adapters.secondary.mock_code_review_adapter import (
     MockCodeReviewAdapter,
 )
 from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
+from codetoreum.adapters.secondary.redis_container_recovery_tracking_store import (
+    RedisContainerRecoveryTrackingStore,
+)
+from codetoreum.adapters.secondary.redis_execution_state_tracker import (
+    RedisExecutionStateTracker,
+)
 from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
 from codetoreum.adapters.testing.mock_discussion_adapter import MockDiscussionAdapter
 
