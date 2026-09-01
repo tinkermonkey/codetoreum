@@ -26,9 +26,6 @@ from codetoreum.application.execution_service import (
     ExecutionFailureReason,
     ExecutionService,
 )
-from codetoreum.infrastructure.resilience.decorators import (
-    BestEffortExecutionTrackerDecorator,
-)
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType, CommitPolicy
 from codetoreum.domain.agent_execution import AgentExecution, ExecutionStatus
 from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
@@ -39,6 +36,9 @@ from codetoreum.domain.events.execution_events import (
 from codetoreum.domain.value_objects import ExecutionContext
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority
 from codetoreum.domain.workspace_context import WorkspaceContext
+from codetoreum.infrastructure.resilience.decorators import (
+    BestEffortExecutionTrackerDecorator,
+)
 from codetoreum.ports.output.coding_agent import (
     CodingAgentInvocationOptions,
     CodingAgentResult,

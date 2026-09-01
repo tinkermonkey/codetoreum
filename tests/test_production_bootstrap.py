@@ -316,11 +316,11 @@ async def test_event_handler_types_declared() -> None:
 
 @pytest.mark.asyncio
 async def test_adapter_selection_config_has_31_slots() -> None:
-    """Verify that AdapterSelectionConfig has exactly 31 slots."""
+    """Verify that AdapterSelectionConfig has exactly 32 slots."""
     config = AdapterSelectionConfig()
     slots = list(AdapterSelectionConfig.__dataclass_fields__.keys())
 
-    assert len(slots) == 31, f"Expected 31 slots, got {len(slots)}: {slots}"
+    assert len(slots) == 32, f"Expected 32 slots, got {len(slots)}: {slots}"
 
 
 def test_critical_adapter_slots_defined() -> None:

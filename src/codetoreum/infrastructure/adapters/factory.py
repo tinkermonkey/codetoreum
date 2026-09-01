@@ -243,6 +243,7 @@ from codetoreum.infrastructure.adapters.registries import (
     SystemicAnalysisRegistry,
     TicketSystemRegistry,
     VersionControlServiceRegistry,
+    WorkExecutionStateTrackerRegistry,
     WorkflowConfigServiceRegistry,
     WorkItemBranchTrackerRegistry,
     WorkItemServiceRegistry,
@@ -364,6 +365,7 @@ class AdapterFactory:
         self._environment_repair_registry = EnvironmentRepairRegistry()
         self._ci_pipeline_registry = CIPipelineServiceRegistry()
         self._distributed_lock_registry = DistributedLockRegistry()
+        self._execution_tracker_registry = WorkExecutionStateTrackerRegistry()
 
         # Dependency injection container
         self._dependencies: dict[str, Any] = {}
@@ -1180,6 +1182,46 @@ class AdapterFactory:
             ),
         )
 
+        # Execution State Tracker Adapters
+        from codetoreum.adapters.testing.in_memory_work_execution_state_tracker import (
+            InMemoryWorkExecutionStateTracker,
+        )
+
+        self._execution_tracker_registry.register(
+            name="in_memory",
+            adapter_type=InMemoryWorkExecutionStateTracker,
+            description="In-memory work execution state tracker for testing",
+            version="1.0.0",
+            tags=["testing", "simulation", "mock"],
+            config_schema=AdapterCredentialRequirement(
+                simulation_only=True,
+                description="Simulation-only adapter, no credentials required",
+            ),
+        )
+
+        try:
+            from codetoreum.adapters.secondary.redis_execution_state_tracker import (
+                RedisExecutionStateTracker,
+            )
+
+            self._execution_tracker_registry.register(
+                name="redis",
+                adapter_type=RedisExecutionStateTracker,
+                description="Redis-backed work execution state tracker",
+                version="1.0.0",
+                tags=["production"],
+                config_schema=AdapterCredentialRequirement(
+                    env_vars=("REDIS_URL",),
+                    description="Redis connection URL for state persistence",
+                ),
+            )
+        except ImportError:
+            logger.warning(
+                "Optional adapter RedisExecutionStateTracker not available, skipping registration",
+                exc_info=True,
+                extra={"adapter": "RedisExecutionStateTracker"},
+            )
+
     # Registry access methods
 
     @property
@@ -1376,6 +1418,7 @@ class AdapterFactory:
             "repository": self._repository_registry,
             "systemic_analysis": self._systemic_analysis_registry,
             "environment_repair": self._environment_repair_registry,
+            "execution_tracker": self._execution_tracker_registry,
             "ci_pipeline": self._ci_pipeline_registry,
             "lock_service": self._distributed_lock_registry,
         }

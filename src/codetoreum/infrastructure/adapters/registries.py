@@ -41,6 +41,7 @@ from codetoreum.ports.output.review_cycle_service import IReviewCycle
 from codetoreum.ports.output.systemic_analysis_service import ISystemicAnalysisService
 from codetoreum.ports.output.ticket_system import ITicketSystem
 from codetoreum.ports.output.version_control_service import IVersionControlService
+from codetoreum.ports.output.work_execution_state_tracker import IWorkExecutionStateTracker
 from codetoreum.ports.output.work_item_branch_tracker import IWorkItemBranchTracker
 from codetoreum.ports.output.work_item_service import IWorkItemService
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
@@ -691,4 +692,16 @@ class DistributedLockRegistry(AdapterRegistry[IDistributedLock]):
 
     def _is_valid_adapter(self, adapter_type: type[IDistributedLock]) -> bool:
         """Validate that an adapter implements IDistributedLock."""
+        return _validate_adapter_implements_interface(adapter_type, self._port_interface)
+
+
+class WorkExecutionStateTrackerRegistry(AdapterRegistry[IWorkExecutionStateTracker]):
+    """Registry for IWorkExecutionStateTracker adapter implementations."""
+
+    def __init__(self):
+        """Initialize the work execution state tracker registry."""
+        super().__init__(IWorkExecutionStateTracker)
+
+    def _is_valid_adapter(self, adapter_type: type[IWorkExecutionStateTracker]) -> bool:
+        """Validate that an adapter implements IWorkExecutionStateTracker."""
         return _validate_adapter_implements_interface(adapter_type, self._port_interface)
