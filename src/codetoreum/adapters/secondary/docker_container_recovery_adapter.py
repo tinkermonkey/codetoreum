@@ -43,13 +43,13 @@ from codetoreum.ports.output.container_recovery import (
 from codetoreum.ports.output.container_recovery_tracking_store import (
     IContainerRecoveryTrackingStore,
 )
+from codetoreum.ports.output.failed_event_store import IFailedEventStore
 from codetoreum.ports.output.repair_cycle_checkpoint_store import (
     IRepairCycleCheckpointStore,
 )
 from codetoreum.ports.output.work_execution_state_tracker import (
     IWorkExecutionStateTracker,
 )
-from codetoreum.ports.output.failed_event_store import IFailedEventStore
 
 # Additional label for tracking containers with timestamp parse failures
 CONTAINER_LABEL_TIMESTAMP_FALLBACK = "codetoreum.timestamp_fallback"
