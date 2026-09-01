@@ -47,6 +47,7 @@ from codetoreum.domain.agent import Agent, AgentCapability, AgentType
 from codetoreum.domain.agent_execution import AgentExecution
 from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
 from codetoreum.domain.conversational_session import ConversationalSessionState
+from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.domain.events.discussion_events import (
     Comment,
     CommentContext,
@@ -62,12 +63,11 @@ from codetoreum.ports.output.coding_agent import (
     ICodingAgent,
 )
 from codetoreum.ports.output.event_store import IEventStore
-from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.ports.output.identity_service import (
     BotIdentityConfig,
     IIdentityService,
 )
-from codetoreum.ports.output.monitoring import MonitoringStatus, MonitoringState
+from codetoreum.ports.output.monitoring import MonitoringState, MonitoringStatus
 from codetoreum.ports.output.prompt_builder import IPromptBuilder, StructuredPrompt
 from codetoreum.ports.output.work_item_service import IWorkItemService
 
