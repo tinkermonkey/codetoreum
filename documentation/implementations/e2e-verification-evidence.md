@@ -223,6 +223,8 @@ bash tests/e2e/run_e2e_verification.sh
 
 ### Expected Output:
 
+**Note**: This is the expected output format when the test runs successfully. The test requires real GitHub credentials and a throwaway test repository to execute. It has not yet been run in this environment.
+
 ```
 ============================= test session starts ==============================
 platform linux -- Python 3.11.16, pytest-8.4.2, pluggy-1.6.0
@@ -230,7 +232,7 @@ platform linux -- Python 3.11.16, pytest-8.4.2, pluggy-1.6.0
 
 tests/e2e/test_conversational_loop_production_e2e.py::TestConversationalLoopProductionE2E::test_conversational_loop_posts_to_real_github PASSED [100%]
 
-[E2E Test] Starting conversational loop verification...
+[E2E Test] Starting conversational loop verification with GitHub org/repo, work item 123
 [E2E Test] ✓ Conversational loop initialized, session ID: conv_session_123_1234567890
 [E2E Test] ✓ GitHub discussion monitoring started for work item 123
 [E2E Test] Created test comment (ID: e2e-test-1234567890) to trigger agent response
@@ -239,11 +241,19 @@ tests/e2e/test_conversational_loop_production_e2e.py::TestConversationalLoopProd
 [E2E Test] ✓ Coding agent invoked (execution ID: exec-abc123)
 [E2E Test] Fetching GitHub discussion thread to verify response...
 [E2E Test] ✓ GitHub discussion thread retrieved with 2 comments
-[E2E Test] ✓ Bot response found in discussion (author: codetoreum-e2e-test, ID: DC_xyz...)
-[E2E Test] ✓ Bot response content verified
+[E2E Test] ✓ Bot response found in discussion (ID: DC_xyz...)
+[E2E Test] ✓ Bot response content verified (contains "Codetoreum Verification Response")
 [E2E Test] ✓ Session state persisted with checkpoint: e2e-test-1234567890
 [E2E Test] ✅ End-to-end verification complete!
-[E2E Test] ✓ Event path: Comment Detected → CommentNeedsResponseEvent → CLO.handle_comment_event → add_comment
+Summary:
+  - GitHub Repo: org/repo
+  - Work Item ID: 123
+  - Session ID: conv_session_123_1234567890
+  - Test Comment ID: e2e-test-1234567890
+  - Bot Response ID: DC_xyz...
+  - Event Path: Comment Detected → CommentNeedsResponseEvent → CLO.handle_comment_event → add_comment
+  - Visible on GitHub: Yes (ID: DC_xyz...)
+[E2E Test] Session terminated (cleanup complete)
 
 ============================== 1 passed in 5.23s =======================================
 ```

@@ -55,13 +55,19 @@ from codetoreum.domain.events.discussion_events import (
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
 from codetoreum.domain.workspace_context import WorkspaceContext
 from codetoreum.infrastructure.event_bus import EventBus
+from codetoreum.ports.output.agent_repository import IAgentRepository
 from codetoreum.ports.output.coding_agent import (
     CodingAgentInvocationOptions,
     CodingAgentResult,
     ICodingAgent,
 )
-from codetoreum.ports.output.discussion_adapter import DiscussionMonitoringConfig
-from codetoreum.ports.output.identity_service import IIdentityService
+from codetoreum.ports.output.event_store import IEventStore
+from codetoreum.ports.output.identity_service import (
+    BotIdentityConfig,
+    IIdentityService,
+)
+from codetoreum.ports.output.prompt_builder import IPromptBuilder, StructuredPrompt
+from codetoreum.ports.output.work_item_service import IWorkItemService
 
 logger = logging.getLogger(__name__)
 
@@ -127,24 +133,24 @@ class MockIdentityService(IIdentityService):
     def is_bot_user(self, username: str) -> bool:
         return username in ["codetoreum-e2e-test", "dependabot", "renovate"]
 
-    def get_human_users(self, usernames: list) -> list:
+    def get_human_users(self, usernames: list[str]) -> list[str]:
         return [u for u in usernames if not self.is_bot_user(u)]
 
-    def configure(self, config: Any) -> None:
+    def configure(self, config: BotIdentityConfig) -> None:
         pass
 
 
-class _MockAgentRepository:
+class _MockAgentRepository(IAgentRepository):
     """Mock agent repository."""
 
     def __init__(self, agent: Agent):
         self._agent = agent
 
-    async def get_by_name(self, name: str) -> Agent:
-        return self._agent
+    async def get_by_name(self, name: str) -> Agent | None:
+        return self._agent if name == self._agent.name else None
 
-    async def get_by_id(self, agent_id: str) -> Agent:
-        return self._agent
+    async def get_by_id(self, agent_id: str) -> Agent | None:
+        return self._agent if agent_id == self._agent.id else None
 
     async def save(self, agent: Agent, project_id: str | None = None) -> None:
         pass
@@ -155,8 +161,11 @@ class _MockAgentRepository:
     async def get_all(self) -> list[Agent]:
         return [self._agent]
 
+    async def delete(self, agent_id: str) -> None:
+        pass
 
-class _MockWorkItemService:
+
+class _MockWorkItemService(IWorkItemService):
     """Mock work item service."""
 
     def __init__(self, work_item: WorkItem):
@@ -165,13 +174,41 @@ class _MockWorkItemService:
     async def get_work_item(self, item_id) -> WorkItem:
         return self._work_item
 
+    async def get_work_items_by_status(self, project_id, status: str) -> list[WorkItem]:
+        return [self._work_item] if self._work_item.status.value == status else []
 
-class _MockPromptBuilder:
+    async def get_work_items_by_column(self, project_id, column_name: str) -> list[WorkItem]:
+        return [self._work_item] if self._work_item.current_stage == column_name else []
+
+    async def update_work_item(self, item_id, updates: dict) -> WorkItem:
+        return self._work_item
+
+    async def create_work_item(self, project_id, title: str, description: str, **kwargs) -> WorkItem:
+        return self._work_item
+
+    async def get_child_issues(self, parent_id) -> list[WorkItem]:
+        return []
+
+    async def transition_to_in_progress(self, work_item_id: str, agent_id: str) -> None:
+        pass
+
+    def on(self, event_type: str, handler) -> None:
+        pass
+
+    def emit(self, event_type: str, event_data: dict) -> None:
+        pass
+
+    async def start_monitoring(self, project_id, config) -> None:
+        pass
+
+    async def stop_monitoring(self, project_id) -> None:
+        pass
+
+
+class _MockPromptBuilder(IPromptBuilder):
     """Mock prompt builder."""
 
     async def build(self, agent, work_item, workspace_context, prior_outputs=()):
-        from codetoreum.ports.output.prompt_builder import StructuredPrompt
-
         return StructuredPrompt(
             role_description=agent.display_name,
             task_description=work_item.title,
@@ -183,7 +220,7 @@ class _MockPromptBuilder:
         )
 
 
-class _MockEventStore:
+class _MockEventStore(IEventStore):
     """Mock event store for session persistence."""
 
     def __init__(self):
@@ -201,10 +238,80 @@ class _MockEventStore:
         self._snapshots[stream_id] = snapshot
         self._versions[stream_id] = version + 1
 
-    async def append(self, stream_id: str, events: list[Any]) -> None:
+    async def append(
+        self,
+        stream_id: str,
+        events: list[Any],
+        expected_version: int | None = None,
+    ) -> None:
         if stream_id not in self._events:
             self._events[stream_id] = []
         self._events[stream_id].extend(events)
+
+    async def get_events(
+        self,
+        stream_id: str,
+        from_version: int = 0,
+        to_version: int | None = None,
+    ) -> list[Any]:
+        events = self._events.get(stream_id, [])
+        return events[from_version : (to_version + 1) if to_version else None]
+
+    async def get_events_since(
+        self,
+        since: datetime,
+        stream_id: str | None = None,
+    ) -> list[Any]:
+        return []
+
+    def stream_events(
+        self,
+        stream_id: str | None = None,
+        from_version: int = 0,
+    ):
+        async def generator():
+            yield None
+
+        return generator()
+
+    async def stream_exists(self, stream_id: str) -> bool:
+        return stream_id in self._events
+
+    async def delete_stream(self, stream_id: str) -> None:
+        if stream_id in self._events:
+            del self._events[stream_id]
+        if stream_id in self._snapshots:
+            del self._snapshots[stream_id]
+        if stream_id in self._versions:
+            del self._versions[stream_id]
+
+    async def get_all_stream_ids(self, aggregate_type: str | None = None) -> list[str]:
+        return list(self._events.keys())
+
+    async def get_events_by_type(
+        self,
+        event_type: str,
+        since: datetime | None = None,
+        limit: int = 1000,
+    ) -> list[Any]:
+        return []
+
+    async def get_events_by_correlation_id(self, correlation_id: str) -> list[Any]:
+        return []
+
+    def replay_events(
+        self,
+        stream_id: str,
+        from_version: int = 0,
+        to_version: int | None = None,
+    ):
+        async def generator():
+            yield None
+
+        return generator()
+
+    async def get_statistics(self) -> dict[str, Any]:
+        return {}
 
 
 @pytest.fixture
@@ -365,10 +472,6 @@ class TestConversationalLoopProductionE2E:
         )
 
         # Step 1: Initialize conversational loop
-        monitoring_config = DiscussionMonitoringConfig(
-            project_id="e2e-test-project",
-        )
-
         session = await orchestrator.initialize_loop(
             work_item_id=work_item_id,
             project_id="e2e-test-project",
@@ -440,12 +543,11 @@ class TestConversationalLoopProductionE2E:
 
         logger.info("[E2E Test] ✓ GitHub discussion thread retrieved with %d comments", len(thread.comments))
 
-        # Step 8: Find the bot response in the thread
-        # The bot response should be from the identity service's bot username
-        bot_username = identity_service.get_bot_username()
-        bot_responses = [c for c in thread.comments if c.author == bot_username or c.is_bot]
+        # Step 8: Find the bot response in the thread by content
+        # Detect by response content instead of author name (which varies by token holder)
+        bot_responses = [c for c in thread.comments if "Codetoreum Verification Response" in c.body]
 
-        assert len(bot_responses) > 0, f"No bot responses found from {bot_username}"
+        assert len(bot_responses) > 0, "No bot responses found (expected 'Codetoreum Verification Response' in comment body)"
         bot_response = bot_responses[-1]  # Get the last bot response
 
         logger.info(
@@ -513,12 +615,10 @@ class TestConversationalLoopProductionE2E:
     ):
         """Verify complete event trail for conversational loop execution.
 
-        Captures and logs:
-        1. CommentNeedsResponseEvent emitted by adapter
-        2. AgentExecutionStartedEvent in orchestrator
-        3. CodingAgent execution events
-        4. AgentResponsePostedEvent after comment posting
-        5. Session state updates
+        Captures actual domain events emitted by components:
+        1. CommentNeedsResponseEvent from the test event creation
+        2. Coding agent executions via mock
+        3. Session state updates via event store
 
         This creates an audit trail demonstrating the full flow.
         """
@@ -584,7 +684,7 @@ class TestConversationalLoopProductionE2E:
             ),
         )
 
-        # Log event trail
+        # Record actual execution timeline
         event_trail = []
 
         event_trail.append(
@@ -593,12 +693,16 @@ class TestConversationalLoopProductionE2E:
                 "event_type": "CommentNeedsResponseEvent",
                 "work_item_id": work_item_id,
                 "comment_id": test_comment.id,
+                "comment_author": test_comment.author,
                 "timestamp": datetime.now(UTC).isoformat(),
-                "description": "Comment detected and event emitted by GitHubDiscussionAdapter",
+                "description": "CommentNeedsResponseEvent created for orchestrator processing",
             }
         )
 
+        # Handle event and capture execution details
+        start_time = datetime.now(UTC).isoformat()
         await orchestrator.handle_comment_event(event)
+        end_time = datetime.now(UTC).isoformat()
 
         event_trail.append(
             {
@@ -606,8 +710,10 @@ class TestConversationalLoopProductionE2E:
                 "event_type": "AgentExecutionStarted",
                 "session_id": session.session_id,
                 "execution_id": mock_coding_agent.last_execution.id if mock_coding_agent.last_execution else None,
-                "timestamp": datetime.now(UTC).isoformat(),
-                "description": "Orchestrator started coding agent execution",
+                "agent_name": test_agent.name,
+                "start_time": start_time,
+                "end_time": end_time,
+                "description": "Orchestrator processed comment event and invoked coding agent",
             }
         )
 
@@ -615,27 +721,44 @@ class TestConversationalLoopProductionE2E:
             {
                 "step": 3,
                 "event_type": "AgentResponsePosted",
-                "response_posted": True,
+                "response_summary": "Codetoreum Verification Response",
                 "timestamp": datetime.now(UTC).isoformat(),
                 "description": "Agent response posted to GitHub via add_comment()",
             }
         )
 
+        # Capture session state after processing
         updated_session = await orchestrator.load_session_state(work_item_id)
         event_trail.append(
             {
                 "step": 4,
                 "event_type": "SessionStateUpdated",
+                "session_id": updated_session.session_id if updated_session else None,
                 "last_processed_comment_id": updated_session.last_processed_comment_id if updated_session else None,
                 "timestamp": datetime.now(UTC).isoformat(),
-                "description": "Session state persisted with checkpoint",
+                "description": "Session state persisted with checkpoint in event store",
+            }
+        )
+
+        # Verify actual coding agent execution was recorded
+        assert len(mock_coding_agent.executions) == 1, "Coding agent should have been invoked once"
+        execution_record = mock_coding_agent.executions[0]
+
+        event_trail.append(
+            {
+                "step": 5,
+                "event_type": "CodingAgentExecution",
+                "execution_id": execution_record["execution_id"],
+                "session_id": execution_record["session_id"],
+                "timestamp": execution_record["timestamp"],
+                "description": "Verified coding agent execution record in mock",
             }
         )
 
         # Output complete event trail
         logger.info(
             "[E2E Event Trail] ✅ Complete event trail captured:\n%s",
-            json.dumps(event_trail, indent=2),
+            json.dumps(event_trail, indent=2, default=str),
         )
 
         await orchestrator.cleanup_loop(work_item_id, "Event trail test complete")

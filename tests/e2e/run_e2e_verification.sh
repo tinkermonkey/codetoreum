@@ -51,7 +51,7 @@ echo -e "${BLUE}─────────────────────�
 echo "Configuration:"
 echo -e "  Repository: ${GITHUB_TEST_REPO}"
 echo -e "  Work Item ID: ${GITHUB_TEST_WORK_ITEM_ID}"
-echo -e "  Token: ${GITHUB_TOKEN:0:20}...${GITHUB_TOKEN: -4}"
+echo -e "  Token: ****${GITHUB_TOKEN: -4}"
 echo -e "${BLUE}───────────────────────────────────────────────────────────────${NC}"
 echo ""
 
