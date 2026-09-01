@@ -9,13 +9,19 @@ from codetoreum.ports.output.container import IContainer
 from codetoreum.ports.output.repository import IRepository
 from codetoreum.ports.output.ticket_system import ITicketSystem
 from codetoreum.ports.output.version_control_service import IVersionControlService
+from codetoreum.ports.output.work_execution_state_tracker import (
+    IWorkExecutionStateTracker,
+)
 
 from .circuit_breaker import CircuitBreaker
 from .config import (
     GITHUB_RESILIENCE_CONFIG,
     OperationMode,
 )
-from .decorators import ResilientTicketSystemDecorator
+from .decorators import (
+    BestEffortExecutionTrackerDecorator,
+    ResilientTicketSystemDecorator,
+)
 from .mocks import MockCircuitBreaker, MockRateLimiter, MockRetryPolicy, MockTimeout
 from .rate_limiter import TokenBucketRateLimiter
 from .retry_policy import ExponentialBackoffRetry
@@ -162,3 +168,23 @@ class ResilienceFactory:
         # TODO: Implement ResilientVersionControlDecorator
         # Similar pattern to ResilientTicketSystemDecorator
         return adapter
+
+    def create_best_effort_execution_tracker(
+        self, adapter: IWorkExecutionStateTracker
+    ) -> IWorkExecutionStateTracker:
+        """
+        Create best-effort execution state tracker decorator.
+
+        Wraps the tracker with graceful degradation: failures in
+        mark_execution_started() are logged but do not block execution.
+        The tracker is only a hint store for recovery decisions; failures
+        are non-critical since recovery defaults safely to kill if no hint
+        is found.
+
+        Args:
+            adapter: Underlying execution state tracker adapter
+
+        Returns:
+            IWorkExecutionStateTracker: Wrapped adapter with best-effort resilience
+        """
+        return BestEffortExecutionTrackerDecorator(wrapped=adapter)

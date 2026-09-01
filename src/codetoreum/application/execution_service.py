@@ -252,20 +252,13 @@ class ExecutionService:
             # Write execution state for recovery fast-path lookups.
             # The recovery adapter uses this hint store to assess containers
             # at startup without replaying the full event stream.
-            try:
-                await self.execution_tracker.mark_execution_started(
-                    project=context.project_id,
-                    work_item_id=context.work_item_id,
-                    agent=context.agent_id,
-                )
-            except Exception as e:
-                logger.error(
-                    f"Failed to update execution state tracker for execution {execution.id}: {e}",
-                    exc_info=True,
-                    extra={"error_id": "ERR_EXECUTION_TRACKER_UPDATE_FAILURE"},
-                )
-                # Don't fail the execution if tracking fails — it's only a hint.
-                # Recovery will safely default to kill if no hint is found.
+            # Resilience (graceful degradation on failure) is handled by the
+            # BestEffortExecutionTrackerDecorator in the infrastructure layer.
+            await self.execution_tracker.mark_execution_started(
+                project=context.project_id,
+                work_item_id=context.work_item_id,
+                agent=context.agent_id,
+            )
 
             logger.info(f"Started execution {execution.id}")
 

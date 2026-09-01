@@ -983,6 +983,13 @@ class ProductionApplicationBootstrap:
             )
             logger.debug("Applied resilience to version control adapter")
 
+        # Execution tracker (best-effort write path for recovery hints)
+        if self.adapters.execution_tracker:
+            self.adapters.execution_tracker = resilience_factory.create_best_effort_execution_tracker(
+                self.adapters.execution_tracker
+            )
+            logger.debug("Applied best-effort resilience to execution tracker adapter")
+
         logger.info("Resilience decorators applied to critical adapters")
 
     # =========================================================================

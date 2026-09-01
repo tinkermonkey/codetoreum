@@ -723,8 +723,11 @@ class AdapterResolver:
         Used by ExecutionService to write execution state when a run starts,
         and by the recovery adapter to read state at startup for reconnect
         vs. kill decisions.
+
+        Implementation selection is driven by self._config.execution_tracker
+        (independent configuration), not coupled to container_recovery.
         """
-        if self._config.container_recovery == "docker":
+        if self._config.execution_tracker == "redis":
             import redis.asyncio as aioredis
 
             from codetoreum.adapters.secondary.redis_execution_state_tracker import (

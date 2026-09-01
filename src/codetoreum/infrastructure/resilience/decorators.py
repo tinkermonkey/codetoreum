@@ -3,9 +3,12 @@
 Provides decorators that wrap port interfaces with resilience patterns.
 """
 
+import logging
 from collections.abc import AsyncIterator, Callable
 from datetime import datetime
 from typing import Any, TypeVar
+
+logger = logging.getLogger(__name__)
 
 from codetoreum.domain.comment import Comment
 from codetoreum.domain.types import ProjectId, UserId, WorkItemId
@@ -23,6 +26,9 @@ from codetoreum.ports.output.board_service import (
 from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
 from codetoreum.ports.output.monitoring import MonitoringConfig, MonitoringStatus
 from codetoreum.ports.output.ticket_system import ITicketSystem
+from codetoreum.ports.output.work_execution_state_tracker import (
+    IWorkExecutionStateTracker,
+)
 
 from .interfaces import ICircuitBreaker, IRateLimiter, IRetryPolicy, ITimeout
 
@@ -781,3 +787,68 @@ class ResilientCodingAgentDecorator:
         if self._retry_policy:
             return await self._retry_policy.execute(_timed, "coding_agent.execute")
         return await _timed()
+
+
+# ============================================================================
+# Best-Effort Execution Tracker Decorator
+# ============================================================================
+
+
+class BestEffortExecutionTrackerDecorator(IWorkExecutionStateTracker):
+    """Wraps IWorkExecutionStateTracker with graceful degradation.
+
+    Catches exceptions in mark_execution_started() and logs with exc_info=True,
+    allowing execution to proceed even if tracking fails. This implements
+    the "best-effort" resilience policy: tracking is only a hint store
+    for recovery decisions, so tracking failures should not block execution.
+
+    The decorator passes through load_state() and mark_execution_failed()
+    unchanged, as those are not in the critical path.
+    """
+
+    def __init__(self, wrapped: IWorkExecutionStateTracker) -> None:
+        """
+        Initialize the decorator.
+
+        Args:
+            wrapped: The underlying execution state tracker adapter
+        """
+        self._wrapped = wrapped
+
+    async def load_state(self, project: str, work_item_id: str) -> dict[str, Any] | None:
+        """Pass through to wrapped adapter."""
+        return await self._wrapped.load_state(project, work_item_id)
+
+    async def mark_execution_started(
+        self, project: str, work_item_id: str, agent: str
+    ) -> None:
+        """Mark execution as started with graceful degradation on failure.
+
+        If the underlying tracker fails, this logs the error with full context
+        and returns normally without raising. The caller (ExecutionService)
+        proceeds with execution; recovery will default to kill if no hint
+        is found at startup.
+
+        Args:
+            project: Project identifier
+            work_item_id: Work item identifier
+            agent: Agent identifier executing
+
+        Returns:
+            None (void operation)
+        """
+        try:
+            await self._wrapped.mark_execution_started(project, work_item_id, agent)
+        except Exception as e:
+            logger.error(
+                f"Failed to update execution state tracker for project={project} "
+                f"work_item_id={work_item_id} agent={agent}: {e}",
+                exc_info=True,
+                extra={"error_id": "ERR_EXECUTION_TRACKER_UPDATE_FAILURE"},
+            )
+
+    async def mark_execution_failed(
+        self, project: str, work_item_id: str, agent: str, reason: str
+    ) -> None:
+        """Pass through to wrapped adapter."""
+        return await self._wrapped.mark_execution_failed(project, work_item_id, agent, reason)

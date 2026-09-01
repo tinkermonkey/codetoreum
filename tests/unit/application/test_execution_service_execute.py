@@ -26,6 +26,9 @@ from codetoreum.application.execution_service import (
     ExecutionFailureReason,
     ExecutionService,
 )
+from codetoreum.infrastructure.resilience.decorators import (
+    BestEffortExecutionTrackerDecorator,
+)
 from codetoreum.domain.agent import Agent, AgentCapability, AgentType, CommitPolicy
 from codetoreum.domain.agent_execution import AgentExecution, ExecutionStatus
 from codetoreum.domain.coding_agent_types import AgentInvocationConfig, InvocationMode
@@ -103,10 +106,12 @@ def execution_service(
     execution_tracker: InMemoryWorkExecutionStateTracker,
     coding_agent_mock: AsyncMock,
 ) -> ExecutionService:
+    # Wrap the tracker with the best-effort decorator to handle failures gracefully
+    decorated_tracker = BestEffortExecutionTrackerDecorator(wrapped=execution_tracker)
     return ExecutionService(
         coding_agent=coding_agent_mock,
         event_store=event_store,
-        execution_tracker=execution_tracker,
+        execution_tracker=decorated_tracker,
     )
 
 
