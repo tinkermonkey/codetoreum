@@ -84,7 +84,7 @@ class InMemoryWorkExecutionStateTracker(IWorkExecutionStateTracker):
         """
         key = (project, work_item_id)
         self._state[key] = {
-            "status": "failed",
+            "outcome": "failed",
             "agent": agent,
             "reason": reason,
         }

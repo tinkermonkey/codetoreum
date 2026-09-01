@@ -159,19 +159,19 @@ class RedisContainerRecoveryTrackingStore(IContainerRecoveryTrackingStore):
             raise StorageError(f"Failed to scan keys in tracking store: {e}") from e
 
     @staticmethod
-    def _decode(raw: bytes | str, key: str) -> Any | None:
+    def _decode(raw: bytes | str, key: str) -> Any:
         try:
             if isinstance(raw, bytes):
                 raw = raw.decode("utf-8")
             data = json.loads(raw)
             return data
-        except Exception:
+        except Exception as e:
             logger.error(
                 f"Corrupt JSON in container recovery tracking store for key={key}",
                 exc_info=True,
                 extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
             )
-            return None
+            raise StorageError(f"Failed to decode value for key={key}: {e}") from e
 
 
 __all__ = ["RedisContainerRecoveryTrackingStore"]

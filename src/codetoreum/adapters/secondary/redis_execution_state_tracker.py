@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     import redis.asyncio as aioredis
 
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.ports.exceptions import StorageError
 from codetoreum.ports.output.work_execution_state_tracker import (
     IWorkExecutionStateTracker,
 )
@@ -73,13 +74,15 @@ class RedisExecutionStateTracker(IWorkExecutionStateTracker):
             if raw is None:
                 return None
             return self._decode(raw, project, work_item_id)
-        except Exception:
+        except StorageError:
+            raise
+        except Exception as e:
             logger.error(
                 f"Failed to load execution state for project={project}, work_item_id={work_item_id}",
                 exc_info=True,
                 extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
             )
-            raise
+            raise StorageError(f"Failed to load execution state: {e}") from e
 
     async def mark_execution_started(
         self, project: str, work_item_id: str, agent: str
@@ -107,13 +110,13 @@ class RedisExecutionStateTracker(IWorkExecutionStateTracker):
             await self._redis.set(
                 self._key(project, work_item_id), payload, ex=self._ttl_seconds
             )
-        except Exception:
+        except Exception as e:
             logger.error(
                 f"Failed to mark execution as started for project={project}, work_item_id={work_item_id}, agent={agent}",
                 exc_info=True,
                 extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
             )
-            raise
+            raise StorageError(f"Failed to mark execution as started: {e}") from e
 
     async def mark_execution_failed(
         self, project: str, work_item_id: str, agent: str, reason: str
@@ -144,7 +147,7 @@ class RedisExecutionStateTracker(IWorkExecutionStateTracker):
         try:
             payload = json.dumps(
                 {
-                    "status": "failed",
+                    "outcome": "failed",
                     "agent": agent,
                     "reason": reason,
                 }
@@ -152,28 +155,28 @@ class RedisExecutionStateTracker(IWorkExecutionStateTracker):
             await self._redis.set(
                 self._key(project, work_item_id), payload, ex=self._ttl_seconds
             )
-        except Exception:
+        except Exception as e:
             logger.error(
                 f"Failed to mark execution as failed for project={project}, work_item_id={work_item_id}, agent={agent}",
                 exc_info=True,
                 extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
             )
-            raise
+            raise StorageError(f"Failed to mark execution as failed: {e}") from e
 
     @staticmethod
-    def _decode(raw: bytes | str, project: str, work_item_id: str) -> dict[str, Any] | None:
+    def _decode(raw: bytes | str, project: str, work_item_id: str) -> dict[str, Any]:
         try:
             if isinstance(raw, bytes):
                 raw = raw.decode("utf-8")
             data = json.loads(raw)
             return data
-        except Exception:
+        except Exception as e:
             logger.error(
                 f"Corrupt execution state JSON for project={project}, work_item_id={work_item_id}",
                 exc_info=True,
                 extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
             )
-            return None
+            raise StorageError(f"Failed to decode execution state for project={project}, work_item_id={work_item_id}: {e}") from e
 
 
 __all__ = ["RedisExecutionStateTracker"]

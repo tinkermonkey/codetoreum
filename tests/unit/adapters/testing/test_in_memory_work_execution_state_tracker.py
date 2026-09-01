@@ -25,7 +25,7 @@ class TestInMemoryWorkExecutionStateTrackerRoundTrip:
         )
         state = await tracker.load_state("myproject", "item-123")
         assert state is not None
-        assert state["status"] == "failed"
+        assert state["outcome"] == "failed"
         assert state["agent"] == "claude"
         assert state["reason"] == "Container lost connection"
 

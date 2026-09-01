@@ -144,6 +144,7 @@ class TestRedisContainerRecoveryTrackingStorePersistence:
 
 class TestRedisContainerRecoveryTrackingStoreCorruption:
     @pytest.mark.asyncio
-    async def test_corrupt_json_returns_none(self, store, redis_client):
+    async def test_corrupt_json_raises_storage_error(self, store, redis_client):
         await redis_client.set("corrupt:key", "{not-json}", ex=3600)
-        assert await store.get("corrupt:key") is None
+        with pytest.raises(StorageError):
+            await store.get("corrupt:key")

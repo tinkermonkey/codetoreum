@@ -8,6 +8,7 @@ import pytest
 from codetoreum.adapters.secondary.redis_execution_state_tracker import (
     RedisExecutionStateTracker,
 )
+from codetoreum.ports.exceptions import StorageError
 
 
 @pytest.fixture
@@ -36,7 +37,7 @@ class TestRedisExecutionStateTrackerRoundTrip:
         )
         state = await tracker.load_state("myproject", "item-123")
         assert state is not None
-        assert state["status"] == "failed"
+        assert state["outcome"] == "failed"
         assert state["agent"] == "claude"
         assert state["reason"] == "Container lost connection"
 
@@ -138,6 +139,7 @@ class TestRedisExecutionStateTrackerStarted:
 
 class TestRedisExecutionStateTrackerCorruption:
     @pytest.mark.asyncio
-    async def test_corrupt_json_returns_none(self, tracker, redis_client):
+    async def test_corrupt_json_raises_storage_error(self, tracker, redis_client):
         await redis_client.set(tracker._key("myproject", "item-123"), "{not-json}")
-        assert await tracker.load_state("myproject", "item-123") is None
+        with pytest.raises(StorageError):
+            await tracker.load_state("myproject", "item-123")
