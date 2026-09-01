@@ -40,8 +40,14 @@ from codetoreum.ports.output.container_recovery import (
     IAgentContainerRecoveryService,
     RecoveryAssessment,
 )
+from codetoreum.ports.output.container_recovery_tracking_store import (
+    IContainerRecoveryTrackingStore,
+)
 from codetoreum.ports.output.repair_cycle_checkpoint_store import (
     IRepairCycleCheckpointStore,
+)
+from codetoreum.ports.output.work_execution_state_tracker import (
+    IWorkExecutionStateTracker,
 )
 
 # Additional label for tracking containers with timestamp parse failures
@@ -68,30 +74,6 @@ REPAIR_CYCLE_AGE_THRESHOLD = timedelta(hours=2)  # 2 hours
 
 
 # Protocol types for injected dependencies
-class IWorkExecutionStateTracker(Protocol):
-    """Protocol for execution state tracking."""
-
-    async def load_state(self, project: str, work_item_id: str) -> dict[str, Any] | None:
-        """Load execution state from storage."""
-        ...
-
-    async def mark_execution_failed(self, project: str, work_item_id: str, agent: str, reason: str) -> None:
-        """Mark an execution as failed with a reason."""
-        ...
-
-
-class IStorage(Protocol):
-    """Protocol for storage operations."""
-
-    async def set(self, key: str, value: Any, ttl: int | None = None) -> None:
-        """Store a value with optional TTL."""
-        ...
-
-    async def get(self, key: str) -> Any | None:
-        """Retrieve a stored value."""
-        ...
-
-
 class IDockerRunner(Protocol):
     """Protocol for Docker runner operations."""
 
@@ -127,6 +109,13 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
     5. Monitoring capability: Determine if full monitoring possible
     6. Reconnect or kill accordingly
 
+    Dual-State Concern:
+    - The Redis-backed `tracking_storage` (IContainerRecoveryTrackingStore) is a
+      fast recovery-loop hint store, not the source of truth.
+    - Canonical execution state lives in the event-sourced ExecutionService.
+    - This adapter uses the hint store to make quick reconnect-vs-kill decisions
+      at startup without replaying the full event stream.
+
     Thread Safety:
     - This adapter is async-safe but not thread-safe
     - All Docker operations are executed in a thread pool
@@ -135,7 +124,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
     def __init__(
         self,
         execution_tracker: IWorkExecutionStateTracker,
-        tracking_storage: IStorage,
+        tracking_storage: IContainerRecoveryTrackingStore,
         docker_runner: IDockerRunner | None = None,
         checkpoint_store: IRepairCycleCheckpointStore | None = None,
         container_timeout_hours: int = 2,
