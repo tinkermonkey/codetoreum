@@ -350,6 +350,7 @@ def test_non_critical_adapter_slots_defined() -> None:
         "environment_repair",
         "repair_cycle",
         "ci_pipeline",
+        "container_recovery",
     }
 
     assert expected_non_critical == NON_CRITICAL_SLOTS

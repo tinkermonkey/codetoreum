@@ -168,6 +168,7 @@ NON_CRITICAL_SLOTS = {
     "environment_repair",
     "repair_cycle",
     "ci_pipeline",
+    "container_recovery",
 }
 
 
@@ -291,6 +292,7 @@ class ProductionApplicationBootstrap:
                 branch_tracker="redis",  # Persistent work_item -> branch mapping; survives restart
                 agent_repository="elasticsearch",  # Agent catalog survives restart (DEF-008)
                 workflow_config="elasticsearch",  # BoardWorkflowTemplate survives restart (DEF-008)
+                container_recovery="docker",  # Redis-backed Docker container recovery for production
                 # Non-critical slots use mocks (logged as warnings)
                 review_cycle="basic",
                 pr_review_cycle="basic",

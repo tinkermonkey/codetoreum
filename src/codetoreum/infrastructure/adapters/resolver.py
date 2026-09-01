@@ -26,6 +26,9 @@ from codetoreum.ports.output.code_review_service import ICodeReviewService
 from codetoreum.ports.output.config_store import IConfigStore
 from codetoreum.ports.output.container import IContainer
 from codetoreum.ports.output.container_recovery import IAgentContainerRecoveryService
+from codetoreum.ports.output.container_recovery_tracking_store import (
+    IContainerRecoveryTrackingStore,
+)
 from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
 from codetoreum.ports.output.distributed_lock import IDistributedLock
 from codetoreum.ports.output.encryption_service import IEncryptionService
@@ -47,6 +50,9 @@ from codetoreum.ports.output.review_cycle_service import IReviewCycle
 from codetoreum.ports.output.systemic_analysis_service import ISystemicAnalysisService
 from codetoreum.ports.output.ticket_system import ITicketSystem
 from codetoreum.ports.output.version_control_service import IVersionControlService
+from codetoreum.ports.output.work_execution_state_tracker import (
+    IWorkExecutionStateTracker,
+)
 from codetoreum.ports.output.work_item_branch_tracker import IWorkItemBranchTracker
 from codetoreum.ports.output.work_item_service import IWorkItemService
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
@@ -711,7 +717,44 @@ class AdapterResolver:
         )
 
     def resolve_container_recovery(self) -> IAgentContainerRecoveryService:
-        """Resolve container recovery adapter."""
+        """
+        Resolve container recovery adapter.
+
+        Special handling for production Docker variant:
+        - If docker variant selected: create with Redis-backed execution_tracker
+          and tracking_storage, plus the already-resolved checkpoint_store.
+        - If mock variant: use factory with time_source for testing.
+        """
+        if self._config.container_recovery == "docker":
+            import redis.asyncio as aioredis
+
+            from codetoreum.adapters.secondary.docker_container_recovery_adapter import (
+                DockerContainerRecoveryAdapter,
+            )
+            from codetoreum.adapters.secondary.redis_container_recovery_tracking_store import (
+                RedisContainerRecoveryTrackingStore,
+            )
+            from codetoreum.adapters.secondary.redis_execution_state_tracker import (
+                RedisExecutionStateTracker,
+            )
+
+            redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+            redis_client = aioredis.from_url(redis_url)
+
+            execution_tracker: IWorkExecutionStateTracker = RedisExecutionStateTracker(
+                redis_client=redis_client,
+            )
+            tracking_storage: IContainerRecoveryTrackingStore = RedisContainerRecoveryTrackingStore(
+                redis_client=redis_client,
+            )
+            checkpoint_store = self._resolved.get("checkpoint_store")
+
+            return DockerContainerRecoveryAdapter(
+                execution_tracker=execution_tracker,
+                tracking_storage=tracking_storage,
+                checkpoint_store=checkpoint_store,
+            )
+
         return self._factory.create_container_recovery(
             adapter_name=self._config.container_recovery,
             time_source=lambda: self._deps.engine.get_clock_for_testing().now(),
