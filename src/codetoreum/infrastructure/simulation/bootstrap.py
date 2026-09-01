@@ -1657,8 +1657,7 @@ class SimulationApplicationBootstrap:
         # Execution Service — Phase D5: dispatches via ICodingAgent only.
         # The legacy llm_provider / container / storage deps retired
         # along with execute_with_llm / execute_with_container.
-        # Wrap execution_tracker with best-effort resilience to ensure graceful degradation
-        # if the in-memory tracker throws (e.g., if Redis hint store fails in a connected simulation).
+        # Wrap execution_tracker for graceful degradation on tracker failures (parity with production).
         execution_tracker_wrapped = BestEffortExecutionTrackerDecorator(
             wrapped=self.adapters.execution_tracker
         )

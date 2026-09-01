@@ -333,6 +333,7 @@ def test_critical_adapter_slots_defined() -> None:
         "version_control",
         "container",
         "code_review",
+        "container_recovery",
     }
 
     assert expected_critical == CRITICAL_ADAPTER_SLOTS
@@ -350,7 +351,6 @@ def test_non_critical_adapter_slots_defined() -> None:
         "environment_repair",
         "repair_cycle",
         "ci_pipeline",
-        "container_recovery",
         "execution_tracker",  # Execution state tracking; non-critical for MVP
     }
 

@@ -147,7 +147,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
         self.docker_runner = docker_runner
         self.checkpoint_store = checkpoint_store
         self.container_timeout_hours = container_timeout_hours
-        self.failed_event_store = failed_event_store
+        self.failed_event_store = failed_event_store  # TODO: wire failed_event_store into exception handlers (INV-20)
         self._docker_client = None
 
     def _get_client(self):
