@@ -9,7 +9,7 @@ This test proves end-to-end container recovery with real infrastructure:
 """
 
 import asyncio
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 import docker
 import pytest
@@ -80,14 +80,14 @@ async def redis_client(redis_container) -> AsyncGenerator[aioredis.Redis, None]:
 async def execution_tracker(redis_client) -> AsyncGenerator[RedisExecutionStateTracker, None]:
     """Redis-backed execution state tracker."""
     tracker = RedisExecutionStateTracker(redis_client)
-    yield tracker
+    return tracker
 
 
 @pytest.fixture(scope="function")
 async def tracking_storage(redis_client) -> AsyncGenerator[RedisContainerRecoveryTrackingStore, None]:
     """Redis-backed container recovery tracking storage."""
     storage = RedisContainerRecoveryTrackingStore(redis_client, default_ttl_seconds=3600)
-    yield storage
+    return storage
 
 
 @pytest.fixture(scope="function")
