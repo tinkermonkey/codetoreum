@@ -49,6 +49,7 @@ from codetoreum.ports.output.repair_cycle_checkpoint_store import (
 from codetoreum.ports.output.work_execution_state_tracker import (
     IWorkExecutionStateTracker,
 )
+from codetoreum.ports.output.failed_event_store import IFailedEventStore
 
 # Additional label for tracking containers with timestamp parse failures
 CONTAINER_LABEL_TIMESTAMP_FALLBACK = "codetoreum.timestamp_fallback"
@@ -128,6 +129,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
         docker_runner: IDockerRunner | None = None,
         checkpoint_store: IRepairCycleCheckpointStore | None = None,
         container_timeout_hours: int = 2,
+        failed_event_store: IFailedEventStore | None = None,
     ):
         """
         Initialize DockerContainerRecoveryAdapter.
@@ -138,12 +140,14 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
             docker_runner: Docker runner for reconnectToContainer() calls
             checkpoint_store: Checkpoint store for repair cycle validation
             container_timeout_hours: Hours before a container is considered orphaned
+            failed_event_store: Dead letter queue adapter for failure routing (INV-20)
         """
         self.execution_tracker = execution_tracker
         self.tracking_storage = tracking_storage
         self.docker_runner = docker_runner
         self.checkpoint_store = checkpoint_store
         self.container_timeout_hours = container_timeout_hours
+        self.failed_event_store = failed_event_store
         self._docker_client = None
 
     def _get_client(self):

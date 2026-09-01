@@ -146,7 +146,7 @@ from codetoreum.ports.output.prompt_builder import IPromptBuilder
 
 logger = logging.getLogger(__name__)
 
-# Critical execution path slots (6 total)
+# Critical execution path slots (7 total)
 # event_store excluded: InMemoryEventStore is acceptable for MVP
 CRITICAL_ADAPTER_SLOTS = {
     "board",
@@ -157,6 +157,7 @@ CRITICAL_ADAPTER_SLOTS = {
     "version_control",
     "container",
     "code_review",
+    "container_recovery",  # Required for fail-fast safety if mock is detected in production (Story 5)
 }
 
 # Slots without production implementations (not on MVP critical path)
@@ -168,7 +169,6 @@ NON_CRITICAL_SLOTS = {
     "environment_repair",
     "repair_cycle",
     "ci_pipeline",
-    "container_recovery",
     "execution_tracker",  # Execution state tracking; critical for recovery but non-critical for MVP
 }
 

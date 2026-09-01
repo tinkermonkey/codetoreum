@@ -170,6 +170,7 @@ from codetoreum.infrastructure.error_ids import ErrorRegistry
 # Infrastructure
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.resilience import OperationMode
+from codetoreum.infrastructure.resilience.decorators import BestEffortExecutionTrackerDecorator
 from codetoreum.infrastructure.simulation.causal_link_registry import (
     CausalLinkRegistry,
     LinkType,
@@ -1656,10 +1657,15 @@ class SimulationApplicationBootstrap:
         # Execution Service — Phase D5: dispatches via ICodingAgent only.
         # The legacy llm_provider / container / storage deps retired
         # along with execute_with_llm / execute_with_container.
+        # Wrap execution_tracker with best-effort resilience to ensure graceful degradation
+        # if the in-memory tracker throws (e.g., if Redis hint store fails in a connected simulation).
+        execution_tracker_wrapped = BestEffortExecutionTrackerDecorator(
+            wrapped=self.adapters.execution_tracker
+        )
         execution_service = ExecutionService(
             coding_agent=self.adapters.coding_agent,
             event_store=self.adapters.event_store,
-            execution_tracker=self.adapters.execution_tracker,
+            execution_tracker=execution_tracker_wrapped,
             vcs=self.adapters.version_control,
         )
 

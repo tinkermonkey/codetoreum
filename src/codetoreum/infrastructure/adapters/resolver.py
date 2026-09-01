@@ -790,6 +790,7 @@ class AdapterResolver:
                 execution_tracker=execution_tracker,
                 tracking_storage=tracking_storage,
                 checkpoint_store=checkpoint_store,
+                failed_event_store=self._deps.failed_event_store,
             )
 
         return self._factory.create_container_recovery(
