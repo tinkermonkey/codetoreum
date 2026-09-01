@@ -14,7 +14,7 @@ import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 from types import MappingProxyType
-from typing import Any, Protocol
+from typing import Protocol
 
 import docker
 from dateutil import parser as dateparser
@@ -40,8 +40,15 @@ from codetoreum.ports.output.container_recovery import (
     IAgentContainerRecoveryService,
     RecoveryAssessment,
 )
+from codetoreum.ports.output.container_recovery_tracking_store import (
+    IContainerRecoveryTrackingStore,
+)
+from codetoreum.ports.output.failed_event_store import IFailedEventStore
 from codetoreum.ports.output.repair_cycle_checkpoint_store import (
     IRepairCycleCheckpointStore,
+)
+from codetoreum.ports.output.work_execution_state_tracker import (
+    IWorkExecutionStateTracker,
 )
 
 # Additional label for tracking containers with timestamp parse failures
@@ -67,31 +74,7 @@ CHECKPOINT_STALENESS_THRESHOLD = timedelta(minutes=60)  # 60 minutes
 REPAIR_CYCLE_AGE_THRESHOLD = timedelta(hours=2)  # 2 hours
 
 
-# Protocol types for injected dependencies
-class IWorkExecutionStateTracker(Protocol):
-    """Protocol for execution state tracking."""
-
-    async def load_state(self, project: str, work_item_id: str) -> dict[str, Any] | None:
-        """Load execution state from storage."""
-        ...
-
-    async def mark_execution_failed(self, project: str, work_item_id: str, agent: str, reason: str) -> None:
-        """Mark an execution as failed with a reason."""
-        ...
-
-
-class IStorage(Protocol):
-    """Protocol for storage operations."""
-
-    async def set(self, key: str, value: Any, ttl: int | None = None) -> None:
-        """Store a value with optional TTL."""
-        ...
-
-    async def get(self, key: str) -> Any | None:
-        """Retrieve a stored value."""
-        ...
-
-
+# Adapter-local protocol for Docker runner dependency
 class IDockerRunner(Protocol):
     """Protocol for Docker runner operations."""
 
@@ -127,6 +110,13 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
     5. Monitoring capability: Determine if full monitoring possible
     6. Reconnect or kill accordingly
 
+    Dual-State Concern:
+    - `execution_tracker` (IWorkExecutionStateTracker) drives reconnect-vs-kill
+      decisions via load_state() checks in assess_container().
+    - The Redis-backed `tracking_storage` (IContainerRecoveryTrackingStore)
+      handles container re-registration after successful reconnection and
+      repair cycle result scanning for orphaned repairs.
+
     Thread Safety:
     - This adapter is async-safe but not thread-safe
     - All Docker operations are executed in a thread pool
@@ -135,10 +125,11 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
     def __init__(
         self,
         execution_tracker: IWorkExecutionStateTracker,
-        tracking_storage: IStorage,
+        tracking_storage: IContainerRecoveryTrackingStore,
         docker_runner: IDockerRunner | None = None,
         checkpoint_store: IRepairCycleCheckpointStore | None = None,
         container_timeout_hours: int = 2,
+        failed_event_store: IFailedEventStore | None = None,
     ):
         """
         Initialize DockerContainerRecoveryAdapter.
@@ -149,12 +140,14 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
             docker_runner: Docker runner for reconnectToContainer() calls
             checkpoint_store: Checkpoint store for repair cycle validation
             container_timeout_hours: Hours before a container is considered orphaned
+            failed_event_store: Dead letter queue adapter for failure routing (INV-20)
         """
         self.execution_tracker = execution_tracker
         self.tracking_storage = tracking_storage
         self.docker_runner = docker_runner
         self.checkpoint_store = checkpoint_store
         self.container_timeout_hours = container_timeout_hours
+        self.failed_event_store = failed_event_store  # TODO: wire failed_event_store into exception handlers (INV-20)
         self._docker_client = None
 
     def _get_client(self):
@@ -538,9 +531,8 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
             )
 
         # Step 4: Verify execution outcome is "in_progress"
-        outcome = execution_state.get("outcome")
-        if outcome != "in_progress":
-            logger.info(f"Container {metadata.container_id} execution not in_progress, outcome={outcome}, killing")
+        if execution_state.outcome != "in_progress":
+            logger.info(f"Container {metadata.container_id} execution not in_progress, outcome={execution_state.outcome}, killing")
             return RecoveryAssessment(
                 container_id=metadata.container_id,
                 action="kill",
@@ -550,11 +542,10 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
             )
 
         # Step 5: Validate agent matching
-        execution_agent = execution_state.get("agent")
-        if execution_agent != metadata.agent_id:
+        if execution_state.agent != metadata.agent_id:
             logger.info(
                 f"Container {metadata.container_id} agent mismatch: "
-                f"container={metadata.agent_id}, execution={execution_agent}, killing"
+                f"container={metadata.agent_id}, execution={execution_state.agent}, killing"
             )
             return RecoveryAssessment(
                 container_id=metadata.container_id,
@@ -923,21 +914,19 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                 await loop.run_in_executor(None, _kill_container)
 
                 # Mark execution failed if we have execution info
-                if assessment.execution_id and self.execution_tracker:
+                if assessment.execution_id:
                     try:
                         if project and work_item_id and agent:
-                            # Try to mark execution failed if tracker supports it
-                            if hasattr(self.execution_tracker, "mark_execution_failed"):
-                                await self.execution_tracker.mark_execution_failed(
-                                    project=project,
-                                    work_item_id=work_item_id,
-                                    agent=agent,
-                                    reason=assessment.reason,
-                                )
-                                logger.debug(
-                                    f"Marked execution failed for {work_item_id} with reason {assessment.reason}"
-                                )
-                    except (KeyError, AttributeError, ValueError) as mark_error:
+                            await self.execution_tracker.mark_execution_failed(
+                                project=project,
+                                work_item_id=work_item_id,
+                                agent=agent,
+                                reason=assessment.reason,
+                            )
+                            logger.debug(
+                                f"Marked execution failed for {work_item_id} with reason {assessment.reason}"
+                            )
+                    except (KeyError, AttributeError, ValueError, StorageError) as mark_error:
                         logger.warning(
                             f"Failed to mark execution failed for {assessment.execution_id} (expected error): {mark_error}",
                             exc_info=True,

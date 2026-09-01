@@ -19,6 +19,8 @@ The lifecycle services output ports define contracts for:
 - **IProjectManagerService**: Project lifecycle management
 - **ISystemicAnalysisService**: System analysis and diagnostics
 - **IAgentContainerRecoveryService**: Container recovery and cleanup at startup
+- **IWorkExecutionStateTracker**: Execution state tracking for recovery decisions
+- **IContainerRecoveryTrackingStore**: Container recovery tracking and result scanning
 
 These ports manage long-running processes and system lifecycle.
 
@@ -364,6 +366,98 @@ class IAgentContainerRecoveryService(ABC):
         pass
 ```
 
+### IWorkExecutionStateTracker
+
+```python
+class IWorkExecutionStateTracker(ABC):
+    """Execution state tracking for recovery decisions.
+
+    A recovery-loop hint store that enables fast reconnect-vs-kill decisions
+    at startup without replaying the event stream. The canonical execution
+    state lives in the event-sourced ExecutionService.
+    """
+
+    @abstractmethod
+    async def load_state(self, project: str, work_item_id: str) -> ExecutionState | None:
+        """Load execution state from storage.
+
+        Retrieves the execution state for a specific work item. Returns None
+        if no state exists or the state has expired.
+
+        Returns:
+            ExecutionState instance if found and not expired, None otherwise
+        """
+        pass
+
+    @abstractmethod
+    async def mark_execution_started(self, project: str, work_item_id: str, agent: str) -> None:
+        """Mark an execution as started (in_progress).
+
+        Records that an execution has begun, enabling recovery decisions
+        at startup. The execution_tracker is read-only during recovery;
+        this write happens at execution start before the container runs.
+
+        Args:
+            project: Project identifier
+            work_item_id: Work item identifier
+            agent: Agent identifier executing
+
+        Contract:
+            - State record is persisted atomically
+            - Record has TTL of 4 hours
+            - outcome field set to "in_progress" for recovery validation
+        """
+        pass
+
+    @abstractmethod
+    async def mark_execution_failed(
+        self, project: str, work_item_id: str, agent: str, reason: str
+    ) -> None:
+        """Mark an execution as failed with a reason.
+
+        Records that an execution has failed, typically during recovery
+        operations when a container cannot be reconnected.
+
+        Args:
+            project: Project identifier
+            work_item_id: Work item identifier
+            agent: Agent identifier that was executing
+            reason: Reason for the failure
+
+        Contract:
+            - Failure record is persisted atomically
+            - Record has TTL of 4 hours
+            - Multiple marks are idempotent
+        """
+        pass
+```
+
+### IContainerRecoveryTrackingStore
+
+```python
+class IContainerRecoveryTrackingStore(ABC):
+    """Container recovery tracking and result scanning.
+
+    Provides storage for container re-registration tracking and repair cycle
+    result scanning. Supports pattern-based key scanning for recovery operations.
+    """
+
+    @abstractmethod
+    async def set(self, key: str, value: Any, ttl: int | None = None) -> None:
+        """Store a value with optional TTL."""
+        pass
+
+    @abstractmethod
+    async def get(self, key: str) -> Any | None:
+        """Retrieve a stored value."""
+        pass
+
+    @abstractmethod
+    async def scan(self, pattern: str) -> list[str]:
+        """Scan for keys matching a pattern."""
+        pass
+```
+
 ## Methods Summary
 
 | Service | Key Methods | Purpose |
@@ -381,6 +475,8 @@ class IAgentContainerRecoveryService(ABC):
 | IProjectManagerService | `create_project()`, `get_project()`, `update_project()`, `delete_project()` | Project lifecycle |
 | ISystemicAnalysisService | `analyze_system_health()`, `analyze_bottlenecks()`, `generate_diagnostics_report()` | System diagnostics |
 | IAgentContainerRecoveryService | `recover_or_cleanup_containers()`, `assess_container()`, `execute_recovery_action()` | Container recovery |
+| IWorkExecutionStateTracker | `load_state()`, `mark_execution_started()`, `mark_execution_failed()` | Execution state hints |
+| IContainerRecoveryTrackingStore | `set()`, `get()`, `scan()` | Container tracking storage |
 
 ## Events Emitted
 
@@ -456,5 +552,19 @@ classDiagram
         +get_running_repair_cycle_containers() list
         +assess_repair_cycle_container(metadata) RecoveryAssessment
         +process_orphaned_repair_results() int
+    }
+
+    class IWorkExecutionStateTracker {
+        <<interface>>
+        +load_state(project, work_item_id) ExecutionState
+        +mark_execution_started(project, work_item_id, agent) None
+        +mark_execution_failed(project, work_item_id, agent, reason) None
+    }
+
+    class IContainerRecoveryTrackingStore {
+        <<interface>>
+        +set(key, value, ttl) None
+        +get(key) Any
+        +scan(pattern) list
     }
 ```

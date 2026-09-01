@@ -13,9 +13,9 @@ Both sets use Python Abstract Base Classes (ABCs) with type-annotated methods. A
 
 ## Port Organization
 
-With 63 total port interfaces (21 input + 42 output), individual files per port would create navigational overhead. Instead, ports are grouped by **functional domain** — related interfaces that address the same problem area.
+With 65 total port interfaces (21 input + 44 output), individual files per port would create navigational overhead. Instead, ports are grouped by **functional domain** — related interfaces that address the same problem area.
 
-> Count verified 2026-08-12 via exhaustive port ABC scan (`src/codetoreum/ports/input/` and `src/codetoreum/ports/output/`). Recount when ports are added or removed.
+> Count verified 2026-09-01 via exhaustive port ABC scan (`src/codetoreum/ports/input/` and `src/codetoreum/ports/output/`). Recount when ports are added or removed.
 
 This strategy:
 - Keeps related interfaces together for context
@@ -52,7 +52,7 @@ Each input port documentation file includes:
 - Class diagram
 
 ### [output/](./output/)
-**42 output port interfaces** across 7 documentation files:
+**44 output port interfaces** across 7 documentation files:
 
 1. **core-system.md** — Fundamental operations (tickets, VCS, containers, coding agent)
 2. **board-management.md** — Project board operations

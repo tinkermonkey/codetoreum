@@ -39,6 +39,9 @@ from codetoreum.ports.output.container_recovery import (
     RecoveryAssessment,
     RecoveryResult,
 )
+from codetoreum.ports.output.container_recovery_tracking_store import (
+    IContainerRecoveryTrackingStore,
+)
 from codetoreum.ports.output.discussion_adapter import (
     DiscussionMonitoringConfig,
     DiscussionThread,
@@ -128,6 +131,10 @@ from codetoreum.ports.output.version_control_service import (
     Repository,
     VCSStatus,
 )
+from codetoreum.ports.output.work_execution_state_tracker import (
+    ExecutionState,
+    IWorkExecutionStateTracker,
+)
 from codetoreum.ports.output.work_item_service import IWorkItemService
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 from codetoreum.ports.output.workflow_orchestrator import (
@@ -150,6 +157,10 @@ __all__ = [
     "ContainerMetadata",
     "RecoveryAssessment",
     "RecoveryResult",
+    # Container Recovery Tracking (dependencies for container recovery)
+    "IContainerRecoveryTrackingStore",
+    "ExecutionState",
+    "IWorkExecutionStateTracker",
     # Board Service
     "IBoardService",
     "BoardColumn",

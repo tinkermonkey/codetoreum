@@ -26,6 +26,9 @@ from codetoreum.ports.output.code_review_service import ICodeReviewService
 from codetoreum.ports.output.config_store import IConfigStore
 from codetoreum.ports.output.container import IContainer
 from codetoreum.ports.output.container_recovery import IAgentContainerRecoveryService
+from codetoreum.ports.output.container_recovery_tracking_store import (
+    IContainerRecoveryTrackingStore,
+)
 from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
 from codetoreum.ports.output.distributed_lock import IDistributedLock
 from codetoreum.ports.output.encryption_service import IEncryptionService
@@ -47,6 +50,9 @@ from codetoreum.ports.output.review_cycle_service import IReviewCycle
 from codetoreum.ports.output.systemic_analysis_service import ISystemicAnalysisService
 from codetoreum.ports.output.ticket_system import ITicketSystem
 from codetoreum.ports.output.version_control_service import IVersionControlService
+from codetoreum.ports.output.work_execution_state_tracker import (
+    IWorkExecutionStateTracker,
+)
 from codetoreum.ports.output.work_item_branch_tracker import IWorkItemBranchTracker
 from codetoreum.ports.output.work_item_service import IWorkItemService
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
@@ -710,8 +716,83 @@ class AdapterResolver:
             failed_event_store=self._deps.failed_event_store,
         )
 
+    def resolve_execution_tracker(self) -> IWorkExecutionStateTracker:
+        """
+        Resolve work execution state tracker.
+
+        Used by ExecutionService to write execution state when a run starts,
+        and by the recovery adapter to read state at startup for reconnect
+        vs. kill decisions.
+
+        Implementation selection is driven by self._config.execution_tracker
+        (independent configuration), not coupled to container_recovery.
+        """
+        if self._config.execution_tracker == "redis":
+            import redis.asyncio as aioredis
+
+            from codetoreum.adapters.secondary.redis_execution_state_tracker import (
+                RedisExecutionStateTracker,
+            )
+
+            redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+            redis_client = aioredis.from_url(redis_url)
+
+            return RedisExecutionStateTracker(redis_client=redis_client)
+
+        from codetoreum.adapters.testing.in_memory_work_execution_state_tracker import (
+            InMemoryWorkExecutionStateTracker,
+        )
+
+        return InMemoryWorkExecutionStateTracker()
+
     def resolve_container_recovery(self) -> IAgentContainerRecoveryService:
-        """Resolve container recovery adapter."""
+        """
+        Resolve container recovery adapter.
+
+        Special handling for production Docker variant:
+        - If docker variant selected: create with Redis-backed execution_tracker
+          and tracking_storage, plus the already-resolved checkpoint_store.
+        - If mock variant: use factory with time_source for testing.
+        """
+        if self._config.container_recovery == "docker":
+            import redis.asyncio as aioredis
+
+            from codetoreum.adapters.secondary.docker_container_recovery_adapter import (
+                DockerContainerRecoveryAdapter,
+            )
+            from codetoreum.adapters.secondary.redis_container_recovery_tracking_store import (
+                RedisContainerRecoveryTrackingStore,
+            )
+
+            # Production branch requires these dependencies; comprehension check collects all missing
+            # dependencies at bootstrap time for batch reporting instead of early failure on first KeyError
+            required_keys = ["execution_tracker"]
+            missing = [k for k in required_keys if k not in self._resolved]
+            if missing:
+                raise AdapterConfigurationError(
+                    [
+                        f"container_recovery='{self._config.container_recovery}' requires {key} to be resolved first; "
+                        f"ensure resolve_all() dependency ordering is correct."
+                        for key in missing
+                    ]
+                )
+
+            redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+            redis_client = aioredis.from_url(redis_url)
+
+            execution_tracker = self._resolved["execution_tracker"]
+            tracking_storage: IContainerRecoveryTrackingStore = RedisContainerRecoveryTrackingStore(
+                redis_client=redis_client,
+            )
+            checkpoint_store = self._resolved.get("checkpoint_store")
+
+            return DockerContainerRecoveryAdapter(
+                execution_tracker=execution_tracker,
+                tracking_storage=tracking_storage,
+                checkpoint_store=checkpoint_store,
+                failed_event_store=self._deps.failed_event_store,
+            )
+
         return self._factory.create_container_recovery(
             adapter_name=self._config.container_recovery,
             time_source=lambda: self._deps.engine.get_clock_for_testing().now(),
@@ -1003,6 +1084,7 @@ class AdapterResolver:
 
         # 11. Code review and container recovery adapters
         self._resolved["code_review"] = self.resolve_code_review()
+        self._resolved["execution_tracker"] = self.resolve_execution_tracker()
         self._resolved["container_recovery"] = self.resolve_container_recovery()
 
         logger.info(
@@ -1052,6 +1134,8 @@ class AdapterResolver:
             ),  # Created in bootstrap post-processing
             # Container recovery
             container_recovery=self._resolved["container_recovery"],
+            # Execution state tracker
+            execution_tracker=self._resolved["execution_tracker"],
             # Systemic analysis service (resolved in phase 9)
             systemic_analysis_service=self._resolved["systemic_analysis_service"],
             # Environment repair service (resolved in phase 9b)

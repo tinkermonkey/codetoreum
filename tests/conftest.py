@@ -5,6 +5,7 @@ import os
 import time
 from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 from dataclasses import dataclass
+from typing import TypeVar
 
 import docker
 import pytest
@@ -100,6 +101,7 @@ except ImportError:
     # testcontainers not available yet, will be imported later
     pass
 
+from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.adapters.testing.fake_container_adapter import FakeContainerAdapter
 from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
 from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
@@ -107,6 +109,31 @@ from codetoreum.domain.events import CodetoreumEvent, now_iso
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.simulation import SimulationConfig
 from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
+
+T = TypeVar("T", bound=CodetoreumEvent)
+
+
+class EventCollector(MockEventEmitter):
+    """Event emitter that collects events for testing.
+
+    Extends MockEventEmitter to add event collection capability,
+    allowing tests to verify events were emitted.
+    """
+
+    def __init__(self) -> None:
+        """Initialize the event collector."""
+        super().__init__()
+        self.events: list[CodetoreumEvent] = []
+
+    def emit(self, event: CodetoreumEvent) -> None:
+        """Emit an event and collect it for testing."""
+        self.events.append(event)
+        super().emit(event)
+
+    def get_events_by_type(self, event_type: type[T]) -> list[T]:
+        """Get all events of a specific type."""
+        return [e for e in self.events if isinstance(e, event_type)]
+
 
 # ============================================================================
 # Fallback container cleanup (safety net for the disabled Reaper)

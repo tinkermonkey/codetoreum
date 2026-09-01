@@ -146,7 +146,7 @@ from codetoreum.ports.output.prompt_builder import IPromptBuilder
 
 logger = logging.getLogger(__name__)
 
-# Critical execution path slots (6 total)
+# Critical execution path slots (7 total)
 # event_store excluded: InMemoryEventStore is acceptable for MVP
 CRITICAL_ADAPTER_SLOTS = {
     "board",
@@ -157,6 +157,7 @@ CRITICAL_ADAPTER_SLOTS = {
     "version_control",
     "container",
     "code_review",
+    "container_recovery",  # Required for fail-fast safety if mock is detected in production (Story 5)
 }
 
 # Slots without production implementations (not on MVP critical path)
@@ -168,6 +169,7 @@ NON_CRITICAL_SLOTS = {
     "environment_repair",
     "repair_cycle",
     "ci_pipeline",
+    "execution_tracker",  # Execution state tracking; critical for recovery but non-critical for MVP
 }
 
 
@@ -291,6 +293,8 @@ class ProductionApplicationBootstrap:
                 branch_tracker="redis",  # Persistent work_item -> branch mapping; survives restart
                 agent_repository="elasticsearch",  # Agent catalog survives restart (DEF-008)
                 workflow_config="elasticsearch",  # BoardWorkflowTemplate survives restart (DEF-008)
+                execution_tracker="redis",  # Persistent execution state; container recovery needs this across restart
+                container_recovery="docker",  # Redis-backed Docker container recovery for production
                 # Non-critical slots use mocks (logged as warnings)
                 review_cycle="basic",
                 pr_review_cycle="basic",
@@ -981,6 +985,13 @@ class ProductionApplicationBootstrap:
             )
             logger.debug("Applied resilience to version control adapter")
 
+        # Execution tracker (best-effort write path for recovery hints)
+        if self.adapters.execution_tracker:
+            self.adapters.execution_tracker = resilience_factory.create_best_effort_execution_tracker(
+                self.adapters.execution_tracker
+            )
+            logger.debug("Applied best-effort resilience to execution tracker adapter")
+
         logger.info("Resilience decorators applied to critical adapters")
 
     # =========================================================================
@@ -1012,6 +1023,7 @@ class ProductionApplicationBootstrap:
         execution_service = ExecutionService(
             coding_agent=self.adapters.coding_agent,
             event_store=self.adapters.event_store,
+            execution_tracker=self.adapters.execution_tracker,
             vcs=self.adapters.version_control,
         )
 

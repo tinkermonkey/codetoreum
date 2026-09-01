@@ -316,11 +316,11 @@ async def test_event_handler_types_declared() -> None:
 
 @pytest.mark.asyncio
 async def test_adapter_selection_config_has_31_slots() -> None:
-    """Verify that AdapterSelectionConfig has exactly 31 slots."""
+    """Verify that AdapterSelectionConfig has exactly 32 slots."""
     config = AdapterSelectionConfig()
     slots = list(AdapterSelectionConfig.__dataclass_fields__.keys())
 
-    assert len(slots) == 31, f"Expected 31 slots, got {len(slots)}: {slots}"
+    assert len(slots) == 32, f"Expected 32 slots, got {len(slots)}: {slots}"
 
 
 def test_critical_adapter_slots_defined() -> None:
@@ -333,6 +333,7 @@ def test_critical_adapter_slots_defined() -> None:
         "version_control",
         "container",
         "code_review",
+        "container_recovery",
     }
 
     assert expected_critical == CRITICAL_ADAPTER_SLOTS
@@ -350,6 +351,7 @@ def test_non_critical_adapter_slots_defined() -> None:
         "environment_repair",
         "repair_cycle",
         "ci_pipeline",
+        "execution_tracker",  # Execution state tracking; non-critical for MVP
     }
 
     assert expected_non_critical == NON_CRITICAL_SLOTS
@@ -738,6 +740,62 @@ async def test_repair_cycle_production_missing_dependencies() -> None:
     assert "systemic_analysis_service" in error_msg, "Error should list systemic_analysis_service"
     assert "environment_repair_service" in error_msg, "Error should list environment_repair_service"
     assert "checkpoint_store" in error_msg, "Error should list checkpoint_store"
+
+
+async def test_container_recovery_production_missing_dependencies() -> None:
+    """Verify that resolve_container_recovery() raises AdapterConfigurationError when production dependencies are missing.
+
+    This test validates that the comprehension-based check collects all missing dependencies
+    at bootstrap time for batch reporting, instead of early failure on the first missing key.
+    """
+    from unittest.mock import MagicMock
+
+    from codetoreum.infrastructure.adapters.resolver import (
+        AdapterConfigurationError,
+        AdapterDependencies,
+        AdapterResolver,
+    )
+    from codetoreum.infrastructure.simulation.simulation_config import AdapterSelectionConfig
+
+    # Create config with container_recovery="docker"
+    config = AdapterSelectionConfig(container_recovery="docker")
+
+    # Create minimal mock dependencies
+    mock_event_bus = MagicMock()
+    mock_factory = MagicMock()
+
+    # Create a mock dependencies object with required attributes
+    mock_deps = MagicMock(spec=AdapterDependencies)
+    mock_deps.event_bus = mock_event_bus
+    mock_deps.failed_event_store = MagicMock()
+    mock_deps.engine = MagicMock()
+
+    # Create the resolver
+    resolver = AdapterResolver(
+        adapter_config=config,
+        factory=mock_factory,
+        dependencies=mock_deps,
+    )
+
+    # Set up resolver's internal state with MISSING dependencies (not in _resolved dict)
+    resolver._factory = mock_factory
+    resolver._resolved = {
+        "event_emitter": MagicMock(),
+        # Missing: execution_tracker
+    }
+
+    # Attempt to resolve container_recovery should raise AdapterConfigurationError
+    import pytest
+    with pytest.raises(AdapterConfigurationError) as exc_info:
+        resolver.resolve_container_recovery()
+
+    # Verify error message mentions missing dependency and proper dependency ordering
+    error_msg = str(exc_info.value)
+    assert "container_recovery='docker' requires" in error_msg
+    assert "to be resolved first" in error_msg
+    assert "resolve_all() dependency ordering" in error_msg
+    # Verify the missing dependency name appears in the error
+    assert "execution_tracker" in error_msg, "Error should list execution_tracker"
 
 
 async def test_repair_cycle_dynamic_config_interpolation() -> None:

@@ -18,6 +18,9 @@ from codetoreum.adapters.testing.in_memory_agent_repository import (
 from codetoreum.adapters.testing.in_memory_checkpoint_store import InMemoryCheckpointStore
 from codetoreum.adapters.testing.in_memory_code_review_adapter import InMemoryCodeReviewAdapter
 from codetoreum.adapters.testing.in_memory_config_store import InMemoryConfigStore
+from codetoreum.adapters.testing.in_memory_container_recovery_tracking_store import (
+    InMemoryContainerRecoveryTrackingStore,
+)
 from codetoreum.adapters.testing.in_memory_distributed_lock import (
     InMemoryDistributedLock,
 )
@@ -39,6 +42,9 @@ from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketA
 from codetoreum.adapters.testing.in_memory_tracer import InMemoryTracer
 from codetoreum.adapters.testing.in_memory_version_control_service import (
     InMemoryVersionControlService,
+)
+from codetoreum.adapters.testing.in_memory_work_execution_state_tracker import (
+    InMemoryWorkExecutionStateTracker,
 )
 from codetoreum.adapters.testing.in_memory_work_item_branch_tracker import (
     InMemoryWorkItemBranchTracker,
@@ -87,6 +93,8 @@ __all__ = [
     "InMemoryActiveWorkflowRunRegistry",
     "InMemoryAgentRepository",
     "InMemoryWorkItemBranchTracker",
+    "InMemoryContainerRecoveryTrackingStore",
+    "InMemoryWorkExecutionStateTracker",
     "CircuitBreakerTripped",
     "ConfigurableIdentityService",
     "FakeContainerAdapter",

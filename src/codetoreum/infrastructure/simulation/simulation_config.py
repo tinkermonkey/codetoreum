@@ -63,6 +63,7 @@ class AdapterSelectionConfig:
     environment_repair: str = "mock"
     ci_pipeline: str = "mock"
     pr_review_cycle: str = "mock"
+    execution_tracker: str = "in_memory"
 
     def __post_init__(self) -> None:
         """Validate that all adapter selections are non-empty strings."""

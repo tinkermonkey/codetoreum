@@ -19,6 +19,9 @@ from unittest.mock import AsyncMock
 import pytest
 
 from codetoreum.adapters.testing.in_memory_event_store import InMemoryEventStore
+from codetoreum.adapters.testing.in_memory_work_execution_state_tracker import (
+    InMemoryWorkExecutionStateTracker,
+)
 from codetoreum.application.execution_service import (
     ExecutionFailureReason,
     ExecutionService,
@@ -33,6 +36,9 @@ from codetoreum.domain.events.execution_events import (
 from codetoreum.domain.value_objects import ExecutionContext
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority
 from codetoreum.domain.workspace_context import WorkspaceContext
+from codetoreum.infrastructure.resilience.decorators import (
+    BestEffortExecutionTrackerDecorator,
+)
 from codetoreum.ports.output.coding_agent import (
     CodingAgentInvocationOptions,
     CodingAgentResult,
@@ -64,6 +70,11 @@ def event_store() -> InMemoryEventStore:
 
 
 @pytest.fixture
+def execution_tracker() -> InMemoryWorkExecutionStateTracker:
+    return InMemoryWorkExecutionStateTracker()
+
+
+@pytest.fixture
 def coding_agent_mock() -> AsyncMock:
     """A :class:`ICodingAgent`-shaped AsyncMock.
 
@@ -92,11 +103,15 @@ def coding_agent_mock() -> AsyncMock:
 @pytest.fixture
 def execution_service(
     event_store: InMemoryEventStore,
+    execution_tracker: InMemoryWorkExecutionStateTracker,
     coding_agent_mock: AsyncMock,
 ) -> ExecutionService:
+    # Wrap the tracker with the best-effort decorator to handle failures gracefully
+    decorated_tracker = BestEffortExecutionTrackerDecorator(wrapped=execution_tracker)
     return ExecutionService(
         coding_agent=coding_agent_mock,
         event_store=event_store,
+        execution_tracker=decorated_tracker,
     )
 
 
@@ -338,6 +353,7 @@ async def test_commit_workspace_stages_untracked_files(
     sample_execution: AgentExecution,
     sample_execution_context: ExecutionContext,
     event_store: InMemoryEventStore,
+    execution_tracker: InMemoryWorkExecutionStateTracker,
     tmp_path,
 ) -> None:
     """Agent-created NEW (untracked) files must be staged and committed.
@@ -367,6 +383,7 @@ async def test_commit_workspace_stages_untracked_files(
     service = ExecutionService(
         coding_agent=coding_agent_mock,
         event_store=event_store,
+        execution_tracker=execution_tracker,
         vcs=vcs,
     )
 
@@ -394,6 +411,7 @@ async def test_commit_workspace_commits_pre_staged_when_nothing_else_dirty(
     sample_execution: AgentExecution,
     sample_execution_context: ExecutionContext,
     event_store: InMemoryEventStore,
+    execution_tracker: InMemoryWorkExecutionStateTracker,
     tmp_path,
 ) -> None:
     """When only pre-staged content exists (agent staged before container exit)
@@ -418,6 +436,7 @@ async def test_commit_workspace_commits_pre_staged_when_nothing_else_dirty(
     service = ExecutionService(
         coding_agent=coding_agent_mock,
         event_store=event_store,
+        execution_tracker=execution_tracker,
         vcs=vcs,
     )
     ctx = replace(
@@ -434,3 +453,122 @@ async def test_commit_workspace_commits_pre_staged_when_nothing_else_dirty(
     _, kwargs = vcs.commit.await_args
     assert "files" not in kwargs, "pre-staged commit must not pass a pathspec"
     assert commit_sha == "def456"
+
+
+# Tests for start_execution writing to the execution tracker
+
+
+@pytest.mark.asyncio
+async def test_start_execution_writes_to_execution_tracker(
+    execution_service: ExecutionService,
+    execution_tracker: InMemoryWorkExecutionStateTracker,
+    sample_agent: Agent,
+    sample_work_item: WorkItem,
+    sample_execution_context: ExecutionContext,
+) -> None:
+    """Verify that start_execution writes execution state to the tracker.
+
+    The recovery adapter reads from the tracker at startup to decide whether
+    to reconnect or kill a container. The state is keyed by (project, work_item_id)
+    and includes outcome='in_progress' and the agent name.
+    """
+    # Create a fresh INITIALIZED execution (not RUNNING like the sample_execution fixture)
+    execution = AgentExecution.create(
+        agent_id=sample_agent.id,
+        work_item_id=sample_work_item.id,
+        workflow_id="wf-1",
+        stage_name="stage-1",
+        prompt="prompt",
+        model=sample_agent.invocation.model,
+    )
+
+    result = await execution_service.start_execution(execution, sample_execution_context)
+
+    assert result.success is True
+    assert result.execution == execution
+
+    # Verify the tracker was updated with the execution state
+    state = await execution_tracker.load_state(
+        sample_execution_context.project_id, sample_execution_context.work_item_id
+    )
+    assert state is not None
+    assert state.outcome == "in_progress"
+    assert state.agent == sample_execution_context.agent_id
+
+
+@pytest.mark.asyncio
+async def test_start_execution_writes_state_even_on_tracker_write_error(
+    execution_service: ExecutionService,
+    execution_tracker: InMemoryWorkExecutionStateTracker,
+    sample_agent: Agent,
+    sample_work_item: WorkItem,
+    sample_execution_context: ExecutionContext,
+) -> None:
+    """Verify that start_execution succeeds even if the tracker write fails.
+
+    The execution_tracker is a hint store, not a source of truth. If the tracker
+    write fails, the execution should still start — recovery will safely default
+    to kill if the hint store is unavailable.
+    """
+    # Create a fresh INITIALIZED execution
+    execution = AgentExecution.create(
+        agent_id=sample_agent.id,
+        work_item_id=sample_work_item.id,
+        workflow_id="wf-1",
+        stage_name="stage-1",
+        prompt="prompt",
+        model=sample_agent.invocation.model,
+    )
+
+    # Mock the tracker to raise an exception
+    async def failing_mark_execution_started(*args, **kwargs):
+        raise Exception("Tracker write failed")
+
+    execution_tracker.mark_execution_started = failing_mark_execution_started
+
+    # start_execution should still succeed
+    result = await execution_service.start_execution(execution, sample_execution_context)
+
+    assert result.success is True
+    assert result.execution == execution
+
+
+@pytest.mark.asyncio
+async def test_start_execution_no_entry_fallback_for_recovery(
+    execution_service: ExecutionService,
+    execution_tracker: InMemoryWorkExecutionStateTracker,
+    sample_agent: Agent,
+    sample_work_item: WorkItem,
+    sample_execution_context: ExecutionContext,
+) -> None:
+    """Verify that absent execution state results in safe kill decision.
+
+    If the execution_tracker has no entry for a container (first boot or TTL expired),
+    the recovery adapter must continue to safely default to 'kill' for unrecognized
+    containers.
+    """
+    # Don't start the execution, so no state is written
+    state_before = await execution_tracker.load_state(
+        sample_execution_context.project_id, sample_execution_context.work_item_id
+    )
+    assert state_before is None
+
+    # Create a fresh INITIALIZED execution
+    execution = AgentExecution.create(
+        agent_id=sample_agent.id,
+        work_item_id=sample_work_item.id,
+        workflow_id="wf-1",
+        stage_name="stage-1",
+        prompt="prompt",
+        model=sample_agent.invocation.model,
+    )
+
+    # Now start the execution
+    result = await execution_service.start_execution(execution, sample_execution_context)
+
+    # Verify state was written after start
+    state_after = await execution_tracker.load_state(
+        sample_execution_context.project_id, sample_execution_context.work_item_id
+    )
+    assert state_after is not None
+    assert state_after.outcome == "in_progress"
