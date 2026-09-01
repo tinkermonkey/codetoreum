@@ -14,7 +14,7 @@ import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 from types import MappingProxyType
-from typing import Any, Protocol
+from typing import Protocol
 
 import docker
 from dateutil import parser as dateparser
