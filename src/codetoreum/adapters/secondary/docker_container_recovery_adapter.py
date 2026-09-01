@@ -527,9 +527,8 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
             )
 
         # Step 4: Verify execution outcome is "in_progress"
-        outcome = execution_state.get("outcome")
-        if outcome != "in_progress":
-            logger.info(f"Container {metadata.container_id} execution not in_progress, outcome={outcome}, killing")
+        if execution_state.outcome != "in_progress":
+            logger.info(f"Container {metadata.container_id} execution not in_progress, outcome={execution_state.outcome}, killing")
             return RecoveryAssessment(
                 container_id=metadata.container_id,
                 action="kill",
@@ -539,11 +538,10 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
             )
 
         # Step 5: Validate agent matching
-        execution_agent = execution_state.get("agent")
-        if execution_agent != metadata.agent_id:
+        if execution_state.agent != metadata.agent_id:
             logger.info(
                 f"Container {metadata.container_id} agent mismatch: "
-                f"container={metadata.agent_id}, execution={execution_agent}, killing"
+                f"container={metadata.agent_id}, execution={execution_state.agent}, killing"
             )
             return RecoveryAssessment(
                 container_id=metadata.container_id,

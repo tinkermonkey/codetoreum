@@ -27,6 +27,7 @@ from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
 from codetoreum.ports.output.monitoring import MonitoringConfig, MonitoringStatus
 from codetoreum.ports.output.ticket_system import ITicketSystem
 from codetoreum.ports.output.work_execution_state_tracker import (
+    ExecutionState,
     IWorkExecutionStateTracker,
 )
 
@@ -815,7 +816,7 @@ class BestEffortExecutionTrackerDecorator(IWorkExecutionStateTracker):
         """
         self._wrapped = wrapped
 
-    async def load_state(self, project: str, work_item_id: str) -> dict[str, Any] | None:
+    async def load_state(self, project: str, work_item_id: str) -> ExecutionState | None:
         """Pass through to wrapped adapter."""
         return await self._wrapped.load_state(project, work_item_id)
 

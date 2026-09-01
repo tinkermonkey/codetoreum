@@ -23,7 +23,6 @@ class IContainerRecoveryTrackingStore(ABC):
     - Variable TTL support per use case
 
     Key patterns:
-    - `execution:state:{project}:{work_item_id}` (4h TTL) — Execution state hint
     - `agent:container:{container_name}` (2h TTL) — Container re-registration
     - `repair_cycle:result:{project}:{work_item_id}:{run_id}` (24h TTL) — Repair results
 

@@ -132,6 +132,7 @@ from codetoreum.ports.output.version_control_service import (
     VCSStatus,
 )
 from codetoreum.ports.output.work_execution_state_tracker import (
+    ExecutionState,
     IWorkExecutionStateTracker,
 )
 from codetoreum.ports.output.work_item_service import IWorkItemService
@@ -158,6 +159,7 @@ __all__ = [
     "RecoveryResult",
     # Container Recovery Tracking (dependencies for container recovery)
     "IContainerRecoveryTrackingStore",
+    "ExecutionState",
     "IWorkExecutionStateTracker",
     # Board Service
     "IBoardService",

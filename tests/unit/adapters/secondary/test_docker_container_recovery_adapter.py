@@ -26,6 +26,7 @@ from codetoreum.domain.types import (
     CONTAINER_TYPE_AGENT,
 )
 from codetoreum.ports.exceptions import StorageError
+from codetoreum.ports.output.work_execution_state_tracker import ExecutionState
 
 
 class TestDockerContainerRecoveryAdapterInitialization:
@@ -221,10 +222,10 @@ class TestDockerContainerAssessment:
         )
 
         # Mock execution state with completed outcome
-        execution_tracker.load_state.return_value = {
-            "outcome": "completed",
-            "agent": "agent-1",
-        }
+        execution_tracker.load_state.return_value = ExecutionState(
+            outcome="failed",
+            agent="agent-1",
+        )
 
         assessment = await adapter.assess_container(metadata)
 
@@ -261,10 +262,10 @@ class TestDockerContainerAssessment:
         )
 
         # Mock execution state with different agent
-        execution_tracker.load_state.return_value = {
-            "outcome": "in_progress",
-            "agent": "agent-2",
-        }
+        execution_tracker.load_state.return_value = ExecutionState(
+            outcome="in_progress",
+            agent="agent-2",
+        )
 
         assessment = await adapter.assess_container(metadata)
 
@@ -301,10 +302,10 @@ class TestDockerContainerAssessment:
         )
 
         # Mock execution state with valid state
-        execution_tracker.load_state.return_value = {
-            "outcome": "in_progress",
-            "agent": "agent-1",
-        }
+        execution_tracker.load_state.return_value = ExecutionState(
+            outcome="in_progress",
+            agent="agent-1",
+        )
 
         assessment = await adapter.assess_container(metadata)
 

@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.exceptions import StorageError
 from codetoreum.ports.output.work_execution_state_tracker import (
+    ExecutionState,
     IWorkExecutionStateTracker,
 )
 
@@ -52,7 +53,7 @@ class RedisExecutionStateTracker(IWorkExecutionStateTracker):
     def _key(self, project: str, work_item_id: str) -> str:
         return f"{self._key_prefix}:{project}:{work_item_id}"
 
-    async def load_state(self, project: str, work_item_id: str) -> dict[str, Any] | None:
+    async def load_state(self, project: str, work_item_id: str) -> ExecutionState | None:
         """Load execution state from storage.
 
         Retrieves the execution state for a specific work item. Returns None
@@ -63,8 +64,7 @@ class RedisExecutionStateTracker(IWorkExecutionStateTracker):
             work_item_id: Work item identifier
 
         Returns:
-            Dictionary containing execution state if found and not expired,
-            None otherwise
+            ExecutionState instance if found and not expired, None otherwise
 
         Raises:
             StorageError: If storage read fails
@@ -73,7 +73,12 @@ class RedisExecutionStateTracker(IWorkExecutionStateTracker):
             raw = await self._redis.get(self._key(project, work_item_id))
             if raw is None:
                 return None
-            return self._decode(raw, project, work_item_id)
+            data = self._decode(raw, project, work_item_id)
+            return ExecutionState(
+                outcome=data["outcome"],
+                agent=data["agent"],
+                reason=data.get("reason"),
+            )
         except StorageError:
             raise
         except Exception as e:

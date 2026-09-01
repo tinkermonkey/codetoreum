@@ -1,8 +1,7 @@
 """In-memory work execution state tracker for testing and simulation."""
 
-from typing import Any
-
 from codetoreum.ports.output.work_execution_state_tracker import (
+    ExecutionState,
     IWorkExecutionStateTracker,
 )
 
@@ -12,9 +11,9 @@ class InMemoryWorkExecutionStateTracker(IWorkExecutionStateTracker):
 
     def __init__(self) -> None:
         """Initialize the in-memory work execution state tracker."""
-        self._state: dict[tuple[str, str], dict[str, Any]] = {}
+        self._state: dict[tuple[str, str], ExecutionState] = {}
 
-    async def load_state(self, project: str, work_item_id: str) -> dict[str, Any] | None:
+    async def load_state(self, project: str, work_item_id: str) -> ExecutionState | None:
         """Load execution state from storage.
 
         Retrieves the execution state for a specific work item. Returns None
@@ -25,8 +24,7 @@ class InMemoryWorkExecutionStateTracker(IWorkExecutionStateTracker):
             work_item_id: Work item identifier
 
         Returns:
-            Dictionary containing execution state if found and not expired,
-            None otherwise
+            ExecutionState instance if found and not expired, None otherwise
 
         Raises:
             StorageError: If storage read fails
@@ -51,10 +49,10 @@ class InMemoryWorkExecutionStateTracker(IWorkExecutionStateTracker):
             StorageError: If storage write fails
         """
         key = (project, work_item_id)
-        self._state[key] = {
-            "outcome": "in_progress",
-            "agent": agent,
-        }
+        self._state[key] = ExecutionState(
+            outcome="in_progress",
+            agent=agent,
+        )
 
     async def mark_execution_failed(
         self, project: str, work_item_id: str, agent: str, reason: str
@@ -83,8 +81,8 @@ class InMemoryWorkExecutionStateTracker(IWorkExecutionStateTracker):
             - All fields are preserved exactly
         """
         key = (project, work_item_id)
-        self._state[key] = {
-            "outcome": "failed",
-            "agent": agent,
-            "reason": reason,
-        }
+        self._state[key] = ExecutionState(
+            outcome="failed",
+            agent=agent,
+            reason=reason,
+        )

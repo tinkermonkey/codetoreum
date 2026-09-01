@@ -37,9 +37,9 @@ class TestRedisExecutionStateTrackerRoundTrip:
         )
         state = await tracker.load_state("myproject", "item-123")
         assert state is not None
-        assert state["outcome"] == "failed"
-        assert state["agent"] == "claude"
-        assert state["reason"] == "Container lost connection"
+        assert state.outcome == "failed"
+        assert state.agent == "claude"
+        assert state.reason == "Container lost connection"
 
     @pytest.mark.asyncio
     async def test_load_missing_state_returns_none(self, tracker):
@@ -61,7 +61,7 @@ class TestRedisExecutionStateTrackerRoundTrip:
         )
         state = await tracker.load_state("myproject", "item-123")
         assert state is not None
-        assert state["reason"] == "Second failure"
+        assert state.reason == "Second failure"
 
 
 class TestRedisExecutionStateTrackerMultiProject:
@@ -81,8 +81,8 @@ class TestRedisExecutionStateTrackerMultiProject:
         )
         state_a = await tracker.load_state("project-a", "item-1")
         state_b = await tracker.load_state("project-b", "item-1")
-        assert state_a["reason"] == "Error in A"
-        assert state_b["reason"] == "Error in B"
+        assert state_a.reason == "Error in A"
+        assert state_b.reason == "Error in B"
 
 
 class TestRedisExecutionStateTrackerPersistence:
@@ -101,7 +101,7 @@ class TestRedisExecutionStateTrackerPersistence:
         t2 = RedisExecutionStateTracker(redis_client=redis_client, ttl_seconds=60)
         state = await t2.load_state("myproject", "item-123")
         assert state is not None
-        assert state["agent"] == "claude"
+        assert state.agent == "claude"
 
 
 class TestRedisExecutionStateTrackerStarted:
@@ -114,8 +114,8 @@ class TestRedisExecutionStateTrackerStarted:
         )
         state = await tracker.load_state("myproject", "item-123")
         assert state is not None
-        assert state["outcome"] == "in_progress"
-        assert state["agent"] == "claude"
+        assert state.outcome == "in_progress"
+        assert state.agent == "claude"
 
     @pytest.mark.asyncio
     async def test_mark_execution_started_overwrites_failed_state(self, tracker):
@@ -132,9 +132,9 @@ class TestRedisExecutionStateTrackerStarted:
         )
         state = await tracker.load_state("myproject", "item-123")
         assert state is not None
-        assert state["outcome"] == "in_progress"
-        assert state["agent"] == "claude"
-        assert "reason" not in state
+        assert state.outcome == "in_progress"
+        assert state.agent == "claude"
+        assert state.reason is None
 
 
 class TestRedisExecutionStateTrackerCorruption:

@@ -492,8 +492,8 @@ async def test_start_execution_writes_to_execution_tracker(
         sample_execution_context.project_id, sample_execution_context.work_item_id
     )
     assert state is not None
-    assert state["outcome"] == "in_progress"
-    assert state["agent"] == sample_execution_context.agent_id
+    assert state.outcome == "in_progress"
+    assert state.agent == sample_execution_context.agent_id
 
 
 @pytest.mark.asyncio
@@ -571,4 +571,4 @@ async def test_start_execution_no_entry_fallback_for_recovery(
         sample_execution_context.project_id, sample_execution_context.work_item_id
     )
     assert state_after is not None
-    assert state_after["outcome"] == "in_progress"
+    assert state_after.outcome == "in_progress"

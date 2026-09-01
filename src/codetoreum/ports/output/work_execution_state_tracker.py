@@ -7,7 +7,53 @@ decisions at startup without replaying the full event stream.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any
+from dataclasses import dataclass
+from typing import Literal
+
+
+@dataclass(frozen=True)
+class ExecutionState:
+    """Represents the tracked state of a work execution.
+
+    This is a typed recovery-hint value object returned by the tracker port.
+    The canonical execution state lives in the event-sourced ExecutionService;
+    this copy enables fast startup recovery decisions (reconnect vs. kill)
+    without replaying the full event stream.
+
+    All fields are validated at construction to ensure contract boundary
+    integrity. Frozen to prevent accidental mutation after creation.
+
+    Attributes:
+        outcome: Current execution outcome — either "in_progress" (still
+                 running) or "failed" (unable to reconnect or execution
+                 terminated unexpectedly)
+        agent: Agent identifier that was executing (e.g., "claude")
+        reason: Optional reason for failure state (present only when
+                outcome is "failed")
+    """
+
+    outcome: Literal["in_progress", "failed"]
+    agent: str
+    reason: str | None = None
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.outcome, str) or self.outcome not in (
+            "in_progress",
+            "failed",
+        ):
+            msg = "outcome must be 'in_progress' or 'failed'"
+            raise ValueError(msg)
+
+        if not isinstance(self.agent, str) or not self.agent:
+            msg = "agent must be a non-empty string"
+            raise ValueError(msg)
+
+        if self.reason is not None and (
+            not isinstance(self.reason, str) or not self.reason
+        ):
+            msg = "reason must be None or a non-empty string"
+            raise ValueError(msg)
 
 
 class IWorkExecutionStateTracker(ABC):
@@ -43,7 +89,7 @@ class IWorkExecutionStateTracker(ABC):
     """
 
     @abstractmethod
-    async def load_state(self, project: str, work_item_id: str) -> dict[str, Any] | None:
+    async def load_state(self, project: str, work_item_id: str) -> ExecutionState | None:
         """Load execution state from storage.
 
         Retrieves the execution state for a specific work item. Returns None
@@ -54,8 +100,7 @@ class IWorkExecutionStateTracker(ABC):
             work_item_id: Work item identifier
 
         Returns:
-            Dictionary containing execution state if found and not expired,
-            None otherwise
+            ExecutionState instance if found and not expired, None otherwise
 
         Raises:
             StorageError: If storage read fails
