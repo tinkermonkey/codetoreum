@@ -351,6 +351,7 @@ def test_non_critical_adapter_slots_defined() -> None:
         "repair_cycle",
         "ci_pipeline",
         "container_recovery",
+        "execution_tracker",  # Execution state tracking; non-critical for MVP
     }
 
     assert expected_non_critical == NON_CRITICAL_SLOTS
