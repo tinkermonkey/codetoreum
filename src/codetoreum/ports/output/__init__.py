@@ -21,6 +21,9 @@ from codetoreum.ports.output.code_review_service import (
     ICodeReviewService,
     ReviewComment,
 )
+from codetoreum.ports.output.container_recovery_tracking_store import (
+    IContainerRecoveryTrackingStore,
+)
 from codetoreum.ports.output.coding_agent import (
     CodingAgentInvocationOptions,
     CodingAgentResult,
@@ -128,6 +131,9 @@ from codetoreum.ports.output.version_control_service import (
     Repository,
     VCSStatus,
 )
+from codetoreum.ports.output.work_execution_state_tracker import (
+    IWorkExecutionStateTracker,
+)
 from codetoreum.ports.output.work_item_service import IWorkItemService
 from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
 from codetoreum.ports.output.workflow_orchestrator import (
@@ -150,6 +156,9 @@ __all__ = [
     "ContainerMetadata",
     "RecoveryAssessment",
     "RecoveryResult",
+    # Container Recovery Tracking (dependencies for container recovery)
+    "IContainerRecoveryTrackingStore",
+    "IWorkExecutionStateTracker",
     # Board Service
     "IBoardService",
     "BoardColumn",

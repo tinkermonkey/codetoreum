@@ -52,7 +52,7 @@ Each input port documentation file includes:
 - Class diagram
 
 ### [output/](./output/)
-**42 output port interfaces** across 7 documentation files:
+**44 output port interfaces** across 7 documentation files:
 
 1. **core-system.md** — Fundamental operations (tickets, VCS, containers, coding agent)
 2. **board-management.md** — Project board operations
