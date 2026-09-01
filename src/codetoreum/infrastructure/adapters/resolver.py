@@ -410,8 +410,6 @@ class AdapterResolver:
         )
 
         if self._config.discussion_adapter == "github":
-            import os
-
             from codetoreum.adapters.secondary.github_discussion_adapter import (
                 GitHubDiscussionAdapter,
                 GitHubDiscussionConfig,
@@ -421,16 +419,13 @@ class AdapterResolver:
                 GitHubGraphQLConfig,
             )
 
-            # Get credentials with fallback to os.environ
             if self._credentials is not None:
                 github_token = self._credentials.github_token
             else:
                 github_token = os.environ.get("GITHUB_TOKEN", "")
 
-            # Get organization from environment
             github_org = os.environ.get("GITHUB_ORG", "")
 
-            # Create configuration for GitHub discussion adapter
             config = GitHubDiscussionConfig(
                 token=github_token,
                 organization=github_org,
@@ -438,14 +433,12 @@ class AdapterResolver:
                 graphql_client=GitHubGraphQLClient(GitHubGraphQLConfig(token=github_token)),
             )
 
-            # Construct GitHub discussion adapter with ticket adapter as collaborator
             adapter = GitHubDiscussionAdapter(
                 config=config,
                 identity_service=self._resolved.get("identity_service"),
                 ticket_adapter=self._resolved.get("ticket"),
             )
 
-            # Wrap with resilience decorator
             return ResilientDiscussionAdapterDecorator(wrapped=adapter)
 
         # Mock branch: use factory with time_source
@@ -612,7 +605,6 @@ class AdapterResolver:
     # - resolve_work_item_service (line ~309)
     # - resolve_checkpoint_store (line ~290)
     # - resolve_repository (line ~515)
-    # - resolve_discussion_adapter (line ~270)
     # - resolve_queue_service (line ~283)
     # All currently unconditionally pass time_source, which will TypeError when
     # production adapters are registered for any slot if their constructors don't

@@ -1,8 +1,6 @@
 """Tests for AdapterResolver.resolve_discussion_adapter()
 
-Tests the fix for Phase 2: resolving the discussion adapter correctly,
-applying resilience decorator, and handling both GitHub and mock variants.
-"""
+Tests for AdapterResolver.resolve_discussion_adapter() GitHub and mock variant resolution."""
 
 import os
 from unittest.mock import AsyncMock, Mock, patch
