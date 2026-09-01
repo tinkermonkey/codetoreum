@@ -405,13 +405,59 @@ class AdapterResolver:
 
     def resolve_discussion_adapter(self) -> IDiscussionAdapter:
         """Resolve discussion adapter."""
-        # MockDiscussionAdapter requires identity_service dependency
+        from codetoreum.infrastructure.resilience.decorators import (
+            ResilientDiscussionAdapterDecorator,
+        )
+
+        if self._config.discussion_adapter == "github":
+            import os
+
+            from codetoreum.adapters.secondary.github_discussion_adapter import (
+                GitHubDiscussionAdapter,
+                GitHubDiscussionConfig,
+            )
+            from codetoreum.infrastructure.http.github_graphql_client import (
+                GitHubGraphQLClient,
+                GitHubGraphQLConfig,
+            )
+
+            # Get credentials with fallback to os.environ
+            if self._credentials is not None:
+                github_token = self._credentials.github_token
+            else:
+                github_token = os.environ.get("GITHUB_TOKEN", "")
+
+            # Get organization from environment
+            github_org = os.environ.get("GITHUB_ORG", "")
+
+            # Create configuration for GitHub discussion adapter
+            config = GitHubDiscussionConfig(
+                token=github_token,
+                organization=github_org,
+                repository="",  # Per-project resolution via ticket_adapter
+                graphql_client=GitHubGraphQLClient(GitHubGraphQLConfig(token=github_token)),
+            )
+
+            # Construct GitHub discussion adapter with ticket adapter as collaborator
+            adapter = GitHubDiscussionAdapter(
+                config=config,
+                identity_service=self._resolved.get("identity_service"),
+                ticket_adapter=self._resolved.get("ticket"),
+            )
+
+            # Wrap with resilience decorator
+            return ResilientDiscussionAdapterDecorator(wrapped=adapter)
+
+        # Mock branch: use factory with time_source
         identity_service = self._resolved.get("identity_service")
-        return self._factory.create_discussion_adapter(
+        mock_adapter = self._factory.create_discussion_adapter(
             adapter_name=self._config.discussion_adapter,
             identity_service=identity_service,
             time_source=lambda: self._deps.engine.get_clock_for_testing().now(),
         )
+
+        # Wrap with resilience decorator
+        return ResilientDiscussionAdapterDecorator(wrapped=mock_adapter)
 
     def resolve_lock_service(self) -> IDistributedLock:
         """Resolve pipeline lock service adapter.
