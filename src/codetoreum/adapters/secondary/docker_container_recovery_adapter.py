@@ -922,7 +922,7 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                             logger.debug(
                                 f"Marked execution failed for {work_item_id} with reason {assessment.reason}"
                             )
-                    except (KeyError, AttributeError, ValueError) as mark_error:
+                    except (KeyError, AttributeError, ValueError, StorageError) as mark_error:
                         logger.warning(
                             f"Failed to mark execution failed for {assessment.execution_id} (expected error): {mark_error}",
                             exc_info=True,
