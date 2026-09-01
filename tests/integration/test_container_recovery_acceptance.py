@@ -6,16 +6,9 @@ This test proves end-to-end container recovery with real infrastructure:
 - Real DockerContainerRecoveryAdapter
 - Real execution state tracker
 - No mocks on the tested path
-
-Acceptance Criteria:
-1. Starts a real labeled Docker container representing an agent execution
-2. Uses real Docker SDK queries via DockerContainerRecoveryAdapter
-3. Uses Redis-backed execution_tracker and tracking_storage
-4. Kills the container
-5. Verifies correct recovery action via decision tree (reconnect vs kill)
-6. No component on the tested path is mocked
 """
 
+import asyncio
 import json
 from datetime import UTC, datetime, timedelta
 from typing import AsyncGenerator
@@ -27,7 +20,6 @@ from redis import asyncio as aioredis
 from codetoreum.adapters.secondary.docker_container_recovery_adapter import (
     DockerContainerRecoveryAdapter,
 )
-from codetoreum.adapters.secondary.mock_event_emitter import MockEventEmitter
 from codetoreum.adapters.secondary.redis_container_recovery_tracking_store import (
     RedisContainerRecoveryTrackingStore,
 )
@@ -37,7 +29,6 @@ from codetoreum.adapters.secondary.redis_execution_state_tracker import (
 from codetoreum.application.container_recovery_service import (
     ContainerRecoveryService,
 )
-from codetoreum.domain.events.adapter_events import CodetoreumEvent
 from codetoreum.domain.events.container_recovery_events import (
     ContainerKilledEvent,
     ContainerRecoveredEvent,
@@ -51,31 +42,9 @@ from codetoreum.domain.types import (
     CONTAINER_LABEL_WORK_ITEM_ID,
     CONTAINER_TYPE_AGENT,
 )
-from tests.conftest import ModernRedisContainer, docker_available
+from tests.conftest import EventCollector, ModernRedisContainer, docker_available
 
 pytestmark = docker_available
-
-
-class EventCollector(MockEventEmitter):
-    """Event emitter that collects events for testing.
-
-    Extends MockEventEmitter to add event collection capability,
-    allowing tests to verify events were emitted.
-    """
-
-    def __init__(self) -> None:
-        """Initialize the event collector."""
-        super().__init__()
-        self.events: list[CodetoreumEvent] = []
-
-    def emit(self, event: CodetoreumEvent) -> None:
-        """Emit an event and collect it for testing.
-
-        Args:
-            event: CodetoreumEvent instance to emit
-        """
-        self.events.append(event)
-        super().emit(event)
 
 
 @pytest.fixture(scope="function")
@@ -143,18 +112,7 @@ class TestContainerRecoveryAcceptance:
         execution_tracker,
         tracking_storage,
     ):
-        """
-        Acceptance test: Detect and recover a running container (reconnect path).
-
-        This test verifies the decision tree reconnect path with real infrastructure:
-        1. Create a running container with valid execution state in storage
-        2. Leave the container running (simulating orchestrator restart)
-        3. Run recovery via real DockerContainerRecoveryAdapter
-        4. Verify the service detects the running container via Docker API
-        5. Verify correct assessment (reconnect with monitoring)
-        6. Verify container is re-registered in tracking storage
-        """
-        # Test identifiers
+        """Test reconnect path: valid execution state detected and recovered."""
         project_id = "test-project-recovery"
         work_item_id = "issue-1001"
         agent_id = "senior_software_engineer"
@@ -162,20 +120,8 @@ class TestContainerRecoveryAcceptance:
         execution_id = "exec-recovery-001"
         container_name = f"codetoreum-agent-{execution_id}"
 
-        # Step 1: Set up execution state in tracker (pre-recovery state)
-        # This simulates an execution that was in_progress when orchestrator crashed
-        # The execution tracker uses a specific key format: codetoreum:execution:state:{project}:{work_item_id}
-        execution_state = {
-            "project": project_id,
-            "work_item_id": work_item_id,
-            "agent": agent_id,
-            "outcome": "in_progress",
-            "started_at": datetime.now(UTC).isoformat(),
-        }
-        state_key = f"codetoreum:execution:state:{project_id}:{work_item_id}"
-        await execution_tracker._redis.set(state_key, json.dumps(execution_state), ex=14400)
+        await execution_tracker.mark_execution_started(project_id, work_item_id, agent_id)
 
-        # Step 2: Start a real Docker container with Codetoreum labels
         container_labels = {
             CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT,
             CONTAINER_LABEL_PROJECT: project_id,
@@ -187,23 +133,17 @@ class TestContainerRecoveryAcceptance:
 
         container = docker_client.containers.run(
             "alpine:latest",
-            command=["sleep", "3600"],  # Run for 1 hour
+            command=["sleep", "3600"],
             name=container_name,
             labels=container_labels,
             detach=True,
-            remove=False,  # Manual cleanup
+            remove=False,
         )
 
         try:
-            # Verify container is running (simulating orchestrator detecting running container on restart)
             container.reload()
             assert container.status == "running"
-            created_at = datetime.fromisoformat(
-                container.attrs["Created"].replace("Z", "+00:00")
-            )
 
-            # Step 3: Create adapters and recovery service
-            # (This simulates orchestrator startup with container recovery enabled)
             event_emitter = EventCollector()
             recovery_adapter = DockerContainerRecoveryAdapter(
                 execution_tracker=execution_tracker,
@@ -217,20 +157,14 @@ class TestContainerRecoveryAcceptance:
                 container_timeout_hours=2,
             )
 
-            # Step 4: Run recovery cycle (orchestrator startup recovery)
             result = await service.recover_or_cleanup_containers()
 
-            # Step 5: Verify results - should have recovered 1, killed 0
-            assert result.recovered == 1, f"Expected 1 recovered, got {result.recovered}"
-            assert result.killed == 0, f"Expected 0 killed, got {result.killed}"
-            assert result.errors == 0, f"Expected 0 errors, got {result.errors}"
+            assert result.recovered == 1
+            assert result.killed == 0
+            assert result.errors == 0
 
-            # Step 6: Verify events emitted
-            recovered_events = [
-                e for e in event_emitter.events
-                if isinstance(e, ContainerRecoveredEvent)
-            ]
-            assert len(recovered_events) == 1, f"Expected 1 recovery event, got {len(recovered_events)}"
+            recovered_events = event_emitter.get_events_by_type(ContainerRecoveredEvent)
+            assert len(recovered_events) == 1
 
             recovery_event = recovered_events[0]
             assert recovery_event.container_id == container.id
@@ -241,7 +175,6 @@ class TestContainerRecoveryAcceptance:
             assert recovery_event.recovery_action == "reconnect_with_monitoring"
             assert recovery_event.execution_id == execution_id
 
-            # Step 7: Verify container was re-registered in tracking storage
             registered_key = f"agent:container:{container_name}"
             registered_info = await tracking_storage.get(registered_key)
             assert registered_info is not None
@@ -264,17 +197,7 @@ class TestContainerRecoveryAcceptance:
         execution_tracker,
         tracking_storage,
     ):
-        """
-        Acceptance test: Kill an old running container (age-check path).
-
-        This test verifies the container age-check decision tree path:
-        1. Create a running container
-        2. Set recovery service timeout very low (forcing age-based kill)
-        3. Run recovery via real DockerContainerRecoveryAdapter
-        4. Verify correct assessment (kill due to timeout)
-        5. Verify kill action executed via real Docker API
-        """
-        # Test identifiers
+        """Test kill path: container exceeds age timeout."""
         project_id = "test-project-timeout"
         work_item_id = "issue-1002"
         agent_id = "code_reviewer"
@@ -282,7 +205,6 @@ class TestContainerRecoveryAcceptance:
         execution_id = "exec-timeout-001"
         container_name = f"codetoreum-agent-timeout-{execution_id}"
 
-        # Step 1: Start a running container
         container_labels = {
             CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT,
             CONTAINER_LABEL_PROJECT: project_id,
@@ -305,18 +227,14 @@ class TestContainerRecoveryAcceptance:
             container.reload()
             assert container.status == "running"
 
-            # Step 2: Wait to ensure container is old enough
-            # 0.001 hours = 3.6 seconds, so we need to wait > 3.6 seconds
-            import asyncio
+            # 0.001 hours = 3.6 seconds; wait longer so container is considered old
             await asyncio.sleep(5)
 
-            # Step 3: Create recovery service with very short timeout (0.001 hours)
-            # This forces the container to be considered old and killed
             event_emitter = EventCollector()
             recovery_adapter = DockerContainerRecoveryAdapter(
                 execution_tracker=execution_tracker,
                 tracking_storage=tracking_storage,
-                container_timeout_hours=0.001,  # ~3.6 seconds - container will now exceed this
+                container_timeout_hours=0.001,
             )
 
             service = ContainerRecoveryService(
@@ -325,33 +243,24 @@ class TestContainerRecoveryAcceptance:
                 container_timeout_hours=0.001,
             )
 
-            # Step 4: Run recovery cycle
             result = await service.recover_or_cleanup_containers()
 
-            # Step 5: Verify results - should have killed 1 due to timeout
-            assert result.recovered == 0, f"Expected 0 recovered, got {result.recovered}"
-            assert result.killed == 1, f"Expected 1 killed, got {result.killed}"
-            assert result.errors == 0, f"Expected 0 errors, got {result.errors}"
+            assert result.recovered == 0
+            assert result.killed == 1
+            assert result.errors == 0
 
-            # Step 6: Verify kill event was emitted with correct reason
-            killed_events = [
-                e for e in event_emitter.events
-                if isinstance(e, ContainerKilledEvent)
-            ]
-            assert len(killed_events) == 1, f"Expected 1 kill event, got {len(killed_events)}"
+            killed_events = event_emitter.get_events_by_type(ContainerKilledEvent)
+            assert len(killed_events) == 1
 
             kill_event = killed_events[0]
             assert kill_event.container_id == container.id
             assert kill_event.container_name == container_name
             assert kill_event.kill_reason == "container_timeout"
 
-            # Step 7: Verify container was actually killed (no longer running)
             try:
                 container.reload()
-                # If we got here, container might still exist but should be exited
                 assert container.status != "running"
             except docker.errors.NotFound:
-                # Container was removed, which is expected
                 pass
 
         finally:
@@ -368,16 +277,7 @@ class TestContainerRecoveryAcceptance:
         execution_tracker,
         tracking_storage,
     ):
-        """
-        Acceptance test: Kill orphaned running container (no execution state).
-
-        This test verifies the no-execution-found decision tree path:
-        1. Create a running container without execution state in storage
-        2. Run recovery via real DockerContainerRecoveryAdapter
-        3. Verify correct assessment (kill due to orphaned status)
-        4. Verify kill action executed via real Docker API
-        """
-        # Test identifiers
+        """Test kill path: no execution state found (orphaned container)."""
         project_id = "test-project-no-exec"
         work_item_id = "issue-1003"
         agent_id = "qa_engineer"
@@ -385,10 +285,6 @@ class TestContainerRecoveryAcceptance:
         execution_id = "exec-no-exec-001"
         container_name = f"codetoreum-agent-no-exec-{execution_id}"
 
-        # Note: We explicitly do NOT set execution state in storage
-        # This simulates an orphaned container with no matching execution
-
-        # Step 1: Start a running container
         container_labels = {
             CONTAINER_LABEL_TYPE: CONTAINER_TYPE_AGENT,
             CONTAINER_LABEL_PROJECT: project_id,
@@ -411,7 +307,6 @@ class TestContainerRecoveryAcceptance:
             container.reload()
             assert container.status == "running"
 
-            # Step 2: Create recovery service
             event_emitter = EventCollector()
             recovery_adapter = DockerContainerRecoveryAdapter(
                 execution_tracker=execution_tracker,
@@ -425,31 +320,23 @@ class TestContainerRecoveryAcceptance:
                 container_timeout_hours=2,
             )
 
-            # Step 3: Run recovery cycle
             result = await service.recover_or_cleanup_containers()
 
-            # Step 4: Verify results - should have killed 1 (no execution found)
-            assert result.recovered == 0, f"Expected 0 recovered, got {result.recovered}"
-            assert result.killed == 1, f"Expected 1 killed, got {result.killed}"
-            assert result.errors == 0, f"Expected 0 errors, got {result.errors}"
+            assert result.recovered == 0
+            assert result.killed == 1
+            assert result.errors == 0
 
-            # Step 5: Verify kill event was emitted with correct reason
-            killed_events = [
-                e for e in event_emitter.events
-                if isinstance(e, ContainerKilledEvent)
-            ]
-            assert len(killed_events) == 1, f"Expected 1 kill event, got {len(killed_events)}"
+            killed_events = event_emitter.get_events_by_type(ContainerKilledEvent)
+            assert len(killed_events) == 1
 
             kill_event = killed_events[0]
             assert kill_event.container_id == container.id
             assert kill_event.kill_reason == "no_execution_found"
 
-            # Step 6: Verify container was actually killed
             try:
                 container.reload()
                 assert container.status != "running"
             except docker.errors.NotFound:
-                # Container was removed, which is expected
                 pass
 
         finally:
@@ -466,15 +353,7 @@ class TestContainerRecoveryAcceptance:
         execution_tracker,
         tracking_storage,
     ):
-        """
-        Acceptance test: Recover/kill multiple running containers with different reasons.
-
-        This test verifies the full recovery cycle with multiple running containers:
-        1. Container A: Valid execution (in_progress) → Reconnect with monitoring
-        2. Container B: No execution state (orphaned) → Kill
-        3. Run recovery cycle
-        4. Verify correct mixed actions for each container via real Docker API
-        """
+        """Test mixed paths: one container recovers, one is killed."""
         containers_to_clean = []
 
         try:
@@ -485,15 +364,7 @@ class TestContainerRecoveryAcceptance:
             execution_id_a = "exec-mixed-a"
             container_name_a = f"codetoreum-agent-mixed-a-{execution_id_a}"
 
-            execution_state_a = {
-                "project": project_a,
-                "work_item_id": work_item_a,
-                "agent": agent_a,
-                "outcome": "in_progress",
-                "started_at": datetime.now(UTC).isoformat(),
-            }
-            state_key_a = f"codetoreum:execution:state:{project_a}:{work_item_a}"
-            await execution_tracker._redis.set(state_key_a, json.dumps(execution_state_a), ex=14400)
+            await execution_tracker.mark_execution_started(project_a, work_item_a, agent_a)
 
             container_a = docker_client.containers.run(
                 "alpine:latest",
@@ -519,8 +390,6 @@ class TestContainerRecoveryAcceptance:
             execution_id_b = "exec-mixed-b"
             container_name_b = f"codetoreum-agent-mixed-b-{execution_id_b}"
 
-            # Don't set execution state for this one
-
             container_b = docker_client.containers.run(
                 "alpine:latest",
                 command=["sleep", "3600"],
@@ -538,12 +407,11 @@ class TestContainerRecoveryAcceptance:
             )
             containers_to_clean.append(container_b)
 
-            # Run recovery with normal timeout
             event_emitter = EventCollector()
             recovery_adapter = DockerContainerRecoveryAdapter(
                 execution_tracker=execution_tracker,
                 tracking_storage=tracking_storage,
-                container_timeout_hours=2,  # Normal 2-hour timeout
+                container_timeout_hours=2,
             )
 
             service = ContainerRecoveryService(
@@ -552,33 +420,22 @@ class TestContainerRecoveryAcceptance:
                 container_timeout_hours=2,
             )
 
-            # Run recovery
             result = await service.recover_or_cleanup_containers()
 
-            # Verify overall counts
-            assert result.recovered == 1, f"Expected 1 recovered, got {result.recovered}"
-            assert result.killed == 1, f"Expected 1 killed, got {result.killed}"
-            assert result.errors == 0, f"Expected 0 errors, got {result.errors}"
+            assert result.recovered == 1
+            assert result.killed == 1
+            assert result.errors == 0
 
-            # Verify individual events
-            recovered_events = [
-                e for e in event_emitter.events
-                if isinstance(e, ContainerRecoveredEvent)
-            ]
-            killed_events = [
-                e for e in event_emitter.events
-                if isinstance(e, ContainerKilledEvent)
-            ]
+            recovered_events = event_emitter.get_events_by_type(ContainerRecoveredEvent)
+            killed_events = event_emitter.get_events_by_type(ContainerKilledEvent)
 
-            assert len(recovered_events) == 1, f"Expected 1 recovery event, got {len(recovered_events)}"
-            assert len(killed_events) == 1, f"Expected 1 kill event, got {len(killed_events)}"
+            assert len(recovered_events) == 1
+            assert len(killed_events) == 1
 
-            # Container A should be recovered
             recovery_event_a = recovered_events[0]
             assert recovery_event_a.container_id == container_a.id
             assert recovery_event_a.recovery_action == "reconnect_with_monitoring"
 
-            # Container B should be killed
             kill_event_b = killed_events[0]
             assert kill_event_b.kill_reason == "no_execution_found"
 
