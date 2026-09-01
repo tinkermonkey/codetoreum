@@ -764,9 +764,8 @@ class AdapterResolver:
                 RedisContainerRecoveryTrackingStore,
             )
 
-            redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-            redis_client = aioredis.from_url(redis_url)
-
+            # Production branch requires these dependencies; comprehension check collects all missing
+            # dependencies at bootstrap time for batch reporting instead of early failure on first KeyError
             required_keys = ["execution_tracker"]
             missing = [k for k in required_keys if k not in self._resolved]
             if missing:
@@ -777,6 +776,9 @@ class AdapterResolver:
                         for key in missing
                     ]
                 )
+
+            redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+            redis_client = aioredis.from_url(redis_url)
 
             execution_tracker = self._resolved["execution_tracker"]
             tracking_storage: IContainerRecoveryTrackingStore = RedisContainerRecoveryTrackingStore(
