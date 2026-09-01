@@ -111,11 +111,11 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
     6. Reconnect or kill accordingly
 
     Dual-State Concern:
-    - The Redis-backed `tracking_storage` (IContainerRecoveryTrackingStore) is a
-      fast recovery-loop hint store, not the source of truth.
-    - Canonical execution state lives in the event-sourced ExecutionService.
-    - This adapter uses the hint store to make quick reconnect-vs-kill decisions
-      at startup without replaying the full event stream.
+    - `execution_tracker` (IWorkExecutionStateTracker) drives reconnect-vs-kill
+      decisions via load_state() checks in assess_container().
+    - The Redis-backed `tracking_storage` (IContainerRecoveryTrackingStore)
+      handles container re-registration after successful reconnection and
+      repair cycle result scanning for orphaned repairs.
 
     Thread Safety:
     - This adapter is async-safe but not thread-safe
