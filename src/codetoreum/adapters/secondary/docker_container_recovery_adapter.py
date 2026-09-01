@@ -73,7 +73,7 @@ CHECKPOINT_STALENESS_THRESHOLD = timedelta(minutes=60)  # 60 minutes
 REPAIR_CYCLE_AGE_THRESHOLD = timedelta(hours=2)  # 2 hours
 
 
-# Protocol types for injected dependencies
+# Adapter-local protocol for Docker runner dependency
 class IDockerRunner(Protocol):
     """Protocol for Docker runner operations."""
 
@@ -912,20 +912,18 @@ class DockerContainerRecoveryAdapter(IAgentContainerRecoveryService):
                 await loop.run_in_executor(None, _kill_container)
 
                 # Mark execution failed if we have execution info
-                if assessment.execution_id and self.execution_tracker:
+                if assessment.execution_id:
                     try:
                         if project and work_item_id and agent:
-                            # Try to mark execution failed if tracker supports it
-                            if hasattr(self.execution_tracker, "mark_execution_failed"):
-                                await self.execution_tracker.mark_execution_failed(
-                                    project=project,
-                                    work_item_id=work_item_id,
-                                    agent=agent,
-                                    reason=assessment.reason,
-                                )
-                                logger.debug(
-                                    f"Marked execution failed for {work_item_id} with reason {assessment.reason}"
-                                )
+                            await self.execution_tracker.mark_execution_failed(
+                                project=project,
+                                work_item_id=work_item_id,
+                                agent=agent,
+                                reason=assessment.reason,
+                            )
+                            logger.debug(
+                                f"Marked execution failed for {work_item_id} with reason {assessment.reason}"
+                            )
                     except (KeyError, AttributeError, ValueError) as mark_error:
                         logger.warning(
                             f"Failed to mark execution failed for {assessment.execution_id} (expected error): {mark_error}",
