@@ -9,8 +9,6 @@ This test proves end-to-end container recovery with real infrastructure:
 """
 
 import asyncio
-import json
-from datetime import UTC, datetime, timedelta
 from typing import AsyncGenerator
 
 import docker
