@@ -767,7 +767,7 @@ class AdapterResolver:
             redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
             redis_client = aioredis.from_url(redis_url)
 
-            execution_tracker = self._resolved.get("execution_tracker")
+            execution_tracker = self._resolved["execution_tracker"]
             tracking_storage: IContainerRecoveryTrackingStore = RedisContainerRecoveryTrackingStore(
                 redis_client=redis_client,
             )
