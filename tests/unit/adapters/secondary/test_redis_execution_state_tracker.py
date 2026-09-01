@@ -143,3 +143,49 @@ class TestRedisExecutionStateTrackerCorruption:
         await redis_client.set(tracker._key("myproject", "item-123"), "{not-json}")
         with pytest.raises(StorageError):
             await tracker.load_state("myproject", "item-123")
+
+
+class TestRedisExecutionStateTrackerValidation:
+    @pytest.mark.asyncio
+    async def test_mark_execution_started_rejects_empty_agent(self, tracker):
+        with pytest.raises(StorageError) as exc_info:
+            await tracker.mark_execution_started(
+                project="myproject",
+                work_item_id="item-123",
+                agent="",
+            )
+        assert "agent must be a non-empty string" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_mark_execution_failed_rejects_empty_agent(self, tracker):
+        with pytest.raises(StorageError) as exc_info:
+            await tracker.mark_execution_failed(
+                project="myproject",
+                work_item_id="item-123",
+                agent="",
+                reason="Some reason",
+            )
+        assert "agent must be a non-empty string" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_mark_execution_failed_rejects_empty_reason(self, tracker):
+        with pytest.raises(StorageError) as exc_info:
+            await tracker.mark_execution_failed(
+                project="myproject",
+                work_item_id="item-123",
+                agent="claude",
+                reason="",
+            )
+        assert "reason must be None or a non-empty string" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_validation_errors_caught_at_write_time(self, tracker, redis_client):
+        with pytest.raises(StorageError):
+            await tracker.mark_execution_failed(
+                project="myproject",
+                work_item_id="item-123",
+                agent="invalid",
+                reason="",
+            )
+        # Verify nothing was written to Redis
+        assert await redis_client.get(tracker._key("myproject", "item-123")) is None

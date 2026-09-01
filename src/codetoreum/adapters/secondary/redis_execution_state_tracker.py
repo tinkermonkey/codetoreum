@@ -106,15 +106,26 @@ class RedisExecutionStateTracker(IWorkExecutionStateTracker):
             StorageError: If storage write fails
         """
         try:
+            state = ExecutionState(
+                outcome="in_progress",
+                agent=agent,
+            )
             payload = json.dumps(
                 {
-                    "outcome": "in_progress",
-                    "agent": agent,
+                    "outcome": state.outcome,
+                    "agent": state.agent,
                 }
             )
             await self._redis.set(
                 self._key(project, work_item_id), payload, ex=self._ttl_seconds
             )
+        except ValueError as e:
+            logger.error(
+                f"Invalid execution state for project={project}, work_item_id={work_item_id}, agent={agent}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
+            )
+            raise StorageError(f"Failed to mark execution as started: {e}") from e
         except Exception as e:
             logger.error(
                 f"Failed to mark execution as started for project={project}, work_item_id={work_item_id}, agent={agent}",
@@ -150,16 +161,28 @@ class RedisExecutionStateTracker(IWorkExecutionStateTracker):
             - All fields are preserved exactly
         """
         try:
+            state = ExecutionState(
+                outcome="failed",
+                agent=agent,
+                reason=reason,
+            )
             payload = json.dumps(
                 {
-                    "outcome": "failed",
-                    "agent": agent,
-                    "reason": reason,
+                    "outcome": state.outcome,
+                    "agent": state.agent,
+                    "reason": state.reason,
                 }
             )
             await self._redis.set(
                 self._key(project, work_item_id), payload, ex=self._ttl_seconds
             )
+        except ValueError as e:
+            logger.error(
+                f"Invalid execution state for project={project}, work_item_id={work_item_id}, agent={agent}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INFRASTRUCTURE_ERROR},
+            )
+            raise StorageError(f"Failed to mark execution as failed: {e}") from e
         except Exception as e:
             logger.error(
                 f"Failed to mark execution as failed for project={project}, work_item_id={work_item_id}, agent={agent}",
