@@ -21,9 +21,6 @@ from codetoreum.ports.output.code_review_service import (
     ICodeReviewService,
     ReviewComment,
 )
-from codetoreum.ports.output.container_recovery_tracking_store import (
-    IContainerRecoveryTrackingStore,
-)
 from codetoreum.ports.output.coding_agent import (
     CodingAgentInvocationOptions,
     CodingAgentResult,
@@ -41,6 +38,9 @@ from codetoreum.ports.output.container_recovery import (
     IAgentContainerRecoveryService,
     RecoveryAssessment,
     RecoveryResult,
+)
+from codetoreum.ports.output.container_recovery_tracking_store import (
+    IContainerRecoveryTrackingStore,
 )
 from codetoreum.ports.output.discussion_adapter import (
     DiscussionMonitoringConfig,
