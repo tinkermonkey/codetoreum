@@ -21,6 +21,7 @@ from datetime import UTC, datetime
 
 import httpx
 
+from codetoreum.adapters.secondary.github_ticket_adapter import GitHubTicketAdapter
 from codetoreum.domain.events.discussion_events import (
     Comment,
     CommentContext,
@@ -31,6 +32,7 @@ from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.http.github_graphql_client import GitHubGraphQLClient
 from codetoreum.ports.exceptions import (
     AuthenticationError,
+    ConfigurationError,
     ExternalServiceError,
     ResourceNotFoundError,
     ValidationError,
@@ -52,7 +54,7 @@ class GitHubDiscussionConfig:
     Attributes:
         token: GitHub personal access token or GitHub App token
         organization: GitHub organization name
-        repository: GitHub repository name
+        repository: GitHub repository name (optional, can be resolved per-project via ticket_adapter)
         api_base_url: Base URL for GitHub REST API
         graphql_client: Optional pre-configured GraphQL client
         webhook_enabled: Whether to use webhook-based detection
@@ -63,7 +65,7 @@ class GitHubDiscussionConfig:
 
     token: str
     organization: str
-    repository: str
+    repository: str = ""
     api_base_url: str = "https://api.github.com"
     graphql_client: GitHubGraphQLClient | None = None
     webhook_enabled: bool = True
@@ -106,18 +108,24 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
         self,
         config: GitHubDiscussionConfig,
         identity_service: IIdentityService,
+        ticket_adapter: GitHubTicketAdapter | None = None,
     ):
         """Initialize GitHub discussion adapter.
 
         Args:
             config: GitHub configuration
             identity_service: Service for bot identification
+            ticket_adapter: Optional GitHub ticket adapter for per-project repository resolution.
+                When supplied, the adapter resolves owner/repo per work item's project_id
+                via ticket_adapter._get_repo(project_id). Falls back to config.repository
+                when not supplied or project isn't registered.
 
         Raises:
             ValidationError: If configuration is invalid
         """
         self._config = config
         self._identity_service = identity_service
+        self._ticket_adapter = ticket_adapter
         self._http_client: httpx.AsyncClient | None = None
         self._graphql_client = config.graphql_client
         self._webhook_enabled = config.webhook_enabled
@@ -166,6 +174,42 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
         await self.close()
         return False
 
+    def _resolve_repository(self, work_item_id: str) -> str:
+        """Resolve the GitHub repository for a work item.
+
+        When ticket_adapter is supplied, resolves owner/repo per-project via
+        ticket_adapter._get_repo(project_id), sourcing project_id from the
+        internally tracked self._monitoring[work_item_id].project_id.
+        Falls back to self._config.repository when ticket_adapter is not supplied
+        or the project isn't registered.
+
+        Args:
+            work_item_id: ID of the work item
+
+        Returns:
+            str: Repository name
+
+        Raises:
+            ConfigurationError: If unable to determine repository
+        """
+        if self._ticket_adapter and work_item_id in self._monitoring:
+            try:
+                project_id = self._monitoring[work_item_id].project_id
+                repo = self._ticket_adapter._get_repo(project_id)
+                return repo
+            except (ConfigurationError, KeyError):
+                # Fall back to config.repository if ticket_adapter resolution fails
+                pass
+
+        if self._config.repository:
+            return self._config.repository
+
+        raise ConfigurationError(
+            f"Unable to determine GitHub repository for work_item_id '{work_item_id}'. "
+            "Either provide ticket_adapter for multi-project resolution or set "
+            "config.repository for single-repo fallback."
+        )
+
     # Query Operations
 
     async def get_thread(self, work_item_id: str) -> DiscussionThread:
@@ -203,11 +247,12 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
         comments = []
         page = 1
         per_page = 100
+        repository = self._resolve_repository(work_item_id)
 
         try:
             while True:
                 # Fetch page of comments
-                url = f"/repos/{self._config.organization}/{self._config.repository}/issues/{work_item_id}/comments"
+                url = f"/repos/{self._config.organization}/{repository}/issues/{work_item_id}/comments"
 
                 response = await client.get(
                     url,
@@ -380,9 +425,10 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
     async def _add_issue_comment(self, work_item_id: str, content: str) -> Comment:
         """Post a comment to a GitHub issue via REST API."""
         client = await self._get_client()
+        repository = self._resolve_repository(work_item_id)
 
         try:
-            url = f"/repos/{self._config.organization}/{self._config.repository}/issues/{work_item_id}/comments"
+            url = f"/repos/{self._config.organization}/{repository}/issues/{work_item_id}/comments"
 
             response = await client.post(
                 url,
