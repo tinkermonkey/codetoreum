@@ -114,6 +114,8 @@ class RedisContainerRecoveryTrackingStore(IContainerRecoveryTrackingStore):
             if raw is None:
                 return None
             return self._decode(raw, key)
+        except StorageError:
+            raise
         except Exception as e:
             logger.error(
                 f"Failed to get key={key} from container recovery tracking store",
