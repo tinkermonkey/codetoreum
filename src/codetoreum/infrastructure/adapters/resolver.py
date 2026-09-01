@@ -767,6 +767,17 @@ class AdapterResolver:
             redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
             redis_client = aioredis.from_url(redis_url)
 
+            required_keys = ["execution_tracker"]
+            missing = [k for k in required_keys if k not in self._resolved]
+            if missing:
+                raise AdapterConfigurationError(
+                    [
+                        f"container_recovery='{self._config.container_recovery}' requires {key} to be resolved first; "
+                        f"ensure resolve_all() dependency ordering is correct."
+                        for key in missing
+                    ]
+                )
+
             execution_tracker = self._resolved["execution_tracker"]
             tracking_storage: IContainerRecoveryTrackingStore = RedisContainerRecoveryTrackingStore(
                 redis_client=redis_client,
