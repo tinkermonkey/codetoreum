@@ -170,7 +170,7 @@ NON_CRITICAL_SLOTS = {
     "repair_cycle",
     "ci_pipeline",
     "execution_tracker",  # Execution state tracking; critical for recovery but non-critical for MVP
-    "discussion_adapter",  # GitHubDiscussionAdapter doesn't have failed_event_store today (INV-20 gap)
+    "discussion_adapter",  # Discussion handling is non-critical; does not block work-item progression
 }
 
 
@@ -299,7 +299,7 @@ class ProductionApplicationBootstrap:
                 # Non-critical slots use mocks (logged as warnings)
                 review_cycle="basic",
                 pr_review_cycle="basic",
-                discussion_adapter="github",  # Phase 3: GitHubDiscussionAdapter for inbound comment handling
+                discussion_adapter="github",
                 # Post-D9 cleanup item #2 migrated the three repair adapters
                 # to the new ICodingAgent contract; the production variants
                 # are wireable again via the resolver's
@@ -1709,7 +1709,7 @@ class ProductionApplicationBootstrap:
         )
         logger.info("Registered ConversationalLoopOrchestrator to WorkItemColumnChangedEvent")
 
-        # Phase 3: Subscribe CLO to CommentNeedsResponseEvent so inbound comments trigger responses
+        # Subscribe CLO to CommentNeedsResponseEvent so inbound comments trigger responses
         self.infrastructure.event_bus.subscribe(
             "CommentNeedsResponseEvent",
             self.conversational_loop_orchestrator.handle_comment_event,
