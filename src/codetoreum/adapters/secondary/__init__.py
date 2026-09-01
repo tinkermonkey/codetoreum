@@ -17,6 +17,12 @@ from codetoreum.adapters.secondary.docker_container_adapter import (
     DockerConfig,
     DockerContainerAdapter,
 )
+from codetoreum.adapters.secondary.redis_container_recovery_tracking_store import (
+    RedisContainerRecoveryTrackingStore,
+)
+from codetoreum.adapters.secondary.redis_execution_state_tracker import (
+    RedisExecutionStateTracker,
+)
 from codetoreum.adapters.secondary.elasticsearch_config_storage import (
     ElasticsearchConfigStorage,
 )
@@ -72,6 +78,9 @@ __all__ = [
     "create_elasticsearch_config_storage",
     "create_redis_config_cache",
     "create_cached_config_store",
+    # Container Recovery and Execution State Tracking
+    "RedisExecutionStateTracker",
+    "RedisContainerRecoveryTrackingStore",
     # Mock Adapters for Testing
     "MockEventEmitter",
     "MockBoardAdapter",
