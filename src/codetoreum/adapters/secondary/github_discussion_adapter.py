@@ -21,6 +21,12 @@ from datetime import UTC, datetime
 
 import httpx
 
+from codetoreum.domain.events.discussion_events import (
+    Comment,
+    CommentContext,
+    CommentNeedsResponseEvent,
+    CommentPostedEvent,
+)
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.http.github_graphql_client import GitHubGraphQLClient
 from codetoreum.ports.exceptions import (
@@ -37,12 +43,6 @@ from codetoreum.ports.output.discussion_adapter import (
 )
 from codetoreum.ports.output.identity_service import IIdentityService
 from codetoreum.ports.output.ticket_system import ITicketSystem
-from codetoreum.domain.events.discussion_events import (
-    Comment,
-    CommentContext,
-    CommentNeedsResponseEvent,
-    CommentPostedEvent,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -191,12 +191,11 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
     def _resolve_repository(self, work_item_id: str) -> str:
         """Resolve the GitHub repository for a work item.
 
-        When ticket_adapter is supplied and has the _get_repo method, resolves
-        owner/repo per-project via ticket_adapter._get_repo(project_id), sourcing
-        project_id from the internally tracked self._monitoring[work_item_id].project_id.
+        When ticket_adapter is supplied, resolves owner/repo per-project via
+        ticket_adapter.get_project_repository(project_id), sourcing project_id
+        from the internally tracked self._monitoring[work_item_id].project_id.
         Falls back to self._config.repository when ticket_adapter is not supplied,
-        the project isn't registered, or the adapter doesn't support multi-project
-        repository resolution.
+        the project isn't registered, or repository resolution fails.
 
         Args:
             work_item_id: ID of the work item
@@ -208,34 +207,32 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             ConfigurationError: If unable to determine repository
         """
         if self._ticket_adapter and work_item_id in self._monitoring:
-            # Attempt to resolve per-project via ticket_adapter
-            # Only works if ticket_adapter has _get_repo method (GitHubTicketAdapter)
-            if hasattr(self._ticket_adapter, "_get_repo"):
-                try:
-                    project_id = self._monitoring[work_item_id].project_id
-                    repo = self._ticket_adapter._get_repo(project_id)
-                    return repo
-                except ConfigurationError as e:
-                    logger.warning(
-                        f"Failed to resolve repository via ticket_adapter for project '{self._monitoring[work_item_id].project_id}': {e}. "
-                        "Falling back to config.repository.",
-                        exc_info=True,
-                        extra={
-                            "error_id": ErrorRegistry.ERR_CONFIGURATION_ERROR,
-                            "work_item_id": work_item_id,
-                            "project_id": self._monitoring[work_item_id].project_id,
-                        },
-                    )
-                except KeyError as e:
-                    logger.warning(
-                        f"Failed to resolve repository via ticket_adapter for work_item '{work_item_id}': {e}. "
-                        "Falling back to config.repository.",
-                        exc_info=True,
-                        extra={
-                            "error_id": ErrorRegistry.ERR_CONFIGURATION_ERROR,
-                            "work_item_id": work_item_id,
-                        },
-                    )
+            try:
+                project_id = self._monitoring[work_item_id].project_id
+                repo = self._ticket_adapter.get_project_repository(project_id)
+                return repo
+            except ConfigurationError as e:
+                logger.warning(
+                    f"Failed to resolve repository via ticket_adapter for project '{project_id}': {e}. "
+                    "Falling back to config.repository.",
+                    exc_info=True,
+                    extra={
+                        "error_id": ErrorRegistry.ERR_CONFIGURATION_ERROR,
+                        "work_item_id": work_item_id,
+                        "project_id": project_id,
+                    },
+                )
+            except KeyError as e:
+                logger.warning(
+                    f"Failed to resolve repository via ticket_adapter for work_item '{work_item_id}': {e}. "
+                    "Falling back to config.repository.",
+                    exc_info=True,
+                    extra={
+                        "error_id": ErrorRegistry.ERR_CONFIGURATION_ERROR,
+                        "work_item_id": work_item_id,
+                        "project_id": project_id,
+                    },
+                )
 
         if self._config.repository:
             return self._config.repository

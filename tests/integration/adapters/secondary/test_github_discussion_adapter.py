@@ -817,7 +817,7 @@ class TestGitHubDiscussionAdapterMultiProject:
 
     @pytest.mark.asyncio
     async def test_resolve_repository_with_ticket_adapter(self, monitoring_config):
-        """Repository resolution uses ticket_adapter._get_repo when supplied."""
+        """Repository resolution uses ticket_adapter.get_project_repository when supplied."""
         # Setup
         config = GitHubDiscussionConfig(
             token="test-token",
@@ -827,7 +827,7 @@ class TestGitHubDiscussionAdapterMultiProject:
 
         # Mock ticket adapter that resolves repos per project
         mock_ticket_adapter = Mock(spec=GitHubTicketAdapter)
-        mock_ticket_adapter._get_repo = Mock(return_value="resolved-repo")
+        mock_ticket_adapter.get_project_repository = Mock(return_value="resolved-repo")
 
         identity = MockIdentityService()
         adapter = GitHubDiscussionAdapter(config, identity, ticket_adapter=mock_ticket_adapter)
@@ -840,7 +840,7 @@ class TestGitHubDiscussionAdapterMultiProject:
 
         # Assert
         assert repo == "resolved-repo"
-        mock_ticket_adapter._get_repo.assert_called_once_with("proj-multi-1")
+        mock_ticket_adapter.get_project_repository.assert_called_once_with("proj-multi-1")
 
     @pytest.mark.asyncio
     async def test_resolve_repository_fallback_to_config(self, monitoring_config):
@@ -881,7 +881,7 @@ class TestGitHubDiscussionAdapterMultiProject:
 
         # Mock ticket adapter that raises ConfigurationError for unknown project
         mock_ticket_adapter = Mock(spec=GitHubTicketAdapter)
-        mock_ticket_adapter._get_repo = Mock(side_effect=ConfigurationError("Project not found"))
+        mock_ticket_adapter.get_project_repository = Mock(side_effect=ConfigurationError("Project not found"))
 
         identity = MockIdentityService()
         adapter = GitHubDiscussionAdapter(config, identity, ticket_adapter=mock_ticket_adapter)
@@ -933,7 +933,7 @@ class TestGitHubDiscussionAdapterMultiProject:
         )
 
         mock_ticket_adapter = Mock(spec=GitHubTicketAdapter)
-        mock_ticket_adapter._get_repo = Mock(return_value="resolved-repo")
+        mock_ticket_adapter.get_project_repository = Mock(return_value="resolved-repo")
 
         identity = MockIdentityService()
         adapter = GitHubDiscussionAdapter(config, identity, ticket_adapter=mock_ticket_adapter)
@@ -978,7 +978,7 @@ class TestGitHubDiscussionAdapterMultiProject:
         )
 
         mock_ticket_adapter = Mock(spec=GitHubTicketAdapter)
-        mock_ticket_adapter._get_repo = Mock(return_value="resolved-repo")
+        mock_ticket_adapter.get_project_repository = Mock(return_value="resolved-repo")
 
         identity = MockIdentityService()
         adapter = GitHubDiscussionAdapter(config, identity, ticket_adapter=mock_ticket_adapter)

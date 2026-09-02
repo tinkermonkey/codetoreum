@@ -417,6 +417,31 @@ class InMemoryTicketAdapter(MockEventEmitter, ITicketSystem):
             await asyncio.sleep(0.01)  # Simulate streaming delay
             yield work_item
 
+    # ===== Repository Operations =====
+
+    def get_project_repository(self, project_id: ProjectId) -> str:
+        """
+        Resolve the repository for a given project.
+
+        For in-memory testing adapter, returns a synthetic repository name
+        based on the project ID.
+
+        Args:
+            project_id: Project identifier
+
+        Returns:
+            str: Repository identifier (synthetic for testing)
+
+        Raises:
+            ValidationError: If project_id is empty or invalid
+        """
+        if not project_id:
+            msg = "project_id cannot be empty"
+            raise ValidationError(msg)
+        return f"test-repo-{project_id}"
+
+    # ===== Comment Operations =====
+
     async def add_comment(
         self,
         item_id: WorkItemId,
