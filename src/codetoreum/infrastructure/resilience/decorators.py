@@ -273,6 +273,10 @@ class ResilientTicketSystemDecorator(ITicketSystem):
             rate_limit_cost=2,
         )
 
+    def get_project_repository(self, project_id: ProjectId) -> str:
+        """Get project repository (delegates to wrapped adapter)."""
+        return self._wrapped.get_project_repository(project_id)
+
     async def _execute_resilient(
         self,
         operation: Callable[[], T],
