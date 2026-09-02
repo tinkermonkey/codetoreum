@@ -111,9 +111,10 @@ class TestResolveDiscussionAdapterGithub:
             # Act & Assert - should not raise TypeError
             adapter = resolver.resolve_discussion_adapter()
 
-        # Verify adapter is wrapped in resilience decorator
-        assert isinstance(adapter, ResilientDiscussionAdapterDecorator)
-        assert isinstance(adapter._wrapped, GitHubDiscussionAdapter)
+        # Verify adapter is raw (not wrapped in resilience decorator yet)
+        # Resilience wrapping happens in Phase 4 of the bootstrap
+        assert isinstance(adapter, GitHubDiscussionAdapter)
+        assert not isinstance(adapter, ResilientDiscussionAdapterDecorator)
 
     def test_github_variant_constructs_github_discussion_config(
         self,
@@ -136,12 +137,11 @@ class TestResolveDiscussionAdapterGithub:
         ):
             adapter = resolver.resolve_discussion_adapter()
 
-        # Verify the wrapped adapter has correct config
-        wrapped_adapter = adapter._wrapped
-        assert isinstance(wrapped_adapter, GitHubDiscussionAdapter)
-        assert wrapped_adapter._config.token == "ghp_test123"
-        assert wrapped_adapter._config.organization == "my-org"
-        assert wrapped_adapter._config.repository == ""
+        # Verify the adapter (raw, not wrapped) has correct config
+        assert isinstance(adapter, GitHubDiscussionAdapter)
+        assert adapter._config.token == "ghp_test123"
+        assert adapter._config.organization == "my-org"
+        assert adapter._config.repository == ""
 
     def test_github_variant_constructs_fresh_graphql_client(
         self,
@@ -164,10 +164,9 @@ class TestResolveDiscussionAdapterGithub:
         ):
             adapter = resolver.resolve_discussion_adapter()
 
-        # Verify the wrapped adapter has a GraphQL client
-        wrapped_adapter = adapter._wrapped
-        assert wrapped_adapter._config.graphql_client is not None
-        assert isinstance(wrapped_adapter._config.graphql_client, GitHubGraphQLClient)
+        # Verify the adapter (raw) has a GraphQL client
+        assert adapter._config.graphql_client is not None
+        assert isinstance(adapter._config.graphql_client, GitHubGraphQLClient)
 
     def test_github_variant_passes_ticket_adapter_as_collaborator(
         self,
@@ -194,17 +193,19 @@ class TestResolveDiscussionAdapterGithub:
         ):
             adapter = resolver.resolve_discussion_adapter()
 
-        # Verify the wrapped adapter has the ticket adapter
-        wrapped_adapter = adapter._wrapped
-        assert wrapped_adapter._ticket_adapter is mock_ticket_adapter
+        # Verify the adapter (raw) has the ticket adapter
+        assert adapter._ticket_adapter is mock_ticket_adapter
 
-    def test_github_variant_wraps_in_resilience_decorator(
+    def test_github_variant_returns_raw_adapter_not_wrapped(
         self,
         adapter_factory,
         adapter_dependencies,
         mock_identity_service,
     ):
-        """Test that GitHub variant result is wrapped in ResilientDiscussionAdapterDecorator."""
+        """Test that GitHub variant returns raw adapter not wrapped in resilience decorator.
+
+        Resilience wrapping happens in Phase 4 of the bootstrap after mock-detection validation.
+        """
         config = AdapterSelectionConfig(discussion_adapter="github")
         resolver = AdapterResolver(
             adapter_config=config,
@@ -219,7 +220,8 @@ class TestResolveDiscussionAdapterGithub:
         ):
             adapter = resolver.resolve_discussion_adapter()
 
-        assert isinstance(adapter, ResilientDiscussionAdapterDecorator)
+        assert isinstance(adapter, GitHubDiscussionAdapter)
+        assert not isinstance(adapter, ResilientDiscussionAdapterDecorator)
 
     def test_github_variant_uses_credentials_when_available(
         self,
@@ -248,8 +250,7 @@ class TestResolveDiscussionAdapterGithub:
             adapter = resolver.resolve_discussion_adapter()
 
         # Verify credentials from ProductionCredentials are used
-        wrapped_adapter = adapter._wrapped
-        assert wrapped_adapter._config.token == "ghp_from_credentials"
+        assert adapter._config.token == "ghp_from_credentials"
 
 
 class TestResolveDiscussionAdapterMock:
@@ -272,9 +273,9 @@ class TestResolveDiscussionAdapterMock:
 
         adapter = resolver.resolve_discussion_adapter()
 
-        # Verify adapter is wrapped and mock adapter is used
-        assert isinstance(adapter, ResilientDiscussionAdapterDecorator)
-        assert isinstance(adapter._wrapped, MockDiscussionAdapter)
+        # Verify adapter is raw mock adapter (not wrapped in resilience decorator yet)
+        assert isinstance(adapter, MockDiscussionAdapter)
+        assert not isinstance(adapter, ResilientDiscussionAdapterDecorator)
 
     def test_mock_variant_passes_time_source(
         self,
@@ -293,19 +294,21 @@ class TestResolveDiscussionAdapterMock:
 
         adapter = resolver.resolve_discussion_adapter()
 
-        # Verify the wrapped adapter is MockDiscussionAdapter with time_source
-        wrapped_adapter = adapter._wrapped
-        assert isinstance(wrapped_adapter, MockDiscussionAdapter)
+        # Verify the adapter is MockDiscussionAdapter with time_source
+        assert isinstance(adapter, MockDiscussionAdapter)
         # MockDiscussionAdapter should have a time_source callable
-        assert callable(wrapped_adapter._time_source)
+        assert callable(adapter._time_source)
 
-    def test_mock_variant_wraps_in_resilience_decorator(
+    def test_mock_variant_returns_raw_adapter_not_wrapped(
         self,
         adapter_factory,
         adapter_dependencies,
         mock_identity_service,
     ):
-        """Test that mock variant result is wrapped in ResilientDiscussionAdapterDecorator."""
+        """Test that mock variant returns raw adapter not wrapped in resilience decorator.
+
+        Resilience wrapping happens in Phase 4 of the bootstrap after mock-detection validation.
+        """
         config = AdapterSelectionConfig(discussion_adapter="mock")
         resolver = AdapterResolver(
             adapter_config=config,
@@ -316,7 +319,8 @@ class TestResolveDiscussionAdapterMock:
 
         adapter = resolver.resolve_discussion_adapter()
 
-        assert isinstance(adapter, ResilientDiscussionAdapterDecorator)
+        assert isinstance(adapter, MockDiscussionAdapter)
+        assert not isinstance(adapter, ResilientDiscussionAdapterDecorator)
 
 
 class TestResolveDiscussionAdapterIDiscussionAdapterContract:

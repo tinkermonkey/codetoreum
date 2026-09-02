@@ -404,11 +404,11 @@ class AdapterResolver:
         )
 
     def resolve_discussion_adapter(self) -> IDiscussionAdapter:
-        """Resolve discussion adapter."""
-        from codetoreum.infrastructure.resilience.decorators import (
-            ResilientDiscussionAdapterDecorator,
-        )
+        """Resolve discussion adapter without resilience wrapping.
 
+        Resilience wrapping is applied in production_bootstrap Phase 4 so that
+        mock-detection can inspect the raw adapter class name before decoration.
+        """
         if self._config.discussion_adapter == "github":
             from codetoreum.adapters.secondary.github_discussion_adapter import (
                 GitHubDiscussionAdapter,
@@ -454,7 +454,7 @@ class AdapterResolver:
                 ticket_adapter=self._resolved.get("ticket"),
             )
 
-            return ResilientDiscussionAdapterDecorator(wrapped=adapter)
+            return adapter
 
         # Mock branch: use factory with time_source
         required_keys = ["identity_service"]
@@ -474,8 +474,7 @@ class AdapterResolver:
             time_source=lambda: self._deps.engine.get_clock_for_testing().now(),
         )
 
-        # Wrap with resilience decorator
-        return ResilientDiscussionAdapterDecorator(wrapped=mock_adapter)
+        return mock_adapter
 
     def resolve_lock_service(self) -> IDistributedLock:
         """Resolve pipeline lock service adapter.

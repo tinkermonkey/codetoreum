@@ -994,6 +994,17 @@ class ProductionApplicationBootstrap:
             )
             logger.debug("Applied best-effort resilience to execution tracker adapter")
 
+        # Discussion adapter (non-critical but benefits from resilience)
+        if self.adapters.discussion_adapter:
+            from codetoreum.infrastructure.resilience.decorators import (
+                ResilientDiscussionAdapterDecorator,
+            )
+
+            self.adapters.discussion_adapter = ResilientDiscussionAdapterDecorator(
+                wrapped=self.adapters.discussion_adapter
+            )
+            logger.debug("Applied resilience to discussion adapter")
+
         logger.info("Resilience decorators applied to critical adapters")
 
     # =========================================================================

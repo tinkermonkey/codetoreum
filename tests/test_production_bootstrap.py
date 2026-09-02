@@ -352,6 +352,7 @@ def test_non_critical_adapter_slots_defined() -> None:
         "repair_cycle",
         "ci_pipeline",
         "execution_tracker",  # Execution state tracking; non-critical for MVP
+        "discussion_adapter",  # Discussion handling is non-critical; does not block work-item progression
     }
 
     assert expected_non_critical == NON_CRITICAL_SLOTS
