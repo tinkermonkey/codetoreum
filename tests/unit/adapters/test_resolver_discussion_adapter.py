@@ -14,6 +14,7 @@ from codetoreum.adapters.secondary.github_discussion_adapter import (
 from codetoreum.adapters.testing.mock_discussion_adapter import MockDiscussionAdapter
 from codetoreum.infrastructure.adapters.factory import AdapterFactory, AdapterFactoryConfig
 from codetoreum.infrastructure.adapters.resolver import (
+    AdapterConfigurationError,
     AdapterDependencies,
     AdapterResolver,
 )
@@ -362,3 +363,75 @@ class TestResolveDiscussionAdapterIDiscussionAdapterContract:
         adapter = resolver.resolve_discussion_adapter()
 
         assert isinstance(adapter, IDiscussionAdapter)
+
+
+class TestResolveDiscussionAdapterValidation:
+    """Tests for validation of required dependencies."""
+
+    def test_github_variant_raises_when_identity_service_missing(
+        self,
+        adapter_factory,
+        adapter_dependencies,
+    ):
+        """Test that GitHub variant raises error when identity_service is not resolved."""
+        config = AdapterSelectionConfig(discussion_adapter="github")
+        resolver = AdapterResolver(
+            adapter_config=config,
+            factory=adapter_factory,
+            dependencies=adapter_dependencies,
+        )
+        resolver._resolved = {}  # No identity_service
+
+        with patch.dict(
+            os.environ,
+            {"GITHUB_TOKEN": "ghp_test", "GITHUB_ORG": "test-org"},
+        ):
+            with pytest.raises(AdapterConfigurationError) as exc_info:
+                resolver.resolve_discussion_adapter()
+
+            assert "identity_service" in str(exc_info.value)
+            assert "requires" in str(exc_info.value)
+
+    def test_mock_variant_raises_when_identity_service_missing(
+        self,
+        adapter_factory,
+        adapter_dependencies,
+    ):
+        """Test that mock variant raises error when identity_service is not resolved."""
+        config = AdapterSelectionConfig(discussion_adapter="mock")
+        resolver = AdapterResolver(
+            adapter_config=config,
+            factory=adapter_factory,
+            dependencies=adapter_dependencies,
+        )
+        resolver._resolved = {}  # No identity_service
+
+        with pytest.raises(AdapterConfigurationError) as exc_info:
+            resolver.resolve_discussion_adapter()
+
+        assert "identity_service" in str(exc_info.value)
+        assert "requires" in str(exc_info.value)
+
+    def test_github_variant_translates_validation_error_to_adapter_config_error(
+        self,
+        adapter_factory,
+        adapter_dependencies,
+        mock_identity_service,
+    ):
+        """Test that GitHubDiscussionConfig validation errors are translated to AdapterConfigurationError."""
+        config = AdapterSelectionConfig(discussion_adapter="github")
+        resolver = AdapterResolver(
+            adapter_config=config,
+            factory=adapter_factory,
+            dependencies=adapter_dependencies,
+        )
+        resolver._resolved = {"identity_service": mock_identity_service}
+
+        with patch.dict(
+            os.environ,
+            {"GITHUB_TOKEN": "ghp_test", "GITHUB_ORG": ""},
+        ):
+            with pytest.raises(AdapterConfigurationError) as exc_info:
+                resolver.resolve_discussion_adapter()
+
+            assert "organization is required" in str(exc_info.value)
