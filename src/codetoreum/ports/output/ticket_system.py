@@ -213,7 +213,7 @@ class ITicketSystem(ABC):
         Resolve the repository for a given project.
 
         This method enables vendor-agnostic multi-project repository resolution.
-        Implementations must return the repository identifier (e.g. "owner/repo" for GitHub).
+        Implementations must return the repository identifier (e.g. "repo" for GitHub).
 
         Args:
             project_id: Project identifier

@@ -222,6 +222,17 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
                         "project_id": project_id,
                     },
                 )
+            except ResourceNotFoundError as e:
+                logger.warning(
+                    f"Failed to resolve repository via ticket_adapter for project '{project_id}': {e}. "
+                    "Falling back to config.repository.",
+                    exc_info=True,
+                    extra={
+                        "error_id": ErrorRegistry.ERR_RESOURCE_NOT_FOUND,
+                        "work_item_id": work_item_id,
+                        "project_id": project_id,
+                    },
+                )
             except KeyError as e:
                 logger.warning(
                     f"Failed to resolve repository via ticket_adapter for work_item '{work_item_id}': {e}. "
