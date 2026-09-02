@@ -21,13 +21,6 @@ from datetime import UTC, datetime
 
 import httpx
 
-from codetoreum.adapters.secondary.github_ticket_adapter import GitHubTicketAdapter
-from codetoreum.domain.events.discussion_events import (
-    Comment,
-    CommentContext,
-    CommentNeedsResponseEvent,
-    CommentPostedEvent,
-)
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.http.github_graphql_client import GitHubGraphQLClient
 from codetoreum.ports.exceptions import (
@@ -43,6 +36,13 @@ from codetoreum.ports.output.discussion_adapter import (
     IDiscussionAdapter,
 )
 from codetoreum.ports.output.identity_service import IIdentityService
+from codetoreum.ports.output.ticket_system import ITicketSystem
+from codetoreum.domain.events.discussion_events import (
+    Comment,
+    CommentContext,
+    CommentNeedsResponseEvent,
+    CommentPostedEvent,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +72,19 @@ class GitHubDiscussionConfig:
     polling_interval_seconds: int = 30
     api_version: str = "2022-11-28"
     timeout_seconds: int = 30
+
+    def __post_init__(self) -> None:
+        """Validate configuration after initialization.
+
+        Raises:
+            ValidationError: If required fields are missing or invalid
+        """
+        if not self.token:
+            msg = "token is required"
+            raise ValidationError(msg)
+        if not self.organization:
+            msg = "organization is required"
+            raise ValidationError(msg)
 
 
 class GitHubDiscussionAdapter(IDiscussionAdapter):
@@ -108,17 +121,18 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
         self,
         config: GitHubDiscussionConfig,
         identity_service: IIdentityService,
-        ticket_adapter: GitHubTicketAdapter | None = None,
+        ticket_adapter: ITicketSystem | None = None,
     ):
         """Initialize GitHub discussion adapter.
 
         Args:
             config: GitHub configuration
             identity_service: Service for bot identification
-            ticket_adapter: Optional GitHub ticket adapter for per-project repository resolution.
-                When supplied, the adapter resolves owner/repo per work item's project_id
-                via ticket_adapter._get_repo(project_id). Falls back to config.repository
-                when not supplied or project isn't registered.
+            ticket_adapter: Optional ticket system adapter for per-project repository resolution.
+                When supplied and the work item's project is registered, the adapter resolves
+                owner/repo per work item's project_id. Falls back to config.repository
+                when not supplied, project isn't registered, or adapter doesn't support
+                multi-project repo resolution.
 
         Raises:
             ValidationError: If configuration is invalid
@@ -177,11 +191,12 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
     def _resolve_repository(self, work_item_id: str) -> str:
         """Resolve the GitHub repository for a work item.
 
-        When ticket_adapter is supplied, resolves owner/repo per-project via
-        ticket_adapter._get_repo(project_id), sourcing project_id from the
-        internally tracked self._monitoring[work_item_id].project_id.
-        Falls back to self._config.repository when ticket_adapter is not supplied
-        or the project isn't registered.
+        When ticket_adapter is supplied and has the _get_repo method, resolves
+        owner/repo per-project via ticket_adapter._get_repo(project_id), sourcing
+        project_id from the internally tracked self._monitoring[work_item_id].project_id.
+        Falls back to self._config.repository when ticket_adapter is not supplied,
+        the project isn't registered, or the adapter doesn't support multi-project
+        repository resolution.
 
         Args:
             work_item_id: ID of the work item
@@ -193,21 +208,42 @@ class GitHubDiscussionAdapter(IDiscussionAdapter):
             ConfigurationError: If unable to determine repository
         """
         if self._ticket_adapter and work_item_id in self._monitoring:
-            try:
-                project_id = self._monitoring[work_item_id].project_id
-                repo = self._ticket_adapter._get_repo(project_id)
-                return repo
-            except (ConfigurationError, KeyError):
-                # Fall back to config.repository if ticket_adapter resolution fails
-                pass
+            # Attempt to resolve per-project via ticket_adapter
+            # Only works if ticket_adapter has _get_repo method (GitHubTicketAdapter)
+            if hasattr(self._ticket_adapter, "_get_repo"):
+                try:
+                    project_id = self._monitoring[work_item_id].project_id
+                    repo = self._ticket_adapter._get_repo(project_id)
+                    return repo
+                except ConfigurationError as e:
+                    logger.warning(
+                        f"Failed to resolve repository via ticket_adapter for project '{self._monitoring[work_item_id].project_id}': {e}. "
+                        "Falling back to config.repository.",
+                        exc_info=True,
+                        extra={
+                            "error_id": ErrorRegistry.ERR_CONFIGURATION_ERROR,
+                            "work_item_id": work_item_id,
+                            "project_id": self._monitoring[work_item_id].project_id,
+                        },
+                    )
+                except KeyError as e:
+                    logger.warning(
+                        f"Failed to resolve repository via ticket_adapter for work_item '{work_item_id}': {e}. "
+                        "Falling back to config.repository.",
+                        exc_info=True,
+                        extra={
+                            "error_id": ErrorRegistry.ERR_CONFIGURATION_ERROR,
+                            "work_item_id": work_item_id,
+                        },
+                    )
 
         if self._config.repository:
             return self._config.repository
 
         raise ConfigurationError(
             f"Unable to determine GitHub repository for work_item_id '{work_item_id}'. "
-            "Either provide ticket_adapter for multi-project resolution or set "
-            "config.repository for single-repo fallback."
+            "Either provide ticket_adapter with multi-project repository registration or "
+            "set config.repository for single-repository fallback."
         )
 
     # Query Operations
