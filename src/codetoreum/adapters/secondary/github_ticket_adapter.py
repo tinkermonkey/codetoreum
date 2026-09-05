@@ -184,6 +184,24 @@ class GitHubTicketAdapter(ITicketSystem):
             "project_id provided for this call. Update ITicketSystem to pass project_id."
         )
 
+    def get_project_repository(self, project_id: str) -> str:
+        """Public implementation of ITicketSystem.get_project_repository.
+
+        Resolves the GitHub repository for a given project ID.
+        This delegates to the private _get_repo method to maintain consistent
+        multi-project resolution logic.
+
+        Args:
+            project_id: Project identifier
+
+        Returns:
+            str: Repository name (e.g. "repo" for https://github.com/org/repo)
+
+        Raises:
+            ConfigurationError: Project not registered or repository not configured
+        """
+        return self._get_repo(project_id)
+
     def register_project_repo(self, project_id: str, github_repo: str) -> None:
         """Register a project's GitHub repository.
 

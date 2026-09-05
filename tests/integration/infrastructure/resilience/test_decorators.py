@@ -60,6 +60,10 @@ class FlakyTicketSystem(ITicketSystem):
         """Return empty list of child issues for testing."""
         return []
 
+    def get_project_repository(self, project_id: ProjectId) -> str:
+        """Return test repository reference."""
+        return f"test-org/test-repo-{project_id}"
+
     # Stub implementations for other required methods
     async def create_work_item(
         self,

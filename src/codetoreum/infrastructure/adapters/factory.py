@@ -1141,7 +1141,7 @@ class AdapterFactory:
             version="1.0.0",
             tags=["production", "github"],
             config_schema=AdapterCredentialRequirement(
-                env_vars=("GITHUB_TOKEN", "GITHUB_ORG"),
+                env_vars=("GITHUB_TOKEN",),
                 description="GitHub personal access token with repo scope",
             ),
         )

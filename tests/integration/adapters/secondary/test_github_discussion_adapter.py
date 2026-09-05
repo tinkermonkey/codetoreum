@@ -13,6 +13,7 @@ from codetoreum.adapters.secondary.github_discussion_adapter import (
     GitHubDiscussionAdapter,
     GitHubDiscussionConfig,
 )
+from codetoreum.adapters.secondary.github_ticket_adapter import GitHubTicketAdapter
 from codetoreum.domain.events.discussion_events import (
     Comment,
     CommentContext,
@@ -21,6 +22,7 @@ from codetoreum.domain.events.discussion_events import (
 )
 from codetoreum.ports.exceptions import (
     AuthenticationError,
+    ConfigurationError,
     ResourceNotFoundError,
     ValidationError,
 )
@@ -801,3 +803,209 @@ class TestGitHubDiscussionAdapterDiscussionNodeId:
         """get_thread with an unrecognised ID format includes guidance in the error."""
         with pytest.raises(ValidationError, match="D_\\.\\.\\."):
             await adapter.get_thread("not-a-valid-id")
+
+
+class TestGitHubDiscussionAdapterMultiProject:
+    """Tests for multi-project repo resolution via ticket_adapter."""
+
+    @pytest.fixture
+    def monitoring_config(self):
+        """Create monitoring configuration."""
+        return DiscussionMonitoringConfig(
+            project_id="proj-multi-1",
+        )
+
+    @pytest.mark.asyncio
+    async def test_resolve_repository_with_ticket_adapter(self, monitoring_config):
+        """Repository resolution uses ticket_adapter.get_project_repository when supplied."""
+        # Setup
+        config = GitHubDiscussionConfig(
+            token="test-token",
+            organization="test-org",
+            repository="",  # No default repository
+        )
+
+        # Mock ticket adapter that resolves repos per project
+        mock_ticket_adapter = Mock(spec=GitHubTicketAdapter)
+        mock_ticket_adapter.get_project_repository = Mock(return_value="resolved-repo")
+
+        identity = MockIdentityService()
+        adapter = GitHubDiscussionAdapter(config, identity, ticket_adapter=mock_ticket_adapter)
+
+        # Start monitoring with a project ID
+        adapter.start_monitoring("123", monitoring_config)
+
+        # Act - resolve repository for the work item
+        repo = adapter._resolve_repository("123")
+
+        # Assert
+        assert repo == "resolved-repo"
+        mock_ticket_adapter.get_project_repository.assert_called_once_with("proj-multi-1")
+
+    @pytest.mark.asyncio
+    async def test_resolve_repository_fallback_to_config(self, monitoring_config):
+        """Repository resolution falls back to config.repository when ticket_adapter not supplied."""
+        # Setup
+        from codetoreum.adapters.secondary.github_discussion_adapter import (
+            GitHubDiscussionAdapter,
+            GitHubDiscussionConfig,
+        )
+
+        config = GitHubDiscussionConfig(
+            token="test-token",
+            organization="test-org",
+            repository="fallback-repo",  # Fallback repository
+        )
+
+        identity = MockIdentityService()
+        adapter = GitHubDiscussionAdapter(config, identity, ticket_adapter=None)
+
+        # Start monitoring
+        adapter.start_monitoring("456", monitoring_config)
+
+        # Act
+        repo = adapter._resolve_repository("456")
+
+        # Assert
+        assert repo == "fallback-repo"
+
+    @pytest.mark.asyncio
+    async def test_resolve_repository_fallback_when_project_not_registered(self, monitoring_config):
+        """Repository resolution falls back to config when project_id not registered in ticket_adapter."""
+        # Setup
+        config = GitHubDiscussionConfig(
+            token="test-token",
+            organization="test-org",
+            repository="fallback-repo",
+        )
+
+        # Mock ticket adapter that raises ConfigurationError for unknown project
+        mock_ticket_adapter = Mock(spec=GitHubTicketAdapter)
+        mock_ticket_adapter.get_project_repository = Mock(side_effect=ConfigurationError("Project not found"))
+
+        identity = MockIdentityService()
+        adapter = GitHubDiscussionAdapter(config, identity, ticket_adapter=mock_ticket_adapter)
+
+        # Start monitoring
+        adapter.start_monitoring("789", monitoring_config)
+
+        # Act
+        repo = adapter._resolve_repository("789")
+
+        # Assert - falls back to config.repository
+        assert repo == "fallback-repo"
+
+    @pytest.mark.asyncio
+    async def test_resolve_repository_raises_when_no_repo_available(self, monitoring_config):
+        """Repository resolution raises ConfigurationError when no repo is available."""
+        # Setup
+        from codetoreum.adapters.secondary.github_discussion_adapter import (
+            GitHubDiscussionAdapter,
+            GitHubDiscussionConfig,
+        )
+
+        config = GitHubDiscussionConfig(
+            token="test-token",
+            organization="test-org",
+            repository="",  # No default repository
+        )
+
+        identity = MockIdentityService()
+        adapter = GitHubDiscussionAdapter(config, identity, ticket_adapter=None)
+
+        # Start monitoring
+        adapter.start_monitoring("999", monitoring_config)
+
+        # Act & Assert
+        from codetoreum.ports.exceptions import ConfigurationError
+
+        with pytest.raises(ConfigurationError, match="Unable to determine GitHub repository"):
+            adapter._resolve_repository("999")
+
+    @pytest.mark.asyncio
+    async def test_get_thread_uses_resolved_repository(self, monitoring_config):
+        """get_thread uses the resolved repository when fetching comments."""
+        # Setup
+        config = GitHubDiscussionConfig(
+            token="test-token",
+            organization="test-org",
+            repository="",
+        )
+
+        mock_ticket_adapter = Mock(spec=GitHubTicketAdapter)
+        mock_ticket_adapter.get_project_repository = Mock(return_value="resolved-repo")
+
+        identity = MockIdentityService()
+        adapter = GitHubDiscussionAdapter(config, identity, ticket_adapter=mock_ticket_adapter)
+
+        # Start monitoring
+        adapter.start_monitoring("123", monitoring_config)
+
+        # Mock the HTTP client to capture the URL being called
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json = Mock(return_value=[
+            {
+                "id": 1,
+                "user": {"login": "alice"},
+                "body": "Test comment",
+                "created_at": "2025-01-08T10:00:00Z",
+            }
+        ])
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+
+        with patch.object(adapter, "_get_client", new_callable=AsyncMock, return_value=mock_client):
+            # Act
+            thread = await adapter.get_thread("123")
+
+            # Assert
+            assert len(thread.comments) == 1
+            # Verify that the API call was made with the resolved repository
+            call_args = mock_client.get.call_args
+            assert "resolved-repo" in call_args[0][0]
+            assert "test-org" in call_args[0][0]
+
+    @pytest.mark.asyncio
+    async def test_add_comment_uses_resolved_repository(self, monitoring_config):
+        """add_comment uses the resolved repository when posting comments."""
+        # Setup
+        config = GitHubDiscussionConfig(
+            token="test-token",
+            organization="test-org",
+            repository="",
+        )
+
+        mock_ticket_adapter = Mock(spec=GitHubTicketAdapter)
+        mock_ticket_adapter.get_project_repository = Mock(return_value="resolved-repo")
+
+        identity = MockIdentityService()
+        adapter = GitHubDiscussionAdapter(config, identity, ticket_adapter=mock_ticket_adapter)
+
+        # Start monitoring
+        adapter.start_monitoring("456", monitoring_config)
+
+        # Mock the HTTP client to capture the URL being called
+        mock_response = Mock()
+        mock_response.status_code = 201
+        mock_response.json = Mock(return_value={
+            "id": 999,
+            "user": {"login": "bot"},
+            "body": "Response comment",
+            "created_at": "2025-01-08T11:00:00Z",
+        })
+
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_response)
+
+        with patch.object(adapter, "_get_client", new_callable=AsyncMock, return_value=mock_client):
+            # Act
+            comment = await adapter.add_comment("456", "Response comment")
+
+            # Assert
+            assert comment.body == "Response comment"
+            # Verify that the API call was made with the resolved repository
+            call_args = mock_client.post.call_args
+            assert "resolved-repo" in call_args[0][0]
+            assert "test-org" in call_args[0][0]

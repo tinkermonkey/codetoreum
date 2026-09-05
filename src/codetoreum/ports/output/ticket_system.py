@@ -205,6 +205,27 @@ class ITicketSystem(ABC):
             ExternalServiceError: Service communication failure
         """
 
+    # Repository Operations
+
+    @abstractmethod
+    def get_project_repository(self, project_id: ProjectId) -> str:
+        """
+        Resolve the repository for a given project.
+
+        This method enables vendor-agnostic multi-project repository resolution.
+        Implementations must return the repository identifier (e.g. "repo" for GitHub).
+
+        Args:
+            project_id: Project identifier
+
+        Returns:
+            str: Repository identifier for the project
+
+        Raises:
+            ConfigurationError: Project not registered or repository not configured
+            ResourceNotFoundError: Project doesn't exist
+        """
+
     # Comment Operations
 
     @abstractmethod

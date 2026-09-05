@@ -6,6 +6,7 @@ Creates resilient adapters with appropriate components based on operation mode.
 from typing import Any
 
 from codetoreum.ports.output.container import IContainer
+from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
 from codetoreum.ports.output.repository import IRepository
 from codetoreum.ports.output.ticket_system import ITicketSystem
 from codetoreum.ports.output.version_control_service import IVersionControlService
@@ -20,7 +21,14 @@ from .config import (
 )
 from .decorators import (
     BestEffortExecutionTrackerDecorator,
+    ResilientDiscussionAdapterDecorator,
     ResilientTicketSystemDecorator,
+)
+from .interfaces import (
+    ICircuitBreaker,
+    IRateLimiter,
+    IRetryPolicy,
+    ITimeout,
 )
 from .mocks import MockCircuitBreaker, MockRateLimiter, MockRetryPolicy, MockTimeout
 from .rate_limiter import TokenBucketRateLimiter
@@ -46,22 +54,15 @@ class ResilienceFactory:
         self.mode = mode
         self.config = config or {}
 
-    def create_resilient_ticket_system(
-        self, adapter: ITicketSystem, service_config: dict[str, Any] | None = None
-    ) -> ITicketSystem:
+    def _build_resilience_components(
+        self, cfg: dict[str, Any]
+    ) -> tuple[IRateLimiter, ICircuitBreaker, IRetryPolicy, ITimeout]:
         """
-        Create resilient ticket system adapter.
-
-        Args:
-            adapter: Underlying ticket system adapter (GitHub, Jira, etc.)
-            service_config: Service-specific configuration
+        Build resilience components based on operation mode.
 
         Returns:
-            ITicketSystem: Wrapped adapter with resilience
+            Tuple of (rate_limiter, circuit_breaker, retry_policy, timeout)
         """
-        cfg = {**self.config, **(service_config or {})}
-
-        # Create components based on mode
         if self.mode == OperationMode.PRODUCTION:
             rate_limiter = TokenBucketRateLimiter(
                 max_requests=cfg.get(
@@ -100,7 +101,50 @@ class ResilienceFactory:
             retry_policy = MockRetryPolicy(simulate_retries=True, max_retries=2)
             timeout = AsyncTimeout()
 
+        return rate_limiter, circuit_breaker, retry_policy, timeout
+
+    def create_resilient_ticket_system(
+        self, adapter: ITicketSystem, service_config: dict[str, Any] | None = None
+    ) -> ITicketSystem:
+        """
+        Create resilient ticket system adapter.
+
+        Args:
+            adapter: Underlying ticket system adapter (GitHub, Jira, etc.)
+            service_config: Service-specific configuration
+
+        Returns:
+            ITicketSystem: Wrapped adapter with resilience
+        """
+        cfg = {**self.config, **(service_config or {})}
+        rate_limiter, circuit_breaker, retry_policy, timeout = self._build_resilience_components(cfg)
+
         return ResilientTicketSystemDecorator(
+            wrapped=adapter,
+            rate_limiter=rate_limiter,
+            circuit_breaker=circuit_breaker,
+            retry_policy=retry_policy,
+            timeout=timeout,
+            default_timeout_seconds=cfg.get("default_timeout", 30.0),
+        )
+
+    def create_resilient_discussion_adapter(
+        self, adapter: IDiscussionAdapter, service_config: dict[str, Any] | None = None
+    ) -> IDiscussionAdapter:
+        """
+        Create resilient discussion adapter.
+
+        Args:
+            adapter: Underlying discussion adapter (GitHub, etc.)
+            service_config: Service-specific configuration
+
+        Returns:
+            IDiscussionAdapter: Wrapped adapter with resilience
+        """
+        cfg = {**self.config, **(service_config or {})}
+        rate_limiter, circuit_breaker, retry_policy, timeout = self._build_resilience_components(cfg)
+
+        return ResilientDiscussionAdapterDecorator(
             wrapped=adapter,
             rate_limiter=rate_limiter,
             circuit_breaker=circuit_breaker,

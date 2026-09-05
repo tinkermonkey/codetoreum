@@ -170,6 +170,7 @@ NON_CRITICAL_SLOTS = {
     "repair_cycle",
     "ci_pipeline",
     "execution_tracker",  # Execution state tracking; critical for recovery but non-critical for MVP
+    "discussion_adapter",  # Discussion handling is non-critical; does not block work-item progression
 }
 
 
@@ -298,6 +299,7 @@ class ProductionApplicationBootstrap:
                 # Non-critical slots use mocks (logged as warnings)
                 review_cycle="basic",
                 pr_review_cycle="basic",
+                discussion_adapter="github",
                 # Post-D9 cleanup item #2 migrated the three repair adapters
                 # to the new ICodingAgent contract; the production variants
                 # are wireable again via the resolver's
@@ -992,6 +994,13 @@ class ProductionApplicationBootstrap:
             )
             logger.debug("Applied best-effort resilience to execution tracker adapter")
 
+        # Discussion adapter (non-critical but benefits from resilience)
+        if self.adapters.discussion_adapter:
+            self.adapters.discussion_adapter = resilience_factory.create_resilient_discussion_adapter(
+                self.adapters.discussion_adapter
+            )
+            logger.debug("Applied resilience to discussion adapter")
+
         logger.info("Resilience decorators applied to critical adapters")
 
     # =========================================================================
@@ -1660,13 +1669,16 @@ class ProductionApplicationBootstrap:
         # reach the event bus and BoardColumnEventHandler above is never invoked, so a
         # column move (manual trigger or poll-detected) silently fails to kick the
         # pipeline. Simulation bootstrap wires this; production previously did not.
+        # Similarly, the discussion adapter emits CommentNeedsResponseEvent which must
+        # reach the event bus for ConversationalLoopOrchestrator to handle it.
         from codetoreum.infrastructure.event_bus_wiring import wire_adapters_to_event_bus
 
         wire_adapters_to_event_bus(
             event_bus=event_bus,
             board_service=self.adapters.board,
+            discussion_adapter=self.adapters.discussion_adapter,
         )
-        logger.info("Wired board adapter event emission to central event bus")
+        logger.info("Wired board and discussion adapter event emission to central event bus")
 
         # Register PipelineOrchestrator to coordinate lock and queue events
         # PipelineOrchestrator expects IPipelineQueue, but we have IPipelineQueueService
@@ -1687,7 +1699,7 @@ class ProductionApplicationBootstrap:
         app.state.pipeline_orchestrator = orchestrator
 
     def _register_conversational_loop_orchestrator(self) -> None:
-        """Register conversational loop orchestrator to handle column changes."""
+        """Register conversational loop orchestrator to handle column changes and comment events."""
         if not self.infrastructure:
             msg = "Infrastructure not initialised; cannot register CLO"
             raise RuntimeError(msg)
@@ -1703,6 +1715,13 @@ class ProductionApplicationBootstrap:
             self.conversational_loop_orchestrator.handle_column_change_event,
         )
         logger.info("Registered ConversationalLoopOrchestrator to WorkItemColumnChangedEvent")
+
+        # Subscribe CLO to CommentNeedsResponseEvent so inbound comments trigger responses
+        self.infrastructure.event_bus.subscribe(
+            "CommentNeedsResponseEvent",
+            self.conversational_loop_orchestrator.handle_comment_event,
+        )
+        logger.info("Registered ConversationalLoopOrchestrator to CommentNeedsResponseEvent")
 
     def _register_pr_review_cycle_handlers(self) -> None:
         """Register PR review cycle event handlers."""

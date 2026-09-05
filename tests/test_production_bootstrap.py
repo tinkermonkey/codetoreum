@@ -352,6 +352,7 @@ def test_non_critical_adapter_slots_defined() -> None:
         "repair_cycle",
         "ci_pipeline",
         "execution_tracker",  # Execution state tracking; non-critical for MVP
+        "discussion_adapter",  # Discussion handling is non-critical; does not block work-item progression
     }
 
     assert expected_non_critical == NON_CRITICAL_SLOTS
@@ -891,5 +892,139 @@ def test_ci_pipeline_in_non_critical_slots() -> None:
     assert "ci_pipeline" not in CRITICAL_ADAPTER_SLOTS, "ci_pipeline should not be on critical path"
     # Verify ci_pipeline is in non-critical slots
     assert "ci_pipeline" in NON_CRITICAL_SLOTS, "ci_pipeline should be in non-critical slots"
+
+
+@pytest.mark.asyncio
+async def test_conversational_loop_orchestrator_subscriptions_during_bootstrap() -> None:
+    """Verify that _register_conversational_loop_orchestrator registers both event subscriptions.
+
+    This integration test verifies that the bootstrap process correctly wires the
+    CommentNeedsResponseEvent and WorkItemColumnChangedEvent subscriptions by checking
+    that they are called with the correct parameters.
+
+    A deletion or typo in the production_bootstrap.py registration would be caught
+    by this test.
+    """
+    from unittest.mock import AsyncMock, MagicMock
+
+    from codetoreum.infrastructure.bootstrap import ProductionApplicationBootstrap
+
+    # Create a mock bootstrap instance
+    bootstrap = ProductionApplicationBootstrap()
+
+    # Create a mock event bus to capture subscriptions
+    mock_event_bus = MagicMock()
+
+    # Create a mock infrastructure with the event bus
+    bootstrap.infrastructure = MagicMock()
+    bootstrap.infrastructure.event_bus = mock_event_bus
+
+    # Create a mock conversational loop orchestrator
+    mock_orchestrator = MagicMock()
+    bootstrap.conversational_loop_orchestrator = mock_orchestrator
+
+    # Call the registration method (the actual method being tested)
+    bootstrap._register_conversational_loop_orchestrator()
+
+    # Verify that subscribe was called with the correct event types and handlers
+    mock_event_bus.subscribe.assert_any_call(
+        "WorkItemColumnChangedEvent",
+        mock_orchestrator.handle_column_change_event,
+    )
+    mock_event_bus.subscribe.assert_any_call(
+        "CommentNeedsResponseEvent",
+        mock_orchestrator.handle_comment_event,
+    )
+
+
+@pytest.mark.asyncio
+async def test_comment_needs_response_event_subscription_registered() -> None:
+    """Integration test: verify that _register_conversational_loop_orchestrator() wires subscriptions correctly.
+
+    This test ensures that the core feature of the conversational loop — inbound GitHub
+    comments triggering agent responses — is wired correctly when the bootstrap method runs.
+
+    Unlike the mock-based test above, this test:
+    1. Calls the real _register_conversational_loop_orchestrator() method
+    2. Verifies subscriptions actually land in a real event bus
+    3. Would fail if a typo or accidental deletion breaks the wiring
+
+    This is complementary to the mock-based test above: a deletion or typo in the
+    production_bootstrap.py method would be caught by this integration test verifying
+    the subscriptions actually reach the event bus.
+    """
+    from unittest.mock import AsyncMock, MagicMock
+
+    from codetoreum.application.conversational_loop_orchestrator import (
+        ConversationalLoopOrchestrator,
+    )
+    from codetoreum.infrastructure.bootstrap import ProductionApplicationBootstrap
+    from codetoreum.infrastructure.event_bus import EventBus
+
+    # Create event bus and minimal mock dependencies for ConversationalLoopOrchestrator
+    event_bus = EventBus()
+
+    # Create mocks for all ConversationalLoopOrchestrator dependencies
+    mock_discussion_adapter = MagicMock()
+    mock_coding_agent = MagicMock()
+    mock_prompt_builder = MagicMock()
+    mock_agent_repository = MagicMock()
+    mock_work_item_service = MagicMock()
+    mock_event_store = AsyncMock()
+    mock_event_emitter = MagicMock()
+
+    # Instantiate ConversationalLoopOrchestrator
+    orchestrator = ConversationalLoopOrchestrator(
+        discussion_adapter=mock_discussion_adapter,
+        coding_agent=mock_coding_agent,
+        prompt_builder=mock_prompt_builder,
+        agent_repository=mock_agent_repository,
+        work_item_service=mock_work_item_service,
+        event_store=mock_event_store,
+        event_emitter=mock_event_emitter,
+    )
+
+    # Create a bootstrap instance and wire the real components
+    bootstrap = ProductionApplicationBootstrap()
+    bootstrap.infrastructure = MagicMock()
+    bootstrap.infrastructure.event_bus = event_bus
+    bootstrap.conversational_loop_orchestrator = orchestrator
+
+    # Call the real registration method (this is what we're testing)
+    bootstrap._register_conversational_loop_orchestrator()
+
+    # === Verify CommentNeedsResponseEvent subscription ===
+    # This is the core feature: inbound comments must trigger agent responses
+    assert "CommentNeedsResponseEvent" in event_bus._callbacks, (
+        "CommentNeedsResponseEvent subscription must exist in event_bus._callbacks after calling "
+        "_register_conversational_loop_orchestrator(). A typo in the event type string or accidental "
+        "deletion of the subscription in the bootstrap method would break the conversational loop."
+    )
+
+    # Verify the subscription is connected to the correct handler
+    comment_callbacks = event_bus._callbacks["CommentNeedsResponseEvent"]
+    assert len(comment_callbacks) > 0, (
+        "CommentNeedsResponseEvent must have at least one callback registered"
+    )
+
+    # Verify the callback is orchestrator.handle_comment_event
+    assert orchestrator.handle_comment_event in comment_callbacks, (
+        "ConversationalLoopOrchestrator.handle_comment_event must be subscribed to CommentNeedsResponseEvent. "
+        "A change to the handler method name or event type in _register_conversational_loop_orchestrator() "
+        "would break the feature."
+    )
+
+    # === Verify WorkItemColumnChangedEvent subscription ===
+    # Also verify the related subscription for column changes
+    assert "WorkItemColumnChangedEvent" in event_bus._callbacks, (
+        "WorkItemColumnChangedEvent subscription must exist in event_bus._callbacks"
+    )
+    column_callbacks = event_bus._callbacks["WorkItemColumnChangedEvent"]
+    assert len(column_callbacks) > 0, (
+        "WorkItemColumnChangedEvent must have at least one callback registered"
+    )
+    assert orchestrator.handle_column_change_event in column_callbacks, (
+        "ConversationalLoopOrchestrator.handle_column_change_event must be subscribed to WorkItemColumnChangedEvent"
+    )
 
 

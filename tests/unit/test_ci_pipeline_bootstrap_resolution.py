@@ -76,13 +76,17 @@ class TestCIPipelineBootstrapResolution:
     """Tests for CI pipeline adapter resolution through bootstrap."""
 
     @pytest.mark.asyncio
-    async def test_adapter_resolver_resolves_github_ci_pipeline(self) -> None:
+    async def test_adapter_resolver_resolves_github_ci_pipeline(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Verify AdapterResolver.resolve_ci_pipeline() creates GitHubCIPipelineAdapter.
 
         This test validates Phase 1 resolution: when ci_pipeline="github",
         the resolver constructs a real GitHubCIPipelineAdapter with proper
         dependencies (ticket_adapter and graphql_client).
         """
+        # Set up required environment variables for GitHub adapters
+        monkeypatch.setenv("GITHUB_TOKEN", "test_token")
+        monkeypatch.setenv("GITHUB_ORG", "test_org")
+
         # Create test adapter config with github ci_pipeline
         adapter_config = AdapterSelectionConfig(
             ci_pipeline="github",
@@ -194,12 +198,16 @@ class TestCIPipelineBootstrapResolution:
         assert isinstance(ci_pipeline_adapter, MockCIPipelineAdapter)
 
     @pytest.mark.asyncio
-    async def test_resolve_all_places_ticket_before_ci_pipeline(self) -> None:
+    async def test_resolve_all_places_ticket_before_ci_pipeline(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Verify that resolve_all() resolves ticket before ci_pipeline.
 
         This validates the critical ordering fix: ci_pipeline (GitHub variant)
         depends on ticket_adapter, so ticket must be resolved first.
         """
+        # Set up required environment variables for GitHub adapters
+        monkeypatch.setenv("GITHUB_TOKEN", "test_token")
+        monkeypatch.setenv("GITHUB_ORG", "test_org")
+
         # Create test adapter config
         adapter_config = AdapterSelectionConfig(
             ci_pipeline="github",

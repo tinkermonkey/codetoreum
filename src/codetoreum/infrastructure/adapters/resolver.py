@@ -404,14 +404,77 @@ class AdapterResolver:
         )
 
     def resolve_discussion_adapter(self) -> IDiscussionAdapter:
-        """Resolve discussion adapter."""
-        # MockDiscussionAdapter requires identity_service dependency
-        identity_service = self._resolved.get("identity_service")
-        return self._factory.create_discussion_adapter(
+        """Resolve discussion adapter without resilience wrapping.
+
+        Resilience wrapping is applied in production_bootstrap Phase 4 so that
+        mock-detection can inspect the raw adapter class name before decoration.
+        """
+        if self._config.discussion_adapter == "github":
+            from codetoreum.adapters.secondary.github_discussion_adapter import (
+                GitHubDiscussionAdapter,
+                GitHubDiscussionConfig,
+            )
+            from codetoreum.infrastructure.http.github_graphql_client import (
+                GitHubGraphQLClient,
+                GitHubGraphQLConfig,
+            )
+            from codetoreum.ports.exceptions import ValidationError
+
+            if self._credentials is not None:
+                github_token = self._credentials.github_token
+            else:
+                github_token = os.environ.get("GITHUB_TOKEN", "")
+
+            github_org = os.environ.get("GITHUB_ORG", "")
+
+            required_keys = ["identity_service"]
+            missing = [k for k in required_keys if k not in self._resolved]
+            if missing:
+                raise AdapterConfigurationError(
+                    [
+                        f"resolve_discussion_adapter='{self._config.discussion_adapter}' requires {key} to be resolved first; "
+                        f"ensure resolve_all() dependency ordering is correct."
+                        for key in missing
+                    ]
+                )
+
+            try:
+                config = GitHubDiscussionConfig(
+                    token=github_token,
+                    organization=github_org,
+                    repository="",  # Per-project resolution via ticket_adapter
+                    graphql_client=GitHubGraphQLClient(GitHubGraphQLConfig(token=github_token)),
+                )
+            except ValidationError as e:
+                raise AdapterConfigurationError([f"resolve_discussion_adapter: {e}"]) from e
+
+            adapter = GitHubDiscussionAdapter(
+                config=config,
+                identity_service=self._resolved["identity_service"],
+                ticket_adapter=self._resolved.get("ticket"),
+            )
+
+            return adapter
+
+        # Mock branch: use factory with time_source
+        required_keys = ["identity_service"]
+        missing = [k for k in required_keys if k not in self._resolved]
+        if missing:
+            raise AdapterConfigurationError(
+                [
+                    f"resolve_discussion_adapter='{self._config.discussion_adapter}' requires {key} to be resolved first; "
+                    f"ensure resolve_all() dependency ordering is correct."
+                    for key in missing
+                ]
+            )
+
+        mock_adapter = self._factory.create_discussion_adapter(
             adapter_name=self._config.discussion_adapter,
-            identity_service=identity_service,
+            identity_service=self._resolved["identity_service"],
             time_source=lambda: self._deps.engine.get_clock_for_testing().now(),
         )
+
+        return mock_adapter
 
     def resolve_lock_service(self) -> IDistributedLock:
         """Resolve pipeline lock service adapter.
@@ -566,7 +629,6 @@ class AdapterResolver:
     # - resolve_work_item_service (line ~309)
     # - resolve_checkpoint_store (line ~290)
     # - resolve_repository (line ~515)
-    # - resolve_discussion_adapter (line ~270)
     # - resolve_queue_service (line ~283)
     # All currently unconditionally pass time_source, which will TypeError when
     # production adapters are registered for any slot if their constructors don't
