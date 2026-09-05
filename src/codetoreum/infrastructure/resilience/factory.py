@@ -6,6 +6,7 @@ Creates resilient adapters with appropriate components based on operation mode.
 from typing import Any
 
 from codetoreum.ports.output.container import IContainer
+from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
 from codetoreum.ports.output.repository import IRepository
 from codetoreum.ports.output.ticket_system import ITicketSystem
 from codetoreum.ports.output.version_control_service import IVersionControlService
@@ -20,6 +21,7 @@ from .config import (
 )
 from .decorators import (
     BestEffortExecutionTrackerDecorator,
+    ResilientDiscussionAdapterDecorator,
     ResilientTicketSystemDecorator,
 )
 from .mocks import MockCircuitBreaker, MockRateLimiter, MockRetryPolicy, MockTimeout
@@ -101,6 +103,69 @@ class ResilienceFactory:
             timeout = AsyncTimeout()
 
         return ResilientTicketSystemDecorator(
+            wrapped=adapter,
+            rate_limiter=rate_limiter,
+            circuit_breaker=circuit_breaker,
+            retry_policy=retry_policy,
+            timeout=timeout,
+            default_timeout_seconds=cfg.get("default_timeout", 30.0),
+        )
+
+    def create_resilient_discussion_adapter(
+        self, adapter: IDiscussionAdapter, service_config: dict[str, Any] | None = None
+    ) -> IDiscussionAdapter:
+        """
+        Create resilient discussion adapter.
+
+        Args:
+            adapter: Underlying discussion adapter (GitHub, etc.)
+            service_config: Service-specific configuration
+
+        Returns:
+            IDiscussionAdapter: Wrapped adapter with resilience
+        """
+        cfg = {**self.config, **(service_config or {})}
+
+        # Create components based on mode
+        if self.mode == OperationMode.PRODUCTION:
+            rate_limiter = TokenBucketRateLimiter(
+                max_requests=cfg.get(
+                    "max_requests",
+                    GITHUB_RESILIENCE_CONFIG.rate_limit.max_requests if GITHUB_RESILIENCE_CONFIG.rate_limit else 5000,
+                ),
+                window_seconds=cfg.get("window_seconds", 3600),
+                max_wait_seconds=cfg.get("max_wait_seconds", 60),
+            )
+
+            circuit_breaker = CircuitBreaker(
+                failure_threshold=cfg.get("failure_threshold", 5),
+                timeout_seconds=cfg.get("circuit_timeout_seconds", 60),
+                success_threshold=cfg.get("success_threshold", 2),
+            )
+
+            retry_policy = ExponentialBackoffRetry(
+                max_retries=cfg.get("max_retries", 3),
+                base_delay=cfg.get("base_delay", 1.0),
+                max_delay=cfg.get("max_delay", 60.0),
+            )
+
+            timeout = AsyncTimeout()
+
+        elif self.mode == OperationMode.SIMULATION:
+            # Mock components with no delays
+            rate_limiter = MockRateLimiter(enforce_limits=False)
+            circuit_breaker = MockCircuitBreaker()
+            retry_policy = MockRetryPolicy(simulate_retries=False)
+            timeout = MockTimeout(simulate_timeouts=False)
+
+        else:  # INTEGRATION_TEST
+            # Mock components but enforce limits for realistic testing
+            rate_limiter = MockRateLimiter(enforce_limits=True)
+            circuit_breaker = CircuitBreaker(failure_threshold=3, timeout_seconds=5)
+            retry_policy = MockRetryPolicy(simulate_retries=True, max_retries=2)
+            timeout = AsyncTimeout()
+
+        return ResilientDiscussionAdapterDecorator(
             wrapped=adapter,
             rate_limiter=rate_limiter,
             circuit_breaker=circuit_breaker,

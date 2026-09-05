@@ -996,12 +996,8 @@ class ProductionApplicationBootstrap:
 
         # Discussion adapter (non-critical but benefits from resilience)
         if self.adapters.discussion_adapter:
-            from codetoreum.infrastructure.resilience.decorators import (
-                ResilientDiscussionAdapterDecorator,
-            )
-
-            self.adapters.discussion_adapter = ResilientDiscussionAdapterDecorator(
-                wrapped=self.adapters.discussion_adapter
+            self.adapters.discussion_adapter = resilience_factory.create_resilient_discussion_adapter(
+                self.adapters.discussion_adapter
             )
             logger.debug("Applied resilience to discussion adapter")
 
