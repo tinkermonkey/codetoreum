@@ -36,7 +36,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -50,6 +50,7 @@ from codetoreum.application.conversational_loop_orchestrator import (
 from codetoreum.application.prompt_building import DefaultPromptBuilder
 from codetoreum.domain.agent_execution import AgentExecution
 from codetoreum.domain.coding_agent_types import InvocationMode
+from codetoreum.domain.conversational_session import ConversationalSessionState
 from codetoreum.domain.events.discussion_events import (
     Comment,
     CommentContext,
@@ -242,14 +243,32 @@ class TestConversationalLoopProductionE2E:
 
         # Step 4: Create ConversationalLoopOrchestrator and subscribe to event bus
         # (This is how the real production bootstrap registers it)
+        # Use AsyncMock for async dependencies to avoid "can't be used in 'await' expression"
+        session_state = ConversationalSessionState(
+            session_id=f"e2e-test-session-{int(datetime.now(UTC).timestamp() * 1000)}",
+            work_item_id=work_item_id,
+            project_id="e2e-test-project",
+            agent_assignment="e2e-conversational-agent",
+            column_name="Conversational Review",
+            llm_conversation_id=None,
+            last_processed_comment_id="",
+            last_interaction_timestamp=datetime.now(UTC).isoformat(),
+            status="active",
+        )
+
+        event_store_mock = AsyncMock()
+        # Mock get_latest_snapshot to return the session state (session already active)
+        event_store_mock.get_latest_snapshot = AsyncMock(return_value=session_state)
+        event_store_mock.append = AsyncMock()
+
         orchestrator = ConversationalLoopOrchestrator(
             discussion_adapter=discussion_adapter,
             coding_agent=mock_coding_agent,
             prompt_builder=DefaultPromptBuilder(),
-            agent_repository=MagicMock(),
-            work_item_service=MagicMock(),
-            event_store=MagicMock(),
-            event_emitter=MagicMock(),
+            agent_repository=AsyncMock(),
+            work_item_service=AsyncMock(),
+            event_store=event_store_mock,
+            event_emitter=AsyncMock(),
         )
 
         # Subscribe orchestrator to CommentNeedsResponseEvent on the event bus
@@ -289,7 +308,7 @@ class TestConversationalLoopProductionE2E:
         # Step 7: Publish event to event bus (CRITICAL: this validates subscription wiring)
         # This is the key difference from the original test which called
         # handle_comment_event directly without going through the event bus
-        event_bus.publish(event)
+        await event_bus.publish(event)
 
         # Give the event bus a moment to process the event
         await asyncio.sleep(0.2)

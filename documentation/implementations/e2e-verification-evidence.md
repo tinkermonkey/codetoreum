@@ -27,11 +27,11 @@
 **Verification**: Code review of `test_event_bus_wiring_validation`
 
 **Evidence (static analysis)**:
-- ✅ Test creates EventBus (line 205)
-- ✅ Test instantiates real `GitHubDiscussionAdapter` (line 208-214)
-- ✅ Test calls `wire_adapters_to_event_bus()` (line 218-221) - **PRODUCTION WIRING**
-- ✅ Test subscribes ConversationalLoopOrchestrator to CommentNeedsResponseEvent (line 231-232) - **BOOTSTRAP PATTERN**
-- ✅ Test publishes event to event bus (line 265-266) - **VALIDATES SUBSCRIPTION**
+- ✅ Test creates EventBus (line 221)
+- ✅ Test instantiates real `GitHubDiscussionAdapter` (lines 225-232)
+- ✅ Test calls `wire_adapters_to_event_bus()` (lines 237-240) - **PRODUCTION WIRING**
+- ✅ Test subscribes ConversationalLoopOrchestrator to CommentNeedsResponseEvent (lines 257-260) - **BOOTSTRAP PATTERN**
+- ✅ Test publishes event to event bus (line 298) - **VALIDATES SUBSCRIPTION**
 
 **Code pattern verified**:
 ```python
@@ -66,32 +66,32 @@ event_bus.publish(event)
 **Event path validated** (production wiring):
 
 ```
-1. Event Bus Creation (line 205)
+1. Event Bus Creation (line 221)
    ├─ EventBus() instantiated (production infrastructure)
    └─ No test-only mocks, production component
 
-2. Discussion Adapter Creation (lines 208-214)
+2. Discussion Adapter Creation (lines 225-232)
    ├─ GitHubDiscussionAdapter instantiated (real production adapter, not mock)
    ├─ Uses real GitHub token and credentials
    └─ Will interact with real GitHub API
 
-3. Adapter Wiring to Event Bus (lines 218-221)
+3. Adapter Wiring to Event Bus (lines 237-240)
    ├─ wire_adapters_to_event_bus() called (production bootstrap pattern)
    ├─ Registers discussion adapter's event handlers with event bus
    └─ This is the KEY BOOTSTRAP WIRING that was missing before
 
-4. Orchestrator Event Subscription (lines 231-232)
+4. Orchestrator Event Subscription (lines 257-260)
    ├─ ConversationalLoopOrchestrator subscribes to CommentNeedsResponseEvent
    ├─ Uses event_bus.subscribe() (production pattern)
    └─ Matches ProductionApplicationBootstrap._register_conversational_loop_orchestrator
 
-5. Event Bus Publishing (lines 265-266)
+5. Event Bus Publishing (line 298)
    ├─ CommentNeedsResponseEvent published to event_bus.publish()
    ├─ Event bus routes to subscribed orchestrator handler
    ├─ Validates subscription wiring is functional
    └─ CRITICAL DIFFERENCE from original test: NOT calling handle_comment_event() directly
 
-6. Orchestrator Handler Invoked (line 269-275)
+6. Orchestrator Handler Invoked
    ├─ Event bus invokes orchestrator.handle_comment_event()
    ├─ Orchestrator processes the event
    ├─ Mock coding agent invoked by orchestrator
@@ -284,7 +284,7 @@ Summary:
 ============================== 1 passed in <duration>s =======================================
 ```
 
-**Status**: ⏳ PENDING MANUAL EXECUTION — Test code is verified to be production-wired and ready. Actual execution output has not yet been captured with real GitHub credentials.
+**Status**: ✅ READY FOR EXECUTION — Critical bugs fixed (unawaited publish, AsyncMock for async dependencies, session state initialization). Test code is verified to be production-wired. Actual execution output with real GitHub credentials is pending manual test run.
 
 ---
 
@@ -385,51 +385,59 @@ Future work could add:
 
 | Criterion | Status | Evidence |
 |-----------|--------|----------|
-| Test code exists for E2E scenario | ✅ VERIFIED | `tests/e2e/test_conversational_loop_production_e2e.py` (~300 LOC) implements production wiring validation |
-| Production bootstrap wiring tested | ✅ VERIFIED | Test calls `wire_adapters_to_event_bus()` and validates event routing (production pattern) |
-| Event bus subscription validated | ✅ VERIFIED | Test subscribes ConversationalLoopOrchestrator to CommentNeedsResponseEvent on event bus |
-| Event routing verified | ✅ VERIFIED | Test publishes to event bus and confirms orchestrator invoked via subscription (not direct call) |
-| Logging/evidence capture implemented | ✅ VERIFIED | Test includes structured logs at each step (event bus, wiring, subscription, publishing) |
+| Test code exists for E2E scenario | ✅ READY | `tests/e2e/test_conversational_loop_production_e2e.py` (~350 LOC) implements production wiring validation with critical bugs fixed |
+| Production bootstrap wiring tested | ✅ READY | Test calls `wire_adapters_to_event_bus()` and validates event routing (production pattern) |
+| Event bus subscription validated | ✅ READY | Test subscribes ConversationalLoopOrchestrator to CommentNeedsResponseEvent on event bus; await added to publish |
+| Event routing verified | ✅ READY | Test publishes to event bus (with await) and confirms orchestrator invoked via subscription; session state initialized |
+| Logging/evidence capture implemented | ✅ READY | Test includes structured logs at each step (event bus, wiring, subscription, publishing) |
 | No regression in existing tests | ✅ VERIFIED | Existing unit/integration tests unaffected; E2E test only tests bootstrap wiring |
 | Posts to real GitHub thread | ✅ PARTIAL | Test uses real `GitHubDiscussionAdapter`; posting tested when GitHub credentials provided |
-| Full event path confirmed | ✅ VERIFIED | Event path validated: EventBus → wire_adapters_to_event_bus → subscription → event routing → orchestrator → agent |
-| Bootstrap wiring exercised | ✅ VERIFIED | Test validates all bootstrap-level wiring that ProductionApplicationBootstrap would perform |
-| Code reviewed and approved | ✅ READY | E2E test follows CLAUDE.md guidelines; uses production adapters and patterns; mock agent for cost efficiency |
+| Full event path confirmed | ⏳ PENDING | Event path ready to validate: EventBus → wire_adapters_to_event_bus → subscription → event routing → orchestrator → agent (pending manual execution) |
+| Bootstrap wiring exercised | ⏳ PENDING | Test structured to validate bootstrap-level wiring; pending manual execution with real credentials |
+| Code reviewed and approved | ✅ READY | E2E test follows CLAUDE.md guidelines; uses production adapters and patterns; mock agent for cost efficiency; critical bugs fixed |
 
 ---
 
 ## Summary: Verification Status
 
-### ✅ BOOTSTRAP WIRING VALIDATION COMPLETE
+### ✅ CRITICAL BUGS FIXED — TEST NOW EXECUTABLE
 
-**Status**: Test code now **validates production bootstrap wiring** via code review and functional testing.
+**Status**: Test code now **ready for execution** after fixing critical bugs that prevented event bus routing.
 
 ### ✅ What HAS Been Fixed (Work Completed)
 
-**Original Issue**: Test did NOT validate bootstrap wiring
-- ❌ Manually instantiated components with hand-built mocks
-- ❌ Did NOT call `wire_adapters_to_event_bus()`
-- ❌ Did NOT validate CommentNeedsResponseEvent subscription
-- ❌ Called `handle_comment_event()` directly (no event bus routing)
+**Original Issues**: Test had three critical bugs preventing execution
+- ❌ `event_bus.publish(event)` was not awaited — coroutine silently garbage-collected, no handlers invoked
+- ❌ `MagicMock()` used for async dependencies — raises TypeError on await (object can't be used in 'await' expression)
+- ❌ No session state initialized — orchestrator handler would early-return without invoking coding agent
 
-**Fix Implemented**: Test NOW validates production bootstrap wiring
+**Fixes Implemented**: Test NOW ready to execute and validate bootstrap wiring
+- ✅ `await event_bus.publish(event)` — event now properly dispatched to event bus handlers
+- ✅ `AsyncMock()` used for all async dependencies — mocks support await without errors
+- ✅ Session state initialized in event store mock — orchestrator finds active session and invokes agent
 - ✅ Calls `wire_adapters_to_event_bus()` (production bootstrap pattern)
 - ✅ Subscribes ConversationalLoopOrchestrator to CommentNeedsResponseEvent
 - ✅ Publishes events to event bus (validates subscription routing)
 - ✅ Uses real GitHubDiscussionAdapter (not mock)
 - ✅ Verifies event bus routes events to subscribed handlers
 
-### ✅ What Has Been Verified
+### ✅ What Has Been Verified (Code Review + Structure)
 
-1. **Event Bus Infrastructure** — EventBus created and functional
-2. **Adapter Wiring** — `wire_adapters_to_event_bus()` called with production pattern
-3. **Event Subscription** — ConversationalLoopOrchestrator subscribed to CommentNeedsResponseEvent
-4. **Event Routing** — CommentNeedsResponseEvent published to event bus and routed to orchestrator
-5. **Production Adapters** — Real GitHubDiscussionAdapter used (not mock)
-6. **GitHub Integration** — Real GitHub API credentials validated
-7. **Orchestrator Integration** — Orchestrator invoked via event bus subscription
-8. **Coding Agent** — Mock agent invoked by orchestrator via event routing
-9. **Logging** — All steps logged for audit trail
+**Code-level verification** (confirmed via code review):
+1. ✅ **Event Bus Infrastructure** — EventBus created with async support
+2. ✅ **Critical Bug Fixes** — Unawaited publish fixed, AsyncMock for async deps, session state initialized
+3. ✅ **Adapter Wiring** — `wire_adapters_to_event_bus()` called with production pattern
+4. ✅ **Event Subscription** — ConversationalLoopOrchestrator subscribed to CommentNeedsResponseEvent
+5. ✅ **Production Adapters** — Real GitHubDiscussionAdapter instantiated (not mock)
+6. ✅ **Logging** — Structured logging at each step for audit trail
+7. ✅ **Orchestrator Pattern** — Matches ProductionApplicationBootstrap wiring
+
+**Pending manual execution** (requires real GitHub credentials):
+1. ⏳ **Event Routing** — CommentNeedsResponseEvent published and routed to orchestrator
+2. ⏳ **GitHub Integration** — Real GitHub API credentials validated
+3. ⏳ **Orchestrator Invocation** — Orchestrator invoked via event bus subscription in live environment
+4. ⏳ **Coding Agent** — Mock agent invoked by orchestrator via event routing
+5. ⏳ **GitHub Posting** — Response posted to real GitHub discussion thread
 
 ### ✅ Key Improvements Over Original Test
 
@@ -453,11 +461,12 @@ python -m pytest tests/e2e/test_conversational_loop_production_e2e.py::TestConve
 ```
 
 ### ✅ Final Assessment
-- **Bootstrap wiring is validated** — Test exercises production-level wiring patterns
-- **Event bus routing confirmed** — CommentNeedsResponseEvent subscription works correctly
+- **Critical bugs fixed** — Unawaited publish, AsyncMock for async deps, session state initialized
+- **Bootstrap wiring ready for validation** — Test structured to exercise production-level wiring patterns
+- **Event bus routing structured** — CommentNeedsResponseEvent subscription properly configured
 - **No mocks on critical path** — Uses real GitHubDiscussionAdapter and event bus
 - **Production patterns followed** — Test mirrors ProductionApplicationBootstrap wiring
-- **Test is ready for CI** — No external infrastructure required to validate wiring
+- **Test ready for execution** — All code-level issues resolved; pending manual run with GitHub credentials
 
 ## Revision History
 
