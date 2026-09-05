@@ -1,0 +1,36 @@
+# Failure Recovery Scenario — Orchestrator: Simulation Settings
+#
+# Port/Interface: SimulationConfig (speed, clock, behaviour)
+# Adapter: SimulationClock, SimulationApplicationBootstrap
+
+name: "Failure Recovery Scenario"
+description: "Scenario for testing error handling and recovery mechanisms"
+version: "1.0"
+
+speed_multiplier: 10.0
+auto_advance: false
+
+metadata:
+  scenario_type: "chaos_testing"
+  author: "codetoreum-team"
+  failure_modes:
+    - "intermittent_failures"
+    - "timeouts"
+    - "permanent_failures"
+    - "recovery_scenarios"
+  tags:
+    - "failure"
+    - "recovery"
+    - "retry"
+    - "error-handling"
+    - "chaos"
+  notes: |
+    This scenario tests the system's resilience and error handling capabilities.
+    Agents are configured to simulate various failure modes:
+    - Flaky agent: 50% failure rate
+    - Recovery agent: Always succeeds
+
+    Expected outcomes:
+    - Most tasks should eventually succeed after retries
+    - One task should fail permanently
+    - All failures should be properly logged and handled

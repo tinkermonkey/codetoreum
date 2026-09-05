@@ -1,0 +1,14 @@
+# Failure Recovery Scenario — External: Projects
+#
+# Port/Interface: ITicketSystem, IVersionControlService
+# Adapter (sim): InMemoryTicketAdapter, InMemoryVersionControlAdapter
+# Skipped when using real adapters (project already exists in GitHub/Jira/etc.)
+
+projects:
+  - name: "failure-recovery-project"
+    description: "Project for testing failure scenarios and recovery"
+    repository_url: "https://github.com/demo-org/failure-recovery-project.git"
+    default_branch: "main"
+    metadata:
+      environment: "chaos_testing"
+      retry_policy: "aggressive"

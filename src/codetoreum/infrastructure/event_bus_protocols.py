@@ -1,0 +1,62 @@
+"""
+Protocol types for event bus adapter integration.
+
+These protocols define the interfaces that adapters must implement
+to work with the event bus wiring system.
+"""
+
+from collections.abc import Awaitable, Callable
+from typing import Any, Protocol
+
+
+class EventEmitter(Protocol):
+    """Protocol for objects that emit events to the event bus."""
+
+    def on(self, event_type: str, handler: Callable[[Any], Awaitable[None]]) -> None:
+        """Register an event handler for a specific event type."""
+        ...
+
+
+class IBoardService(EventEmitter, Protocol):
+    """Protocol for board service implementations."""
+
+    async def move_item_to_column(self, work_item_id: str, column_name: str, moved_by: str) -> None:
+        """Move a work item to a specific column."""
+        ...
+
+    async def add_item_to_column(self, work_item_id: str, column_name: str, moved_by: str) -> None:
+        """Add newly created work item to initial column."""
+        ...
+
+    async def get_item_position(self, work_item_id: str):
+        """Get the column and position of a work item."""
+        ...
+
+
+class IDiscussionAdapter(EventEmitter, Protocol):
+    """Protocol for discussion adapter implementations."""
+
+    def start_monitoring(self, work_item_id: str, config: Any) -> None:
+        """Start monitoring discussions for a work item."""
+        ...
+
+    def stop_monitoring(self, work_item_id: str) -> None:
+        """Stop monitoring discussions for a work item."""
+        ...
+
+
+class IDistributedLockEventEmitter(EventEmitter, Protocol):
+    """Protocol for distributed lock service implementations.
+
+    This protocol is used for event bus wiring purposes and only requires
+    the EventEmitter interface (on() method). The actual lock service methods
+    are not used by event bus wiring.
+    """
+
+
+class ICodeReviewService(EventEmitter, Protocol):
+    """Protocol for code review service implementations."""
+
+    async def get_review_status(self, work_item_id: str) -> str:
+        """Get the current review status of a work item."""
+        ...

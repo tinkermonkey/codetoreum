@@ -1,0 +1,33 @@
+business.businessactor.ai-agent:
+  id: e3cce486-eeb5-46f0-841f-d951523fc7c6
+  path: business.businessactor.ai-agent
+  spec_node_id: business.businessactor
+  type: businessactor
+  layer_id: business
+  name: AI Agent
+  description: Specialized AI agent that autonomously executes software
+    development tasks within isolated containers
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/agent.py
+        symbol: Agent
+  metadata:
+    created_at: 2026-05-08T11:09:43.197Z
+    updated_at: 2026-05-08T11:09:43.197Z
+    version: 1
+business.businessactor.developer:
+  id: 347eee0b-2e5d-445a-ac2c-0aa3edb616bd
+  path: business.businessactor.developer
+  spec_node_id: business.businessactor
+  type: businessactor
+  layer_id: business
+  name: Developer
+  description: Software developer who creates work items, reviews AI agent
+    outputs, and configures workflows
+  source_reference:
+    provenance: inferred
+  metadata:
+    created_at: 2026-05-08T11:09:45.842Z
+    updated_at: 2026-05-08T11:09:45.842Z
+    version: 1

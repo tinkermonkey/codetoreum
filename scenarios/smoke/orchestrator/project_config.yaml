@@ -1,0 +1,20 @@
+# Smoke Scenario — Orchestrator: Project Configuration
+#
+# Port/Interface: IConfigStore
+# Adapter (sim): InMemoryConfigStore
+#
+# IMPORTANT: `id` must match the project `name` so that CLI trigger payloads
+# (project_id="default-project") resolve to this entry in InMemoryConfigStore.
+# This aligns with SimulationDataSeeder.create_project() which uses name as id.
+
+project_configs:
+  - id: "default-project"
+    name: "default-project"
+    github_org: "demo-org"
+    github_repo: "default-project"
+    tech_stacks:
+      python: "3.11"
+    testing:
+      command: "pytest"
+      framework: "pytest"
+    environment_variables: {}

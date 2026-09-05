@@ -1,0 +1,123 @@
+version: 0.1.0
+schema: documentation-robotics-v1
+cli_version: 0.1.3
+spec_version: 0.8.4
+created: 2026-05-08T10:23:47.104Z
+updated: 2026-05-11T22:23:06.945Z
+project:
+  name: codetoreum
+  description: Adaptable code orchestration
+  version: 0.1.0
+documentation: .dr/README.md
+layers:
+  motivation:
+    order: 1
+    name: Motivation
+    path: documentation-robotics/model/01_motivation/
+    enabled: true
+    elements:
+      assessment: 2
+      constraint: 4
+      driver: 3
+      goal: 4
+      principle: 4
+      requirement: 3
+  business:
+    order: 2
+    name: Business
+    path: documentation-robotics/model/02_business/
+    enabled: true
+    elements:
+      businessactor: 2
+      businessfunction: 1
+      businessrole: 1
+      businessservice: 6
+  security:
+    order: 3
+    name: Security
+    path: documentation-robotics/model/03_security/
+    enabled: true
+    elements:
+      actor: 4
+      role: 4
+      securitypolicy: 6
+      threat: 4
+  application:
+    order: 4
+    name: Application
+    path: documentation-robotics/model/04_application/
+    enabled: true
+    elements:
+      applicationcomponent: 11
+      applicationfunction: 1
+      applicationinterface: 59
+      applicationservice: 22
+  technology:
+    order: 5
+    name: Technology
+    path: documentation-robotics/model/05_technology/
+    enabled: true
+    elements:
+      systemsoftware: 24
+  api:
+    order: 6
+    name: Api
+    path: documentation-robotics/model/06_api/
+    enabled: true
+    elements:
+      operation: 110
+  data-model:
+    order: 7
+    name: Data model
+    path: documentation-robotics/model/07_data-model/
+    enabled: true
+    elements:
+      objectschema: 50
+      schemadefinition: 25
+  data-store:
+    order: 8
+    name: Data store
+    path: documentation-robotics/model/08_data-store/
+    enabled: true
+    elements:
+      collection: 3
+      database: 9
+      namespace: 4
+  ux:
+    order: 9
+    name: Ux
+    path: documentation-robotics/model/09_ux/
+    enabled: true
+    elements:
+      librarycomponent: 5
+      view: 8
+  navigation:
+    order: 10
+    name: Navigation
+    path: documentation-robotics/model/10_navigation/
+    enabled: true
+    elements:
+      navigationflow: 1
+      route: 7
+  apm:
+    order: 11
+    name: Apm
+    path: documentation-robotics/model/11_apm/
+    enabled: true
+    elements:
+      dashboard: 2
+      instrumentationconfig: 1
+      logconfiguration: 1
+      metricinstrument: 6
+      span: 6
+      traceconfiguration: 1
+  testing:
+    order: 12
+    name: Testing
+    path: documentation-robotics/model/12_testing/
+    enabled: true
+    elements:
+      coveragerequirement: 2
+      testcasesketch: 28
+      testcoveragemodel: 15
+      testcoveragetarget: 42

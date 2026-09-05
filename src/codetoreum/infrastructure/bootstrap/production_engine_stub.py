@@ -1,0 +1,40 @@
+import logging
+from datetime import UTC, datetime
+
+from codetoreum.adapters.secondary.basic_pr_review_cycle_adapter import BasicPRReviewCycleAdapter
+from codetoreum.adapters.secondary.basic_review_cycle_adapter import BasicReviewCycleAdapter
+from codetoreum.adapters.testing import MockRepairCycleAdapter
+
+logger = logging.getLogger(__name__)
+
+
+class ProductionClockStub:
+    """Minimal clock returning system time."""
+
+    def now(self) -> datetime:
+        return datetime.now(UTC)
+
+    def advance(self, delta):
+        pass
+
+
+class ProductionEngineStub:
+    """Minimal engine stub for production bootstrap."""
+
+    def __init__(self):
+        self._clock = ProductionClockStub()
+
+    def get_clock_for_testing(self) -> ProductionClockStub:
+        return self._clock
+
+    def create_review_cycle_adapter(self, llm_adapter=None):
+        logger.debug("Creating BasicReviewCycleAdapter for production")
+        return BasicReviewCycleAdapter()
+
+    def create_pr_review_cycle_adapter(self):
+        logger.debug("Creating BasicPRReviewCycleAdapter for production")
+        return BasicPRReviewCycleAdapter()
+
+    def create_repair_cycle_adapter(self, checkpoint_store=None, container_adapter=None):
+        logger.debug("Creating MockRepairCycleAdapter for production (non-critical path)")
+        return MockRepairCycleAdapter(clock=None)

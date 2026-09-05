@@ -1,0 +1,926 @@
+testing.testcoveragetarget.simulation-config:
+  id: 1964573d-abe4-4080-ab98-5ba7be219c1b
+  path: testing.testcoveragetarget.simulation-config
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: SimulationConfig
+  description: "Configuration for simulation behavior with three factory modes:
+    create_fast_config (100x speed multiplier for tests),
+    create_realistic_config (1x speed for behavior testing),
+    create_high_fidelity_config; supports per-agent behavior config, container
+    command results, YAML file loading"
+  attributes:
+    targetType: integration-flow
+    priority: high
+  source_reference:
+    provenance: manual
+    locations:
+      - file: src/codetoreum/infrastructure/simulation/simulation_config.py
+        symbol: SimulationConfig
+  metadata:
+    created_at: 2026-05-08T12:17:04.681Z
+    updated_at: 2026-05-08T12:17:04.681Z
+    version: 1
+testing.testcoveragetarget.simulation-clock:
+  id: bfbc65d4-f1ad-4a3c-bf87-a8d8a05d97e6
+  path: testing.testcoveragetarget.simulation-clock
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: SimulationClock
+  description: Time control with configurable speed multipliers; supports
+    advance(delta), advance_to(time), schedule_callback, auto-advance loop, and
+    start_at for deterministic time-based testing; 10-100x faster than real
+    execution
+  attributes:
+    targetType: integration-flow
+    priority: high
+  source_reference:
+    provenance: manual
+    locations:
+      - file: src/codetoreum/infrastructure/simulation/simulation_clock.py
+        symbol: SimulationClock
+  metadata:
+    created_at: 2026-05-08T12:17:05.039Z
+    updated_at: 2026-05-08T12:17:05.039Z
+    version: 1
+testing.testcoveragetarget.mock-llmadapter:
+  id: 3b3afcb3-a2d9-4c2c-b3e6-e9dd9f721d74
+  path: testing.testcoveragetarget.mock-llmadapter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: MockLLMAdapter
+  description: Mock LLM provider adapter replacing ClaudeCodeAdapter; returns
+    deterministic responses via configurable patterns; used by all simulation
+    scenarios to avoid real LLM API calls
+  attributes:
+    targetType: integration-flow
+    priority: critical
+  source_reference:
+    provenance: manual
+    locations:
+      - file: src/codetoreum/adapters/testing/mock_llm_adapter.py
+        symbol: MockLLMAdapter
+  metadata:
+    created_at: 2026-05-08T12:17:12.577Z
+    updated_at: 2026-05-08T12:17:12.577Z
+    version: 1
+testing.testcoveragetarget.mock-board-adapter:
+  id: dd35228b-0e01-4be7-a75f-41b0f8649ca3
+  path: testing.testcoveragetarget.mock-board-adapter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: MockBoardAdapter
+  description: In-memory board adapter replacing GitHubBoardAdapter; supports
+    create_board, add_item_to_column sync helpers; requires current_project to
+    be set before most operations; used by workflow orchestration tests
+  attributes:
+    targetType: integration-flow
+    priority: critical
+  source_reference:
+    provenance: manual
+    locations:
+      - file: src/codetoreum/adapters/testing/mock_board_adapter.py
+        symbol: MockBoardAdapter
+  metadata:
+    created_at: 2026-05-08T12:17:12.930Z
+    updated_at: 2026-05-08T12:17:12.930Z
+    version: 1
+testing.testcoveragetarget.in-memory-event-store:
+  id: b6709235-0d87-4365-a737-1581bba886e7
+  path: testing.testcoveragetarget.in-memory-event-store
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: InMemoryEventStore
+  description: In-memory Redis-backed event store replacement; stores all domain
+    events for audit trail inspection; supports event replay and debugging in
+    simulation scenarios without Redis dependency
+  attributes:
+    targetType: integration-flow
+    priority: critical
+  source_reference:
+    provenance: manual
+    locations:
+      - file: src/codetoreum/adapters/testing/in_memory_event_store.py
+        symbol: InMemoryEventStore
+  metadata:
+    created_at: 2026-05-08T12:17:13.315Z
+    updated_at: 2026-05-08T12:17:13.315Z
+    version: 1
+testing.testcoveragetarget.fake-container-adapter:
+  id: 2639dd56-36d5-476d-bf6a-1d01d292304c
+  path: testing.testcoveragetarget.fake-container-adapter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: FakeContainerAdapter
+  description: Fake container adapter replacing DockerContainerAdapter; simulates
+    container lifecycle (create, start, exec, stop) without Docker daemon; used
+    to test ContainerRecoveryService and WorkspaceRouter
+  attributes:
+    targetType: integration-flow
+    priority: critical
+  source_reference:
+    provenance: manual
+    locations:
+      - file: src/codetoreum/adapters/testing/fake_container_adapter.py
+        symbol: FakeContainerAdapter
+  metadata:
+    created_at: 2026-05-08T12:17:19.748Z
+    updated_at: 2026-05-08T12:17:19.748Z
+    version: 1
+testing.testcoveragetarget.mock-review-cycle-adapter:
+  id: 62714fa8-bbc9-4ab5-a10b-c4eda1af87c0
+  path: testing.testcoveragetarget.mock-review-cycle-adapter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: MockReviewCycleAdapter
+  description: Mock adapter for review cycle port; simulates maker-checker review
+    process with configurable approval/rejection outcomes for ReviewService
+    integration tests
+  attributes:
+    targetType: integration-flow
+    priority: high
+  source_reference:
+    provenance: manual
+    locations:
+      - file: src/codetoreum/adapters/testing/mock_review_cycle_adapter.py
+        symbol: MockReviewCycleAdapter
+  metadata:
+    created_at: 2026-05-08T12:17:20.182Z
+    updated_at: 2026-05-08T12:17:20.182Z
+    version: 1
+testing.testcoveragetarget.mock-repair-cycle-adapter:
+  id: 78f58162-4c4c-4d80-a2ee-a9ddc375f582
+  path: testing.testcoveragetarget.mock-repair-cycle-adapter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: MockRepairCycleAdapter
+  description: Mock adapter for repair cycle port; simulates test-fix-validate
+    repair loops for ContainerRecoveryService and repair workflow scenario
+    testing
+  attributes:
+    targetType: integration-flow
+    priority: high
+  source_reference:
+    provenance: manual
+    locations:
+      - file: src/codetoreum/adapters/testing/mock_repair_cycle_adapter.py
+        symbol: MockRepairCycleAdapter
+  metadata:
+    created_at: 2026-05-08T12:17:20.714Z
+    updated_at: 2026-05-08T12:17:20.714Z
+    version: 1
+testing.testcoveragetarget.in-memory-metrics-adapter:
+  id: 98598cc7-5de7-437b-9922-1e65c015ff51
+  path: testing.testcoveragetarget.in-memory-metrics-adapter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: InMemoryMetricsAdapter
+  description: In-memory Prometheus metrics adapter; captures metric recordings
+    for assertion in simulation tests (assert_metric_recorded); replaces
+    Prometheus push gateway in test environments
+  attributes:
+    targetType: integration-flow
+    priority: high
+  source_reference:
+    provenance: manual
+    locations:
+      - file: src/codetoreum/adapters/testing/in_memory_metrics_adapter.py
+        symbol: InMemoryMetricsAdapter
+  metadata:
+    created_at: 2026-05-08T12:17:27.162Z
+    updated_at: 2026-05-08T12:17:27.162Z
+    version: 1
+testing.testcoveragetarget.in-memory-storage-adapter:
+  id: 63b03a3f-05b3-48e0-b6c4-0c8e5ad8b961
+  path: testing.testcoveragetarget.in-memory-storage-adapter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: InMemoryStorageAdapter
+  description: In-memory file storage adapter; simulates container workspace file
+    mounting (issue.txt, code/, previous_stage.txt contexts) without filesystem
+    access in tests
+  attributes:
+    targetType: integration-flow
+    priority: medium
+  source_reference:
+    provenance: manual
+    locations:
+      - file: src/codetoreum/adapters/testing/in_memory_storage_adapter.py
+        symbol: InMemoryStorageAdapter
+  metadata:
+    created_at: 2026-05-08T12:17:27.522Z
+    updated_at: 2026-05-08T12:17:27.522Z
+    version: 1
+testing.testcoveragetarget.mock-event-emitter:
+  id: 3fc5e334-c233-4f02-96ab-1a6d379c9a06
+  path: testing.testcoveragetarget.mock-event-emitter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: MockEventEmitter
+  description: Mock event emitter for testing event publication; captures emitted
+    domain events for inspection; used by board reconciliation and workflow
+    state change tests
+  attributes:
+    targetType: integration-flow
+    priority: high
+  source_reference:
+    provenance: manual
+    locations:
+      - file: src/codetoreum/adapters/testing/capturing_mock_event_emitter.py
+        symbol: CapturingMockEventEmitter
+  metadata:
+    created_at: 2026-05-08T12:17:27.885Z
+    updated_at: 2026-05-08T12:17:27.885Z
+    version: 1
+testing.testcoveragetarget.mock-agent-executor:
+  id: ea530506-7fa7-4838-acf0-cf508144706d
+  path: testing.testcoveragetarget.mock-agent-executor
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: MockAgentExecutor
+  description: Mock agent executor using set_completion_handler(callback,
+    board_id) pattern to wire completion callback after construction, avoiding
+    circular dependencies; simulates agent execution lifecycle for
+    ExecutionService tests
+  attributes:
+    targetType: integration-flow
+    priority: critical
+  source_reference:
+    provenance: manual
+    locations:
+      - file: src/codetoreum/adapters/testing/mock_agent_executor.py
+        symbol: MockAgentExecutor
+  metadata:
+    created_at: 2026-05-08T12:17:35.158Z
+    updated_at: 2026-05-08T12:17:35.158Z
+    version: 1
+testing.testcoveragetarget.mock-container-recovery-adapter:
+  id: 16c86929-892e-4533-bdbc-91ec75882de4
+  path: testing.testcoveragetarget.mock-container-recovery-adapter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: MockContainerRecoveryAdapter
+  description: Mock adapter for container recovery port; simulates container
+    failure and recovery sequences for ContainerRecoveryService scenario testing
+    (scenario 12)
+  attributes:
+    targetType: integration-flow
+    priority: high
+  source_reference:
+    provenance: manual
+    locations:
+      - file: src/codetoreum/adapters/testing/mock_container_recovery_adapter.py
+        symbol: MockContainerRecoveryAdapter
+  metadata:
+    created_at: 2026-05-08T12:17:35.520Z
+    updated_at: 2026-05-08T12:17:35.520Z
+    version: 1
+testing.testcoveragetarget.in-memory-code-review-adapter:
+  id: a610dda9-ef7c-4cc4-a5e2-5f8ffd973ec1
+  path: testing.testcoveragetarget.in-memory-code-review-adapter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: InMemoryCodeReviewAdapter
+  description: In-memory code review adapter replacing GitHubCodeReviewAdapter;
+    simulates PR creation, review submission, approval/rejection for
+    ReviewService and review cycle scenario tests
+  attributes:
+    targetType: integration-flow
+    priority: high
+  source_reference:
+    provenance: manual
+    locations:
+      - file: src/codetoreum/adapters/testing/in_memory_code_review_adapter.py
+        symbol: InMemoryCodeReviewAdapter
+  metadata:
+    created_at: 2026-05-08T12:17:35.921Z
+    updated_at: 2026-05-08T12:17:35.921Z
+    version: 1
+testing.testcoveragetarget.in-memory-ticket-adapter:
+  id: 5959fbd6-5036-4e19-9dc8-fec5577555b5
+  path: testing.testcoveragetarget.in-memory-ticket-adapter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: InMemoryTicketAdapter
+  description: In-memory GitHub ticket adapter; simulates issue creation, updates,
+    and comment operations for WorkItemService tests without GitHub API
+    dependency
+  attributes:
+    targetType: integration-flow
+    priority: high
+  source_reference:
+    provenance: manual
+    locations:
+      - file: src/codetoreum/adapters/testing/in_memory_ticket_adapter.py
+        symbol: InMemoryTicketAdapter
+  metadata:
+    created_at: 2026-05-08T12:17:41.976Z
+    updated_at: 2026-05-08T12:17:41.976Z
+    version: 1
+testing.testcoveragetarget.in-memory-version-control-service:
+  id: a8e1d52b-3c47-4a19-a338-10bfe6f28a9c
+  path: testing.testcoveragetarget.in-memory-version-control-service
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: InMemoryVersionControlService
+  description: In-memory version control adapter; simulates git clone, commit,
+    push operations that the orchestrator performs on behalf of containerized
+    agents (no git credentials in containers)
+  attributes:
+    targetType: integration-flow
+    priority: high
+  source_reference:
+    provenance: manual
+    locations:
+      - file: src/codetoreum/adapters/testing/in_memory_version_control_service.py
+        symbol: InMemoryVersionControlService
+  metadata:
+    created_at: 2026-05-08T12:17:42.361Z
+    updated_at: 2026-05-08T12:17:42.361Z
+    version: 1
+testing.testcoveragetarget.mock-prreview-cycle-adapter:
+  id: 8664747c-7bd7-45a1-af83-e6bb58a308a5
+  path: testing.testcoveragetarget.mock-prreview-cycle-adapter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: MockPRReviewCycleAdapter
+  description: Mock adapter for PR review cycle port; simulates pull request
+    review lifecycle including approval chains, rejection loops, and status
+    change events
+  attributes:
+    targetType: integration-flow
+    priority: high
+  source_reference:
+    provenance: manual
+    locations:
+      - file: src/codetoreum/adapters/testing/mock_pr_review_cycle_adapter.py
+        symbol: MockPRReviewCycleAdapter
+  metadata:
+    created_at: 2026-05-08T12:17:42.748Z
+    updated_at: 2026-05-08T12:17:42.748Z
+    version: 1
+testing.testcoveragetarget.in-memory-agent-repository:
+  id: 54c8509a-7643-4bc2-9b88-571d51d68fb3
+  path: testing.testcoveragetarget.in-memory-agent-repository
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: InMemoryAgentRepository
+  description: In-memory agent repository adapter; stores and retrieves Agent
+    domain objects without PostgreSQL dependency for application service
+    integration tests
+  attributes:
+    targetType: integration-flow
+    priority: medium
+  source_reference:
+    provenance: manual
+    locations:
+      - file: src/codetoreum/adapters/testing/in_memory_agent_repository.py
+        symbol: InMemoryAgentRepository
+  metadata:
+    created_at: 2026-05-08T12:17:48.748Z
+    updated_at: 2026-05-08T12:17:48.748Z
+    version: 1
+testing.testcoveragetarget.in-memory-config-store:
+  id: 028f2ece-f97b-423d-ade8-82b810db812c
+  path: testing.testcoveragetarget.in-memory-config-store
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: InMemoryConfigStore
+  description: In-memory configuration store replacing PostgreSQL-backed config;
+    holds project settings, workflow definitions, agent configurations, and
+    environment variables for simulation tests
+  attributes:
+    targetType: integration-flow
+    priority: high
+  source_reference:
+    provenance: manual
+    locations:
+      - file: src/codetoreum/adapters/testing/in_memory_config_store.py
+        symbol: InMemoryConfigStore
+  metadata:
+    created_at: 2026-05-08T12:17:49.137Z
+    updated_at: 2026-05-08T12:17:49.137Z
+    version: 1
+testing.testcoveragetarget.in-memory-queue-service:
+  id: 7df57967-e71e-45fa-813e-adcad360ccf7
+  path: testing.testcoveragetarget.in-memory-queue-service
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: InMemoryQueueService
+  description: In-memory queue service adapter; simulates pipeline lock queue
+    ordering for scenario 09 (queue_position_ordering) and concurrency tests
+  attributes:
+    targetType: integration-flow
+    priority: medium
+  source_reference:
+    provenance: manual
+    locations:
+      - file: src/codetoreum/adapters/testing/in_memory_queue_service.py
+        symbol: InMemoryQueueService
+  metadata:
+    created_at: 2026-05-08T12:17:49.521Z
+    updated_at: 2026-05-08T12:17:49.521Z
+    version: 1
+testing.testcoveragetarget.input-port-mock-adapters:
+  id: aba06115-914e-4bc1-9a39-13c035a0b720
+  path: testing.testcoveragetarget.input-port-mock-adapters
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: Input Port Mock Adapters
+  description: "19 mock implementations of all input port interfaces in
+    adapters/primary/input_port_adapters/mock/: agent command/query, audit
+    query, config command/query/service, execution command/query, logger,
+    metrics query, orchestration command, task query, workflow
+    command/definition-command/query/run-query, work item command/query,
+    workspace query; enable isolated input port testing without application
+    service wiring"
+  attributes:
+    targetType: integration-flow
+    priority: high
+  source_reference:
+    provenance: manual
+    locations:
+      - file: src/codetoreum/adapters/primary/input_port_adapters/mock/__init__.py
+  metadata:
+    created_at: 2026-05-08T12:18:14.769Z
+    updated_at: 2026-05-08T12:18:14.769Z
+    version: 1
+testing.testcoveragetarget.simulation-application-bootstrap:
+  id: 3b1f895a-7c05-4327-820a-8f78945317ad
+  path: testing.testcoveragetarget.simulation-application-bootstrap
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: SimulationApplicationBootstrap
+  description: Wires all 54 mock adapters, input port adapters, and
+    simulation-only routes; entry point for all simulation and test
+    environments; mounts SimulationWorkflowStateManager,
+    SimulationDecisionEvents, SimulationProjectsAPI routes
+  attributes:
+    targetType: integration-flow
+    priority: critical
+  source_reference:
+    provenance: manual
+    locations:
+      - file: src/codetoreum/infrastructure/simulation/bootstrap.py
+        symbol: SimulationApplicationBootstrap
+  metadata:
+    created_at: 2026-05-08T12:16:43.990Z
+    updated_at: 2026-05-08T12:16:43.990Z
+    version: 1
+testing.testcoveragetarget.simulation-runner:
+  id: b9caf181-f6c0-4a0f-ab27-7155de269517
+  path: testing.testcoveragetarget.simulation-runner
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: SimulationRunner
+  description: Orchestrates test scenarios with assertion helpers
+    (assert_event_occurred, assert_metric_recorded, assert_notification_sent,
+    assert_span_exists); provides advance_time/advance_to for time control;
+    captures domain events for inspection
+  attributes:
+    targetType: integration-flow
+    priority: critical
+  source_reference:
+    provenance: manual
+    locations:
+      - file: src/codetoreum/infrastructure/simulation/simulation_runner.py
+        symbol: SimulationRunner
+  metadata:
+    created_at: 2026-05-08T12:16:44.350Z
+    updated_at: 2026-05-08T12:16:44.350Z
+    version: 1
+testing.testcoveragetarget.mock-notifier-adapter:
+  id: e185ec50-851b-4db8-b125-fc95118286b2
+  path: testing.testcoveragetarget.mock-notifier-adapter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: MockNotifierAdapter
+  description: Mock notification adapter; captures sent notifications for
+    assert_notification_sent assertions in SimulationRunner; simulates Slack,
+    email, or webhook notification delivery
+  attributes:
+    targetType: integration-flow
+    priority: medium
+  source_reference:
+    provenance: manual
+    locations:
+      - file: src/codetoreum/adapters/testing/mock_notifier_adapter.py
+        symbol: MockNotifierAdapter
+  metadata:
+    created_at: 2026-05-08T12:17:57.558Z
+    updated_at: 2026-05-08T12:17:57.558Z
+    version: 1
+testing.testcoveragetarget.in-memory-workflow-config-service:
+  id: b7692cc3-6121-435b-af63-b04054d10b65
+  path: testing.testcoveragetarget.in-memory-workflow-config-service
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: InMemoryWorkflowConfigService
+  description: In-memory workflow configuration service; provides workflow
+    definition lookups, stage transition rules, and agent assignment configs
+    without database dependency
+  attributes:
+    targetType: integration-flow
+    priority: high
+  source_reference:
+    provenance: manual
+    locations:
+      - file: src/codetoreum/adapters/testing/in_memory_workflow_config_service.py
+        symbol: InMemoryWorkflowConfigService
+  metadata:
+    created_at: 2026-05-08T12:17:57.877Z
+    updated_at: 2026-05-08T12:17:57.877Z
+    version: 1
+testing.testcoveragetarget.mock-environment-repair-adapter:
+  id: a7abb71b-5958-4370-b9f6-fdd8a06e5dc3
+  path: testing.testcoveragetarget.mock-environment-repair-adapter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: MockEnvironmentRepairAdapter
+  description: "Mock adapter for environment repair port; simulates dev
+    environment repair scenarios (scenario: dev_environment_repair); used to
+    test automated remediation workflows"
+  attributes:
+    targetType: integration-flow
+    priority: medium
+  source_reference:
+    provenance: manual
+    locations:
+      - file: src/codetoreum/adapters/testing/mock_environment_repair_adapter.py
+        symbol: MockEnvironmentRepairAdapter
+  metadata:
+    created_at: 2026-05-08T12:17:58.209Z
+    updated_at: 2026-05-08T12:17:58.209Z
+    version: 1
+testing.testcoveragetarget.capturing-mock-event-emitter:
+  id: 3260d888-7b32-4a5d-854f-c84aca0b1b6e
+  path: testing.testcoveragetarget.capturing-mock-event-emitter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: CapturingMockEventEmitter
+  description: Mock event emitter that captures all emitted events for assertion
+    in integration tests. Extends the basic mock with an ordered event capture
+    list, enabling tests to verify which domain events were emitted and in what
+    sequence.
+  attributes:
+    targetType: integration-flow
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/testing/capturing_mock_event_emitter.py
+        symbol: CapturingMockEventEmitter
+  metadata:
+    created_at: 2026-05-09T09:25:31.135Z
+    updated_at: 2026-05-09T09:25:31.135Z
+    version: 1
+testing.testcoveragetarget.execution-service-agent-executor:
+  id: 9f15f386-0c00-482b-9436-57514564cbe4
+  path: testing.testcoveragetarget.execution-service-agent-executor
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: ExecutionServiceAgentExecutor
+  description: Mock agent executor wired directly to ExecutionService for
+    integration tests. Provides deterministic execution results and completion
+    callbacks without spawning real containers, enabling fast pipeline
+    integration testing.
+  attributes:
+    targetType: integration-flow
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/testing/execution_service_agent_executor.py
+        symbol: ExecutionServiceAgentExecutor
+  metadata:
+    created_at: 2026-05-09T09:25:37.577Z
+    updated_at: 2026-05-09T09:25:37.577Z
+    version: 1
+testing.testcoveragetarget.in-memory-active-workflow-run-registry:
+  id: f1af6241-0d0d-4f74-8ea7-65496470caa5
+  path: testing.testcoveragetarget.in-memory-active-workflow-run-registry
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: InMemoryActiveWorkflowRunRegistry
+  description: In-memory implementation of the active workflow run registry.
+    Tracks currently executing workflow runs without Redis, enabling fast
+    isolation of workflow state management in integration tests.
+  attributes:
+    targetType: integration-flow
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/testing/in_memory_active_workflow_run_registry.py
+        symbol: InMemoryActiveWorkflowRunRegistry
+  metadata:
+    created_at: 2026-05-09T09:25:37.940Z
+    updated_at: 2026-05-09T09:25:37.940Z
+    version: 1
+testing.testcoveragetarget.in-memory-checkpoint-store:
+  id: fc542d5e-7eaa-4fb3-bb22-ec418a96e3cb
+  path: testing.testcoveragetarget.in-memory-checkpoint-store
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: InMemoryCheckpointStore
+  description: In-memory implementation of the repair cycle checkpoint store.
+    Persists checkpoint data between repair iterations without a real database,
+    enabling deterministic repair cycle integration tests with checkpoint
+    verification.
+  attributes:
+    targetType: integration-flow
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/testing/in_memory_checkpoint_store.py
+        symbol: InMemoryCheckpointStore
+  metadata:
+    created_at: 2026-05-09T09:25:43.680Z
+    updated_at: 2026-05-09T09:25:43.680Z
+    version: 1
+testing.testcoveragetarget.in-memory-failed-event-store:
+  id: b70a6e10-2ead-4fa7-b1a1-3fe1f4df7bb2
+  path: testing.testcoveragetarget.in-memory-failed-event-store
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: InMemoryFailedEventStore
+  description: In-memory store for failed events that could not be processed.
+    Replaces the Redis-backed dead letter storage in tests, enabling
+    verification of dead letter queue behavior and failed event recovery
+    scenarios.
+  attributes:
+    targetType: integration-flow
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/testing/in_memory_failed_event_store.py
+        symbol: InMemoryFailedEventStore
+  metadata:
+    created_at: 2026-05-09T09:25:44.052Z
+    updated_at: 2026-05-09T09:25:44.052Z
+    version: 1
+testing.testcoveragetarget.in-memory-message-broker:
+  id: 997bb74f-2365-4328-9ab1-4ccd26e824e6
+  path: testing.testcoveragetarget.in-memory-message-broker
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: InMemoryMessageBroker
+  description: In-memory message broker for integration tests. Provides pub/sub
+    semantics without an external message queue (e.g. Redis Streams), enabling
+    testing of event-driven workflows in isolation.
+  attributes:
+    targetType: integration-flow
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/testing/in_memory_message_broker.py
+        symbol: InMemoryMessageBroker
+  metadata:
+    created_at: 2026-05-09T09:25:49.286Z
+    updated_at: 2026-05-09T09:25:49.286Z
+    version: 1
+testing.testcoveragetarget.in-memory-repository-adapter:
+  id: c7d579d2-813c-4bf7-be8e-b973f9e92114
+  path: testing.testcoveragetarget.in-memory-repository-adapter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: InMemoryRepositoryAdapter
+  description: In-memory repository adapter replacing the GitHub repository
+    adapter in tests. Provides deterministic version control operations (clone,
+    commit, push, branch) without network calls.
+  attributes:
+    targetType: integration-flow
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/testing/in_memory_repository_adapter.py
+        symbol: InMemoryRepositoryAdapter
+  metadata:
+    created_at: 2026-05-09T09:25:49.650Z
+    updated_at: 2026-05-09T09:25:49.650Z
+    version: 1
+testing.testcoveragetarget.in-memory-tracer:
+  id: 502a1488-7bd7-4689-af57-10a036db8481
+  path: testing.testcoveragetarget.in-memory-tracer
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: InMemoryTracer
+  description: In-memory OpenTelemetry tracer replacing the production Jaeger
+    exporter in tests. Captures all spans in memory for assertion, enabling
+    verification of distributed tracing instrumentation without a real tracing
+    backend.
+  attributes:
+    targetType: integration-flow
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/testing/in_memory_tracer.py
+        symbol: InMemoryTracer
+  metadata:
+    created_at: 2026-05-09T09:25:58.351Z
+    updated_at: 2026-05-09T09:25:58.351Z
+    version: 1
+testing.testcoveragetarget.in-memory-work-item-branch-tracker:
+  id: 57d0bf5d-465e-4e40-ad70-b278185e2cd7
+  path: testing.testcoveragetarget.in-memory-work-item-branch-tracker
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: InMemoryWorkItemBranchTracker
+  description: In-memory work item to branch mapping tracker. Replaces
+    Redis-backed branch tracking in tests, enabling verification of branch
+    assignment and resolution logic across work item lifecycle events.
+  attributes:
+    targetType: integration-flow
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/testing/in_memory_work_item_branch_tracker.py
+        symbol: InMemoryWorkItemBranchTracker
+  metadata:
+    created_at: 2026-05-09T09:25:58.758Z
+    updated_at: 2026-05-09T09:25:58.758Z
+    version: 1
+testing.testcoveragetarget.mock-branch-resolution-adapter:
+  id: f8217ba4-060c-4584-b2d6-e3453a0f92a8
+  path: testing.testcoveragetarget.mock-branch-resolution-adapter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: MockBranchResolutionAdapter
+  description: Mock branch resolution adapter for integration tests. Returns
+    configurable BranchResolution outcomes (exact_match, parent_issue, sibling,
+    fuzzy, new) enabling verification of branch selection logic across all
+    strategy paths.
+  attributes:
+    targetType: integration-flow
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/testing/mock_branch_resolution_adapter.py
+        symbol: MockBranchResolutionAdapter
+  metadata:
+    created_at: 2026-05-09T09:26:04.879Z
+    updated_at: 2026-05-09T09:26:04.879Z
+    version: 1
+testing.testcoveragetarget.mock-cipipeline-adapter:
+  id: 33b01215-c2ff-4bba-9880-f6dc6e39a3db
+  path: testing.testcoveragetarget.mock-cipipeline-adapter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: MockCIPipelineAdapter
+  description: Mock CI pipeline adapter for integration tests. Provides
+    configurable CIRunResult responses (pass/fail/skip per check), enabling
+    repair cycle and CI integration testing without triggering real CI
+    pipelines.
+  attributes:
+    targetType: integration-flow
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/testing/mock_ci_pipeline_adapter.py
+        symbol: MockCIPipelineAdapter
+  metadata:
+    created_at: 2026-05-09T09:26:05.258Z
+    updated_at: 2026-05-09T09:26:05.258Z
+    version: 1
+testing.testcoveragetarget.mock-discussion-adapter:
+  id: 1654dec4-d356-410a-919b-69467dacdcdb
+  path: testing.testcoveragetarget.mock-discussion-adapter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: MockDiscussionAdapter
+  description: Mock discussion adapter for integration tests. Simulates discussion
+    thread creation and comment operations (used in code review and PR feedback
+    flows) without real GitHub API calls.
+  attributes:
+    targetType: integration-flow
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/testing/mock_discussion_adapter.py
+        symbol: MockDiscussionAdapter
+  metadata:
+    created_at: 2026-05-09T09:26:10.525Z
+    updated_at: 2026-05-09T09:26:10.525Z
+    version: 1
+testing.testcoveragetarget.mock-project-manager-adapter:
+  id: 027d9112-7379-4c43-bd4e-3c96252a0001
+  path: testing.testcoveragetarget.mock-project-manager-adapter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: MockProjectManagerAdapter
+  description: Mock project manager adapter for integration tests. Provides
+    configurable project listing, configuration lookup, and project state
+    responses without database or configuration file access.
+  attributes:
+    targetType: integration-flow
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/testing/mock_project_manager_adapter.py
+        symbol: MockProjectManagerAdapter
+  metadata:
+    created_at: 2026-05-09T09:26:10.911Z
+    updated_at: 2026-05-09T09:26:10.911Z
+    version: 1
+testing.testcoveragetarget.mock-systemic-analysis-adapter:
+  id: d35fd821-ccd3-4768-9be2-2cec9afac5ed
+  path: testing.testcoveragetarget.mock-systemic-analysis-adapter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: MockSystemicAnalysisAdapter
+  description: Mock systemic analysis adapter for integration tests. Returns
+    configurable SystemicAnalysisResult with failure classifications and
+    recommended fix strategies, enabling repair cycle systemic analysis branch
+    testing without agent calls.
+  attributes:
+    targetType: integration-flow
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/testing/mock_systemic_analysis_adapter.py
+        symbol: MockSystemicAnalysisAdapter
+  metadata:
+    created_at: 2026-05-09T09:26:16.405Z
+    updated_at: 2026-05-09T09:26:16.405Z
+    version: 1
+testing.testcoveragetarget.mock-work-item-service:
+  id: c4c77558-f311-4ba0-9c27-5931d51c648f
+  path: testing.testcoveragetarget.mock-work-item-service
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: MockWorkItemService
+  description: Mock work item service for integration tests. Provides in-memory
+    work item CRUD, state transitions, and assignment operations without
+    database or ticket system access. Used in application service tests that
+    depend on work item state.
+  attributes:
+    targetType: integration-flow
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/testing/mock_work_item_service.py
+        symbol: MockWorkItemService
+  metadata:
+    created_at: 2026-05-09T09:26:16.792Z
+    updated_at: 2026-05-09T09:26:16.792Z
+    version: 1
+testing.testcoveragetarget.simple-encryption-adapter:
+  id: 2294376a-7ab9-43cf-8b1b-aaf8836ec857
+  path: testing.testcoveragetarget.simple-encryption-adapter
+  spec_node_id: testing.testcoveragetarget
+  type: testcoveragetarget
+  layer_id: testing
+  name: SimpleEncryptionAdapter
+  description: Simple reversible encryption adapter for integration tests.
+    Provides encrypt/decrypt operations with a deterministic algorithm (not
+    production-strength), enabling testing of encrypted data flows and secret
+    management paths without real key management infrastructure.
+  attributes:
+    targetType: integration-flow
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/testing/simple_encryption_adapter.py
+        symbol: SimpleEncryptionAdapter
+  metadata:
+    created_at: 2026-05-09T09:27:17.479Z
+    updated_at: 2026-05-09T09:27:17.479Z
+    version: 1

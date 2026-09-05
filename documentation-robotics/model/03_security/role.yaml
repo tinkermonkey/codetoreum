@@ -1,0 +1,97 @@
+security.role.admin:
+  id: 2d889ff9-cef0-4091-a4bb-b8d8b15f409a
+  path: security.role.admin
+  spec_node_id: security.role
+  type: role
+  layer_id: security
+  name: Admin
+  description: Full system access role. Holds all permissions including user
+    management, project CRUD, configuration updates, and workflow management.
+    Maps to UserRole.ADMIN in the domain model.
+  attributes:
+    displayName: Administrator
+    level: 100
+    inheritsFrom: developer
+    description: Full system access with all permissions
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/user.py
+        symbol: UserRole.ADMIN
+  metadata:
+    created_at: 2026-05-08T20:43:22.932Z
+    updated_at: 2026-05-08T20:43:22.932Z
+    version: 1
+security.role.developer:
+  id: 894a9fc2-0ddf-4850-932c-d439b5cb1f0a
+  path: security.role.developer
+  spec_node_id: security.role
+  type: role
+  layer_id: security
+  name: Developer
+  description: Can trigger workflows, view and cancel executions, manage projects
+    (create/view/update/delete), view and update configuration, and view/manage
+    work items. Maps to UserRole.DEVELOPER in the domain model.
+  attributes:
+    displayName: Developer
+    level: 50
+    inheritsFrom: viewer
+    description: Can trigger workflows, view executions, and manage projects
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/user.py
+        symbol: UserRole.DEVELOPER
+  metadata:
+    created_at: 2026-05-08T20:43:27.116Z
+    updated_at: 2026-05-08T20:43:27.116Z
+    version: 1
+security.role.viewer:
+  id: e7df263e-16af-457c-ab14-b40988181f74
+  path: security.role.viewer
+  spec_node_id: security.role
+  type: role
+  layer_id: security
+  name: Viewer
+  description: Read-only access role. Can view workflows, executions,
+    configuration, projects, users, and work items but cannot modify anything.
+    Maps to UserRole.VIEWER in the domain model.
+  attributes:
+    displayName: Viewer
+    level: 10
+    inheritsFrom: ""
+    description: Read-only access across all resources
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/user.py
+        symbol: UserRole.VIEWER
+  metadata:
+    created_at: 2026-05-08T20:43:30.757Z
+    updated_at: 2026-05-08T20:43:30.757Z
+    version: 1
+security.role.service-account:
+  id: 612c9fb7-7e7a-416f-9630-240414c1a843
+  path: security.role.service-account
+  spec_node_id: security.role
+  type: role
+  layer_id: security
+  name: Service Account
+  description: API access only role for programmatic integrations. Has workflow
+    view/create/cancel/retry, execution view/cancel, config view, project view,
+    and work item management permissions. Maps to UserRole.SERVICE_ACCOUNT in
+    the domain model.
+  attributes:
+    displayName: Service Account
+    level: 30
+    inheritsFrom: viewer
+    description: Programmatic API access for integrations and automation
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/user.py
+        symbol: UserRole.SERVICE_ACCOUNT
+  metadata:
+    created_at: 2026-05-08T20:43:34.700Z
+    updated_at: 2026-05-08T20:43:34.700Z
+    version: 1

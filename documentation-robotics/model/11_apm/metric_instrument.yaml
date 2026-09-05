@@ -1,0 +1,118 @@
+apm.metricinstrument.agent-execution-duration:
+  id: 2707a9e4-7803-4c0c-ba4b-be3b5a49983e
+  path: apm.metricinstrument.agent-execution-duration
+  spec_node_id: apm.metricinstrument
+  type: metricinstrument
+  layer_id: apm
+  name: Agent Execution Duration
+  description: Histogram tracking agent execution duration and latency for
+    pipeline performance monitoring
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/secondary/prometheus_metrics_adapter.py
+        symbol: PrometheusMetricsAdapter
+  metadata:
+    created_at: 2026-05-08T11:07:21.595Z
+    updated_at: 2026-05-08T11:07:21.595Z
+    version: 1
+apm.metricinstrument.repair-cycle-metrics:
+  id: 6f03f7d7-0c2e-494c-a7a0-8577cba48715
+  path: apm.metricinstrument.repair-cycle-metrics
+  spec_node_id: apm.metricinstrument
+  type: metricinstrument
+  layer_id: apm
+  name: Repair Cycle Metrics
+  description: Counter and histogram metrics for repair cycle attempts, successes,
+    and failures
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/secondary/prometheus_metrics_adapter.py
+        symbol: PrometheusMetricsAdapter
+  metadata:
+    created_at: 2026-05-08T11:07:22.972Z
+    updated_at: 2026-05-08T11:07:22.972Z
+    version: 1
+apm.metricinstrument.event-bus-stats:
+  id: a104d006-79a0-4c3b-94f7-e74abbfc7213
+  path: apm.metricinstrument.event-bus-stats
+  spec_node_id: apm.metricinstrument
+  type: metricinstrument
+  layer_id: apm
+  name: Event Bus Stats
+  description: Gauge and counter metrics for event bus throughput, handler errors,
+    and queue depth
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/infrastructure/observability/event_bus_instrumentation.py
+        symbol: InstrumentedEventBus
+  metadata:
+    created_at: 2026-05-08T11:07:26.499Z
+    updated_at: 2026-05-08T11:07:26.499Z
+    version: 1
+apm.metricinstrument.board-reconciliation-metrics:
+  id: 46b9e384-3fc8-45ff-bb12-f7b6bed75750
+  path: apm.metricinstrument.board-reconciliation-metrics
+  spec_node_id: apm.metricinstrument
+  type: metricinstrument
+  layer_id: apm
+  name: Board Reconciliation Metrics
+  description: Counter metrics for board reconciliation cycles, drift detections,
+    and sync operations
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/secondary/prometheus_metrics_adapter.py
+        symbol: PrometheusMetricsAdapter
+  metadata:
+    created_at: 2026-05-08T11:07:27.639Z
+    updated_at: 2026-05-08T11:07:27.639Z
+    version: 1
+apm.metricinstrument.circuit-breaker-state-metrics:
+  id: 0fbdd877-4ec7-4729-b5fb-ec2beaabe3b7
+  path: apm.metricinstrument.circuit-breaker-state-metrics
+  spec_node_id: apm.metricinstrument
+  type: metricinstrument
+  layer_id: apm
+  name: CircuitBreaker State Metrics
+  description: Metric instrument tracking circuit breaker state transitions
+    (CLOSED/OPEN/HALF_OPEN) and failure counts for external service calls.
+    Records total_calls, total_failures, total_successes, and current state per
+    service. Used for resilience observability and detecting cascading failures.
+  attributes:
+    type: ObservableGauge
+    unit: state
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/infrastructure/resilience/circuit_breaker.py
+        symbol: CircuitBreaker
+  metadata:
+    created_at: 2026-05-09T09:23:40.994Z
+    updated_at: 2026-05-09T09:23:40.994Z
+    version: 1
+apm.metricinstrument.performance-threshold-metrics:
+  id: 9a5924ee-4bcb-449e-ad91-144764a2ddf3
+  path: apm.metricinstrument.performance-threshold-metrics
+  spec_node_id: apm.metricinstrument
+  type: metricinstrument
+  layer_id: apm
+  name: Performance Threshold Metrics
+  description: Metric instrument for PerformanceThresholdMonitor tracking
+    violations of configured performance thresholds (duration, memory, CPU)
+    across repair cycle operations. Emits threshold violation counts per
+    operation type enabling SLO enforcement and alerting on regression.
+  attributes:
+    type: Counter
+    unit: violations
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/infrastructure/repair_cycle_profiling.py
+        symbol: PerformanceThresholdMonitor
+  metadata:
+    created_at: 2026-05-09T09:24:15.488Z
+    updated_at: 2026-05-09T09:24:15.488Z
+    version: 1

@@ -1,0 +1,16 @@
+# SDLC Pipeline Scenario — External: Board Structure
+#
+# Port/Interface: IBoardService
+# Adapter (sim): MockBoardAdapter
+# Skipped when using real adapters (board already exists in GitHub Projects/Linear/etc.)
+
+boards:
+  - board_id: "board-1"
+    board_name: "SDLC Board"
+    columns:
+      - "Backlog"
+      - "Ready"
+      - "In Progress"
+      - "Code Review"
+      - "Testing"
+      - "Done"

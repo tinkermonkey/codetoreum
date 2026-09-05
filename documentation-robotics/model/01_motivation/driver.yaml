@@ -1,0 +1,73 @@
+motivation.driver.reduce-developer-toil-on-repetitive-coding-tasks:
+  id: 15d16d8c-0743-4883-ac25-02dbec6284ed
+  path: motivation.driver.reduce-developer-toil-on-repetitive-coding-tasks
+  spec_node_id: motivation.driver
+  type: driver
+  layer_id: motivation
+  name: Reduce Developer Toil on Repetitive Coding Tasks
+  description: "Software developers spend significant time on repetitive,
+    automatable tasks: writing boilerplate, triaging issues, responding to
+    review comments, and running test-fix cycles. Automating these via
+    specialized AI agents frees developers for higher-value creative and design
+    work."
+  attributes:
+    category: operational
+    documentation: Primary motivation for the agent orchestration platform. Agents
+      handle issue triage, code generation, review responses, and repair cycles
+      autonomously.
+  source_reference:
+    provenance: manual
+    locations:
+      - file: CLAUDE.md
+  metadata:
+    created_at: 2026-05-08T20:44:53.496Z
+    updated_at: 2026-05-08T20:44:53.496Z
+    version: 1
+motivation.driver.accelerate-software-delivery-throughput:
+  id: 9f538c30-1d1e-4b57-8b71-8560a9d6aa0a
+  path: motivation.driver.accelerate-software-delivery-throughput
+  spec_node_id: motivation.driver
+  type: driver
+  layer_id: motivation
+  name: Accelerate Software Delivery Throughput
+  description: Engineering organizations face pressure to ship features faster
+    while maintaining quality. AI agent orchestration enables parallel execution
+    of coding, review, and repair workflows, compressing cycle times and
+    increasing throughput without proportional headcount growth.
+  attributes:
+    category: business
+    documentation: Drives the multi-agent parallel execution model, pipeline stage
+      design, and the full SDLC scenario (scenario 06) covering planning through
+      PR merge.
+  source_reference:
+    provenance: manual
+    locations:
+      - file: CLAUDE.md
+  metadata:
+    created_at: 2026-05-08T20:44:58.248Z
+    updated_at: 2026-05-08T20:44:58.248Z
+    version: 1
+motivation.driver.maintain-code-quality-through-automated-review-cycles:
+  id: ee039443-41af-4e0c-b488-dbdd60665adc
+  path: motivation.driver.maintain-code-quality-through-automated-review-cycles
+  spec_node_id: motivation.driver
+  type: driver
+  layer_id: motivation
+  name: Maintain Code Quality Through Automated Review Cycles
+  description: Automated review feedback and test-fix-validate repair loops
+    (maker-checker ReviewCycle pattern) ensure that AI-generated code meets
+    quality standards before human review, reducing the burden on human
+    reviewers and catching regressions earlier in the pipeline.
+  attributes:
+    category: operational
+    documentation: Drives the ReviewService, RepairCycleAdapter, and review cycle
+      scenarios (scenarios 03, 07). The ReviewCycle domain model implements
+      maker-checker with feedback loops.
+  source_reference:
+    provenance: manual
+    locations:
+      - file: CLAUDE.md
+  metadata:
+    created_at: 2026-05-08T20:45:02.887Z
+    updated_at: 2026-05-08T20:45:02.887Z
+    version: 1

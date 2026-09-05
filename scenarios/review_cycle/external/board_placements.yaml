@@ -1,0 +1,17 @@
+# Review Cycle Scenario — External: Board Item Placements
+#
+# Port/Interface: IBoardService
+# Adapter (sim): MockBoardAdapter
+# Skipped when using real adapters (items are already on the board)
+
+board_placements:
+  - work_item_title: "Implement user profile API"
+    column: "Backlog"
+  - work_item_title: "Add password reset functionality"
+    column: "Backlog"
+  - work_item_title: "Create data export utility"
+    column: "Backlog"
+  - work_item_title: "Optimize image upload pipeline"
+    column: "Backlog"
+  - work_item_title: "Refactor authentication middleware"
+    column: "Backlog"

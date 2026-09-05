@@ -1,0 +1,14 @@
+# Smoke Scenario — External: Projects
+#
+# Port/Interface: ITicketSystem, IVersionControlService
+# Adapter (sim): InMemoryTicketAdapter, InMemoryVersionControlAdapter
+# Skipped when using real adapters (project already exists in GitHub/Jira/etc.)
+
+projects:
+  - name: "default-project"
+    description: "Default test project"
+    repository_url: "https://github.com/demo-org/default-project.git"
+    default_branch: "main"
+    metadata:
+      environment: "test"
+      team: "qa"

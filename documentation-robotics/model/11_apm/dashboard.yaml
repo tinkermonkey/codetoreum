@@ -1,0 +1,36 @@
+apm.dashboard.system-health-dashboard:
+  id: d8b767a2-5566-4749-9e0d-e1eb38588423
+  path: apm.dashboard.system-health-dashboard
+  spec_node_id: apm.dashboard
+  type: dashboard
+  layer_id: apm
+  name: System Health Dashboard
+  description: Operational dashboard showing active agents, circuit breaker
+    states, API usage, and system status
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: frontend/src/components/system-status/SystemStatusHeader.tsx
+        symbol: SystemStatusHeader
+  metadata:
+    created_at: 2026-05-08T11:07:45.723Z
+    updated_at: 2026-05-08T11:07:45.723Z
+    version: 1
+apm.dashboard.pipeline-performance-dashboard:
+  id: 84d7c719-8d8d-4a97-a293-93dc33af4df8
+  path: apm.dashboard.pipeline-performance-dashboard
+  spec_node_id: apm.dashboard
+  type: dashboard
+  layer_id: apm
+  name: Pipeline Performance Dashboard
+  description: Dashboard for pipeline run metrics, execution timelines, and event
+    audit trails
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: frontend/src/pages/PipelineRunDetailsPage.tsx
+        symbol: PipelineRunDetailsPage
+  metadata:
+    created_at: 2026-05-08T11:07:46.897Z
+    updated_at: 2026-05-08T11:07:46.897Z
+    version: 1

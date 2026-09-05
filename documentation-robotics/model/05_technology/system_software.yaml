@@ -1,0 +1,406 @@
+technology.systemsoftware.python-311:
+  id: 49db50ec-b95a-4398-b59c-85c832f604be
+  path: technology.systemsoftware.python-311
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: Python 3.11
+  description: Primary runtime language and version for all application code
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: pyproject.toml
+        symbol: python
+  metadata:
+    created_at: 2026-05-08T11:06:03.869Z
+    updated_at: 2026-05-08T11:06:03.870Z
+    version: 1
+technology.systemsoftware.docker:
+  id: dbce604e-ca1f-466c-a731-609aab5ddc52
+  path: technology.systemsoftware.docker
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: Docker
+  description: Container runtime for agent isolation and deployment
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: Dockerfile.agent
+  metadata:
+    created_at: 2026-05-08T11:06:04.852Z
+    updated_at: 2026-05-08T11:06:04.852Z
+    version: 1
+technology.systemsoftware.fast-api:
+  id: 30c1d4a1-8a25-4ebf-82bf-d8eee41b9e4b
+  path: technology.systemsoftware.fast-api
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: FastAPI
+  description: Async REST API framework used for all HTTP endpoints and WebSocket support
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: pyproject.toml
+        symbol: fastapi
+  metadata:
+    created_at: 2026-05-08T11:06:07.968Z
+    updated_at: 2026-05-08T11:06:07.969Z
+    version: 1
+technology.systemsoftware.sqlalchemy:
+  id: 017f5ed3-00ed-4cda-8d54-873709accb9e
+  path: technology.systemsoftware.sqlalchemy
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: SQLAlchemy
+  description: ORM for PostgreSQL configuration database access
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: pyproject.toml
+        symbol: sqlalchemy
+  metadata:
+    created_at: 2026-05-08T11:06:08.847Z
+    updated_at: 2026-05-08T11:06:08.847Z
+    version: 1
+technology.systemsoftware.redis-client:
+  id: f68410f7-8217-4bfe-af28-8e7fbdd1db99
+  path: technology.systemsoftware.redis-client
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: Redis Client
+  description: Redis SDK for event store, pub/sub, and config cache
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: pyproject.toml
+        symbol: redis
+  metadata:
+    created_at: 2026-05-08T11:06:11.787Z
+    updated_at: 2026-05-08T11:06:11.788Z
+    version: 1
+technology.systemsoftware.elasticsearch-client:
+  id: 0e4d749a-347d-40bd-a23c-99a40d25c749
+  path: technology.systemsoftware.elasticsearch-client
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: Elasticsearch Client
+  description: Elasticsearch SDK for event store, config storage, and workflow config
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: pyproject.toml
+        symbol: elasticsearch
+  metadata:
+    created_at: 2026-05-08T11:06:12.720Z
+    updated_at: 2026-05-08T11:06:12.721Z
+    version: 1
+technology.systemsoftware.open-telemetry:
+  id: f607e273-2ed6-4594-9ab8-614e75066356
+  path: technology.systemsoftware.open-telemetry
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: OpenTelemetry
+  description: Distributed tracing SDK with OTLP exporter for Jaeger integration
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: pyproject.toml
+        symbol: opentelemetry-sdk
+  metadata:
+    created_at: 2026-05-08T11:06:15.590Z
+    updated_at: 2026-05-08T11:06:15.590Z
+    version: 1
+technology.systemsoftware.prometheus:
+  id: bc45f3fe-20e1-4d89-befd-6314358a246e
+  path: technology.systemsoftware.prometheus
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: Prometheus
+  description: Prometheus metrics library for application performance monitoring
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/secondary/prometheus_metrics_adapter.py
+        symbol: PrometheusMetricsAdapter
+  metadata:
+    created_at: 2026-05-08T11:06:17.046Z
+    updated_at: 2026-05-08T11:06:17.046Z
+    version: 1
+technology.systemsoftware.pytest:
+  id: c7766129-48f6-498f-8509-688092251713
+  path: technology.systemsoftware.pytest
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: pytest
+  description: Test runner for unit, integration, simulation, and e2e test suites
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: pyproject.toml
+        symbol: pytest
+  metadata:
+    created_at: 2026-05-08T11:06:20.316Z
+    updated_at: 2026-05-08T11:06:20.317Z
+    version: 1
+technology.systemsoftware.postgre-sql:
+  id: 61cc3314-fb38-44c7-8928-a907b0a9e05a
+  path: technology.systemsoftware.postgre-sql
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: PostgreSQL
+  description: Relational database for configuration, agent definitions, and
+    workflow storage
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: pyproject.toml
+        symbol: sqlalchemy
+  metadata:
+    created_at: 2026-05-08T11:06:21.117Z
+    updated_at: 2026-05-08T11:06:21.117Z
+    version: 1
+technology.systemsoftware.redis:
+  id: cedaea87-85a5-432b-8df5-048ecc470333
+  path: technology.systemsoftware.redis
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: Redis
+  description: In-memory data store used as event store, pub/sub broker, and
+    distributed cache
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/infrastructure/event_bus.py
+        symbol: EventBus
+  metadata:
+    created_at: 2026-05-08T11:06:24.716Z
+    updated_at: 2026-05-08T11:06:24.716Z
+    version: 1
+technology.systemsoftware.elasticsearch:
+  id: 3366d620-3d39-431f-9817-1e1254561d68
+  path: technology.systemsoftware.elasticsearch
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: Elasticsearch
+  description: Search and analytics engine used for event store and workflow
+    configuration storage
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/secondary/elasticsearch_event_store.py
+        symbol: ElasticsearchEventStore
+  metadata:
+    created_at: 2026-05-08T11:06:25.625Z
+    updated_at: 2026-05-08T11:06:25.625Z
+    version: 1
+technology.systemsoftware.react:
+  id: c9ec9861-a77b-456a-9d37-42016572708e
+  path: technology.systemsoftware.react
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: React
+  description: Frontend UI library (v18) for building the configuration dashboard
+    and workflow visualization
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: frontend/package.json
+  metadata:
+    created_at: 2026-05-08T20:43:34.751Z
+    updated_at: 2026-05-08T20:43:34.751Z
+    version: 1
+technology.systemsoftware.vite:
+  id: 98334b94-b50d-4501-bf77-b19ccfb0a189
+  path: technology.systemsoftware.vite
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: Vite
+  description: Frontend build tool and dev server for the React configuration dashboard
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: frontend/package.json
+  metadata:
+    created_at: 2026-05-08T20:43:35.110Z
+    updated_at: 2026-05-08T20:43:35.110Z
+    version: 1
+technology.systemsoftware.type-script:
+  id: 517f0e06-a81b-4939-a02d-2db65771fe9e
+  path: technology.systemsoftware.type-script
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: TypeScript
+  description: Statically-typed superset of JavaScript used for the entire frontend codebase
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: frontend/package.json
+  metadata:
+    created_at: 2026-05-08T20:43:35.507Z
+    updated_at: 2026-05-08T20:43:35.507Z
+    version: 1
+technology.systemsoftware.tailwind-css:
+  id: 526f2964-82bb-4a65-a59e-2b15337ba2e1
+  path: technology.systemsoftware.tailwind-css
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: TailwindCSS
+  description: Utility-first CSS framework used for styling the frontend dashboard
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: frontend/package.json
+  metadata:
+    created_at: 2026-05-08T20:43:35.903Z
+    updated_at: 2026-05-08T20:43:35.903Z
+    version: 1
+technology.systemsoftware.zustand:
+  id: 03fe38b2-0f63-4aa7-9644-a50daf02f1ad
+  path: technology.systemsoftware.zustand
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: Zustand
+  description: Lightweight client-side state management library for the
+    configuration dashboard
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: frontend/package.json
+  metadata:
+    created_at: 2026-05-08T20:43:36.275Z
+    updated_at: 2026-05-08T20:43:36.275Z
+    version: 1
+technology.systemsoftware.tan-stack-query:
+  id: 8015e3a9-f50f-4e82-b8a1-3f1fa594e290
+  path: technology.systemsoftware.tan-stack-query
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: TanStack Query
+  description: Async data-fetching and server state library (@tanstack/react-query
+    v5) for API calls in the frontend
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: frontend/package.json
+  metadata:
+    created_at: 2026-05-08T20:43:36.647Z
+    updated_at: 2026-05-08T20:43:36.647Z
+    version: 1
+technology.systemsoftware.xyflow:
+  id: 596f0173-bd5b-457a-8502-c1af9deea399
+  path: technology.systemsoftware.xyflow
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: XYFlow
+  description: React node-graph library (@xyflow/react v12) powering the
+    interactive workflow canvas
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: frontend/package.json
+  metadata:
+    created_at: 2026-05-08T20:43:37.025Z
+    updated_at: 2026-05-08T20:43:37.025Z
+    version: 1
+technology.systemsoftware.react-router:
+  id: d1e3af38-1788-4eba-801d-53d26f0087e1
+  path: technology.systemsoftware.react-router
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: React Router
+  description: Client-side routing library (react-router-dom v6) for frontend SPA
+    page navigation
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: frontend/package.json
+  metadata:
+    created_at: 2026-05-08T20:43:37.411Z
+    updated_at: 2026-05-08T20:43:37.411Z
+    version: 1
+technology.systemsoftware.git-hub:
+  id: 77026213-8c65-4f5a-aae0-10a36d8fcdc2
+  path: technology.systemsoftware.git-hub
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: GitHub
+  description: External platform providing ticket tracking, board management, code
+    review, and webhook events — integrated via 5 production secondary adapters
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/secondary/github_ticket_adapter.py
+  metadata:
+    created_at: 2026-05-08T20:43:48.041Z
+    updated_at: 2026-05-08T20:43:48.041Z
+    version: 1
+technology.systemsoftware.sig-noz:
+  id: 9197ff3c-d8b0-45c3-aabd-540eec864b36
+  path: technology.systemsoftware.sig-noz
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: SigNoz
+  description: OpenTelemetry-compatible observability backend (OTLP target) for
+    traces, metrics, and logs
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/infrastructure/observability/config.py
+        symbol: SignozConfig
+  metadata:
+    created_at: 2026-05-08T20:43:48.428Z
+    updated_at: 2026-05-08T20:43:48.428Z
+    version: 1
+technology.systemsoftware.git-hub-actions:
+  id: c238b661-6189-4776-b4e7-f4616ba65b50
+  path: technology.systemsoftware.git-hub-actions
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: GitHub Actions
+  description: CI/CD pipeline platform for automated testing and deployment workflows
+  source_reference:
+    provenance: manual
+    locations:
+      - file: .github
+  metadata:
+    created_at: 2026-05-08T20:43:48.820Z
+    updated_at: 2026-05-08T20:43:48.820Z
+    version: 1
+technology.systemsoftware.vitest:
+  id: 7bdf6c78-9eba-4b71-8fe4-1911138e1448
+  path: technology.systemsoftware.vitest
+  spec_node_id: technology.systemsoftware
+  type: systemsoftware
+  layer_id: technology
+  name: Vitest
+  description: Fast unit test framework for the frontend TypeScript codebase
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: frontend/package.json
+  metadata:
+    created_at: 2026-05-08T20:43:49.239Z
+    updated_at: 2026-05-08T20:43:49.239Z
+    version: 1

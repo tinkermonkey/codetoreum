@@ -1,0 +1,73 @@
+# Dev Environment Repair Scenario — Orchestrator: Board Column Policy
+#
+# Port/Interface: IWorkflowConfigService
+# Adapter (sim): InMemoryWorkflowConfigService
+#
+# Derived from Switchyard benchmark run db1dbf2a (context-studio #376, 2026-03-27).
+#
+# Board layout:
+#   Backlog (manual)
+#   → Ready (manual, PIPELINE TRIGGER — lock acquired here)
+#   → Development (automated, senior_software_engineer, on_failure → Backlog)
+#   → Code Review (automated, code_reviewer, on_failure → Development)
+#   → Testing (automated, qa_engineer, repair cycle, on_failure → Development)
+#   → Staged (manual, EXIT — lock released here)
+
+board_policies:
+  - board_id: "dev-board-1"
+    column_configs:
+      - name: "Backlog"
+        type: "manual"
+        is_pipeline_trigger: false
+        is_exit_column: false
+        auto_progress_on_completion: false
+
+      - name: "Ready"
+        type: "manual"
+        is_pipeline_trigger: true          # Lock acquired when item enters here
+        is_exit_column: false
+        auto_progress_on_completion: false
+        sla_seconds: 86400                 # 24h — don't stall in staging
+
+      - name: "Development"
+        type: "automated"
+        agent_id: "senior_software_engineer"
+        is_pipeline_trigger: false
+        is_exit_column: false
+        auto_progress_on_completion: true  # → Code Review on success
+        on_failure_column: "Backlog"
+        sla_seconds: 7200                  # 2h
+
+      - name: "Code Review"
+        type: "automated"
+        agent_id: "code_reviewer"
+        is_pipeline_trigger: false
+        is_exit_column: false
+        auto_progress_on_completion: true  # → Testing on approval
+        on_failure_column: "Development"   # Reviewer flags changes → back to dev
+        sla_seconds: 3600                  # 1h
+
+      - name: "Testing"
+        type: "automated"
+        agent_id: "qa_engineer"
+        is_pipeline_trigger: false
+        is_exit_column: false
+        auto_progress_on_completion: true  # → Staged after repair cycle success
+        on_failure_column: "Development"   # Unrecoverable failure → re-develop
+        sla_seconds: 5400                  # 1.5h (benchmark repair ran ~34 min)
+        sla_escalation_column: "Backlog"
+        # Repair cycle agent assignments — derived from Switchyard run db1dbf2a
+        # Each sub-task uses a specialist agent with the right tools and system prompt
+        repair_cycle_agents:
+          test_execution: "qa_engineer"              # runs tests, parses results
+          code_fix: "senior_software_engineer"       # fixes code-level failures
+          systemic_analysis: "senior_software_engineer"   # classifies root causes
+          systemic_fix: "senior_software_engineer"        # applies cross-cutting fixes
+          env_rebuild: "devops_engineer"             # rebuilds Docker environment
+          env_verification: "qa_engineer"            # verifies environment health
+
+      - name: "Staged"
+        type: "manual"
+        is_pipeline_trigger: false
+        is_exit_column: true               # Lock released when item enters here
+        auto_progress_on_completion: false

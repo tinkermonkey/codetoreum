@@ -1,0 +1,39 @@
+# Planning & Design Pipeline Scenario — Orchestrator: Workflow Definitions
+#
+# Port/Interface: IWorkflowConfigService (workflow domain model)
+# Adapter (sim): InMemoryConfigStore
+#
+# Stages: Research → Requirements → Design → Work Breakdown
+# All stages are discussion-based; no VCS operations at any stage.
+
+workflows:
+  - name: "planning-design-workflow"
+    description: "4-stage Planning & Design pipeline (discussion-only, no VCS)"
+    stages:
+      - name: "research"
+        agent_type: "idea_researcher"
+        description: "Deep domain research; produces initial_request.md"
+        order: 1
+        max_retries: 2
+        timeout_seconds: 600
+
+      - name: "requirements"
+        agent_type: "business_analyst"
+        description: "Structure and formalise requirements; produces business_analyst_output.md"
+        order: 2
+        max_retries: 2
+        timeout_seconds: 480
+
+      - name: "design"
+        agent_type: "software_architect"
+        description: "Technical architecture design; produces software_architect_output.md"
+        order: 3
+        max_retries: 2
+        timeout_seconds: 420
+
+      - name: "work-breakdown"
+        agent_type: "work_breakdown_agent"
+        description: "Decompose design into 5 child sub-issues; triggers graduation to In Development"
+        order: 4
+        max_retries: 1
+        timeout_seconds: 180

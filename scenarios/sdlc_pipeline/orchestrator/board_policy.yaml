@@ -1,0 +1,61 @@
+# SDLC Pipeline Scenario — Orchestrator: Board Column Policy
+#
+# Port/Interface: IWorkflowConfigService
+# Adapter (sim): InMemoryWorkflowConfigService
+#
+# Board layout:
+#   Backlog (manual) → Ready (manual, pipeline trigger)
+#   → In Progress (automated, senior_software_engineer)
+#   → Code Review (automated, code_reviewer)
+#   → Testing (automated, qa_engineer, SLA escalation → Backlog)
+#   → Done (exit)
+
+board_policies:
+  - board_id: "board-1"
+    column_configs:
+      - name: "Backlog"
+        type: "manual"
+        is_pipeline_trigger: false
+        is_exit_column: false
+        auto_progress_on_completion: false
+
+      - name: "Ready"
+        type: "manual"
+        is_pipeline_trigger: true
+        is_exit_column: false
+        auto_progress_on_completion: false
+        sla_seconds: 86400
+
+      - name: "In Progress"
+        type: "automated"
+        agent_id: "senior_software_engineer"
+        is_pipeline_trigger: false
+        is_exit_column: false
+        auto_progress_on_completion: true
+        on_failure_column: "Backlog"
+        sla_seconds: 7200
+
+      - name: "Code Review"
+        type: "automated"
+        agent_id: "code_reviewer"
+        is_pipeline_trigger: false
+        is_exit_column: false
+        auto_progress_on_completion: true
+        on_failure_column: "In Progress"
+        sla_seconds: 3600
+
+      - name: "Testing"
+        type: "automated"
+        agent_id: "qa_engineer"
+        is_pipeline_trigger: false
+        is_exit_column: false
+        auto_progress_on_completion: true
+        on_failure_column: "In Progress"
+        sla_seconds: 3600
+        sla_escalation_column: "Backlog"
+
+      - name: "Done"
+        type: "manual"
+        is_pipeline_trigger: false
+        is_exit_column: true
+        auto_progress_on_completion: false

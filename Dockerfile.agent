@@ -1,0 +1,182 @@
+# ============================================================================
+# Stage 1: Base Environment Setup
+# ============================================================================
+FROM switchyard-orchestrator:latest
+
+# Build argument for host docker group GID (required for non-root Docker socket access)
+# Linux: run `getent group docker | cut -d: -f3` to get the GID
+# macOS: use 0 (Docker group is root)
+ARG DOCKER_GID=984
+
+# The base image already includes:
+# - Claude CLI (REQUIRED - must be present)
+# - Git CLI (REQUIRED - must be present)
+# - GitHub CLI (REQUIRED - must be present)
+# - Python 3.11
+# - Essential build tools
+# - procps package (provides 'ps' command needed by Claude CLI)
+
+USER root
+
+# ============================================================================
+# Stage 2: Install Project-Specific Runtimes
+# ============================================================================
+# This is a Python-based project, so we don't need additional runtimes
+# The base image already provides Python 3.11
+
+# Install system packages needed for Python dependencies and integration tests.
+# - build-essential, libpq-dev: compilation of native Python extensions
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    && apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# ============================================================================
+# Stage 3: Pre-install Dependencies (OPTIONAL but RECOMMENDED)
+# ============================================================================
+# Pre-installing dependencies speeds up agent startup time because the agent
+# doesn't have to install them every time it runs.
+
+# WORKDIR should match where the orchestrator will mount the project
+WORKDIR /workspace
+
+# Poetry configuration: install into system Python, no per-project virtualenv.
+# In a container the container itself is the isolated environment, so a nested
+# venv adds no value and breaks `poetry run pytest` by creating a second Python.
+ENV POETRY_NO_INTERACTION=1 \
+    POETRY_VIRTUALENVS_CREATE=false \
+    POETRY_VIRTUALENVS_IN_PROJECT=false \
+    POETRY_CACHE_DIR=/tmp/poetry_cache
+
+# Copy ONLY the dependency manifests needed for installation
+# DO NOT copy source code - it comes from the runtime mount
+COPY requirements.txt* pyproject.toml poetry.lock* ./
+
+# Install Poetry so agents can use `poetry run pytest` (per CLAUDE.md)
+RUN pip install --no-cache-dir poetry
+
+# Install all project dependencies (runtime + dev) via poetry when lockfile exists;
+# fall back to requirements.txt otherwise.
+RUN if [ -f poetry.lock ]; then \
+    poetry install --no-root; \
+    elif [ -f requirements.txt ]; then \
+    pip install --no-cache-dir -r requirements.txt; \
+    fi
+
+# Install the codetoreum package in editable mode so that `import codetoreum`
+# works at runtime. We create a minimal package skeleton here; the real source
+# code is volume-mounted at runtime and the editable .pth link resolves to it.
+RUN mkdir -p src/codetoreum && \
+    touch src/codetoreum/__init__.py README.md && \
+    pip install --no-cache-dir --no-deps -e .
+
+# Install pre-commit so repair cycle agents can run `pre-commit run --all-files`.
+# The local hooks in .pre-commit-config.yaml use `language: system`, meaning they
+# rely on binaries already in PATH (ruff, black, mypy) — these come from the base image.
+RUN pip install --no-cache-dir pre-commit
+
+# ============================================================================
+# Stage 4: Ownership and Permissions
+# ============================================================================
+# Change ownership ONLY of what was installed, NOT source code
+# Source code ownership is handled by the mount
+
+# Python packages are installed as root in /usr/local, no chown needed
+
+# NOTE: Do NOT touch /home/orchestrator/.gitconfig here.
+# It is a runtime bind mount injected by the orchestrator — never create,
+# remove, or modify it during the image build.
+
+# ============================================================================
+# Stage 5: Configure Headless Environment
+# ============================================================================
+# Disable dbus-based secret storage for gh CLI. In a headless container there
+# is no session bus, so gh would fail or hang trying to reach gnome-keyring.
+# GH_NO_KEYRING tells gh to fall back to file-based token storage.
+ENV GH_NO_KEYRING=1
+# Prevent any tool from attempting a dbus session connection.
+ENV DBUS_SESSION_BUS_ADDRESS=disabled:
+
+# ============================================================================
+# GitHub Token Scope Requirements (Runtime)
+# ============================================================================
+# The orchestrator must provide GITHUB_TOKEN at container runtime with the
+# following scopes for full agent functionality:
+#
+# REQUIRED scopes for classic PATs:
+#   - repo           : Push commits, create branches, manage PRs
+#   - actions         : Query GitHub Actions CI status (gh run list/view)
+#
+# For fine-grained PATs, equivalent permissions are:
+#   - Contents       : Read and write
+#   - Pull requests  : Read and write
+#   - Actions        : Read-only (minimum for CI status verification)
+#
+# The entrypoint script validates token scopes at startup and warns if
+# 'actions' scope is missing. Without it, CI status queries will fail.
+# ============================================================================
+
+# ============================================================================
+# Stage 4b: Docker Group Access for Testcontainers
+# ============================================================================
+# Ensure the docker group exists with the correct host GID so the
+# orchestrator user can access /var/run/docker.sock at runtime.
+# The group may already exist (from the base image) with a different GID —
+# delete it first, then recreate with the host-matching GID.
+RUN if [ "${DOCKER_GID}" = "0" ]; then \
+        usermod -aG root orchestrator 2>/dev/null || true; \
+    else \
+        groupdel docker 2>/dev/null || true; \
+        groupadd -g ${DOCKER_GID} docker; \
+        usermod -aG docker orchestrator; \
+    fi
+
+# ============================================================================
+# Stage 6: Install Entrypoint Script
+# ============================================================================
+# The entrypoint validates git CLI, handles DinD mount issues, and authenticates GitHub CLI
+# at runtime. Handles both readable and writable .ssh/ mounts gracefully.
+COPY scripts/agent-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
+# ============================================================================
+# Stage 7: Switch to Runtime User
+# ============================================================================
+USER orchestrator
+
+# ============================================================================
+# Stage 8: Pre-seed gh CLI config to prevent multi-account migration
+# ============================================================================
+# gh CLI v2.40.0+ attempts a one-time config migration for multi-account
+# support. If stale hosts.yml with an expired token exists, the migration
+# fails with "cowardly refusing to continue with multi account migration"
+# and blocks ALL gh commands. Pre-seeding config.yml with version: "1"
+# tells gh the migration is already complete. The entrypoint script also
+# handles this at runtime as a defense-in-depth measure.
+# See: https://github.com/cli/cli/issues/8441
+RUN mkdir -p /home/orchestrator/.config/gh && \
+    printf 'version: "1"\n' > /home/orchestrator/.config/gh/config.yml && \
+    rm -f /home/orchestrator/.config/gh/hosts.yml
+
+# ============================================================================
+# Stage 9: Verification (MANDATORY)
+# ============================================================================
+# Verify all critical CLIs are present (from base image)
+RUN claude --version && \
+    git --version && \
+    gh --version && \
+    python3 --version && \
+    pip --version
+
+# Verify ruff and pre-commit are installed and accessible (required by pre-commit
+# hooks which use 'language: system' and expect these binaries in PATH)
+RUN ruff --version && \
+    pre-commit --version
+
+# ============================================================================
+# Default command
+# ============================================================================
+ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["/bin/bash"]

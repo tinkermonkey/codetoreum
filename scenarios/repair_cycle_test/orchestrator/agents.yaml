@@ -1,0 +1,20 @@
+# Agents for repair cycle test scenario
+
+agents:
+  - name: "qa_engineer"
+    agent_type: "testing"
+    description: "QA engineer for testing"
+    capabilities: ["testing"]
+    enabled: true
+
+  - name: "senior_software_engineer"
+    agent_type: "developer"
+    description: "Senior developer for fixes"
+    capabilities: ["code_generation", "code_review"]
+    enabled: true
+
+  - name: "devops_engineer"
+    agent_type: "infrastructure"
+    description: "DevOps engineer for environment"
+    capabilities: ["testing"]
+    enabled: true

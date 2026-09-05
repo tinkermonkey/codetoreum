@@ -1,0 +1,14 @@
+# Dev Environment Repair Scenario — External: Board Item Placements
+#
+# Port/Interface: IBoardService
+# Adapter (sim): MockBoardAdapter
+# Skipped when using real adapters (items are already on the board)
+#
+# Both items start in Backlog. The test harness (or simulation runner)
+# moves them to Ready to acquire the pipeline lock and start automation.
+
+board_placements:
+  - work_item_title: "Refactor persistence layer adapter reset"
+    column: "Backlog"
+  - work_item_title: "Add persistence layer integration tests"
+    column: "Backlog"

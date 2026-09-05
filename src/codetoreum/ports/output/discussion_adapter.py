@@ -1,0 +1,230 @@
+"""Discussion adapter port interface with event emission.
+
+This interface defines contracts for managing discussions/comments on work items,
+including posting comments, retrieving threads, and monitoring for new responses.
+
+Discussions are vendor-agnostic abstractions over GitHub issue comments, PR reviews,
+JIRA issue discussions, etc. Unlike other services, discussion monitoring is
+work-item-specific rather than project-wide, enabling granular subscription
+to discussion updates.
+"""
+
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Literal
+
+from codetoreum.domain.events import Comment
+
+from .event_emitter import IEventEmitter
+
+
+@dataclass(frozen=True)
+class DiscussionMonitoringConfig:
+    """Configuration for work-item-specific discussion monitoring.
+
+    Unlike project-wide monitoring (IMonitoredService), discussion monitoring
+    is work-item-specific, allowing selective subscription to specific issues.
+
+    This configuration focuses on discussion-specific concerns (what comments
+    have been processed) rather than workflow/board context (column, agent assignment).
+    Board context should be tracked separately in the orchestration layer.
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation.
+
+    Attributes:
+        project_id: Project containing the work item
+        last_processed_comment_id: Last comment ID already processed,
+                                  used to avoid reprocessing comments
+    """
+
+    project_id: str
+    last_processed_comment_id: str | None = None
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        if not isinstance(self.project_id, str) or not self.project_id:
+            msg = "project_id must be a non-empty string"
+            raise ValueError(msg)
+
+        if self.last_processed_comment_id is not None:
+            if not isinstance(self.last_processed_comment_id, str) or not self.last_processed_comment_id:
+                msg = "last_processed_comment_id must be a non-empty string or None"
+                raise ValueError(msg)
+
+
+@dataclass(frozen=True)
+class DiscussionThread:
+    """Represents a complete discussion thread on a work item.
+
+    All fields are validated at construction to ensure contract boundary integrity.
+    Frozen to prevent accidental mutation after creation. Comments are converted
+    to a tuple for true immutability.
+
+    Attributes:
+        id: Unique identifier for the thread
+        work_item_id: Work item this thread is on
+        comments: All comments in the thread (tuple for immutability)
+        thread_type: 'flat' for sequential comments, 'nested' for threaded replies
+    """
+
+    id: str
+    work_item_id: str
+    comments: tuple[Comment, ...]
+    thread_type: Literal["flat", "nested"]
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time."""
+        # Coerce list to tuple for comments
+        if isinstance(self.comments, list):
+            object.__setattr__(self, "comments", tuple(self.comments))
+
+        if not isinstance(self.id, str) or not self.id:
+            msg = "id must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.work_item_id, str) or not self.work_item_id:
+            msg = "work_item_id must be a non-empty string"
+            raise ValueError(msg)
+
+        if not isinstance(self.comments, tuple):
+            msg = "comments must be a list or tuple of Comment instances"
+            raise ValueError(msg)
+
+        if not all(isinstance(c, Comment) for c in self.comments):
+            msg = "all comments must be Comment instances"
+            raise ValueError(msg)
+
+        if self.thread_type not in ("flat", "nested"):
+            msg = f"thread_type must be 'flat' or 'nested', got: {self.thread_type}"
+            raise ValueError(msg)
+
+
+class IDiscussionAdapter(IEventEmitter, ABC):
+    """Discussion/comment management with event emission.
+
+    Provides vendor-agnostic abstraction for discussions on work items
+    (GitHub issue comments, PR reviews, JIRA comments, etc.). Unlike
+    other services, monitoring is work-item-specific, not project-wide.
+
+    This adapter enables:
+    1. Posting comments to work items
+    2. Retrieving discussion threads
+    3. Monitoring specific work items for new comments
+
+    Events emitted:
+        - 'comment.needs_response' → CommentNeedsResponseEvent
+                                     When a comment requires agent response
+        - 'comment.posted' → CommentPostedEvent
+                            When any comment is posted (monitoring active)
+
+    Example:
+        async with adapter as adp:
+            # Start monitoring a specific work item
+            config = DiscussionMonitoringConfig(
+                project_id="proj-123"
+            )
+            adp.start_monitoring("issue-789", config)
+
+            # Subscribe to new comments
+            adp.on("comment.needs_response", handle_comment)
+
+            # Query thread
+            thread = await adp.get_thread("issue-789")
+
+            # Post a response
+            comment = await adp.add_comment(
+                work_item_id="issue-789",
+                content="This looks good to me!"
+            )
+
+            # Stop monitoring when done
+            adp.stop_monitoring("issue-789")
+    """
+
+    # Query Operations
+
+    @abstractmethod
+    async def get_thread(self, work_item_id: str) -> DiscussionThread:
+        """Retrieve full discussion thread for a work item.
+
+        Returns all comments on the work item, including replies if applicable.
+
+        Args:
+            work_item_id: Work item to retrieve discussion for
+
+        Returns:
+            DiscussionThread: Complete thread with all comments
+
+        Raises:
+            ResourceNotFoundError: Work item doesn't exist or has no discussion
+            ExternalServiceError: Service communication failure
+        """
+
+    # Command Operations
+
+    @abstractmethod
+    async def add_comment(
+        self,
+        work_item_id: str,
+        content: str,
+        parent_id: str | None = None,
+    ) -> Comment:
+        """Post a comment to a work item.
+
+        Adds a comment to the work item's discussion thread. If parent_id is
+        provided and the system supports threading, creates a reply.
+
+        Args:
+            work_item_id: Work item to comment on
+            content: Comment text (supports markdown if platform supports it)
+            parent_id: Optional parent comment ID for threaded replies
+
+        Returns:
+            Comment: Newly posted comment with server-assigned ID and timestamp
+
+        Raises:
+            ResourceNotFoundError: Work item doesn't exist
+            ValidationError: Comment content is invalid or too long
+            ExternalServiceError: Service communication failure
+
+        Events:
+            Emits 'comment.posted' event with new comment
+        """
+
+    # Work-Item-Specific Monitoring
+
+    @abstractmethod
+    def start_monitoring(self, work_item_id: str, config: DiscussionMonitoringConfig) -> None:
+        """Start monitoring a specific work item for new comments.
+
+        Enables change detection for a particular work item's discussion thread.
+        When new comments are posted (especially those requiring response),
+        events are emitted.
+
+        This is work-item-specific monitoring, not project-wide. Use this
+        to subscribe to individual issues/items.
+
+        Args:
+            work_item_id: Work item to monitor for discussion updates
+            config: Monitoring configuration with context
+
+        Raises:
+            ValidationError: If work_item_id or config is invalid
+            ResourceNotFoundError: Work item doesn't exist
+            ExternalServiceError: If unable to start monitoring
+        """
+
+    @abstractmethod
+    def stop_monitoring(self, work_item_id: str) -> None:
+        """Stop monitoring a specific work item for new comments.
+
+        Disables change detection for the work item. After this call,
+        no events will be emitted for this item's discussion.
+
+        Args:
+            work_item_id: Work item to stop monitoring
+
+        Raises:
+            ValidationError: If work_item_id is invalid
+            ResourceNotFoundError: If not currently monitoring this item
+        """

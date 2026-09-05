@@ -1,0 +1,14 @@
+business.businessrole.orchestration-system-user:
+  id: 540e26a9-882a-40f3-861e-f3a9a91f87bf
+  path: business.businessrole.orchestration-system-user
+  spec_node_id: business.businessrole
+  type: businessrole
+  layer_id: business
+  name: Orchestration System User
+  description: Role for users and agents interacting with the workflow automation system
+  source_reference:
+    provenance: inferred
+  metadata:
+    created_at: 2026-05-08T11:14:04.945Z
+    updated_at: 2026-05-08T11:14:04.945Z
+    version: 1

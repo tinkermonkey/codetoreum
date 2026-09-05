@@ -1,0 +1,279 @@
+testing.testcoveragemodel.domain-model-unit-tests:
+  id: 195b3a05-28f8-40c5-b598-937f82468016
+  path: testing.testcoveragemodel.domain-model-unit-tests
+  spec_node_id: testing.testcoveragemodel
+  type: testcoveragemodel
+  layer_id: testing
+  name: Domain Model Unit Tests
+  description: Unit tests for core domain models including WorkItem, Agent,
+    Workflow, PipelineStage, and ReviewCycle
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: tests/unit/domain/test_work_item.py
+        symbol: test_work_item
+  metadata:
+    created_at: 2026-05-08T11:08:34.006Z
+    updated_at: 2026-05-08T11:08:34.006Z
+    version: 1
+testing.testcoveragemodel.application-service-unit-tests:
+  id: 287cad54-7e77-4dea-b8ba-1462e2059f8b
+  path: testing.testcoveragemodel.application-service-unit-tests
+  spec_node_id: testing.testcoveragemodel
+  type: testcoveragemodel
+  layer_id: testing
+  name: Application Service Unit Tests
+  description: Unit tests for application services including WorkflowOrchestrator,
+    ExecutionService, and AgentScheduler
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: tests/unit/application/test_agent_execution_recovery_service.py
+        symbol: test_agent_execution_recovery_service
+  metadata:
+    created_at: 2026-05-08T11:08:37.055Z
+    updated_at: 2026-05-08T11:08:37.055Z
+    version: 1
+testing.testcoveragemodel.adapter-unit-tests:
+  id: 8b9c5db4-9921-4c24-91e9-edca9a03b616
+  path: testing.testcoveragemodel.adapter-unit-tests
+  spec_node_id: testing.testcoveragemodel
+  type: testcoveragemodel
+  layer_id: testing
+  name: Adapter Unit Tests
+  description: Unit tests for secondary adapters including mock and in-memory
+    implementations
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: tests/unit/adapters/test_fake_container_adapter.py
+        symbol: test_fake_container_adapter
+  metadata:
+    created_at: 2026-05-08T11:08:38.440Z
+    updated_at: 2026-05-08T11:08:38.440Z
+    version: 1
+testing.testcoveragemodel.integration-tests:
+  id: b2b8bbd9-d365-4314-8995-b7c7905776cc
+  path: testing.testcoveragemodel.integration-tests
+  spec_node_id: testing.testcoveragemodel
+  type: testcoveragemodel
+  layer_id: testing
+  name: Integration Tests
+  description: Integration tests for adapter contracts, application service
+    integration, and event handler wiring
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: tests/integration/conftest.py
+        symbol: conftest
+  metadata:
+    created_at: 2026-05-08T11:08:43.109Z
+    updated_at: 2026-05-08T11:08:43.110Z
+    version: 1
+testing.testcoveragemodel.simulation-scenario-tests:
+  id: abc6978d-0832-4070-a2ce-e5ab6ffc215c
+  path: testing.testcoveragemodel.simulation-scenario-tests
+  spec_node_id: testing.testcoveragemodel
+  type: testcoveragemodel
+  layer_id: testing
+  name: Simulation Scenario Tests
+  description: Full end-to-end simulation tests using deterministic mock adapters
+    for workflow scenarios without external services
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: tests/simulation/test_execution_chain_e2e.py
+        symbol: test_execution_chain_e2e
+  metadata:
+    created_at: 2026-05-08T11:08:44.736Z
+    updated_at: 2026-05-08T11:08:44.736Z
+    version: 1
+testing.testcoveragemodel.board-automation-tests:
+  id: 774d7487-632c-41d2-9e64-ff1d537e6c97
+  path: testing.testcoveragemodel.board-automation-tests
+  spec_node_id: testing.testcoveragemodel
+  type: testcoveragemodel
+  layer_id: testing
+  name: Board Automation Tests
+  description: Simulation tests for board-driven workflow automation scenarios A,
+    B, C, and D
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: tests/simulation/test_board_automation_e2e.py
+        symbol: test_board_automation_e2e
+  metadata:
+    created_at: 2026-05-08T11:08:48.077Z
+    updated_at: 2026-05-08T11:08:48.077Z
+    version: 1
+testing.testcoveragemodel.observability-integration-tests:
+  id: fe8163ae-4636-4547-8276-165672aead8f
+  path: testing.testcoveragemodel.observability-integration-tests
+  spec_node_id: testing.testcoveragemodel
+  type: testcoveragemodel
+  layer_id: testing
+  name: Observability Integration Tests
+  description: Tests for trace propagation, OpenTelemetry instrumentation, and
+    structured logging across services
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: tests/integration/observability
+  metadata:
+    created_at: 2026-05-08T11:08:49.475Z
+    updated_at: 2026-05-08T11:08:49.475Z
+    version: 1
+testing.testcoveragemodel.multi-project-isolation-tests:
+  id: e2f21136-89d1-468e-9d08-d499dc9506a3
+  path: testing.testcoveragemodel.multi-project-isolation-tests
+  spec_node_id: testing.testcoveragemodel
+  type: testcoveragemodel
+  layer_id: testing
+  name: Multi-Project Isolation Tests
+  description: Integration tests verifying project isolation and cross-project
+    orchestration correctness
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: tests/integration/test_multi_project_isolation.py
+        symbol: test_multi_project_isolation
+  metadata:
+    created_at: 2026-05-08T11:08:54.824Z
+    updated_at: 2026-05-08T11:08:54.824Z
+    version: 1
+testing.testcoveragemodel.failure-recovery-tests:
+  id: 23d0cef9-12d7-4c29-94b5-ce8c57b8a411
+  path: testing.testcoveragemodel.failure-recovery-tests
+  spec_node_id: testing.testcoveragemodel
+  type: testcoveragemodel
+  layer_id: testing
+  name: Failure Recovery Tests
+  description: Simulation tests for container failure recovery and repair cycle
+    test-fix-validate loops
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: tests/simulation/test_failure_recovery_e2e.py
+        symbol: test_failure_recovery_e2e
+  metadata:
+    created_at: 2026-05-08T11:08:55.987Z
+    updated_at: 2026-05-08T11:08:55.987Z
+    version: 1
+testing.testcoveragemodel.rest-api-adapter-tests:
+  id: d829bf40-9bb8-4414-8485-be8c5bbfa402
+  path: testing.testcoveragemodel.rest-api-adapter-tests
+  spec_node_id: testing.testcoveragemodel
+  type: testcoveragemodel
+  layer_id: testing
+  name: REST API Adapter Tests
+  description: Integration tests for FastAPI REST adapter endpoints, auth
+    dependencies, and WebSocket connections
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: tests/integration/test_rest_api_adapter.py
+        symbol: test_rest_api_adapter
+  metadata:
+    created_at: 2026-05-08T11:08:59.405Z
+    updated_at: 2026-05-08T11:08:59.405Z
+    version: 1
+testing.testcoveragemodel.port-adapter-contract-tests:
+  id: 970120b7-a2c2-43f1-ae62-039661a56556
+  path: testing.testcoveragemodel.port-adapter-contract-tests
+  spec_node_id: testing.testcoveragemodel
+  type: testcoveragemodel
+  layer_id: testing
+  name: Port Adapter Contract Tests
+  description: Tests verifying all 54 mock and in-memory adapters conform to their
+    port interface contracts
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: tests/simulation/test_port_adapter_coverage.py
+        symbol: test_port_adapter_coverage
+  metadata:
+    created_at: 2026-05-08T11:09:01.236Z
+    updated_at: 2026-05-08T11:09:01.236Z
+    version: 1
+testing.testcoveragemodel.event-domain-unit-tests:
+  id: a5395f33-48cf-4ac3-96b2-65dd086592c6
+  path: testing.testcoveragemodel.event-domain-unit-tests
+  spec_node_id: testing.testcoveragemodel
+  type: testcoveragemodel
+  layer_id: testing
+  name: Event Domain Unit Tests
+  description: Unit tests for domain events covering serialization, immutability,
+    and event type correctness
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: tests/unit/domain/events
+  metadata:
+    created_at: 2026-05-08T11:09:04.039Z
+    updated_at: 2026-05-08T11:09:04.039Z
+    version: 1
+testing.testcoveragemodel.simulation-framework:
+  id: f4d89c33-d2b6-462c-9444-852426484b62
+  path: testing.testcoveragemodel.simulation-framework
+  spec_node_id: testing.testcoveragemodel
+  type: testcoveragemodel
+  layer_id: testing
+  name: Simulation Framework
+  description: Top-level test coverage model for the simulation-based end-to-end
+    testing framework; wires all mock adapters, controls time, orchestrates
+    scenarios, and provides assertion helpers without external service
+    dependencies
+  attributes:
+    version: "1.0"
+    application: codetoreum
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/README.md
+  metadata:
+    created_at: 2026-05-08T12:16:21.914Z
+    updated_at: 2026-05-08T12:16:21.914Z
+    version: 1
+testing.testcoveragemodel.domain-layer-unit-tests:
+  id: bfb1319c-e348-414f-88cd-93e734b653f0
+  path: testing.testcoveragemodel.domain-layer-unit-tests
+  spec_node_id: testing.testcoveragemodel
+  type: testcoveragemodel
+  layer_id: testing
+  name: Domain Layer Unit Tests
+  description: "Coverage model for domain layer: pure business logic (WorkItem,
+    Agent, AgentExecution, Workflow, PipelineStage, ReviewCycle), domain events
+    (151 CodetoreumEvent subclasses), and domain services; targets 100% code coverage"
+  attributes:
+    version: "1.0"
+    application: codetoreum
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/README.md
+  metadata:
+    created_at: 2026-05-08T12:16:27.948Z
+    updated_at: 2026-05-08T12:16:27.948Z
+    version: 1
+testing.testcoveragemodel.application-service-integration-tests:
+  id: 7d220892-20ba-4bee-8621-84e3b7a3707a
+  path: testing.testcoveragemodel.application-service-integration-tests
+  spec_node_id: testing.testcoveragemodel
+  type: testcoveragemodel
+  layer_id: testing
+  name: Application Service Integration Tests
+  description: Coverage model for 23 application services with mock adapters;
+    WorkflowOrchestrator, AgentScheduler, ExecutionService, ReviewService,
+    WorkspaceRouter, ConversationalLoopOrchestrator, ContainerRecoveryService,
+    MultiProjectOrchestrator, and event handlers; targets 90% code coverage
+  attributes:
+    version: "1.0"
+    application: codetoreum
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/README.md
+  metadata:
+    created_at: 2026-05-08T12:16:28.278Z
+    updated_at: 2026-05-08T12:16:28.278Z
+    version: 1

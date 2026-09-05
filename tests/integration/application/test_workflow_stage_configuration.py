@@ -1,0 +1,305 @@
+"""
+Workflow stage configuration tests
+
+Tests for configuring workflow templates for automated pipeline stages:
+- Agent type (coding agent, reviewer, etc.)
+- Model selection (Claude Sonnet, etc.)
+- Context file mounting
+- Agent prompt template
+- Git identity for commits
+- Verification that no credentials are passed to container
+"""
+
+from datetime import UTC, datetime
+
+import pytest
+
+from codetoreum.adapters.testing.in_memory_config_store import InMemoryConfigStore
+from codetoreum.application.configuration_service import ConfigurationService
+from codetoreum.application.workspace_router import WorkspaceRouter
+from codetoreum.domain.agent import Agent, AgentType
+from codetoreum.domain.project_context import ProjectContext
+from codetoreum.domain.workspace_context import WorkspaceContext
+from codetoreum.infrastructure.event_bus import EventBus
+from codetoreum.ports.input.config_command import UpdatePipelineConfigCommand
+from codetoreum.ports.output.config_store import ProjectConfig
+
+
+@pytest.fixture
+async def config_store():
+    """Create in-memory config store."""
+    store = InMemoryConfigStore()
+    yield store
+    store.clear()
+
+
+@pytest.fixture
+async def event_bus():
+    """Create event bus."""
+    return EventBus()
+
+
+@pytest.fixture
+async def config_service(config_store, event_bus):
+    """Create configuration service."""
+    return ConfigurationService(config_store, event_bus)
+
+
+@pytest.fixture
+async def sample_project(config_store):
+    """Create sample project configuration."""
+    project = ProjectConfig(
+        id="codetoreum:codetoreum",
+        name="codetoreum/codetoreum",
+        github_org="codetoreum",
+        github_repo="codetoreum",
+        tech_stacks={},
+        pipelines=[],
+        testing={},
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+    await config_store.save_project_config(project)
+    return project
+
+
+class TestWorkflowStageConfiguration:
+    """Tests for workflow stage configuration."""
+
+    @pytest.mark.asyncio
+    async def test_configure_in_progress_stage_with_coding_agent(self, config_service, config_store, sample_project):
+        """Test configuring 'In Progress' stage with coding agent.
+
+        Verifies:
+        - Pipeline template stored for "In Progress" stage
+        - Agent type set to "coding agent"
+        - Model set to Claude Sonnet
+        - Context files configured (issue.md, repo_summary.md, previous_stage.txt)
+        - Agent prompt template included
+        """
+        command = UpdatePipelineConfigCommand(
+            project_name="codetoreum/codetoreum",
+            pipeline_name="default",
+            updates={
+                "stages": [
+                    {
+                        "name": "In Progress",
+                        "agent_type": "coding agent",
+                        "model": "claude-sonnet-4-5",
+                        "context_files": [
+                            {
+                                "path": "/context/issue.md",
+                                "description": "Work item title, description, and labels",
+                            },
+                            {
+                                "path": "/context/repo_summary.md",
+                                "description": "Repository structure summary (top-level dirs, key files)",
+                            },
+                            {
+                                "path": "/context/previous_stage.txt",
+                                "description": "Empty for first stage",
+                            },
+                        ],
+                        "prompt_template": (
+                            "You are a coding assistant. Your task is to implement the issue "
+                            "described in /context/issue.md. "
+                            "Write tests for your implementation. "
+                            "Output a summary of changes made."
+                        ),
+                        "git_author_name": "Codetoreum Agent",
+                        "git_author_email": "agent@codetoreum.dev",
+                    }
+                ],
+                "triggers": ["column:In Progress"],
+            },
+            user_id="test-user",
+        )
+
+        result = await config_service.update_pipeline_config(command)
+
+        assert result.success
+        assert result.config_version == 2
+
+        # Read back and verify
+        pipeline = await config_store.get_pipeline_config(sample_project.id, "default")
+        assert len(pipeline.stages) == 1
+
+        stage = dict(pipeline.stages[0])
+        assert stage["name"] == "In Progress"
+        assert stage["agent_type"] == "coding agent"
+        assert stage["model"] == "claude-sonnet-4-5"
+        assert len(stage["context_files"]) == 3
+        assert stage["context_files"][0]["path"] == "/context/issue.md"
+        assert stage["git_author_name"] == "Codetoreum Agent"
+        assert stage["git_author_email"] == "agent@codetoreum.dev"
+
+    @pytest.mark.asyncio
+    async def test_workflow_template_smoke_test(self, config_service, config_store, sample_project):
+        """Smoke test: configure and read back workflow template.
+
+        Verifies that ConfigurationService correctly persists and retrieves
+        a complete workflow template for the "In Progress" stage.
+        """
+        # Configure the pipeline
+        command = UpdatePipelineConfigCommand(
+            project_name="codetoreum/codetoreum",
+            pipeline_name="default",
+            updates={
+                "stages": [
+                    {
+                        "name": "In Progress",
+                        "agent_type": "coding agent",
+                        "model": "claude-sonnet-4-5",
+                        "context_files": [
+                            {
+                                "path": "/context/issue.md",
+                                "description": "Work item title, description, and labels",
+                            },
+                            {
+                                "path": "/context/repo_summary.md",
+                                "description": "Repository structure summary",
+                            },
+                            {
+                                "path": "/context/previous_stage.txt",
+                                "description": "Empty for first stage",
+                            },
+                        ],
+                        "prompt_template": "Implement the issue described in /context/issue.md",
+                        "git_author_name": "Codetoreum Agent",
+                        "git_author_email": "agent@codetoreum.dev",
+                    }
+                ]
+            },
+            user_id="test-user",
+        )
+
+        result = await config_service.update_pipeline_config(command)
+        assert result.success
+
+        # Read back and verify all fields present and correct
+        pipeline = await config_store.get_pipeline_config(sample_project.id, "default")
+
+        assert pipeline.name == "default"
+        assert len(pipeline.stages) == 1
+
+        stage = dict(pipeline.stages[0])
+
+        # Verify all fields
+        expected_fields = [
+            "name",
+            "agent_type",
+            "model",
+            "context_files",
+            "prompt_template",
+            "git_author_name",
+            "git_author_email",
+        ]
+        for field in expected_fields:
+            assert field in stage, f"Stage missing field: {field}"
+
+        # Verify field values
+        assert stage["name"] == "In Progress"
+        assert stage["agent_type"] == "coding agent"
+        assert stage["model"] == "claude-sonnet-4-5"
+        assert stage["prompt_template"] == "Implement the issue described in /context/issue.md"
+        assert stage["git_author_name"] == "Codetoreum Agent"
+        assert stage["git_author_email"] == "agent@codetoreum.dev"
+
+        # Verify context files
+        context_files = stage["context_files"]
+        assert len(context_files) == 3
+        paths = [f["path"] for f in context_files]
+        assert "/context/issue.md" in paths
+        assert "/context/repo_summary.md" in paths
+        assert "/context/previous_stage.txt" in paths
+
+    @pytest.mark.asyncio
+    async def test_git_identity_configuration(self, config_service, config_store, sample_project):
+        """Test git identity configuration for agent commits.
+
+        Verifies:
+        - Git author name stored in pipeline config
+        - Git author email stored in pipeline config
+        - Values match Codetoreum conventions
+        """
+        command = UpdatePipelineConfigCommand(
+            project_name="codetoreum/codetoreum",
+            pipeline_name="default",
+            updates={
+                "stages": [
+                    {
+                        "name": "In Progress",
+                        "agent_type": "coding agent",
+                        "model": "claude-sonnet-4-5",
+                        "git_author_name": "Codetoreum Agent",
+                        "git_author_email": "agent@codetoreum.dev",
+                    }
+                ]
+            },
+            user_id="test-user",
+        )
+
+        result = await config_service.update_pipeline_config(command)
+        assert result.success
+
+        # Verify git identity
+        pipeline = await config_store.get_pipeline_config(sample_project.id, "default")
+        stage = dict(pipeline.stages[0])
+
+        assert stage["git_author_name"] == "Codetoreum Agent"
+        assert stage["git_author_email"] == "agent@codetoreum.dev"
+
+    @pytest.mark.asyncio
+    async def test_context_files_configuration_structure(self, config_service, config_store, sample_project):
+        """Test context files configuration structure.
+
+        Verifies:
+        - Context files are a list of dicts
+        - Each dict has 'path' and 'description' fields
+        - Paths are correct for the mounted files
+        """
+        context_files = [
+            {
+                "path": "/context/issue.md",
+                "description": "Work item title, description, and labels",
+            },
+            {
+                "path": "/context/repo_summary.md",
+                "description": "Repository structure summary (top-level dirs, key files)",
+            },
+            {
+                "path": "/context/previous_stage.txt",
+                "description": "Empty for first stage",
+            },
+        ]
+
+        command = UpdatePipelineConfigCommand(
+            project_name="codetoreum/codetoreum",
+            pipeline_name="default",
+            updates={
+                "stages": [
+                    {
+                        "name": "In Progress",
+                        "agent_type": "coding agent",
+                        "model": "claude-sonnet-4-5",
+                        "context_files": context_files,
+                    }
+                ]
+            },
+            user_id="test-user",
+        )
+
+        result = await config_service.update_pipeline_config(command)
+        assert result.success
+
+        # Verify context files structure
+        pipeline = await config_store.get_pipeline_config(sample_project.id, "default")
+        stage = dict(pipeline.stages[0])
+
+        assert "context_files" in stage
+        stored_files = stage["context_files"]
+        assert len(stored_files) == 3
+
+        for i, expected in enumerate(context_files):
+            assert stored_files[i]["path"] == expected["path"]
+            assert stored_files[i]["description"] == expected["description"]

@@ -1,0 +1,2066 @@
+- type: add
+  elementId: application.applicationinterface.iagent-command-port
+  layerName: application
+  after:
+    id: 0d552305-c6b7-485d-b6b8-545e403ae689
+    path: application.applicationinterface.iagent-command-port
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IAgentCommandPort
+    description: Input port for agent command operations including registering,
+      updating, and deactivating AI agents
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/input/agent_command.py
+          symbol: IAgentCommandPort
+    metadata:
+      created_at: 2026-05-08T12:07:57.614Z
+      updated_at: 2026-05-08T12:07:57.614Z
+      version: 1
+  timestamp: 2026-05-08T12:07:57.634Z
+  sequenceNumber: 0
+- type: add
+  elementId: application.applicationinterface.iagent-query-port
+  layerName: application
+  after:
+    id: a0a14fa5-2031-483d-abe3-d10f380ef748
+    path: application.applicationinterface.iagent-query-port
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IAgentQueryPort
+    description: Input port for agent query operations including retrieving agent
+      details and capabilities
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/input/agent_query.py
+          symbol: IAgentQueryPort
+    metadata:
+      created_at: 2026-05-08T12:07:57.949Z
+      updated_at: 2026-05-08T12:07:57.949Z
+      version: 1
+  timestamp: 2026-05-08T12:07:57.971Z
+  sequenceNumber: 1
+- type: add
+  elementId: application.applicationinterface.iaudit-query-port
+  layerName: application
+  after:
+    id: 7f17377b-a65e-4abb-a04c-11e3cedcc2d6
+    path: application.applicationinterface.iaudit-query-port
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IAuditQueryPort
+    description: Input port for querying audit events and accessing the audit trail
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/input/audit_query.py
+          symbol: IAuditQueryPort
+    metadata:
+      created_at: 2026-05-08T12:07:58.287Z
+      updated_at: 2026-05-08T12:07:58.287Z
+      version: 1
+  timestamp: 2026-05-08T12:07:58.309Z
+  sequenceNumber: 2
+- type: add
+  elementId: application.applicationinterface.iauthentication-port
+  layerName: application
+  after:
+    id: 8539604d-000f-4cef-a285-d55dc4a517f5
+    path: application.applicationinterface.iauthentication-port
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IAuthenticationPort
+    description: Input port for authentication operations including token validation
+      and user identity resolution
+    attributes:
+      protocol: HTTPS
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/input/authentication.py
+          symbol: IAuthenticationPort
+    metadata:
+      created_at: 2026-05-08T12:07:58.624Z
+      updated_at: 2026-05-08T12:07:58.624Z
+      version: 1
+  timestamp: 2026-05-08T12:07:58.647Z
+  sequenceNumber: 3
+- type: add
+  elementId: application.applicationinterface.iconfiguration-command-port
+  layerName: application
+  after:
+    id: 0b220b8b-c6cd-440c-a549-c60cd4dc0b8c
+    path: application.applicationinterface.iconfiguration-command-port
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IConfigurationCommandPort
+    description: Input port for configuration commands including creating, updating,
+      and deleting configuration entries
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/input/config_command.py
+          symbol: IConfigurationCommandPort
+    metadata:
+      created_at: 2026-05-08T12:07:58.951Z
+      updated_at: 2026-05-08T12:07:58.951Z
+      version: 1
+  timestamp: 2026-05-08T12:07:58.973Z
+  sequenceNumber: 4
+- type: add
+  elementId: application.applicationinterface.iconfiguration-query-port
+  layerName: application
+  after:
+    id: 85f1310a-9d3a-43f5-9ee2-3390f7be07a0
+    path: application.applicationinterface.iconfiguration-query-port
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IConfigurationQueryPort
+    description: Input port for configuration queries including retrieving project
+      and workflow configuration
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/input/config_query.py
+          symbol: IConfigurationQueryPort
+    metadata:
+      created_at: 2026-05-08T12:08:04.877Z
+      updated_at: 2026-05-08T12:08:04.877Z
+      version: 1
+  timestamp: 2026-05-08T12:08:04.901Z
+  sequenceNumber: 5
+- type: add
+  elementId: application.applicationinterface.iconversational-loop-service
+  layerName: application
+  after:
+    id: 90669ab8-5306-4f6c-b7b1-e71b9668905d
+    path: application.applicationinterface.iconversational-loop-service
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IConversationalLoopService
+    description: Application service port for orchestrating conversational feedback
+      loops between agents and reviewers
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/input/conversational_loop_service.py
+          symbol: IConversationalLoopService
+    metadata:
+      created_at: 2026-05-08T12:08:05.220Z
+      updated_at: 2026-05-08T12:08:05.220Z
+      version: 1
+  timestamp: 2026-05-08T12:08:05.244Z
+  sequenceNumber: 6
+- type: add
+  elementId: application.applicationinterface.iexecution-command-port
+  layerName: application
+  after:
+    id: 9cd2b1bc-af8b-42da-be6a-b8ada88afedc
+    path: application.applicationinterface.iexecution-command-port
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IExecutionCommandPort
+    description: Input port for execution commands including starting, stopping, and
+      managing agent executions
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/input/execution_command.py
+          symbol: IExecutionCommandPort
+    metadata:
+      created_at: 2026-05-08T12:08:05.558Z
+      updated_at: 2026-05-08T12:08:05.558Z
+      version: 1
+  timestamp: 2026-05-08T12:08:05.583Z
+  sequenceNumber: 7
+- type: add
+  elementId: application.applicationinterface.iexecution-query-port
+  layerName: application
+  after:
+    id: 5040edb1-21c2-452a-ac1a-2cae78308e34
+    path: application.applicationinterface.iexecution-query-port
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IExecutionQueryPort
+    description: Input port for execution queries including retrieving execution
+      status and history
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/input/execution_query.py
+          symbol: IExecutionQueryPort
+    metadata:
+      created_at: 2026-05-08T12:08:05.900Z
+      updated_at: 2026-05-08T12:08:05.900Z
+      version: 1
+  timestamp: 2026-05-08T12:08:05.925Z
+  sequenceNumber: 8
+- type: add
+  elementId: application.applicationinterface.imetrics-query-port
+  layerName: application
+  after:
+    id: fe48af11-1041-42cc-9d9f-75ac3d114829
+    path: application.applicationinterface.imetrics-query-port
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IMetricsQueryPort
+    description: Input port for metrics queries including system performance and
+      integration status metrics
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/input/metrics_query.py
+          symbol: IMetricsQueryPort
+    metadata:
+      created_at: 2026-05-08T12:08:06.244Z
+      updated_at: 2026-05-08T12:08:06.244Z
+      version: 1
+  timestamp: 2026-05-08T12:08:06.271Z
+  sequenceNumber: 9
+- type: add
+  elementId: application.applicationinterface.iorchestration-command-port
+  layerName: application
+  after:
+    id: 99a60a1b-08d9-404c-b7d6-61012e42cf49
+    path: application.applicationinterface.iorchestration-command-port
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IOrchestrationCommandPort
+    description: Input port for orchestration commands including triggering workflow
+      executions and board reconciliation
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/input/orchestration_command.py
+          symbol: IOrchestrationCommandPort
+    metadata:
+      created_at: 2026-05-08T12:08:12.054Z
+      updated_at: 2026-05-08T12:08:12.054Z
+      version: 1
+  timestamp: 2026-05-08T12:08:12.080Z
+  sequenceNumber: 10
+- type: add
+  elementId: application.applicationinterface.itask-query-port
+  layerName: application
+  after:
+    id: 7f998e68-6dfc-45c8-ad1f-7da870fc3076
+    path: application.applicationinterface.itask-query-port
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: ITaskQueryPort
+    description: Input port for task and execution queries including agent task
+      status and queue position
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/input/task_query.py
+          symbol: ITaskQueryPort
+    metadata:
+      created_at: 2026-05-08T12:08:12.395Z
+      updated_at: 2026-05-08T12:08:12.395Z
+      version: 1
+  timestamp: 2026-05-08T12:08:12.421Z
+  sequenceNumber: 11
+- type: add
+  elementId: application.applicationinterface.iworkflow-command-port
+  layerName: application
+  after:
+    id: 8814d355-953a-4889-a7f4-6631400daddb
+    path: application.applicationinterface.iworkflow-command-port
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IWorkflowCommandPort
+    description: Input port for workflow commands including creating, starting, and
+      transitioning workflow instances
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/input/workflow_command.py
+          symbol: IWorkflowCommandPort
+    metadata:
+      created_at: 2026-05-08T12:08:12.742Z
+      updated_at: 2026-05-08T12:08:12.742Z
+      version: 1
+  timestamp: 2026-05-08T12:08:12.767Z
+  sequenceNumber: 12
+- type: add
+  elementId: application.applicationinterface.iworkflow-definition-command-port
+  layerName: application
+  after:
+    id: 8e3c5a06-f9c0-484f-be0b-50f643337386
+    path: application.applicationinterface.iworkflow-definition-command-port
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IWorkflowDefinitionCommandPort
+    description: Input port for workflow definition commands including creating and
+      updating workflow templates
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/input/workflow_definition_command.py
+          symbol: IWorkflowDefinitionCommandPort
+    metadata:
+      created_at: 2026-05-08T12:08:13.082Z
+      updated_at: 2026-05-08T12:08:13.082Z
+      version: 1
+  timestamp: 2026-05-08T12:08:13.108Z
+  sequenceNumber: 13
+- type: add
+  elementId: application.applicationinterface.iworkflow-query-port
+  layerName: application
+  after:
+    id: 8e5af39b-c94d-460e-b3ca-c31f190a7c22
+    path: application.applicationinterface.iworkflow-query-port
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IWorkflowQueryPort
+    description: Input port for workflow queries including retrieving workflow
+      definitions and active instances
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/input/workflow_query.py
+          symbol: IWorkflowQueryPort
+    metadata:
+      created_at: 2026-05-08T12:08:13.431Z
+      updated_at: 2026-05-08T12:08:13.431Z
+      version: 1
+  timestamp: 2026-05-08T12:08:13.457Z
+  sequenceNumber: 14
+- type: add
+  elementId: application.applicationinterface.iworkflow-run-query-port
+  layerName: application
+  after:
+    id: 867d2b5b-6da1-4295-864f-43b5100a5c54
+    path: application.applicationinterface.iworkflow-run-query-port
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IWorkflowRunQueryPort
+    description: Input port for workflow run queries including retrieving run
+      history and execution details
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/input/workflow_run_query.py
+          symbol: IWorkflowRunQueryPort
+    metadata:
+      created_at: 2026-05-08T12:08:18.468Z
+      updated_at: 2026-05-08T12:08:18.468Z
+      version: 1
+  timestamp: 2026-05-08T12:08:18.494Z
+  sequenceNumber: 15
+- type: add
+  elementId: application.applicationinterface.iwork-item-command-port
+  layerName: application
+  after:
+    id: 1dbdb82b-fc9a-4db4-a65f-178d6b2289b8
+    path: application.applicationinterface.iwork-item-command-port
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IWorkItemCommandPort
+    description: Input port for work item commands including creating, updating, and
+      transitioning work items
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/input/work_item_command.py
+          symbol: IWorkItemCommandPort
+    metadata:
+      created_at: 2026-05-08T12:08:18.835Z
+      updated_at: 2026-05-08T12:08:18.835Z
+      version: 1
+  timestamp: 2026-05-08T12:08:18.863Z
+  sequenceNumber: 16
+- type: add
+  elementId: application.applicationinterface.iwork-item-query-port
+  layerName: application
+  after:
+    id: d74d1a1d-5c90-43cc-bc30-baeebdb5fb47
+    path: application.applicationinterface.iwork-item-query-port
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IWorkItemQueryPort
+    description: Input port for work item queries including retrieving work item
+      details and status
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/input/work_item_query.py
+          symbol: IWorkItemQueryPort
+    metadata:
+      created_at: 2026-05-08T12:08:19.196Z
+      updated_at: 2026-05-08T12:08:19.196Z
+      version: 1
+  timestamp: 2026-05-08T12:08:19.222Z
+  sequenceNumber: 17
+- type: add
+  elementId: application.applicationinterface.iworkspace-query-port
+  layerName: application
+  after:
+    id: d9099ab1-52bb-4898-9dec-8548086e322a
+    path: application.applicationinterface.iworkspace-query-port
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IWorkspaceQueryPort
+    description: Input port for workspace queries including retrieving container
+      workspace status and assignments
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/input/workspace_query.py
+          symbol: IWorkspaceQueryPort
+    metadata:
+      created_at: 2026-05-08T12:08:19.644Z
+      updated_at: 2026-05-08T12:08:19.644Z
+      version: 1
+  timestamp: 2026-05-08T12:08:19.682Z
+  sequenceNumber: 18
+- type: add
+  elementId: application.applicationinterface.iactive-workflow-run-registry
+  layerName: application
+  after:
+    id: e1c57107-3f2b-4be0-99cc-4b652c8a5dd7
+    path: application.applicationinterface.iactive-workflow-run-registry
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IActiveWorkflowRunRegistry
+    description: Output port for tracking active workflow runs per work item,
+      preventing duplicate concurrent executions
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/active_workflow_run_registry.py
+          symbol: IActiveWorkflowRunRegistry
+    metadata:
+      created_at: 2026-05-08T12:08:34.879Z
+      updated_at: 2026-05-08T12:08:34.879Z
+      version: 1
+  timestamp: 2026-05-08T12:08:34.906Z
+  sequenceNumber: 19
+- type: add
+  elementId: application.applicationinterface.iagent-executor
+  layerName: application
+  after:
+    id: da1c585b-b5b6-4400-a53c-f014a610718b
+    path: application.applicationinterface.iagent-executor
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IAgentExecutor
+    description: Output port for triggering and managing agent execution within
+      containerized environments
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/agent_executor.py
+          symbol: IAgentExecutor
+    metadata:
+      created_at: 2026-05-08T12:08:35.246Z
+      updated_at: 2026-05-08T12:08:35.246Z
+      version: 1
+  timestamp: 2026-05-08T12:08:35.273Z
+  sequenceNumber: 20
+- type: add
+  elementId: application.applicationinterface.iagent-repository
+  layerName: application
+  after:
+    id: 10a21811-594a-46df-91dd-8c466948eed9
+    path: application.applicationinterface.iagent-repository
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IAgentRepository
+    description: Output port repository interface for Agent domain objects,
+      providing CRUD access to agent definitions
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/agent_repository.py
+          symbol: IAgentRepository
+    metadata:
+      created_at: 2026-05-08T12:08:35.615Z
+      updated_at: 2026-05-08T12:08:35.615Z
+      version: 1
+  timestamp: 2026-05-08T12:08:35.640Z
+  sequenceNumber: 21
+- type: add
+  elementId: application.applicationinterface.iboard-service
+  layerName: application
+  after:
+    id: 995ed439-b1c3-4ab8-a19e-f5d000727f8b
+    path: application.applicationinterface.iboard-service
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IBoardService
+    description: Output port for board management with event emission and
+      monitoring, abstracting GitHub project board operations
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/board_service.py
+          symbol: IBoardService
+    metadata:
+      created_at: 2026-05-08T12:08:35.991Z
+      updated_at: 2026-05-08T12:08:35.991Z
+      version: 1
+  timestamp: 2026-05-08T12:08:36.018Z
+  sequenceNumber: 22
+- type: add
+  elementId: application.applicationinterface.ibranch-resolution-service
+  layerName: application
+  after:
+    id: 871c4858-965e-4a6d-99c2-cbd73a61588c
+    path: application.applicationinterface.ibranch-resolution-service
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IBranchResolutionService
+    description: Output port for resolving VCS branch names for work items with
+      event emission capability
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/branch_resolution_service.py
+          symbol: IBranchResolutionService
+    metadata:
+      created_at: 2026-05-08T12:08:36.368Z
+      updated_at: 2026-05-08T12:08:36.368Z
+      version: 1
+  timestamp: 2026-05-08T12:08:36.397Z
+  sequenceNumber: 23
+- type: add
+  elementId: application.applicationinterface.icipipeline-service
+  layerName: application
+  after:
+    id: bb6764c0-d6e0-4997-99d7-84ed3387f4f1
+    path: application.applicationinterface.icipipeline-service
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: ICIPipelineService
+    description: Output port for CI pipeline management with event emission and
+      monitoring, abstracting CI/CD system interactions
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/ci_pipeline_service.py
+          symbol: ICIPipelineService
+    metadata:
+      created_at: 2026-05-08T12:08:42.732Z
+      updated_at: 2026-05-08T12:08:42.732Z
+      version: 1
+  timestamp: 2026-05-08T12:08:42.759Z
+  sequenceNumber: 24
+- type: add
+  elementId: application.applicationinterface.icode-review-service
+  layerName: application
+  after:
+    id: 21a6e93e-e04c-4054-a910-a31445bd8f63
+    path: application.applicationinterface.icode-review-service
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: ICodeReviewService
+    description: Output port for code review management with event emission,
+      abstracting GitHub pull request review operations
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/code_review_service.py
+          symbol: ICodeReviewService
+    metadata:
+      created_at: 2026-05-08T12:08:43.196Z
+      updated_at: 2026-05-08T12:08:43.196Z
+      version: 1
+  timestamp: 2026-05-08T12:08:43.236Z
+  sequenceNumber: 25
+- type: add
+  elementId: application.applicationinterface.iconfig-store
+  layerName: application
+  after:
+    id: d9e0d1c5-578c-446e-b962-f55d6117f057
+    path: application.applicationinterface.iconfig-store
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IConfigStore
+    description: Output port interface for configuration storage, providing
+      read/write access to project and system configuration
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/config_store.py
+          symbol: IConfigStore
+    metadata:
+      created_at: 2026-05-08T12:08:43.716Z
+      updated_at: 2026-05-08T12:08:43.716Z
+      version: 1
+  timestamp: 2026-05-08T12:08:43.746Z
+  sequenceNumber: 26
+- type: add
+  elementId: application.applicationinterface.icontainer
+  layerName: application
+  after:
+    id: 40edf8d5-8138-4561-9586-aaa22cb458b4
+    path: application.applicationinterface.icontainer
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IContainer
+    description: Output port for container orchestration including starting,
+      stopping, and executing commands in agent containers
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/container.py
+          symbol: IContainer
+    metadata:
+      created_at: 2026-05-08T12:08:44.106Z
+      updated_at: 2026-05-08T12:08:44.106Z
+      version: 1
+  timestamp: 2026-05-08T12:08:44.133Z
+  sequenceNumber: 27
+- type: add
+  elementId: application.applicationinterface.iagent-container-recovery-service
+  layerName: application
+  after:
+    id: 0458a57a-0f4d-4402-85bb-3f82945fbe58
+    path: application.applicationinterface.iagent-container-recovery-service
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IAgentContainerRecoveryService
+    description: Output port for container recovery operations including detecting
+      and recovering from failed agent containers
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/container_recovery.py
+          symbol: IAgentContainerRecoveryService
+    metadata:
+      created_at: 2026-05-08T12:08:44.493Z
+      updated_at: 2026-05-08T12:08:44.493Z
+      version: 1
+  timestamp: 2026-05-08T12:08:44.522Z
+  sequenceNumber: 28
+- type: add
+  elementId: application.applicationinterface.idiscussion-adapter
+  layerName: application
+  after:
+    id: 9ad5696c-d5d3-4911-ae15-c4d440980167
+    path: application.applicationinterface.idiscussion-adapter
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IDiscussionAdapter
+    description: Output port for discussion and comment management with event
+      emission, abstracting GitHub comment operations
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/discussion_adapter.py
+          symbol: IDiscussionAdapter
+    metadata:
+      created_at: 2026-05-08T12:08:51.047Z
+      updated_at: 2026-05-08T12:08:51.047Z
+      version: 1
+  timestamp: 2026-05-08T12:08:51.077Z
+  sequenceNumber: 29
+- type: add
+  elementId: application.applicationinterface.iencryption-service
+  layerName: application
+  after:
+    id: d77d9b04-e263-4b55-ac01-193a84beb8b6
+    path: application.applicationinterface.iencryption-service
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IEncryptionService
+    description: Output port for encryption operations including encrypting and
+      decrypting sensitive configuration values
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/encryption_service.py
+          symbol: IEncryptionService
+    metadata:
+      created_at: 2026-05-08T12:08:51.441Z
+      updated_at: 2026-05-08T12:08:51.441Z
+      version: 1
+  timestamp: 2026-05-08T12:08:51.471Z
+  sequenceNumber: 30
+- type: add
+  elementId: application.applicationinterface.ienvironment-repair-service
+  layerName: application
+  after:
+    id: 84224cb7-b601-4034-a297-59ce88157873
+    path: application.applicationinterface.ienvironment-repair-service
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IEnvironmentRepairService
+    description: Output port for environment repair operations including diagnosing
+      and repairing broken agent execution environments
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/environment_repair_service.py
+          symbol: IEnvironmentRepairService
+    metadata:
+      created_at: 2026-05-08T12:08:51.849Z
+      updated_at: 2026-05-08T12:08:51.849Z
+      version: 1
+  timestamp: 2026-05-08T12:08:51.879Z
+  sequenceNumber: 31
+- type: add
+  elementId: application.applicationinterface.ievent-emitter
+  layerName: application
+  after:
+    id: 8ec0b859-aef7-430f-a36f-f69759f24dee
+    path: application.applicationinterface.ievent-emitter
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IEventEmitter
+    description: Output port for event emission capability, allowing adapters to
+      publish domain events to the event bus
+    attributes:
+      protocol: AMQP
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/event_emitter.py
+          symbol: IEventEmitter
+    metadata:
+      created_at: 2026-05-08T12:08:52.238Z
+      updated_at: 2026-05-08T12:08:52.238Z
+      version: 1
+  timestamp: 2026-05-08T12:08:52.269Z
+  sequenceNumber: 32
+- type: add
+  elementId: application.applicationinterface.ievent-store
+  layerName: application
+  after:
+    id: d17ad5ab-fb00-4bb9-8262-ac259efce7e8
+    path: application.applicationinterface.ievent-store
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IEventStore
+    description: Output port for event sourcing and persistence, storing and
+      retrieving immutable domain events in Redis
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/event_store.py
+          symbol: IEventStore
+    metadata:
+      created_at: 2026-05-08T12:08:52.628Z
+      updated_at: 2026-05-08T12:08:52.628Z
+      version: 1
+  timestamp: 2026-05-08T12:08:52.660Z
+  sequenceNumber: 33
+- type: add
+  elementId: application.applicationinterface.ifailed-event-store
+  layerName: application
+  after:
+    id: 21f07dee-8f49-47e1-8232-51675c91be91
+    path: application.applicationinterface.ifailed-event-store
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IFailedEventStore
+    description: Output port for storing and managing failed events (dead letter
+      queue) for retry and debugging
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/failed_event_store.py
+          symbol: IFailedEventStore
+    metadata:
+      created_at: 2026-05-08T12:08:59.482Z
+      updated_at: 2026-05-08T12:08:59.482Z
+      version: 1
+  timestamp: 2026-05-08T12:08:59.511Z
+  sequenceNumber: 34
+- type: add
+  elementId: application.applicationinterface.iidentity-service
+  layerName: application
+  after:
+    id: 8ca3c5cc-f5fe-4f03-b41d-ff8c781a4656
+    path: application.applicationinterface.iidentity-service
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IIdentityService
+    description: Output port for bot identity queries, resolving the bot user ID for
+      filtering self-triggered events
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/identity_service.py
+          symbol: IIdentityService
+    metadata:
+      created_at: 2026-05-08T12:08:59.879Z
+      updated_at: 2026-05-08T12:08:59.879Z
+      version: 1
+  timestamp: 2026-05-08T12:08:59.909Z
+  sequenceNumber: 35
+- type: add
+  elementId: application.applicationinterface.itracer
+  layerName: application
+  after:
+    id: d779ab09-2e18-4340-8249-c9a23607e2ad
+    path: application.applicationinterface.itracer
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: ITracer
+    description: Output port for distributed tracing providing
+      OpenTelemetry-compatible span creation and context propagation
+    attributes:
+      protocol: HTTP
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/i_tracer.py
+          symbol: ITracer
+    metadata:
+      created_at: 2026-05-08T12:09:00.255Z
+      updated_at: 2026-05-08T12:09:00.255Z
+      version: 1
+  timestamp: 2026-05-08T12:09:00.286Z
+  sequenceNumber: 36
+- type: add
+  elementId: application.applicationinterface.illmprovider
+  layerName: application
+  after:
+    id: 5a9637f2-eb2e-4064-9973-7c68c3de8473
+    path: application.applicationinterface.illmprovider
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: ILLMProvider
+    description: Output port for Large Language Model providers, abstracting Claude
+      Code API and other LLM integrations
+    attributes:
+      protocol: HTTPS
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/llm_provider.py
+          symbol: ILLMProvider
+    metadata:
+      created_at: 2026-05-08T12:09:00.651Z
+      updated_at: 2026-05-08T12:09:00.651Z
+      version: 1
+  timestamp: 2026-05-08T12:09:00.684Z
+  sequenceNumber: 37
+- type: add
+  elementId: application.applicationinterface.imessage-broker
+  layerName: application
+  after:
+    id: bf91a307-5dc4-4422-99ff-7763a7963a0f
+    path: application.applicationinterface.imessage-broker
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IMessageBroker
+    description: Output port for pub/sub message broker for distributed event
+      distribution across services
+    attributes:
+      protocol: AMQP
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/message_broker.py
+          symbol: IMessageBroker
+    metadata:
+      created_at: 2026-05-08T12:09:01.067Z
+      updated_at: 2026-05-08T12:09:01.067Z
+      version: 1
+  timestamp: 2026-05-08T12:09:01.099Z
+  sequenceNumber: 38
+- type: add
+  elementId: application.applicationinterface.imetrics
+  layerName: application
+  after:
+    id: 377501b8-c45c-4112-8840-07a9681f154b
+    path: application.applicationinterface.imetrics
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IMetrics
+    description: Output port for metrics collection including recording counters,
+      gauges, and histograms for Prometheus
+    attributes:
+      protocol: HTTP
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/metrics.py
+          symbol: IMetrics
+    metadata:
+      created_at: 2026-05-08T12:09:07.924Z
+      updated_at: 2026-05-08T12:09:07.924Z
+      version: 1
+  timestamp: 2026-05-08T12:09:07.958Z
+  sequenceNumber: 39
+- type: add
+  elementId: application.applicationinterface.imonitored-service
+  layerName: application
+  after:
+    id: 9c0973f4-eac7-4eb2-aef6-86d26543fc8b
+    path: application.applicationinterface.imonitored-service
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IMonitoredService
+    description: Output port for standard monitoring lifecycle for event-emitting
+      services including health and metrics
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/monitoring.py
+          symbol: IMonitoredService
+    metadata:
+      created_at: 2026-05-08T12:09:08.341Z
+      updated_at: 2026-05-08T12:09:08.341Z
+      version: 1
+  timestamp: 2026-05-08T12:09:08.373Z
+  sequenceNumber: 40
+- type: add
+  elementId: application.applicationinterface.imulti-project-orchestrator
+  layerName: application
+  after:
+    id: e6447e87-5c14-4cda-af14-6c44055212b2
+    path: application.applicationinterface.imulti-project-orchestrator
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IMultiProjectOrchestrator
+    description: Output port for orchestrating workflows across multiple GitHub
+      projects simultaneously
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/multi_project_orchestrator.py
+          symbol: IMultiProjectOrchestrator
+    metadata:
+      created_at: 2026-05-08T12:09:08.747Z
+      updated_at: 2026-05-08T12:09:08.747Z
+      version: 1
+  timestamp: 2026-05-08T12:09:08.777Z
+  sequenceNumber: 41
+- type: add
+  elementId: application.applicationinterface.inotifier
+  layerName: application
+  after:
+    id: 7d54d5ce-86ea-4e82-9eec-ec88dc475d53
+    path: application.applicationinterface.inotifier
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: INotifier
+    description: Output port for sending notifications to external channels
+      including Slack and email
+    attributes:
+      protocol: HTTPS
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/notifier.py
+          symbol: INotifier
+    metadata:
+      created_at: 2026-05-08T12:09:09.144Z
+      updated_at: 2026-05-08T12:09:09.144Z
+      version: 1
+  timestamp: 2026-05-08T12:09:09.177Z
+  sequenceNumber: 42
+- type: add
+  elementId: application.applicationinterface.ipipeline-lock-service
+  layerName: application
+  after:
+    id: d77273d1-449f-44ca-bc11-8cf37d93737e
+    path: application.applicationinterface.ipipeline-lock-service
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IPipelineLockService
+    description: Output port for pipeline lock management with event emission,
+      preventing concurrent execution on the same work item
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/pipeline_lock_service.py
+          symbol: IPipelineLockService
+    metadata:
+      created_at: 2026-05-08T12:09:09.557Z
+      updated_at: 2026-05-08T12:09:09.557Z
+      version: 1
+  timestamp: 2026-05-08T12:09:09.587Z
+  sequenceNumber: 43
+- type: add
+  elementId: application.applicationinterface.ipipeline-queue-service
+  layerName: application
+  after:
+    id: c581f120-3b33-4989-bdce-df13a1b1c83e
+    path: application.applicationinterface.ipipeline-queue-service
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IPipelineQueueService
+    description: Output port for pipeline queue management, ordering and scheduling
+      work items for agent execution
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/pipeline_queue_service.py
+          symbol: IPipelineQueueService
+    metadata:
+      created_at: 2026-05-08T12:09:17.168Z
+      updated_at: 2026-05-08T12:09:17.168Z
+      version: 1
+  timestamp: 2026-05-08T12:09:17.198Z
+  sequenceNumber: 44
+- type: add
+  elementId: application.applicationinterface.iproject-manager-service
+  layerName: application
+  after:
+    id: ba5cef1d-c25f-4837-aa65-58fc3c637716
+    path: application.applicationinterface.iproject-manager-service
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IProjectManagerService
+    description: Output port for managing multiple project configurations including
+      registration and lifecycle management
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/project_manager_service.py
+          symbol: IProjectManagerService
+    metadata:
+      created_at: 2026-05-08T12:09:17.571Z
+      updated_at: 2026-05-08T12:09:17.571Z
+      version: 1
+  timestamp: 2026-05-08T12:09:17.604Z
+  sequenceNumber: 45
+- type: add
+  elementId: application.applicationinterface.iprreview-cycle
+  layerName: application
+  after:
+    id: 84ed3dcd-dc3f-4327-8218-ce1b82fe299e
+    path: application.applicationinterface.iprreview-cycle
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IPRReviewCycle
+    description: Output port for PR review cycle operations including maker-checker
+      review workflows on pull requests
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/pr_review_cycle_service.py
+          symbol: IPRReviewCycle
+    metadata:
+      created_at: 2026-05-08T12:09:17.980Z
+      updated_at: 2026-05-08T12:09:17.980Z
+      version: 1
+  timestamp: 2026-05-08T12:09:18.011Z
+  sequenceNumber: 46
+- type: add
+  elementId: application.applicationinterface.irepair-cycle-checkpoint-store
+  layerName: application
+  after:
+    id: 4359b6b1-9537-44c2-bac4-3a0d10a546d4
+    path: application.applicationinterface.irepair-cycle-checkpoint-store
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IRepairCycleCheckpointStore
+    description: Output port for checkpoint storage and retrieval during repair
+      cycles to enable resumable test-fix loops
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/repair_cycle_checkpoint_store.py
+          symbol: IRepairCycleCheckpointStore
+    metadata:
+      created_at: 2026-05-08T12:09:18.406Z
+      updated_at: 2026-05-08T12:09:18.406Z
+      version: 1
+  timestamp: 2026-05-08T12:09:18.439Z
+  sequenceNumber: 47
+- type: add
+  elementId: application.applicationinterface.irepair-cycle
+  layerName: application
+  after:
+    id: ea94a95e-6c15-44cb-aa92-b40d930494cc
+    path: application.applicationinterface.irepair-cycle
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IRepairCycle
+    description: Output port for repair cycle operations including running
+      test-fix-validate iteration loops
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/repair_cycle_service.py
+          symbol: IRepairCycle
+    metadata:
+      created_at: 2026-05-08T12:09:18.835Z
+      updated_at: 2026-05-08T12:09:18.835Z
+      version: 1
+  timestamp: 2026-05-08T12:09:18.869Z
+  sequenceNumber: 48
+- type: add
+  elementId: application.applicationinterface.irepository
+  layerName: application
+  after:
+    id: 887774b6-1c9b-475e-ab2a-b592c3a8d95c
+    path: application.applicationinterface.irepository
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IRepository
+    description: Output port for source code repository operations including
+      cloning, committing, and pushing changes
+    attributes:
+      protocol: HTTPS
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/repository.py
+          symbol: IRepository
+    metadata:
+      created_at: 2026-05-08T12:09:26.164Z
+      updated_at: 2026-05-08T12:09:26.164Z
+      version: 1
+  timestamp: 2026-05-08T12:09:26.197Z
+  sequenceNumber: 49
+- type: add
+  elementId: application.applicationinterface.ireview-cycle
+  layerName: application
+  after:
+    id: 2f1d30f0-26d4-43cd-9fe4-d186c1ddfb18
+    path: application.applicationinterface.ireview-cycle
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IReviewCycle
+    description: Output port for review cycle operations including maker-checker
+      iteration loops with feedback processing
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/review_cycle_service.py
+          symbol: IReviewCycle
+    metadata:
+      created_at: 2026-05-08T12:09:26.579Z
+      updated_at: 2026-05-08T12:09:26.579Z
+      version: 1
+  timestamp: 2026-05-08T12:09:26.614Z
+  sequenceNumber: 50
+- type: add
+  elementId: application.applicationinterface.istorage
+  layerName: application
+  after:
+    id: bc6291c6-92bc-4e59-bd9d-39e129ce34f8
+    path: application.applicationinterface.istorage
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IStorage
+    description: Output port for file and object storage including reading, writing,
+      and managing artifact files
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/storage.py
+          symbol: IStorage
+    metadata:
+      created_at: 2026-05-08T12:09:27.000Z
+      updated_at: 2026-05-08T12:09:27.000Z
+      version: 1
+  timestamp: 2026-05-08T12:09:27.033Z
+  sequenceNumber: 51
+- type: add
+  elementId: application.applicationinterface.isystemic-analysis-service
+  layerName: application
+  after:
+    id: 4d5c6e0f-391b-4663-8f90-80124626e45c
+    path: application.applicationinterface.isystemic-analysis-service
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: ISystemicAnalysisService
+    description: Output port for systemic analysis of test failures to determine
+      root cause classification for repair routing
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/systemic_analysis_service.py
+          symbol: ISystemicAnalysisService
+    metadata:
+      created_at: 2026-05-08T12:09:27.411Z
+      updated_at: 2026-05-08T12:09:27.411Z
+      version: 1
+  timestamp: 2026-05-08T12:09:27.443Z
+  sequenceNumber: 52
+- type: add
+  elementId: application.applicationinterface.iticket-system
+  layerName: application
+  after:
+    id: dd17486e-e7b8-43e3-ba5f-38b574a389ac
+    path: application.applicationinterface.iticket-system
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: ITicketSystem
+    description: Output port for ticket/issue management systems, abstracting GitHub
+      Issues and other ticketing platforms
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/ticket_system.py
+          symbol: ITicketSystem
+    metadata:
+      created_at: 2026-05-08T12:09:27.829Z
+      updated_at: 2026-05-08T12:09:27.829Z
+      version: 1
+  timestamp: 2026-05-08T12:09:27.864Z
+  sequenceNumber: 53
+- type: add
+  elementId: application.applicationinterface.iversion-control-service
+  layerName: application
+  after:
+    id: 259bbd98-efa1-4743-8d43-a2a9f920d523
+    path: application.applicationinterface.iversion-control-service
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IVersionControlService
+    description: Output port for version control operations including creating
+      branches, committing changes, and managing PRs
+    attributes:
+      protocol: HTTPS
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/version_control_service.py
+          symbol: IVersionControlService
+    metadata:
+      created_at: 2026-05-08T12:09:34.995Z
+      updated_at: 2026-05-08T12:09:34.995Z
+      version: 1
+  timestamp: 2026-05-08T12:09:35.030Z
+  sequenceNumber: 54
+- type: add
+  elementId: application.applicationinterface.iwork-item-branch-tracker
+  layerName: application
+  after:
+    id: fa816f9f-98e2-4a72-a117-a1b074b2cfe8
+    path: application.applicationinterface.iwork-item-branch-tracker
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IWorkItemBranchTracker
+    description: Output port for tracking the VCS branch associated with each work
+      item during processing
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/work_item_branch_tracker.py
+          symbol: IWorkItemBranchTracker
+    metadata:
+      created_at: 2026-05-08T12:09:35.417Z
+      updated_at: 2026-05-08T12:09:35.417Z
+      version: 1
+  timestamp: 2026-05-08T12:09:35.452Z
+  sequenceNumber: 55
+- type: add
+  elementId: application.applicationinterface.iwork-item-service
+  layerName: application
+  after:
+    id: 4f42bc27-9196-41b0-a30a-04610c5ecfcf
+    path: application.applicationinterface.iwork-item-service
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IWorkItemService
+    description: Output port for work item management with event emission,
+      abstracting work item CRUD and state transitions
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/work_item_service.py
+          symbol: IWorkItemService
+    metadata:
+      created_at: 2026-05-08T12:09:35.839Z
+      updated_at: 2026-05-08T12:09:35.839Z
+      version: 1
+  timestamp: 2026-05-08T12:09:35.873Z
+  sequenceNumber: 56
+- type: add
+  elementId: application.applicationinterface.iworkflow-config-service
+  layerName: application
+  after:
+    id: 1e05f099-6fc3-4131-9d8b-4bdceab4f3b0
+    path: application.applicationinterface.iworkflow-config-service
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IWorkflowConfigService
+    description: Output port for storing and retrieving board workflow templates
+      defining stage transitions and agent assignments
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/workflow_config_service.py
+          symbol: IWorkflowConfigService
+    metadata:
+      created_at: 2026-05-08T12:09:36.257Z
+      updated_at: 2026-05-08T12:09:36.257Z
+      version: 1
+  timestamp: 2026-05-08T12:09:36.291Z
+  sequenceNumber: 57
+- type: add
+  elementId: application.applicationinterface.iworkflow-orchestrator
+  layerName: application
+  after:
+    id: 342d383a-3742-4fef-9234-93af63a2d2fa
+    path: application.applicationinterface.iworkflow-orchestrator
+    spec_node_id: application.applicationinterface
+    type: applicationinterface
+    layer_id: application
+    name: IWorkflowOrchestrator
+    description: Output port for orchestrating workflows within a project including
+      triggering stage transitions and agent scheduling
+    attributes:
+      protocol: REST
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/ports/output/workflow_orchestrator.py
+          symbol: IWorkflowOrchestrator
+    metadata:
+      created_at: 2026-05-08T12:09:36.677Z
+      updated_at: 2026-05-08T12:09:36.677Z
+      version: 1
+  timestamp: 2026-05-08T12:09:36.714Z
+  sequenceNumber: 58
+- type: relationship-add
+  elementId: application.applicationinterface.iexecution-command-port::depends-on::application.applicationservice.execution-service
+  layerName: application
+  after:
+    source: application.applicationinterface.iexecution-command-port
+    target: application.applicationservice.execution-service
+    predicate: depends-on
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:10:10.056Z
+  sequenceNumber: 59
+- type: relationship-delete
+  elementId: application.applicationinterface.iexecution-command-port::depends-on::application.applicationservice.execution-service
+  layerName: application
+  before:
+    source: application.applicationinterface.iexecution-command-port
+    target: application.applicationservice.execution-service
+    predicate: depends-on
+    layer: application
+  timestamp: 2026-05-08T12:10:23.889Z
+  sequenceNumber: 60
+- type: relationship-add
+  elementId: application.applicationinterface.iworkflow-command-port::depends-on::application.applicationservice.workflow-orchestrator
+  layerName: application
+  after:
+    source: application.applicationinterface.iworkflow-command-port
+    target: application.applicationservice.workflow-orchestrator
+    predicate: depends-on
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:10:37.156Z
+  sequenceNumber: 61
+- type: relationship-add
+  elementId: application.applicationinterface.iworkflow-query-port::depends-on::application.applicationservice.workflow-orchestrator
+  layerName: application
+  after:
+    source: application.applicationinterface.iworkflow-query-port
+    target: application.applicationservice.workflow-orchestrator
+    predicate: depends-on
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:10:37.746Z
+  sequenceNumber: 62
+- type: relationship-add
+  elementId: application.applicationinterface.iorchestration-command-port::depends-on::application.applicationservice.workflow-orchestrator
+  layerName: application
+  after:
+    source: application.applicationinterface.iorchestration-command-port
+    target: application.applicationservice.workflow-orchestrator
+    predicate: depends-on
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:10:38.353Z
+  sequenceNumber: 63
+- type: relationship-add
+  elementId: application.applicationinterface.iworkflow-run-query-port::depends-on::application.applicationservice.workflow-run-query-service
+  layerName: application
+  after:
+    source: application.applicationinterface.iworkflow-run-query-port
+    target: application.applicationservice.workflow-run-query-service
+    predicate: depends-on
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:10:38.974Z
+  sequenceNumber: 64
+- type: relationship-add
+  elementId: application.applicationinterface.iexecution-command-port::depends-on::application.applicationservice.execution-service
+  layerName: application
+  after:
+    source: application.applicationinterface.iexecution-command-port
+    target: application.applicationservice.execution-service
+    predicate: depends-on
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:10:43.438Z
+  sequenceNumber: 65
+- type: relationship-add
+  elementId: application.applicationinterface.iexecution-query-port::depends-on::application.applicationservice.execution-service
+  layerName: application
+  after:
+    source: application.applicationinterface.iexecution-query-port
+    target: application.applicationservice.execution-service
+    predicate: depends-on
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:10:43.976Z
+  sequenceNumber: 66
+- type: relationship-add
+  elementId: application.applicationinterface.iwork-item-command-port::depends-on::application.applicationservice.work-item-service
+  layerName: application
+  after:
+    source: application.applicationinterface.iwork-item-command-port
+    target: application.applicationservice.work-item-service
+    predicate: depends-on
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:10:44.487Z
+  sequenceNumber: 67
+- type: relationship-add
+  elementId: application.applicationinterface.iwork-item-query-port::depends-on::application.applicationservice.work-item-service
+  layerName: application
+  after:
+    source: application.applicationinterface.iwork-item-query-port
+    target: application.applicationservice.work-item-service
+    predicate: depends-on
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:10:45.011Z
+  sequenceNumber: 68
+- type: relationship-add
+  elementId: application.applicationinterface.iconfiguration-command-port::depends-on::application.applicationservice.configuration-service
+  layerName: application
+  after:
+    source: application.applicationinterface.iconfiguration-command-port
+    target: application.applicationservice.configuration-service
+    predicate: depends-on
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:10:45.508Z
+  sequenceNumber: 69
+- type: relationship-add
+  elementId: application.applicationinterface.iconfiguration-query-port::depends-on::application.applicationservice.configuration-service
+  layerName: application
+  after:
+    source: application.applicationinterface.iconfiguration-query-port
+    target: application.applicationservice.configuration-service
+    predicate: depends-on
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:10:46.042Z
+  sequenceNumber: 70
+- type: relationship-add
+  elementId: application.applicationinterface.iagent-command-port::depends-on::application.applicationservice.agent-scheduler
+  layerName: application
+  after:
+    source: application.applicationinterface.iagent-command-port
+    target: application.applicationservice.agent-scheduler
+    predicate: depends-on
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:10:57.811Z
+  sequenceNumber: 71
+- type: relationship-add
+  elementId: application.applicationinterface.iagent-query-port::depends-on::application.applicationservice.agent-scheduler
+  layerName: application
+  after:
+    source: application.applicationinterface.iagent-query-port
+    target: application.applicationservice.agent-scheduler
+    predicate: depends-on
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:10:58.318Z
+  sequenceNumber: 72
+- type: relationship-add
+  elementId: application.applicationinterface.iauthentication-port::depends-on::application.applicationservice.authentication-service
+  layerName: application
+  after:
+    source: application.applicationinterface.iauthentication-port
+    target: application.applicationservice.authentication-service
+    predicate: depends-on
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:10:58.840Z
+  sequenceNumber: 73
+- type: relationship-add
+  elementId: application.applicationinterface.imetrics-query-port::depends-on::application.applicationservice.metrics-service
+  layerName: application
+  after:
+    source: application.applicationinterface.imetrics-query-port
+    target: application.applicationservice.metrics-service
+    predicate: depends-on
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:10:59.351Z
+  sequenceNumber: 74
+- type: relationship-add
+  elementId: application.applicationinterface.iworkspace-query-port::depends-on::application.applicationservice.workspace-router
+  layerName: application
+  after:
+    source: application.applicationinterface.iworkspace-query-port
+    target: application.applicationservice.workspace-router
+    predicate: depends-on
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:10:59.839Z
+  sequenceNumber: 75
+- type: relationship-add
+  elementId: application.applicationinterface.iconversational-loop-service::depends-on::application.applicationservice.conversational-loop-orchestrator
+  layerName: application
+  after:
+    source: application.applicationinterface.iconversational-loop-service
+    target: application.applicationservice.conversational-loop-orchestrator
+    predicate: depends-on
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:00.373Z
+  sequenceNumber: 76
+- type: relationship-add
+  elementId: application.applicationinterface.iworkflow-definition-command-port::depends-on::application.applicationservice.workflow-orchestrator
+  layerName: application
+  after:
+    source: application.applicationinterface.iworkflow-definition-command-port
+    target: application.applicationservice.workflow-orchestrator
+    predicate: depends-on
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:00.887Z
+  sequenceNumber: 77
+- type: relationship-add
+  elementId: application.applicationinterface.iboard-service::serves::application.applicationservice.workflow-orchestrator
+  layerName: application
+  after:
+    source: application.applicationinterface.iboard-service
+    target: application.applicationservice.workflow-orchestrator
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:10.974Z
+  sequenceNumber: 78
+- type: relationship-delete
+  elementId: application.applicationinterface.iboard-service::serves::application.applicationservice.workflow-orchestrator
+  layerName: application
+  before:
+    source: application.applicationinterface.iboard-service
+    target: application.applicationservice.workflow-orchestrator
+    predicate: serves
+    layer: application
+  timestamp: 2026-05-08T12:11:15.467Z
+  sequenceNumber: 79
+- type: relationship-add
+  elementId: application.applicationinterface.iboard-service::serves::application.applicationservice.board-polling-service
+  layerName: application
+  after:
+    source: application.applicationinterface.iboard-service
+    target: application.applicationservice.board-polling-service
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:21.336Z
+  sequenceNumber: 80
+- type: relationship-add
+  elementId: application.applicationinterface.iboard-service::serves::application.applicationservice.workflow-orchestrator
+  layerName: application
+  after:
+    source: application.applicationinterface.iboard-service
+    target: application.applicationservice.workflow-orchestrator
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:21.863Z
+  sequenceNumber: 81
+- type: relationship-add
+  elementId: application.applicationinterface.iticket-system::serves::application.applicationservice.workflow-orchestrator
+  layerName: application
+  after:
+    source: application.applicationinterface.iticket-system
+    target: application.applicationservice.workflow-orchestrator
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:22.399Z
+  sequenceNumber: 82
+- type: relationship-add
+  elementId: application.applicationinterface.iticket-system::serves::application.applicationservice.execution-service
+  layerName: application
+  after:
+    source: application.applicationinterface.iticket-system
+    target: application.applicationservice.execution-service
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:22.893Z
+  sequenceNumber: 83
+- type: relationship-add
+  elementId: application.applicationinterface.illmprovider::serves::application.applicationservice.execution-service
+  layerName: application
+  after:
+    source: application.applicationinterface.illmprovider
+    target: application.applicationservice.execution-service
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:23.393Z
+  sequenceNumber: 84
+- type: relationship-add
+  elementId: application.applicationinterface.icontainer::serves::application.applicationservice.execution-service
+  layerName: application
+  after:
+    source: application.applicationinterface.icontainer
+    target: application.applicationservice.execution-service
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:23.955Z
+  sequenceNumber: 85
+- type: relationship-add
+  elementId: application.applicationinterface.icontainer::serves::application.applicationservice.container-recovery-service
+  layerName: application
+  after:
+    source: application.applicationinterface.icontainer
+    target: application.applicationservice.container-recovery-service
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:24.463Z
+  sequenceNumber: 86
+- type: relationship-add
+  elementId: application.applicationinterface.ievent-store::serves::application.applicationservice.workflow-orchestrator
+  layerName: application
+  after:
+    source: application.applicationinterface.ievent-store
+    target: application.applicationservice.workflow-orchestrator
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:34.858Z
+  sequenceNumber: 87
+- type: relationship-add
+  elementId: application.applicationinterface.ievent-store::serves::application.applicationservice.execution-service
+  layerName: application
+  after:
+    source: application.applicationinterface.ievent-store
+    target: application.applicationservice.execution-service
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:35.381Z
+  sequenceNumber: 88
+- type: relationship-add
+  elementId: application.applicationinterface.ievent-emitter::serves::application.applicationservice.workflow-orchestrator
+  layerName: application
+  after:
+    source: application.applicationinterface.ievent-emitter
+    target: application.applicationservice.workflow-orchestrator
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:35.903Z
+  sequenceNumber: 89
+- type: relationship-add
+  elementId: application.applicationinterface.ievent-emitter::serves::application.applicationservice.execution-service
+  layerName: application
+  after:
+    source: application.applicationinterface.ievent-emitter
+    target: application.applicationservice.execution-service
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:36.419Z
+  sequenceNumber: 90
+- type: relationship-add
+  elementId: application.applicationinterface.icode-review-service::serves::application.applicationservice.review-service
+  layerName: application
+  after:
+    source: application.applicationinterface.icode-review-service
+    target: application.applicationservice.review-service
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:36.930Z
+  sequenceNumber: 91
+- type: relationship-add
+  elementId: application.applicationinterface.ireview-cycle::serves::application.applicationservice.review-service
+  layerName: application
+  after:
+    source: application.applicationinterface.ireview-cycle
+    target: application.applicationservice.review-service
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:37.473Z
+  sequenceNumber: 92
+- type: relationship-add
+  elementId: application.applicationinterface.iprreview-cycle::serves::application.applicationservice.review-service
+  layerName: application
+  after:
+    source: application.applicationinterface.iprreview-cycle
+    target: application.applicationservice.review-service
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:37.985Z
+  sequenceNumber: 93
+- type: relationship-add
+  elementId: application.applicationinterface.irepair-cycle::serves::application.applicationservice.container-recovery-service
+  layerName: application
+  after:
+    source: application.applicationinterface.irepair-cycle
+    target: application.applicationservice.container-recovery-service
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:38.507Z
+  sequenceNumber: 94
+- type: relationship-add
+  elementId: application.applicationinterface.iagent-executor::serves::application.applicationservice.agent-scheduler
+  layerName: application
+  after:
+    source: application.applicationinterface.iagent-executor
+    target: application.applicationservice.agent-scheduler
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:44.023Z
+  sequenceNumber: 95
+- type: relationship-add
+  elementId: application.applicationinterface.iagent-executor::serves::application.applicationservice.execution-service
+  layerName: application
+  after:
+    source: application.applicationinterface.iagent-executor
+    target: application.applicationservice.execution-service
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:44.535Z
+  sequenceNumber: 96
+- type: relationship-add
+  elementId: application.applicationinterface.iagent-repository::serves::application.applicationservice.agent-scheduler
+  layerName: application
+  after:
+    source: application.applicationinterface.iagent-repository
+    target: application.applicationservice.agent-scheduler
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:45.049Z
+  sequenceNumber: 97
+- type: relationship-add
+  elementId: application.applicationinterface.iconfig-store::serves::application.applicationservice.configuration-service
+  layerName: application
+  after:
+    source: application.applicationinterface.iconfig-store
+    target: application.applicationservice.configuration-service
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:45.564Z
+  sequenceNumber: 98
+- type: relationship-add
+  elementId: application.applicationinterface.inotifier::serves::application.applicationservice.workflow-orchestrator
+  layerName: application
+  after:
+    source: application.applicationinterface.inotifier
+    target: application.applicationservice.workflow-orchestrator
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:46.087Z
+  sequenceNumber: 99
+- type: relationship-add
+  elementId: application.applicationinterface.ipipeline-lock-service::serves::application.applicationservice.pipeline-lock-service
+  layerName: application
+  after:
+    source: application.applicationinterface.ipipeline-lock-service
+    target: application.applicationservice.pipeline-lock-service
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:46.592Z
+  sequenceNumber: 100
+- type: relationship-add
+  elementId: application.applicationinterface.ipipeline-queue-service::serves::application.applicationservice.pipeline-manager
+  layerName: application
+  after:
+    source: application.applicationinterface.ipipeline-queue-service
+    target: application.applicationservice.pipeline-manager
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:47.110Z
+  sequenceNumber: 101
+- type: relationship-add
+  elementId: application.applicationinterface.iversion-control-service::serves::application.applicationservice.workflow-orchestrator
+  layerName: application
+  after:
+    source: application.applicationinterface.iversion-control-service
+    target: application.applicationservice.workflow-orchestrator
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:47.640Z
+  sequenceNumber: 102
+- type: relationship-add
+  elementId: application.applicationinterface.iversion-control-service::serves::application.applicationservice.execution-service
+  layerName: application
+  after:
+    source: application.applicationinterface.iversion-control-service
+    target: application.applicationservice.execution-service
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:48.152Z
+  sequenceNumber: 103
+- type: relationship-add
+  elementId: application.applicationinterface.istorage::serves::application.applicationservice.context-builder
+  layerName: application
+  after:
+    source: application.applicationinterface.istorage
+    target: application.applicationservice.context-builder
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:54.230Z
+  sequenceNumber: 104
+- type: relationship-add
+  elementId: application.applicationinterface.istorage::serves::application.applicationservice.workspace-router
+  layerName: application
+  after:
+    source: application.applicationinterface.istorage
+    target: application.applicationservice.workspace-router
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:54.775Z
+  sequenceNumber: 105
+- type: relationship-add
+  elementId: application.applicationinterface.iidentity-service::serves::application.applicationservice.board-polling-service
+  layerName: application
+  after:
+    source: application.applicationinterface.iidentity-service
+    target: application.applicationservice.board-polling-service
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:55.451Z
+  sequenceNumber: 106
+- type: relationship-add
+  elementId: application.applicationinterface.iwork-item-service::serves::application.applicationservice.workflow-orchestrator
+  layerName: application
+  after:
+    source: application.applicationinterface.iwork-item-service
+    target: application.applicationservice.workflow-orchestrator
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:56.152Z
+  sequenceNumber: 107
+- type: relationship-add
+  elementId: application.applicationinterface.imulti-project-orchestrator::serves::application.applicationservice.multi-project-orchestrator
+  layerName: application
+  after:
+    source: application.applicationinterface.imulti-project-orchestrator
+    target: application.applicationservice.multi-project-orchestrator
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:56.740Z
+  sequenceNumber: 108
+- type: relationship-add
+  elementId: application.applicationinterface.iworkflow-orchestrator::serves::application.applicationservice.workflow-orchestrator
+  layerName: application
+  after:
+    source: application.applicationinterface.iworkflow-orchestrator
+    target: application.applicationservice.workflow-orchestrator
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:57.297Z
+  sequenceNumber: 109
+- type: relationship-add
+  elementId: application.applicationinterface.imetrics::serves::application.applicationservice.metrics-service
+  layerName: application
+  after:
+    source: application.applicationinterface.imetrics
+    target: application.applicationservice.metrics-service
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:57.854Z
+  sequenceNumber: 110
+- type: relationship-add
+  elementId: application.applicationinterface.itracer::serves::application.applicationservice.metrics-service
+  layerName: application
+  after:
+    source: application.applicationinterface.itracer
+    target: application.applicationservice.metrics-service
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:58.470Z
+  sequenceNumber: 111
+- type: relationship-add
+  elementId: application.applicationinterface.iagent-container-recovery-service::serves::application.applicationservice.container-recovery-service
+  layerName: application
+  after:
+    source: application.applicationinterface.iagent-container-recovery-service
+    target: application.applicationservice.container-recovery-service
+    predicate: serves
+    layer: application
+    category: structural
+  timestamp: 2026-05-08T12:11:59.082Z
+  sequenceNumber: 112

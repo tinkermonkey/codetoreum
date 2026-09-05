@@ -1,0 +1,18 @@
+apm.instrumentationconfig.auto-instrumentation-setup:
+  id: bcb0109d-b019-4a9a-a765-f65c60cd7456
+  path: apm.instrumentationconfig.auto-instrumentation-setup
+  spec_node_id: apm.instrumentationconfig
+  type: instrumentationconfig
+  layer_id: apm
+  name: Auto-Instrumentation Setup
+  description: Automatic instrumentation for SQLAlchemy, Redis, and HTTP clients
+    via OpenTelemetry hooks
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/infrastructure/observability/auto_instrument.py
+        symbol: setup_library_instrumentation
+  metadata:
+    created_at: 2026-05-08T11:07:42.338Z
+    updated_at: 2026-05-08T11:07:42.339Z
+    version: 1

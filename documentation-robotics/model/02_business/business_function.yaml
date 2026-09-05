@@ -1,0 +1,15 @@
+business.businessfunction.event-sourced-audit-trail:
+  id: 96adbcfb-bc46-4893-873e-e4638e3c440c
+  path: business.businessfunction.event-sourced-audit-trail
+  spec_node_id: business.businessfunction
+  type: businessfunction
+  layer_id: business
+  name: Event-Sourced Audit Trail
+  description: Immutable record of all system state changes enabling audit,
+    replay, and debugging
+  source_reference:
+    provenance: inferred
+  metadata:
+    created_at: 2026-05-08T11:09:41.502Z
+    updated_at: 2026-05-08T11:09:41.503Z
+    version: 1

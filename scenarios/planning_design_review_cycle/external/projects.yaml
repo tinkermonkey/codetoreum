@@ -1,0 +1,18 @@
+# Planning & Design Review Cycle Scenario — External: Projects
+#
+# Port/Interface: ITicketSystem
+# Adapter (sim): InMemoryTicketAdapter
+# Skipped when using real adapters (projects already exist in GitHub)
+
+projects:
+  - project_id: "planning-project-1"
+    name: "Planning & Design"
+    description: "Planning and design phase for feature work"
+    repository_url: "https://github.com/example/planning-repo"
+    board_id: "planning-board-1"
+
+  - project_id: "sdlc-project-1"
+    name: "SDLC Execution"
+    description: "Software Development Lifecycle execution board"
+    repository_url: "https://github.com/example/sdlc-repo"
+    board_id: "sdlc-board-1"

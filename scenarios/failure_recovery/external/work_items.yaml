@@ -1,0 +1,95 @@
+# Failure Recovery Scenario — External: Work Items
+#
+# Port/Interface: IWorkItemService, ITicketSystem
+# Adapter (sim): InMemoryTicketAdapter, MockWorkItemService
+# Skipped when using real adapters (work items already exist in the ticket system)
+
+work_items:
+  - title: "Task with retry scenario"
+    description: |
+      Work item that will encounter failures and require retries.
+
+      Expected behavior:
+      - Initial attempt fails
+      - Retry succeeds after 2-3 attempts
+      - System logs retry attempts
+    labels:
+      - "failure-test"
+      - "retry"
+    priority: "high"
+    status: "new"
+    metadata:
+      expected_retries: 3
+      failure_mode: "intermittent"
+
+  - title: "Task with timeout scenario"
+    description: |
+      Work item that may timeout due to slow processing.
+
+      Expected behavior:
+      - First attempt times out
+      - Retry with increased timeout succeeds
+      - Timeout properly logged
+    labels:
+      - "failure-test"
+      - "timeout"
+    priority: "high"
+    status: "new"
+    metadata:
+      expected_timeout: true
+      timeout_stage: "flaky-stage"
+
+  - title: "Task with permanent failure"
+    description: |
+      Work item that fails permanently after max retries.
+
+      Expected behavior:
+      - All retries exhausted
+      - Workflow moves to error handling
+      - Failure properly recorded
+    labels:
+      - "failure-test"
+      - "permanent-failure"
+    priority: "medium"
+    status: "new"
+    metadata:
+      expected_outcome: "failed"
+      max_retries_expected: true
+
+  - title: "Task with recovery scenario"
+    description: |
+      Work item that fails but recovers in recovery stage.
+
+      Expected behavior:
+      - Initial stage fails
+      - Recovery stage detects and fixes issues
+      - Successfully completes
+    labels:
+      - "failure-test"
+      - "recovery"
+    priority: "high"
+    status: "new"
+    metadata:
+      recovery_expected: true
+      final_state: "completed"
+
+  - title: "Task with cascading failures"
+    description: |
+      Work item experiencing multiple types of failures.
+
+      Expected behavior:
+      - Multiple different error types
+      - Different retry strategies applied
+      - Comprehensive error logging
+    labels:
+      - "failure-test"
+      - "cascading"
+      - "complex"
+    priority: "medium"
+    status: "new"
+    metadata:
+      failure_types:
+        - "network"
+        - "timeout"
+        - "validation"
+      recovery_strategy: "multi-stage"

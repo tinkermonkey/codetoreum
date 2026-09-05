@@ -1,0 +1,88 @@
+- type: add
+  elementId: application.applicationservice.event-bus-registry
+  layerName: application
+  after:
+    id: 8a957afd-430d-4bc0-b082-7cacd1a59f50
+    path: application.applicationservice.event-bus-registry
+    spec_node_id: application.applicationservice
+    type: applicationservice
+    layer_id: application
+    name: EventBusRegistry
+    description: Application service that wires the event bus to all domain event
+      handlers (WorkflowEventHandler, ExecutionEventHandler, ReviewEventHandler,
+      RepairCycleEventHandler, BranchResolutionEventHandler). Manages handler
+      registration lifecycle, service dependency injection, and event bus
+      statistics. Acts as the integration seam between the infrastructure event
+      bus and application-layer event handlers.
+    attributes:
+      serviceType: event-driven
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/application/event_bus_wiring.py
+          symbol: EventBusRegistry
+    metadata:
+      created_at: 2026-05-09T09:21:44.928Z
+      updated_at: 2026-05-09T09:21:44.928Z
+      version: 1
+  timestamp: 2026-05-09T09:21:44.949Z
+  sequenceNumber: 0
+- type: add
+  elementId: application.applicationfunction.ci-result-conversion
+  layerName: application
+  after:
+    id: e52dc62d-27b4-427f-8f16-7ee3ab6f2313
+    path: application.applicationfunction.ci-result-conversion
+    spec_node_id: application.applicationfunction
+    type: applicationfunction
+    layer_id: application
+    name: CI Result Conversion
+    description: Pure conversion function that transforms ICIPipelineService
+      CIRunResult objects into RepairTestResult domain objects for repair cycle
+      aggregation. Maps CI check failures to RepairTestFailure with file='ci' to
+      enable systemic analysis integration. Supports optional SimulationClock
+      injection for deterministic time in tests.
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/application/repair_cycle_ci_integration.py
+          symbol: convert_ci_run_result_to_repair_test_result
+    metadata:
+      created_at: 2026-05-09T09:21:49.637Z
+      updated_at: 2026-05-09T09:21:49.637Z
+      version: 1
+  timestamp: 2026-05-09T09:21:49.657Z
+  sequenceNumber: 1
+- type: relationship-add
+  elementId: application.applicationservice.event-bus-registry::depends-on::application.applicationservice.workflow-orchestrator
+  layerName: application
+  after:
+    source: application.applicationservice.event-bus-registry
+    target: application.applicationservice.workflow-orchestrator
+    predicate: depends-on
+    layer: application
+    category: structural
+  timestamp: 2026-05-09T09:22:47.154Z
+  sequenceNumber: 2
+- type: relationship-add
+  elementId: application.applicationservice.event-bus-registry::depends-on::application.applicationservice.execution-service
+  layerName: application
+  after:
+    source: application.applicationservice.event-bus-registry
+    target: application.applicationservice.execution-service
+    predicate: depends-on
+    layer: application
+    category: structural
+  timestamp: 2026-05-09T09:22:50.248Z
+  sequenceNumber: 3
+- type: relationship-add
+  elementId: application.applicationservice.event-bus-registry::depends-on::application.applicationservice.review-service
+  layerName: application
+  after:
+    source: application.applicationservice.event-bus-registry
+    target: application.applicationservice.review-service
+    predicate: depends-on
+    layer: application
+    category: structural
+  timestamp: 2026-05-09T09:22:50.683Z
+  sequenceNumber: 4

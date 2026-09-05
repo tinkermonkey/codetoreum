@@ -1,0 +1,198 @@
+application.applicationcomponent.board-column-event-handler:
+  id: f1242bbb-5040-48cf-a391-6d94d2576217
+  path: application.applicationcomponent.board-column-event-handler
+  spec_node_id: application.applicationcomponent
+  type: applicationcomponent
+  layer_id: application
+  name: BoardColumnEventHandler
+  description: Event handler that reacts to board column change events to trigger
+    workflow orchestration and run metadata recording
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/application/event_handlers/board_event_handler.py
+        symbol: BoardColumnEventHandler
+  metadata:
+    created_at: 2026-05-08T10:29:39.339Z
+    updated_at: 2026-05-08T10:29:39.339Z
+    version: 1
+application.applicationcomponent.execution-event-handler:
+  id: 14eb8119-a1a4-4aa9-844d-f3e383243f2c
+  path: application.applicationcomponent.execution-event-handler
+  spec_node_id: application.applicationcomponent
+  type: applicationcomponent
+  layer_id: application
+  name: ExecutionEventHandler
+  description: Event handler that responds to agent execution lifecycle events for
+    state transitions and notifications
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/application/event_handlers/execution_event_handler.py
+        symbol: ExecutionEventHandler
+  metadata:
+    created_at: 2026-05-08T10:29:39.616Z
+    updated_at: 2026-05-08T10:29:39.616Z
+    version: 1
+application.applicationcomponent.workflow-event-handler:
+  id: dac33cdf-1e15-4e24-984c-941e01110f30
+  path: application.applicationcomponent.workflow-event-handler
+  spec_node_id: application.applicationcomponent
+  type: applicationcomponent
+  layer_id: application
+  name: WorkflowEventHandler
+  description: Event handler that processes workflow state change events and
+    coordinates downstream actions
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/application/event_handlers/workflow_event_handler.py
+        symbol: WorkflowEventHandler
+  metadata:
+    created_at: 2026-05-08T10:29:39.885Z
+    updated_at: 2026-05-08T10:29:39.885Z
+    version: 1
+application.applicationcomponent.review-event-handler:
+  id: 4786bf0e-b705-493c-aaa9-58ad0a894057
+  path: application.applicationcomponent.review-event-handler
+  spec_node_id: application.applicationcomponent
+  type: applicationcomponent
+  layer_id: application
+  name: ReviewEventHandler
+  description: Event handler that processes review cycle events and triggers
+    review workflow transitions
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/application/event_handlers/review_event_handler.py
+        symbol: ReviewEventHandler
+  metadata:
+    created_at: 2026-05-08T10:29:44.595Z
+    updated_at: 2026-05-08T10:29:44.595Z
+    version: 1
+application.applicationcomponent.repair-cycle-event-handler:
+  id: 288263dc-fda5-4400-8f74-3bfa9311e069
+  path: application.applicationcomponent.repair-cycle-event-handler
+  spec_node_id: application.applicationcomponent
+  type: applicationcomponent
+  layer_id: application
+  name: RepairCycleEventHandler
+  description: Event handler that responds to repair cycle events including test
+    failures and fix iterations
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/application/event_handlers/repair_cycle_event_handler.py
+        symbol: RepairCycleEventHandler
+  metadata:
+    created_at: 2026-05-08T10:29:44.867Z
+    updated_at: 2026-05-08T10:29:44.868Z
+    version: 1
+application.applicationcomponent.prreview-cycle-event-handler:
+  id: e58848f2-e3fc-4c13-b779-cc8ee1b81382
+  path: application.applicationcomponent.prreview-cycle-event-handler
+  spec_node_id: application.applicationcomponent
+  type: applicationcomponent
+  layer_id: application
+  name: PRReviewCycleEventHandler
+  description: Event handler that processes PR review cycle events for code review
+    workflow automation
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/application/event_handlers/pr_review_cycle_event_handler.py
+        symbol: PRReviewCycleEventHandler
+  metadata:
+    created_at: 2026-05-08T10:29:45.148Z
+    updated_at: 2026-05-08T10:29:45.148Z
+    version: 1
+application.applicationcomponent.prreview-cycle-dispatch-handler:
+  id: 7f0fbe5a-0da8-4e95-85c5-b7538f516af8
+  path: application.applicationcomponent.prreview-cycle-dispatch-handler
+  spec_node_id: application.applicationcomponent
+  type: applicationcomponent
+  layer_id: application
+  name: PRReviewCycleDispatchHandler
+  description: Dispatch handler that routes PR review cycle events to the
+    appropriate downstream services
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/application/event_handlers/pr_review_cycle_dispatch_handler.py
+        symbol: PRReviewCycleDispatchHandler
+  metadata:
+    created_at: 2026-05-08T10:29:54.281Z
+    updated_at: 2026-05-08T10:29:54.281Z
+    version: 1
+application.applicationcomponent.branch-resolution-event-handler:
+  id: eb9b9bad-66a1-4e53-9bdf-efda37264082
+  path: application.applicationcomponent.branch-resolution-event-handler
+  spec_node_id: application.applicationcomponent
+  type: applicationcomponent
+  layer_id: application
+  name: BranchResolutionEventHandler
+  description: Event handler that processes branch resolution events to finalize
+    git branch lifecycle after workflow completion
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/application/event_handlers/branch_resolution_event_handler.py
+        symbol: BranchResolutionEventHandler
+  metadata:
+    created_at: 2026-05-08T10:29:54.557Z
+    updated_at: 2026-05-08T10:29:54.557Z
+    version: 1
+application.applicationcomponent.event-bus-wiring:
+  id: f730676e-0348-4191-8776-d70d8077511d
+  path: application.applicationcomponent.event-bus-wiring
+  spec_node_id: application.applicationcomponent
+  type: applicationcomponent
+  layer_id: application
+  name: EventBusWiring
+  description: Infrastructure component that registers all event handlers with the
+    event bus during application bootstrap
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/application/event_bus_wiring.py
+        symbol: EventBusRegistry
+  metadata:
+    created_at: 2026-05-08T10:29:54.827Z
+    updated_at: 2026-05-08T10:29:54.827Z
+    version: 1
+application.applicationcomponent.expected-sequence-registry:
+  id: f15104f4-7b58-4e25-86c5-ea7a2dd26c9f
+  path: application.applicationcomponent.expected-sequence-registry
+  spec_node_id: application.applicationcomponent
+  type: applicationcomponent
+  layer_id: application
+  name: ExpectedSequenceRegistry
+  description: Registry of expected event sequence patterns used by
+    EventSequenceValidator for anomaly detection
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/application/expected_sequence_registry.py
+        symbol: ExpectedSequenceRegistry
+  metadata:
+    created_at: 2026-05-08T10:29:57.834Z
+    updated_at: 2026-05-08T10:29:57.834Z
+    version: 1
+application.applicationcomponent.simulation-engine:
+  id: 7a854aba-32da-4b45-97cc-36273df217d0
+  path: application.applicationcomponent.simulation-engine
+  spec_node_id: application.applicationcomponent
+  type: applicationcomponent
+  layer_id: application
+  name: Simulation Engine
+  description: Manages simulation time, state, and lifecycle for deterministic
+    test execution
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/infrastructure/simulation/simulation_engine.py
+        symbol: SimulationEngine
+  metadata:
+    created_at: 2026-05-08T10:52:48.713Z
+    updated_at: 2026-05-08T10:52:48.713Z
+    version: 1

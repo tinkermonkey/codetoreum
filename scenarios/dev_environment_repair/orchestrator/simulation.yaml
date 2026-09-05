@@ -1,0 +1,31 @@
+# Dev Environment Repair Scenario — Orchestrator: Simulation Settings
+#
+# Port/Interface: SimulationConfig (speed, clock, behaviour)
+# Adapter: SimulationClock, SimulationApplicationBootstrap
+#
+# Models Switchyard benchmark run db1dbf2a (context-studio #376, 2026-03-27):
+# Full SDLC pipeline culminating in a repair cycle that rebuilt the dev environment
+# and iterated through ~8 test-fix-validate cycles before completing successfully.
+# Benchmark duration: ~56 minutes real time | At 100x: ~34 seconds simulated
+
+name: "Dev Environment Repair"
+description: |
+  Full SDLC pipeline with development environment repair cycle.
+  Models Switchyard benchmark run db1dbf2a (context-studio #376, 2026-03-27).
+  Pipeline: Backlog → Ready* → Development → Code Review → Testing (repair) → Staged
+version: "2.0"
+
+speed_multiplier: 100.0
+auto_advance: false
+
+metadata:
+  scenario_type: "dev_environment_repair"
+  author: "codetoreum-team"
+  benchmark_run_id: "db1dbf2a-a0cb-413e-998c-06a8be61d902"
+  benchmark_project: "context-studio"
+  benchmark_issue: 376
+  tags:
+    - "repair-cycle"
+    - "dev-environment"
+    - "full-pipeline"
+    - "local-agents"

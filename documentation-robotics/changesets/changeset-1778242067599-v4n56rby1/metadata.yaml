@@ -1,0 +1,10 @@
+id: changeset-1778242067599-v4n56rby1
+name: add-application-port-interfaces
+created: 2026-05-08T12:07:47.609Z
+modified: 2026-05-08T12:12:13.388Z
+status: committed
+baseSnapshot: sha256:ef97327fcac6140a8b36eb8a3ad54bb1689a92310fbeb1dfa9849debf48678d1
+stats:
+  additions: 111
+  modifications: 0
+  deletions: 2

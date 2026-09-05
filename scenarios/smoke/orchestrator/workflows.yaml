@@ -1,0 +1,22 @@
+# Smoke Scenario — Orchestrator: Workflow Definitions
+#
+# Port/Interface: IWorkflowConfigService (workflow domain model)
+# Adapter (sim): InMemoryConfigStore
+
+workflows:
+  - name: "default-workflow"
+    description: "Default 2-stage workflow"
+    stages:
+      - name: "implementation"
+        agent_type: "coder"
+        description: "Implement the solution"
+        order: 1
+        max_retries: 3
+        timeout_seconds: 3600
+
+      - name: "testing"
+        agent_type: "tester"
+        description: "Test the implementation"
+        order: 2
+        max_retries: 3
+        timeout_seconds: 3600

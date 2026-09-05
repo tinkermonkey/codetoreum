@@ -1,0 +1,89 @@
+# Dev Environment Repair Scenario — Orchestrator: Agent Configurations
+#
+# Port/Interface: IAgentRepository, ILLMProvider
+# Adapter (sim): InMemoryAgentRepository, MockAgentExecutor
+#
+# Six agents: four pipeline specialists + two local/host-mode environment agents.
+# The dev_environment_setup and dev_environment_verifier agents run on the
+# orchestrator host (not in Docker) — modeled from Switchyard's same-named agents.
+
+agents:
+  - name: "senior_software_engineer"
+    agent_type: "senior_software_engineer"
+    description: "Implements features; handles code_fix, systemic_analysis, and systemic_fix repair sub-tasks"
+    capabilities:
+      - "code_generation"
+      - "code_review"
+    llm_model: "claude-sonnet-4-6"
+    temperature: 0.7
+    max_tokens: 8192
+    enabled: true
+
+  - name: "code_reviewer"
+    agent_type: "code_reviewer"
+    description: "Reviews code quality; approval routes to Testing, rejection routes back to Development"
+    capabilities:
+      - "code_review"
+    llm_model: "claude-sonnet-4-6"
+    temperature: 0.5
+    max_tokens: 4096
+    enabled: true
+
+  - name: "qa_engineer"
+    agent_type: "qa_engineer"
+    description: "Runs tests in Testing column; handles test_execution and env_verification repair sub-tasks"
+    capabilities:
+      - "testing"
+      - "code_generation"
+    llm_model: "claude-sonnet-4-6"
+    temperature: 0.6
+    max_tokens: 6144
+    enabled: true
+
+  - name: "devops_engineer"
+    agent_type: "devops_engineer"
+    description: "Handles env_rebuild repair sub-task — rebuilds Docker image and project container"
+    capabilities:
+      - "code_generation"
+    llm_model: "claude-sonnet-4-6"
+    temperature: 0.4
+    max_tokens: 4096
+    enabled: true
+
+  - name: "dev_environment_setup"
+    agent_type: "devops_engineer"
+    description: |
+      Host-mode agent that sets up the development environment on the orchestrator
+      host. Has access to the Docker socket to build and configure project images.
+      Does not run in a Docker container. Models Switchyard dev_environment_setup
+      (requires_docker=False in production).
+    capabilities:
+      - "code_generation"
+    llm_model: "claude-sonnet-4-6"
+    temperature: 0.4
+    max_tokens: 4096
+    enabled: true
+    metadata:
+      execution_mode: "local"
+      requires_docker: false
+      skip_workspace_prep: true
+      role: "Builds and configures project Docker image and environment on host"
+
+  - name: "dev_environment_verifier"
+    agent_type: "qa_engineer"
+    description: |
+      Host-mode agent that verifies the development environment after setup.
+      Runs locally (not in Docker). Confirms the project container can build
+      and tests can execute. Models Switchyard dev_environment_verifier
+      (requires_docker=False in production).
+    capabilities:
+      - "testing"
+    llm_model: "claude-sonnet-4-6"
+    temperature: 0.3
+    max_tokens: 2048
+    enabled: true
+    metadata:
+      execution_mode: "local"
+      requires_docker: false
+      skip_workspace_prep: true
+      role: "Verifies rebuilt environment health; gates repair cycle completion"

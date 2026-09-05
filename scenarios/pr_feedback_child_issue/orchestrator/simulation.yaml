@@ -1,0 +1,36 @@
+# PR Feedback Child Issue Scenario — Orchestrator: Simulation Settings
+#
+# Models Switchyard benchmark run 5d4a562b (context-library #438, 2026-04-12):
+# A "[PR Feedback]" child issue dispatched via the lock-release queue. Runs a
+# 1-iteration code review (approved) followed by a 4-type repair cycle
+# (compilation → unit → integration → ci), all passing on the first attempt.
+# Benchmark duration: ~15 minutes real time | At 100x: ~9 seconds simulated
+
+name: "PR Feedback Child Issue"
+description: |
+  PR feedback child issue dispatched via lock-release queue with 1-iteration
+  code review and 4-type sequential repair cycle (all first-attempt passes).
+  Models Switchyard benchmark run 5d4a562b (context-library #438, 2026-04-12).
+  Pipeline: Backlog → Ready* → Development → Code Review → Testing (repair) → Staged
+version: "1.0"
+
+speed_multiplier: 100.0
+auto_advance: false
+
+metadata:
+  scenario_type: "pr_feedback_child_issue"
+  fidelity: "low"
+  author: "codetoreum-team"
+  benchmark_run_id: "5d4a562b-39bc-49f9-a5d2-0861868e76c9"
+  benchmark_project: "context-library"
+  benchmark_issue: 438
+  parent_issue: 415
+  parent_branch: "feature/issue-415-feat-coordinated-adapter-rese"
+  dispatch_mode: "lock_release_queue"
+  commit_policy: "auto"
+  tags:
+    - "pr-feedback"
+    - "child-issue"
+    - "repair-cycle"
+    - "code-only-repair"
+    - "queue-dispatch"

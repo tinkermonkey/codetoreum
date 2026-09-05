@@ -1,0 +1,12 @@
+# Planning & Design Pipeline Scenario — External: Board Item Placements
+#
+# Port/Interface: IBoardService
+# Adapter (sim): MockBoardAdapter
+# Skipped when using real adapters
+#
+# Issue #591 starts in Backlog. The test harness moves it to Research
+# to acquire the pipeline lock and begin the planning pipeline.
+
+board_placements:
+  - work_item_title: "Optimize the Regression Test Cycle"
+    column: "Backlog"

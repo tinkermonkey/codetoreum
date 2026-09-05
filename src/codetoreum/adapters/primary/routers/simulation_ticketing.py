@@ -1,0 +1,533 @@
+"""
+Simulation Ticketing REST API Router
+
+Provides simulation-only endpoints for creating issues, moving cards between
+columns, adding comments, and viewing board state. These endpoints drive the
+workflow pipeline from the "outside" — simulating human ticketing actions.
+
+This router is ONLY mounted in SimulationApplicationBootstrap, never in production.
+"""
+
+import logging
+from typing import Any
+
+from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel, Field
+
+from codetoreum.adapters.testing.in_memory_ticket_adapter import InMemoryTicketAdapter
+from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter
+from codetoreum.domain.board_workflow_template import ColumnType
+from codetoreum.domain.work_item import WorkItemPriority
+from codetoreum.ports.exceptions import ResourceNotFoundError
+from codetoreum.ports.output.board_service import MovedByType
+from codetoreum.ports.output.work_item_service import IWorkItemService
+from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
+
+logger = logging.getLogger(__name__)
+
+# =========================================================================
+# Request/Response DTOs
+# =========================================================================
+
+
+class SimCreateIssueRequest(BaseModel):
+    """Request to create a new issue."""
+
+    title: str = Field(..., description="Issue title", min_length=1)
+    description: str = Field(default="", description="Issue description")
+    project_id: str = Field(..., description="Project ID")
+    labels: list[str] = Field(default_factory=list, description="Labels")
+    priority: str = Field(default="medium", description="Priority: low, medium, high, critical")
+    board_id: str | None = Field(None, description="Board to place issue on")
+    column: str | None = Field(None, description="Column to place issue in (requires board_id)")
+
+
+class SimMoveIssueRequest(BaseModel):
+    """Request to move an issue between columns."""
+
+    target_column: str = Field(..., description="Target column name")
+
+
+class SimAddCommentRequest(BaseModel):
+    """Request to add a comment to an issue."""
+
+    body: str = Field(..., description="Comment body", min_length=1)
+    author: str = Field(default="simulation-user", description="Comment author")
+
+
+class SimIssueResponse(BaseModel):
+    """Issue response."""
+
+    id: str
+    title: str
+    description: str
+    project_id: str
+    status: str
+    priority: str
+    labels: list[str]
+    created_at: str
+    external_id: str | None = None
+    board_position: dict[str, Any] | None = None
+
+
+class SimIssueListResponse(BaseModel):
+    """List of issues response."""
+
+    issues: list[SimIssueResponse]
+    total: int
+
+
+class SimMoveResponse(BaseModel):
+    """Move result response."""
+
+    work_item_id: str
+    from_column: str | None
+    to_column: str
+    moved_by: str
+    timestamp: str
+
+
+class SimCommentResponse(BaseModel):
+    """Comment added response."""
+
+    id: str
+    work_item_id: str
+    body: str
+    author: str
+    created_at: str
+
+
+class SimBoardColumnResponse(BaseModel):
+    """Board column response."""
+
+    name: str
+    position: int
+    item_count: int
+    work_item_ids: list[str]
+
+
+class SimBoardColumnsResponse(BaseModel):
+    """Board columns list response."""
+
+    board_id: str
+    board_name: str
+    columns: list[SimBoardColumnResponse]
+
+
+class SimBoardItemResponse(BaseModel):
+    """Board item position response."""
+
+    work_item_id: str
+    column_name: str
+    position: int
+
+
+class SimBoardItemsResponse(BaseModel):
+    """All board items response."""
+
+    board_id: str
+    items: list[SimBoardItemResponse]
+    total: int
+
+
+class SimMovementHistoryEntry(BaseModel):
+    """Movement history entry."""
+
+    work_item_id: str
+    from_column: str | None
+    to_column: str
+    moved_by: str
+    timestamp: str
+
+
+class SimBoardHistoryResponse(BaseModel):
+    """Board movement history response."""
+
+    board_id: str
+    movements: list[SimMovementHistoryEntry]
+    total: int
+
+
+# =========================================================================
+# Router Factory
+# =========================================================================
+
+
+def create_simulation_ticketing_router(
+    ticket_adapter: InMemoryTicketAdapter,
+    board_adapter: MockBoardAdapter,
+    workflow_config_service: IWorkflowConfigService,
+    work_item_service: IWorkItemService | None = None,
+) -> APIRouter:
+    """
+    Create the simulation ticketing router.
+
+    This router provides simulation-only endpoints for driving the workflow
+    pipeline from outside. It takes mock adapters directly (not port interfaces)
+    because this is simulation infrastructure, not production code.
+
+    Args:
+        ticket_adapter: In-memory ticket system adapter
+        board_adapter: Mock board adapter
+        workflow_config_service: Workflow configuration service for finding proper staging columns
+
+    Returns:
+        Configured APIRouter for simulation ticketing
+    """
+    router = APIRouter(
+        prefix="/api/v2/simulation/ticketing",
+        tags=["simulation-ticketing"],
+    )
+
+    # =====================================================================
+    # Helper Functions
+    # =====================================================================
+
+    async def _find_staging_column(project_id: str, board_id: str, board: Any) -> str:
+        """
+        Find the appropriate staging column for a board.
+
+        Staging columns are MANUAL columns (type=MANUAL) used as entry points
+        for newly created work items. In a properly configured board workflow:
+        - First column is typically the staging column (e.g., "Backlog")
+        - It should be MANUAL type (no agent trigger)
+        - It should NOT be a pipeline_trigger_column (avoid unintended lock acquisition)
+
+        If workflow template is available, uses it to validate and find the column.
+        Falls back to first column if workflow template is not found.
+
+        Args:
+            project_id: Project ID containing the board
+            board_id: Board ID to find staging column for
+            board: ProjectBoard object containing column information
+
+        Returns:
+            Name of the staging column
+
+        Raises:
+            ValueError: If board has no columns
+        """
+        if not board.columns:
+            msg = f"Board {board_id} has no columns"
+            raise ValueError(msg)
+
+        # Try to get workflow template for the board to validate column properties
+        workflow_template = await workflow_config_service.get_board_workflow_template(board_id)
+
+        if workflow_template:
+            # Find first MANUAL column (proper staging column)
+            # MANUAL columns have no agent and don't trigger pipeline lock
+            staging_columns = [col for col in workflow_template.columns if col.type == ColumnType.MANUAL]
+            if staging_columns:
+                # Return first MANUAL column by position
+                staging_col = min(staging_columns, key=lambda c: c.position)
+                return staging_col.name
+
+            # If no MANUAL column found, log warning and fall back to first column
+            logger.warning(
+                "No MANUAL columns found in workflow template for board %s. "
+                "Using first column as staging column. This may trigger unintended automation.",
+                board_id,
+                extra={"board_id": board_id, "project_id": project_id},
+            )
+
+        # Fallback: use first column if no workflow template available or if no MANUAL columns
+        # First column is usually the staging/entry point (e.g., "Backlog")
+        return board.columns[0].name
+
+    # =====================================================================
+    # Issue Endpoints
+    # =====================================================================
+
+    @router.post("/issues", response_model=SimIssueResponse, status_code=status.HTTP_201_CREATED)
+    async def create_issue(request: SimCreateIssueRequest):
+        """Create a new issue and optionally place it on a board.
+
+        If board_id and column are provided:
+        1. Creates the work item
+        2. Places it in a temporary "staging" column
+        3. Moves it to the target column to trigger WorkItemColumnChangedEvent
+           (which triggers orchestration for pipeline trigger columns)
+
+        Raises:
+            HTTPException: If board has no columns, column not found, or move fails
+        """
+        priority_map = {
+            "low": WorkItemPriority.LOW,
+            "medium": WorkItemPriority.MEDIUM,
+            "high": WorkItemPriority.HIGH,
+            "critical": WorkItemPriority.CRITICAL,
+        }
+        priority = priority_map.get(request.priority.lower())
+        if priority is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid priority: {request.priority}. Valid: low, medium, high, critical",
+            )
+
+        work_item = await ticket_adapter.create_work_item(
+            title=request.title,
+            description=request.description,
+            project_id=request.project_id,
+            labels=request.labels,
+            priority=priority,
+        )
+
+        # Mirror into work_item_service so ExecutionServiceAgentExecutor can look it up
+        if work_item_service is not None and hasattr(work_item_service, "add_work_item"):
+            work_item_service.add_work_item(work_item)  # type: ignore[union-attr]
+
+        board_position = None
+        if request.board_id and request.column:
+            board_adapter.current_project = request.project_id
+
+            try:
+                # Get the board to validate it has columns
+                board = await board_adapter.get_board(request.project_id, request.board_id)
+
+                # Find the appropriate staging column (preferably a MANUAL column that won't trigger automation)
+                # This validates that the board has columns and finds the best staging column
+                staging_column = await _find_staging_column(request.project_id, request.board_id, board)
+
+                # Place item in staging column first
+                await board_adapter.add_item_to_column(work_item.id, staging_column, MovedByType.HUMAN)
+
+                # Move to target column to trigger WorkItemColumnChangedEvent
+                # (This is essential for pipeline trigger columns to invoke orchestration)
+                # Only emit move event if target differs from staging column
+                if staging_column != request.column:
+                    await board_adapter.move_item_to_column(
+                        work_item.id, request.column, MovedByType.HUMAN  # Simulates user action in ticketing system
+                    )
+
+                board_position = {
+                    "board_id": request.board_id,
+                    "column": request.column,
+                }
+            except HTTPException:
+                # Re-raise HTTP exceptions as-is
+                raise
+            except ValueError as e:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Failed to place item on board: {e!s}",
+                )
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to move item to target column: {e!s}",
+                )
+
+        return SimIssueResponse(
+            id=work_item.id,
+            title=work_item.title,
+            description=work_item.description,
+            project_id=work_item.project_id,
+            status=work_item.status.value,
+            priority=work_item.priority.name.lower(),
+            labels=work_item.labels,
+            created_at=work_item.created_at.isoformat(),
+            external_id=work_item.external_id,
+            board_position=board_position,
+        )
+
+    @router.get("/issues", response_model=SimIssueListResponse)
+    async def list_issues(project_id: str | None = None):
+        """List all issues, optionally filtered by project_id."""
+        items = await ticket_adapter.list_work_items(project_id=project_id)
+        issues = [
+            SimIssueResponse(
+                id=item.id,
+                title=item.title,
+                description=item.description,
+                project_id=item.project_id,
+                status=item.status.value,
+                priority=item.priority.name.lower(),
+                labels=item.labels,
+                created_at=item.created_at.isoformat(),
+                external_id=item.external_id,
+            )
+            for item in items
+        ]
+        return SimIssueListResponse(issues=issues, total=len(issues))
+
+    @router.get("/issues/{issue_id}", response_model=SimIssueResponse)
+    async def get_issue(issue_id: str):
+        """Get issue details by ID."""
+        try:
+            item = await ticket_adapter.get_work_item(issue_id)
+        except ResourceNotFoundError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Issue not found: {issue_id}",
+            )
+
+        # Try to get board position
+        board_position = None
+        try:
+            pos = await board_adapter.get_item_position(issue_id)
+            board_position = {
+                "column": pos.column_name,
+                "position": pos.position,
+            }
+        except ResourceNotFoundError:
+            pass
+
+        return SimIssueResponse(
+            id=item.id,
+            title=item.title,
+            description=item.description,
+            project_id=item.project_id,
+            status=item.status.value,
+            priority=item.priority.name.lower(),
+            labels=item.labels,
+            created_at=item.created_at.isoformat(),
+            external_id=item.external_id,
+            board_position=board_position,
+        )
+
+    # =====================================================================
+    # Board Action Endpoints
+    # =====================================================================
+
+    @router.post("/issues/{issue_id}/move", response_model=SimMoveResponse)
+    async def move_issue(issue_id: str, request: SimMoveIssueRequest):
+        """Move an issue between board columns (simulates human drag-and-drop)."""
+        # Verify issue exists
+        try:
+            item = await ticket_adapter.get_work_item(issue_id)
+        except ResourceNotFoundError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Issue not found: {issue_id}",
+            )
+
+        # Set project context from the work item
+        board_adapter.current_project = item.project_id
+
+        try:
+            result = await board_adapter.move_item_to_column(issue_id, request.target_column, MovedByType.HUMAN)
+        except ResourceNotFoundError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e),
+            )
+
+        return SimMoveResponse(
+            work_item_id=result.work_item_id,
+            from_column=result.from_column,
+            to_column=result.to_column,
+            moved_by=result.moved_by.value,
+            timestamp=result.timestamp,
+        )
+
+    @router.post("/issues/{issue_id}/comment", response_model=SimCommentResponse)
+    async def add_comment(issue_id: str, request: SimAddCommentRequest):
+        """Add a comment to an issue."""
+        # Verify issue exists
+        try:
+            await ticket_adapter.get_work_item(issue_id)
+        except ResourceNotFoundError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Issue not found: {issue_id}",
+            )
+
+        comment = await ticket_adapter.add_comment(
+            item_id=issue_id,
+            body=request.body,
+            author=request.author,
+        )
+
+        return SimCommentResponse(
+            id=comment.id,
+            work_item_id=issue_id,
+            body=comment.body,
+            author=comment.author_id,
+            created_at=comment.created_at.isoformat(),
+        )
+
+    # =====================================================================
+    # Board View Endpoints
+    # =====================================================================
+
+    @router.get("/board/{board_id}/columns", response_model=SimBoardColumnsResponse)
+    async def get_board_columns(board_id: str, project_id: str):
+        """View board columns with item counts."""
+        board_adapter.current_project = project_id
+
+        try:
+            board = await board_adapter.get_board(project_id, board_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Board not found: {board_id}",
+            )
+
+        columns = [
+            SimBoardColumnResponse(
+                name=col.name,
+                position=col.position,
+                item_count=len(col.work_item_ids),
+                work_item_ids=col.work_item_ids,
+            )
+            for col in sorted(board.columns, key=lambda c: c.position)
+        ]
+
+        return SimBoardColumnsResponse(
+            board_id=board.id,
+            board_name=board.name,
+            columns=columns,
+        )
+
+    @router.get("/board/{board_id}/items", response_model=SimBoardItemsResponse)
+    async def get_board_items(board_id: str, project_id: str):
+        """View all items and their positions on a board."""
+        board_adapter.current_project = project_id
+
+        try:
+            board = await board_adapter.get_board(project_id, board_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Board not found: {board_id}",
+            )
+
+        items = []
+        for col in board.columns:
+            for idx, item_id in enumerate(col.work_item_ids):
+                items.append(
+                    SimBoardItemResponse(
+                        work_item_id=item_id,
+                        column_name=col.name,
+                        position=idx,
+                    )
+                )
+
+        return SimBoardItemsResponse(
+            board_id=board.id,
+            items=items,
+            total=len(items),
+        )
+
+    @router.get("/board/{board_id}/history", response_model=SimBoardHistoryResponse)
+    async def get_board_history(board_id: str):
+        """View movement audit trail for a board."""
+        movements = [
+            SimMovementHistoryEntry(
+                work_item_id=m.work_item_id,
+                from_column=m.from_column,
+                to_column=m.to_column,
+                moved_by=m.moved_by.value,
+                timestamp=m.timestamp.isoformat(),
+            )
+            for m in board_adapter.get_all_movements()
+        ]
+
+        return SimBoardHistoryResponse(
+            board_id=board_id,
+            movements=movements,
+            total=len(movements),
+        )
+
+    return router

@@ -1,0 +1,113 @@
+security.securitypolicy.jwt-bearer-authentication:
+  id: e7bae8b9-7309-4218-b75b-f8e0fee6a422
+  path: security.securitypolicy.jwt-bearer-authentication
+  spec_node_id: security.securitypolicy
+  type: securitypolicy
+  layer_id: security
+  name: JWT Bearer Authentication
+  description: Token-based authentication for REST API access using signed JWT
+    tokens with configurable expiry
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/infrastructure/auth/simple_token_auth.py
+        symbol: SimpleTokenAuth
+  metadata:
+    created_at: 2026-05-08T11:10:10.788Z
+    updated_at: 2026-05-08T11:10:10.789Z
+    version: 1
+security.securitypolicy.api-key-authentication:
+  id: 9a6c398a-adba-46d3-bb68-f717472ca5b3
+  path: security.securitypolicy.api-key-authentication
+  spec_node_id: security.securitypolicy
+  type: securitypolicy
+  layer_id: security
+  name: API Key Authentication
+  description: Long-lived API key authentication for programmatic access and integrations
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/auth_api_adapter.py
+        symbol: create_api_key
+  metadata:
+    created_at: 2026-05-08T11:10:13.858Z
+    updated_at: 2026-05-08T11:10:13.858Z
+    version: 1
+security.securitypolicy.role-based-access-control:
+  id: 5f86e67c-b1bc-4de8-8efa-267ead479cdd
+  path: security.securitypolicy.role-based-access-control
+  spec_node_id: security.securitypolicy
+  type: securitypolicy
+  layer_id: security
+  name: Role-Based Access Control
+  description: Permission-based access control with User, Admin, and System roles
+    enforced via FastAPI dependencies
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/auth_dependencies.py
+        symbol: require_permission
+  metadata:
+    created_at: 2026-05-08T11:10:14.943Z
+    updated_at: 2026-05-08T11:10:14.943Z
+    version: 1
+security.securitypolicy.container-isolation:
+  id: 4c3b879a-b625-4d03-9930-6e31a64f3f55
+  path: security.securitypolicy.container-isolation
+  spec_node_id: security.securitypolicy
+  type: securitypolicy
+  layer_id: security
+  name: Container Isolation
+  description: AI agents execute in isolated Docker containers with restricted
+    access — no git credentials, no Docker socket, no GitHub app keys
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/secondary/docker_container_adapter.py
+  metadata:
+    created_at: 2026-05-08T11:10:18.330Z
+    updated_at: 2026-05-08T11:10:18.330Z
+    version: 1
+security.securitypolicy.security-headers-middleware:
+  id: 3c6bda2f-f2ea-4766-a954-fc43858b875e
+  path: security.securitypolicy.security-headers-middleware
+  spec_node_id: security.securitypolicy
+  type: securitypolicy
+  layer_id: security
+  name: Security Headers Middleware
+  description: HTTP security headers middleware enforcing CSP, HSTS,
+    X-Frame-Options, and other browser security policies
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/middleware/security.py
+        symbol: security_headers_middleware
+  metadata:
+    created_at: 2026-05-08T11:10:19.782Z
+    updated_at: 2026-05-08T11:10:19.783Z
+    version: 1
+security.securitypolicy.git-hub-webhook-hmac-signature:
+  id: 26eb918c-39cc-4ab5-b16f-59262ea4810b
+  path: security.securitypolicy.git-hub-webhook-hmac-signature
+  spec_node_id: security.securitypolicy
+  type: securitypolicy
+  layer_id: security
+  name: GitHub Webhook HMAC Signature
+  description: All incoming GitHub webhook payloads must include a valid
+    X-Hub-Signature-256 HMAC-SHA256 header. The /webhooks/github endpoint
+    rejects any request with a missing or invalid signature with 401
+    Unauthorized. The shared secret is configured per project.
+  attributes:
+    priority: 1
+    target: endpoint
+    enabled: true
+    requirementLevel: mandatory
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/adapters/primary/fastapi_app.py
+        symbol: github_webhook
+  metadata:
+    created_at: 2026-05-08T20:43:39.981Z
+    updated_at: 2026-05-08T20:43:39.981Z
+    version: 1

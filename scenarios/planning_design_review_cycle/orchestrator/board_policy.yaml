@@ -1,0 +1,55 @@
+# Planning & Design Review Cycle Scenario — Orchestrator: Board Column Policy
+#
+# Port/Interface: IWorkflowConfigService
+# Adapter (sim): InMemoryWorkflowConfigService
+#
+# Derived from Switchyard benchmark runs 854460d9 and fe4fa87f.
+#
+# Board layout:
+#   Backlog (manual)
+#   → In Review (automated, PR REVIEW CYCLE with code_review + requirements_verifier)
+#   → In Development (on issues found) or Done (on approved)
+
+board_policies:
+  - board_id: "planning-board-1"
+    column_configs:
+      - name: "Backlog"
+        type: "manual"
+        is_pipeline_trigger: false
+        is_exit_column: false
+        auto_progress_on_completion: false
+
+      - name: "In Review"
+        type: "automated"
+        is_pipeline_trigger: true
+        is_exit_column: false
+        auto_progress_on_completion: true
+        sla_seconds: 300
+        pr_review_cycle_config:
+          max_outer_cycles: 1
+          verifier_context_sources:
+            - "parent_issue"
+          code_review_timeout_seconds: 300
+          verification_timeout_seconds: 150
+          ci_check_enabled: true
+          ci_check_timeout_seconds: 150
+          consolidation_timeout_seconds: 300
+          sub_issue_target_board: "sdlc-board-1"
+          on_issues_found_column: "In Development"
+          on_approved_column: "Done"
+          agents:
+            code_review: "pr_code_reviewer"
+            verification: "requirements_verifier"
+            consolidation: "pr_code_reviewer"
+
+      - name: "In Development"
+        type: "manual"
+        is_pipeline_trigger: false
+        is_exit_column: false
+        auto_progress_on_completion: false
+
+      - name: "Done"
+        type: "manual"
+        is_pipeline_trigger: false
+        is_exit_column: true
+        auto_progress_on_completion: false

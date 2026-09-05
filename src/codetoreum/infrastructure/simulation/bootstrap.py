@@ -1,0 +1,2741 @@
+"""
+Simulation Application Bootstrap
+
+Wires up the entire application stack in simulation mode through 6 phases:
+
+**Phase 0**: Create simulation engine (encapsulates clock and timing)
+**Phase 1**: Create infrastructure (event bus, logger, error registry) - EARLY for event subscriptions
+**Phase 2**: Create adapters (34 adapters all via AdapterResolver)
+           Includes: ticket system, LLM, container, repository, event store, metrics, storage, config,
+           notifier, encryption, board, repair cycle, PR review cycle, project manager, lock service, workflow config,
+           agent executor, version control, message broker, discussion, review cycle, identity service,
+           checkpoint store, queue service, event emitter, code review, container recovery, work item
+           service, agent repository, active workflow run registry, work item branch tracker, audit store,
+           systemic analysis service, environment repair service, branch resolution service, and CI pipeline service
+**Phase 3**: Create services (11 application services with their dependencies: workflow orchestrator,
+           execution service, agent scheduler, pipeline manager, review service, feedback processor,
+           workspace router, configuration service, work item service, multi-project orchestrator,
+           container recovery service)
+**Phase 4**: Create ports (17 input port implementations)
+**Phase 5**: Create FastAPI app (wire all ports to API endpoints, register event handlers)
+
+Note: Infrastructure (event bus) is created before adapters to enable causal linking via
+event subscriptions. Adapters can subscribe to domain events during initialization.
+
+This is the foundational component that enables simulation testing. It provides a complete
+application bootstrap that wires together all components in the correct order with proper
+dependency injection.
+"""
+
+import asyncio
+import logging
+import tempfile
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from enum import Enum
+from typing import Any, cast
+
+from fastapi import FastAPI
+
+from codetoreum.adapters.primary.fastapi_app import create_app
+
+# Mock Port Adapters (these wrap application services to implement port interfaces)
+from codetoreum.adapters.primary.input_port_adapters.mock import (
+    MockAgentCommandAdapter,
+    MockAgentQueryAdapter,
+    MockAuditQueryAdapter,
+    MockConfigCommandAdapter,
+    MockConfigQueryAdapter,
+    MockConfigServiceAdapter,
+    MockExecutionCommandAdapter,
+    MockExecutionQueryAdapter,
+    MockLoggerAdapter,
+    MockOrchestrationCommandAdapter,
+    MockTaskQueryAdapter,
+    MockWorkflowCommandAdapter,
+    MockWorkflowDefinitionCommandAdapter,
+    MockWorkflowQueryAdapter,
+    MockWorkItemCommandAdapter,
+    MockWorkItemQueryAdapter,
+    MockWorkspaceQueryAdapter,
+)
+from codetoreum.adapters.primary.routers.simulation_board_state import (
+    create_simulation_board_state_router,
+)
+from codetoreum.adapters.primary.routers.simulation_clock import (
+    create_simulation_clock_router,
+)
+
+# Import simulation routers
+from codetoreum.adapters.primary.routers.simulation_executions import (
+    create_simulation_executions_router,
+)
+from codetoreum.adapters.primary.routers.simulation_stream import (
+    create_simulation_stream_router,
+)
+from codetoreum.adapters.primary.routers.simulation_ticketing import (
+    create_simulation_ticketing_router,
+)
+from codetoreum.adapters.secondary.execution_service_agent_executor import (
+    ExecutionServiceAgentExecutor,
+)
+
+# Adapters
+from codetoreum.adapters.testing import (
+    CapturingMockEventEmitter,
+    ConfigurableIdentityService,
+    FakeContainerAdapter,
+    InMemoryActiveWorkflowRunRegistry,
+    InMemoryAgentRepository,
+    InMemoryCheckpointStore,
+    InMemoryConfigStore,
+    InMemoryEventStore,
+    InMemoryMessageBroker,
+    InMemoryMetricsAdapter,
+    InMemoryQueueService,
+    InMemoryRepositoryAdapter,
+    InMemoryTicketAdapter,
+    InMemoryTracer,
+    InMemoryVersionControlService,
+    InMemoryWorkflowConfigService,
+    InMemoryWorkItemBranchTracker,
+    MockBoardAdapter,
+    MockBranchResolutionAdapter,
+    MockDiscussionAdapter,
+    MockProjectManagerAdapter,
+    MockReviewCycleAdapter,
+    SimpleEncryptionAdapter,
+)
+from codetoreum.adapters.testing.mock_claude_code_adapter import MockClaudeCodeAdapter
+from codetoreum.adapters.testing.mock_systemic_analysis_adapter import (
+    MockSystemicAnalysisAdapter,
+)
+from codetoreum.adapters.testing.mock_work_item_service import MockWorkItemService
+
+# Application Services
+from codetoreum.application.agent_execution_recovery_service import (
+    AgentExecutionRecoveryService,
+)
+from codetoreum.application.agent_scheduler import (
+    AgentScheduler,
+    InMemoryTaskQueue,
+    MockProjectConfiguration,
+    MockRateLimiter,
+    MockResourceMonitor,
+    MockSchedulingEvents,
+)
+from codetoreum.application.configuration_service import ConfigurationService
+from codetoreum.application.container_recovery_service import ContainerRecoveryService
+from codetoreum.application.conversational_loop_orchestrator import ConversationalLoopOrchestrator
+from codetoreum.application.event_handlers.board_event_handler import (
+    BoardColumnEventHandler,
+)
+from codetoreum.application.event_handlers.pr_review_cycle_dispatch_handler import (
+    PRReviewCycleDispatchHandler,
+)
+from codetoreum.application.event_handlers.pr_review_cycle_event_handler import (
+    PRReviewCycleEventHandler,
+)
+from codetoreum.application.event_handlers.review_event_handler import (
+    ReviewEventHandler,
+)
+from codetoreum.application.execution_service import ExecutionService
+from codetoreum.application.feedback_processor import FeedbackProcessor
+from codetoreum.application.multi_project_orchestrator import MultiProjectOrchestrator
+from codetoreum.application.pipeline_manager import PipelineManager
+from codetoreum.application.prompt_building import DefaultPromptBuilder
+from codetoreum.application.review_service import ReviewService
+from codetoreum.application.work_item_service import WorkItemService
+from codetoreum.application.workflow_orchestrator import WorkflowOrchestrator, WorkflowState
+from codetoreum.application.workflow_run_query_service import WorkflowRunQueryService
+from codetoreum.application.workspace_router import WorkspaceRouter
+
+# FastAPI app factory
+# Domain
+from codetoreum.domain.events.board_events import BoardReconciledEvent, WorkItemColumnChangedEvent
+from codetoreum.domain.value_objects import ProjectConfig
+from codetoreum.domain.work_item import WorkItemStatus
+from codetoreum.infrastructure.adapters.factory import (
+    AdapterFactory,
+    AdapterFactoryConfig,
+)
+from codetoreum.infrastructure.adapters.resolver import (
+    AdapterDependencies,
+    AdapterResolver,
+)
+from codetoreum.infrastructure.audit.interfaces import IAuditStore
+from codetoreum.infrastructure.audit.stores import InMemoryAuditStore
+from codetoreum.infrastructure.error_ids import ErrorRegistry
+
+# Infrastructure
+from codetoreum.infrastructure.event_bus import EventBus
+from codetoreum.infrastructure.resilience import OperationMode
+from codetoreum.infrastructure.resilience.decorators import BestEffortExecutionTrackerDecorator
+from codetoreum.infrastructure.simulation.causal_link_registry import (
+    CausalLinkRegistry,
+    LinkType,
+)
+
+# Mock tracer for trace propagation testing
+from codetoreum.infrastructure.simulation.mock_tracer import MockTracer
+from codetoreum.infrastructure.simulation.simulation_config import SimulationConfig
+from codetoreum.infrastructure.simulation.simulation_engine import SimulationEngine
+from codetoreum.infrastructure.simulation.watchdogs import (
+    ColumnProgressionWatchdog,
+    ExecutionTimeoutWatchdog,
+    SLAExpiryWatchdog,
+)
+from codetoreum.ports.input.agent_command import IAgentCommandPort
+from codetoreum.ports.input.agent_query import IAgentQueryPort
+
+# Ports
+from codetoreum.ports.input.audit_query import IAuditQueryPort
+from codetoreum.ports.input.config_command import IConfigurationCommandPort
+from codetoreum.ports.input.config_query import IConfigurationQueryPort
+from codetoreum.ports.input.execution_command import IExecutionCommandPort
+from codetoreum.ports.input.execution_query import IExecutionQueryPort
+from codetoreum.ports.input.metrics_query import IMetricsQueryPort
+from codetoreum.ports.input.orchestration_command import IOrchestrationCommandPort
+from codetoreum.ports.input.task_query import ITaskQueryPort
+from codetoreum.ports.input.work_item_command import IWorkItemCommandPort
+from codetoreum.ports.input.work_item_query import IWorkItemQueryPort
+from codetoreum.ports.input.workflow_command import IWorkflowCommandPort
+from codetoreum.ports.input.workflow_definition_command import (
+    IWorkflowDefinitionCommandPort,
+)
+from codetoreum.ports.input.workflow_query import IWorkflowQueryPort
+from codetoreum.ports.input.workflow_run_query import IWorkflowRunQueryPort
+from codetoreum.ports.input.workspace_query import IWorkspaceQueryPort
+from codetoreum.ports.output.active_workflow_run_registry import (
+    IActiveWorkflowRunRegistry,
+)
+from codetoreum.ports.output.agent_executor import IAgentExecutor
+from codetoreum.ports.output.agent_repository import IAgentRepository
+from codetoreum.ports.output.board_service import IBoardService
+from codetoreum.ports.output.branch_resolution_service import IBranchResolutionService
+from codetoreum.ports.output.ci_pipeline_service import ICIPipelineService
+from codetoreum.ports.output.code_review_service import ICodeReviewService
+from codetoreum.ports.output.coding_agent import ICodingAgent
+from codetoreum.ports.output.config_store import IConfigStore
+from codetoreum.ports.output.container import IContainer
+from codetoreum.ports.output.container_recovery import IAgentContainerRecoveryService
+from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
+from codetoreum.ports.output.distributed_lock import IDistributedLock
+from codetoreum.ports.output.encryption_service import IEncryptionService
+from codetoreum.ports.output.environment_repair_service import IEnvironmentRepairService
+from codetoreum.ports.output.event_emitter import IEventEmitter
+from codetoreum.ports.output.event_store import IEventStore
+from codetoreum.ports.output.failed_event_store import IFailedEventStore
+from codetoreum.ports.output.i_tracer import ITracer
+from codetoreum.ports.output.identity_service import IIdentityService
+from codetoreum.ports.output.message_broker import IMessageBroker
+from codetoreum.ports.output.metrics import IMetrics
+from codetoreum.ports.output.notifier import INotifier
+from codetoreum.ports.output.pipeline_queue_service import IPipelineQueueService
+from codetoreum.ports.output.pr_review_cycle_service import IPRReviewCycle
+from codetoreum.ports.output.project_manager_service import IProjectManagerService
+from codetoreum.ports.output.prompt_builder import IPromptBuilder
+from codetoreum.ports.output.repair_cycle_checkpoint_store import (
+    IRepairCycleCheckpointStore,
+)
+from codetoreum.ports.output.repair_cycle_service import IRepairCycle
+from codetoreum.ports.output.repository import IRepository
+from codetoreum.ports.output.review_cycle_service import IReviewCycle
+from codetoreum.ports.output.systemic_analysis_service import ISystemicAnalysisService
+from codetoreum.ports.output.ticket_system import ITicketSystem
+from codetoreum.ports.output.version_control_service import IVersionControlService
+from codetoreum.ports.output.work_execution_state_tracker import (
+    IWorkExecutionStateTracker,
+)
+from codetoreum.ports.output.work_item_branch_tracker import IWorkItemBranchTracker
+from codetoreum.ports.output.work_item_service import IWorkItemService
+from codetoreum.ports.output.workflow_config_service import IWorkflowConfigService
+
+logger = logging.getLogger(__name__)
+
+
+class BootstrapPhase(Enum):
+    """Bootstrap phases that can fail in degraded mode."""
+
+    AUTO_ADVANCE = "auto_advance"
+    STALE_LOCK_WATCHDOG = "stale_lock_watchdog"
+    EXECUTION_TIMEOUT_WATCHDOG = "execution_timeout_watchdog"
+    SLA_EXPIRY_WATCHDOG = "sla_expiry_watchdog"
+    COLUMN_PROGRESSION_WATCHDOG = "column_progression_watchdog"
+
+
+@dataclass
+class BootstrapDegradedModeState:
+    """Tracks which bootstrap phases failed and why.
+
+    When critical phases fail (e.g., watchdogs), the bootstrap continues but
+    marks these failures so callers can detect degraded mode and decide whether
+    to proceed or fail.
+    """
+
+    failed_phases: dict[BootstrapPhase, str] = field(default_factory=dict)
+
+    def mark_failed(self, phase: BootstrapPhase, error: str) -> None:
+        """Mark a phase as failed with the error message."""
+        self.failed_phases[phase] = error
+
+    @property
+    def is_degraded(self) -> bool:
+        """True if any phases failed."""
+        return bool(self.failed_phases)
+
+    @property
+    def failed_phase_names(self) -> list[str]:
+        """List of failed phase names."""
+        return [phase.value for phase in self.failed_phases.keys()]
+
+    def get_summary(self) -> str:
+        """Get human-readable summary of failures."""
+        if not self.is_degraded:
+            return "Bootstrap completed successfully"
+
+        lines = ["Bootstrap running in degraded mode:"]
+        for phase, error in self.failed_phases.items():
+            lines.append(f"  - {phase.value}: {error}")
+        return "\n".join(lines)
+
+
+@dataclass
+class SimulationAdapters:
+    """Container for all simulation adapters.
+
+    All fields are typed as port interfaces, not concrete adapter classes.
+    This allows test code to inject different implementations (mock vs. real)
+    while maintaining type safety.
+
+    Note: agent_executor is assigned in Phase 3 (ExecutionService creation) and is
+    always ExecutionServiceAgentExecutor. It implements IAgentExecutor and publishes
+    AgentExecutionCompletedEvent on the event bus when an execution finishes;
+    BoardColumnEventHandler subscribes to that event to drive auto-progression.
+
+    Event Bus Wiring: The code_review adapter is available here for wiring to the
+    central event bus via EventBusWiring.wire_review_service(). Currently not wired
+    by default in bootstrap, but accessible for test scenarios that need code review
+    event handling.
+
+    For test code that needs simulation-specific methods (e.g., add_response(),
+    movements, executions), use the accessor helpers:
+    - ticket_as_mock() -> InMemoryTicketAdapter
+    - container_as_fake() -> FakeContainerAdapter
+    - board_as_mock() -> MockBoardAdapter
+    - etc.
+    """
+
+    # Output port adapters (typed as interfaces)
+    ticket_system: ITicketSystem
+    container: IContainer
+    repository: IRepository
+    event_store: IEventStore
+    metrics: IMetrics
+    config_store: IConfigStore
+    notifier: INotifier
+    encryption: IEncryptionService
+    board: IBoardService
+    repair_cycle: IRepairCycle
+    project_manager: IProjectManagerService
+    workflow_config: IWorkflowConfigService
+    queue_service: IPipelineQueueService
+    lock_service: "IDistributedLock"
+    event_emitter: IEventEmitter  # CapturingMockEventEmitter in simulation
+    audit_store: IAuditStore | None  # InMemoryAuditStore in simulation, None in testing
+
+    # Additional adapters (typed as interfaces where available)
+    version_control: IVersionControlService
+    message_broker: IMessageBroker
+    discussion_adapter: IDiscussionAdapter
+    review_cycle: IReviewCycle
+    pr_review_cycle: IPRReviewCycle
+    code_review: ICodeReviewService
+    identity_service: IIdentityService
+    checkpoint_store: IRepairCycleCheckpointStore
+    ci_pipeline: ICIPipelineService
+
+    # Phase 3 adapters (ExecutionService chain)
+    agent_repository: IAgentRepository
+    run_registry: IActiveWorkflowRunRegistry
+    branch_tracker: IWorkItemBranchTracker
+    work_item_service: IWorkItemService
+
+    # Container recovery adapter
+    container_recovery: IAgentContainerRecoveryService
+
+    # Execution state tracker (for recovery fast-path lookups)
+    execution_tracker: IWorkExecutionStateTracker
+
+    # Systemic analysis service (for failure classification in repair cycle)
+    systemic_analysis_service: ISystemicAnalysisService
+
+    # Environment repair service (for environment-related test failures)
+    environment_repair_service: IEnvironmentRepairService
+
+    # Fields with defaults (must come after fields without defaults)
+    branch_resolution_service: IBranchResolutionService | None = None
+    agent_executor: IAgentExecutor | None = None
+    tracer: ITracer | None = None
+    # Phase D3/D4 coding agent slot. Optional during the bridge state:
+    # production wires the resilient ClaudeCodeAdapter, simulation wires
+    # MockClaudeCodeAdapter. ExecutionService.execute() requires this to
+    # be non-None at the point of dispatch.
+    coding_agent: ICodingAgent | None = None
+
+    # =========================================================================
+    # Accessor helpers for test code needing simulation-specific methods
+    # =========================================================================
+
+    def ticket_as_mock(self) -> InMemoryTicketAdapter:
+        """Get ticket system as InMemoryTicketAdapter.
+
+        Raises TypeError if ticket_system is not InMemoryTicketAdapter.
+        """
+        if not isinstance(self.ticket_system, InMemoryTicketAdapter):
+            msg = f"ticket_system is {type(self.ticket_system).__name__}, not InMemoryTicketAdapter"
+            raise TypeError(msg)
+        return cast("InMemoryTicketAdapter", self.ticket_system)
+
+    def container_as_fake(self) -> FakeContainerAdapter:
+        """Get container as FakeContainerAdapter.
+
+        Raises TypeError if container is not FakeContainerAdapter.
+        """
+        if not isinstance(self.container, FakeContainerAdapter):
+            msg = f"container is {type(self.container).__name__}, not FakeContainerAdapter"
+            raise TypeError(msg)
+        return cast("FakeContainerAdapter", self.container)
+
+    def repository_as_memory(self) -> InMemoryRepositoryAdapter:
+        """Get repository as InMemoryRepositoryAdapter.
+
+        Raises TypeError if repository is not InMemoryRepositoryAdapter.
+        """
+        if not isinstance(self.repository, InMemoryRepositoryAdapter):
+            msg = f"repository is {type(self.repository).__name__}, not InMemoryRepositoryAdapter"
+            raise TypeError(msg)
+        return cast("InMemoryRepositoryAdapter", self.repository)
+
+    def board_as_mock(self) -> MockBoardAdapter:
+        """Get board as MockBoardAdapter.
+
+        Raises TypeError if board is not MockBoardAdapter.
+        """
+        if not isinstance(self.board, MockBoardAdapter):
+            msg = f"board is {type(self.board).__name__}, not MockBoardAdapter"
+            raise TypeError(msg)
+        return cast("MockBoardAdapter", self.board)
+
+    def repair_cycle_as_mock(self) -> "MockRepairCycleAdapter":
+        """Get repair cycle as MockRepairCycleAdapter.
+
+        Raises TypeError if repair_cycle is not MockRepairCycleAdapter.
+        """
+        try:
+            from codetoreum.adapters.testing.mock_repair_cycle_adapter import (
+                MockRepairCycleAdapter,
+            )
+
+            if not isinstance(self.repair_cycle, MockRepairCycleAdapter):
+                msg = f"repair_cycle is {type(self.repair_cycle).__name__}, not MockRepairCycleAdapter"
+                raise TypeError(msg)
+            return cast("MockRepairCycleAdapter", self.repair_cycle)
+        except ImportError as e:
+            msg = f"Failed to import MockRepairCycleAdapter: {e}"
+            raise TypeError(msg) from e
+
+    def project_manager_as_mock(self) -> MockProjectManagerAdapter:
+        """Get project manager as MockProjectManagerAdapter.
+
+        Raises TypeError if project_manager is not MockProjectManagerAdapter.
+        """
+        if not isinstance(self.project_manager, MockProjectManagerAdapter):
+            msg = f"project_manager is {type(self.project_manager).__name__}, not MockProjectManagerAdapter"
+            raise TypeError(msg)
+        return cast("MockProjectManagerAdapter", self.project_manager)
+
+    def lock_service_as_memory(self) -> "FileBackedDistributedLock":
+        """Get lock service as FileBackedDistributedLock.
+
+        Raises TypeError if lock_service is not FileBackedDistributedLock.
+        """
+        from codetoreum.adapters.secondary.file_backed_distributed_lock import FileBackedDistributedLock
+
+        if not isinstance(self.lock_service, FileBackedDistributedLock):
+            msg = f"lock_service is {type(self.lock_service).__name__}, not FileBackedDistributedLock"
+            raise TypeError(msg)
+        return cast("FileBackedDistributedLock", self.lock_service)
+
+    def workflow_config_as_memory(self) -> InMemoryWorkflowConfigService:
+        """Get workflow config as InMemoryWorkflowConfigService.
+
+        Raises TypeError if workflow_config is not InMemoryWorkflowConfigService.
+        """
+        if not isinstance(self.workflow_config, InMemoryWorkflowConfigService):
+            msg = f"workflow_config is {type(self.workflow_config).__name__}, not InMemoryWorkflowConfigService"
+            raise TypeError(msg)
+        return cast("InMemoryWorkflowConfigService", self.workflow_config)
+
+    def queue_service_as_memory(self) -> InMemoryQueueService:
+        """Get queue service as InMemoryQueueService.
+
+        Raises TypeError if queue_service is not InMemoryQueueService.
+        """
+        if not isinstance(self.queue_service, InMemoryQueueService):
+            msg = f"queue_service is {type(self.queue_service).__name__}, not InMemoryQueueService"
+            raise TypeError(msg)
+        return cast("InMemoryQueueService", self.queue_service)
+
+    def event_emitter_as_capturing(self) -> CapturingMockEventEmitter:
+        """Get event emitter as CapturingMockEventEmitter.
+
+        Raises TypeError if event_emitter is not CapturingMockEventEmitter.
+        """
+        if not isinstance(self.event_emitter, CapturingMockEventEmitter):
+            msg = f"event_emitter is {type(self.event_emitter).__name__}, not CapturingMockEventEmitter"
+            raise TypeError(msg)
+        return cast("CapturingMockEventEmitter", self.event_emitter)
+
+    def version_control_as_memory(self) -> InMemoryVersionControlService:
+        """Get version control as InMemoryVersionControlService.
+
+        Raises TypeError if version_control is not InMemoryVersionControlService.
+        """
+        if not isinstance(self.version_control, InMemoryVersionControlService):
+            msg = f"version_control is {type(self.version_control).__name__}, not InMemoryVersionControlService"
+            raise TypeError(msg)
+        return cast("InMemoryVersionControlService", self.version_control)
+
+    def message_broker_as_memory(self) -> InMemoryMessageBroker:
+        """Get message broker as InMemoryMessageBroker.
+
+        Raises TypeError if message_broker is not InMemoryMessageBroker.
+        """
+        if not isinstance(self.message_broker, InMemoryMessageBroker):
+            msg = f"message_broker is {type(self.message_broker).__name__}, not InMemoryMessageBroker"
+            raise TypeError(msg)
+        return cast("InMemoryMessageBroker", self.message_broker)
+
+    def discussion_adapter_as_mock(self) -> MockDiscussionAdapter:
+        """Get discussion adapter as MockDiscussionAdapter.
+
+        Raises TypeError if discussion_adapter is not MockDiscussionAdapter.
+        """
+        if not isinstance(self.discussion_adapter, MockDiscussionAdapter):
+            msg = f"discussion_adapter is {type(self.discussion_adapter).__name__}, not MockDiscussionAdapter"
+            raise TypeError(msg)
+        return cast("MockDiscussionAdapter", self.discussion_adapter)
+
+    def review_cycle_as_mock(self) -> MockReviewCycleAdapter:
+        """Get review cycle as MockReviewCycleAdapter.
+
+        Raises TypeError if review_cycle is not MockReviewCycleAdapter.
+        """
+        if not isinstance(self.review_cycle, MockReviewCycleAdapter):
+            msg = f"review_cycle is {type(self.review_cycle).__name__}, not MockReviewCycleAdapter"
+            raise TypeError(msg)
+        return cast("MockReviewCycleAdapter", self.review_cycle)
+
+    def pr_review_cycle_as_mock(self) -> "MockPRReviewCycleAdapter":
+        """Get PR review cycle as MockPRReviewCycleAdapter.
+
+        Raises TypeError if pr_review_cycle is not MockPRReviewCycleAdapter.
+        """
+        try:
+            from codetoreum.adapters.testing.mock_pr_review_cycle_adapter import (
+                MockPRReviewCycleAdapter,
+            )
+
+            if not isinstance(self.pr_review_cycle, MockPRReviewCycleAdapter):
+                msg = f"pr_review_cycle is {type(self.pr_review_cycle).__name__}, not MockPRReviewCycleAdapter"
+                raise TypeError(msg)
+            return cast("MockPRReviewCycleAdapter", self.pr_review_cycle)
+        except ImportError as e:
+            msg = f"Failed to import MockPRReviewCycleAdapter: {e}"
+            raise TypeError(msg) from e
+
+    def identity_service_as_configurable(self) -> ConfigurableIdentityService:
+        """Get identity service as ConfigurableIdentityService.
+
+        Raises TypeError if identity_service is not ConfigurableIdentityService.
+        """
+        if not isinstance(self.identity_service, ConfigurableIdentityService):
+            msg = f"identity_service is {type(self.identity_service).__name__}, not ConfigurableIdentityService"
+            raise TypeError(msg)
+        return cast("ConfigurableIdentityService", self.identity_service)
+
+    def checkpoint_store_as_memory(self) -> InMemoryCheckpointStore:
+        """Get checkpoint store as InMemoryCheckpointStore.
+
+        Raises TypeError if checkpoint_store is not InMemoryCheckpointStore.
+        """
+        if not isinstance(self.checkpoint_store, InMemoryCheckpointStore):
+            msg = f"checkpoint_store is {type(self.checkpoint_store).__name__}, not InMemoryCheckpointStore"
+            raise TypeError(msg)
+        return cast("InMemoryCheckpointStore", self.checkpoint_store)
+
+    def agent_repository_as_memory(self) -> InMemoryAgentRepository:
+        """Get agent repository as InMemoryAgentRepository.
+
+        Raises TypeError if agent_repository is not InMemoryAgentRepository.
+        """
+        if not isinstance(self.agent_repository, InMemoryAgentRepository):
+            msg = f"agent_repository is {type(self.agent_repository).__name__}, not InMemoryAgentRepository"
+            raise TypeError(msg)
+        return cast("InMemoryAgentRepository", self.agent_repository)
+
+    def run_registry_as_memory(self) -> InMemoryActiveWorkflowRunRegistry:
+        """Get run registry as InMemoryActiveWorkflowRunRegistry.
+
+        Raises TypeError if run_registry is not InMemoryActiveWorkflowRunRegistry.
+        """
+        if not isinstance(self.run_registry, InMemoryActiveWorkflowRunRegistry):
+            msg = f"run_registry is {type(self.run_registry).__name__}, not InMemoryActiveWorkflowRunRegistry"
+            raise TypeError(msg)
+        return cast("InMemoryActiveWorkflowRunRegistry", self.run_registry)
+
+    def branch_tracker_as_memory(self) -> InMemoryWorkItemBranchTracker:
+        """Get branch tracker as InMemoryWorkItemBranchTracker.
+
+        Raises TypeError if branch_tracker is not InMemoryWorkItemBranchTracker.
+        """
+        if not isinstance(self.branch_tracker, InMemoryWorkItemBranchTracker):
+            msg = f"branch_tracker is {type(self.branch_tracker).__name__}, not InMemoryWorkItemBranchTracker"
+            raise TypeError(msg)
+        return cast("InMemoryWorkItemBranchTracker", self.branch_tracker)
+
+    def work_item_service_as_mock(self) -> MockWorkItemService:
+        """Get work item service as MockWorkItemService.
+
+        Raises TypeError if work_item_service is not MockWorkItemService.
+        """
+        if not isinstance(self.work_item_service, MockWorkItemService):
+            msg = f"work_item_service is {type(self.work_item_service).__name__}, not MockWorkItemService"
+            raise TypeError(msg)
+        return cast("MockWorkItemService", self.work_item_service)
+
+    def ci_pipeline_as_mock(self) -> "MockCIPipelineAdapter":
+        """Get CI pipeline service as MockCIPipelineAdapter.
+
+        Raises TypeError if ci_pipeline is not MockCIPipelineAdapter.
+        """
+        from codetoreum.adapters.testing.mock_ci_pipeline_adapter import (
+            MockCIPipelineAdapter,
+        )
+
+        if not isinstance(self.ci_pipeline, MockCIPipelineAdapter):
+            msg = f"ci_pipeline is {type(self.ci_pipeline).__name__}, not MockCIPipelineAdapter"
+            raise TypeError(msg)
+        return cast("MockCIPipelineAdapter", self.ci_pipeline)
+
+    def branch_resolution_as_mock(self) -> "MockBranchResolutionAdapter":
+        """Get branch resolution service as MockBranchResolutionAdapter.
+
+        Raises TypeError if branch_resolution_service is not MockBranchResolutionAdapter.
+        """
+        from codetoreum.adapters.testing.mock_branch_resolution_adapter import (
+            MockBranchResolutionAdapter,
+        )
+
+        if self.branch_resolution_service is None:
+            msg = "branch_resolution_service is None, expected MockBranchResolutionAdapter"
+            raise TypeError(msg)
+        if not isinstance(self.branch_resolution_service, MockBranchResolutionAdapter):
+            msg = f"branch_resolution_service is {type(self.branch_resolution_service).__name__}, not MockBranchResolutionAdapter"
+            raise TypeError(msg)
+        return cast("MockBranchResolutionAdapter", self.branch_resolution_service)
+
+    def event_store_as_memory(self) -> InMemoryEventStore:
+        """Get event store as InMemoryEventStore.
+
+        Raises TypeError if event_store is not InMemoryEventStore.
+        """
+        if not isinstance(self.event_store, InMemoryEventStore):
+            msg = f"event_store is {type(self.event_store).__name__}, not InMemoryEventStore"
+            raise TypeError(msg)
+        return cast("InMemoryEventStore", self.event_store)
+
+    def config_store_as_memory(self) -> InMemoryConfigStore:
+        """Get config store as InMemoryConfigStore.
+
+        Raises TypeError if config_store is not InMemoryConfigStore.
+        """
+        if not isinstance(self.config_store, InMemoryConfigStore):
+            msg = f"config_store is {type(self.config_store).__name__}, not InMemoryConfigStore"
+            raise TypeError(msg)
+        return cast("InMemoryConfigStore", self.config_store)
+
+    def encryption_as_simple(self) -> SimpleEncryptionAdapter:
+        """Get encryption as SimpleEncryptionAdapter.
+
+        Raises TypeError if encryption is not SimpleEncryptionAdapter.
+        """
+        if not isinstance(self.encryption, SimpleEncryptionAdapter):
+            msg = f"encryption is {type(self.encryption).__name__}, not SimpleEncryptionAdapter"
+            raise TypeError(msg)
+        return cast("SimpleEncryptionAdapter", self.encryption)
+
+    def metrics_as_memory(self) -> InMemoryMetricsAdapter:
+        """Get metrics as InMemoryMetricsAdapter.
+
+        Raises TypeError if metrics is not InMemoryMetricsAdapter.
+        """
+        if not isinstance(self.metrics, InMemoryMetricsAdapter):
+            msg = f"metrics is {type(self.metrics).__name__}, not InMemoryMetricsAdapter"
+            raise TypeError(msg)
+        return cast("InMemoryMetricsAdapter", self.metrics)
+
+    def tracer_as_in_memory(self) -> InMemoryTracer:
+        """Get tracer as InMemoryTracer.
+
+        Raises TypeError if tracer is not InMemoryTracer.
+        """
+        if not isinstance(self.tracer, InMemoryTracer):
+            msg = f"tracer is {type(self.tracer).__name__}, not InMemoryTracer"
+            raise TypeError(msg)
+        return cast("InMemoryTracer", self.tracer)
+
+    def systemic_analysis_as_mock(self) -> "MockSystemicAnalysisAdapter":
+        """Get systemic analysis as MockSystemicAnalysisAdapter.
+
+        Raises TypeError if systemic_analysis_service is not MockSystemicAnalysisAdapter.
+        """
+        try:
+            from codetoreum.adapters.testing.mock_systemic_analysis_adapter import (
+                MockSystemicAnalysisAdapter,
+            )
+
+            if not isinstance(self.systemic_analysis_service, MockSystemicAnalysisAdapter):
+                msg = f"systemic_analysis_service is {type(self.systemic_analysis_service).__name__}, not MockSystemicAnalysisAdapter"
+                raise TypeError(msg)
+            return cast("MockSystemicAnalysisAdapter", self.systemic_analysis_service)
+        except ImportError as e:
+            msg = f"Failed to import MockSystemicAnalysisAdapter: {e}"
+            raise TypeError(msg) from e
+
+    def systemic_analysis_service_as_mock(self) -> "MockSystemicAnalysisAdapter":
+        """Get systemic analysis service as MockSystemicAnalysisAdapter (alias for systemic_analysis_as_mock).
+
+        Raises TypeError if systemic_analysis_service is not MockSystemicAnalysisAdapter.
+        """
+        return self.systemic_analysis_as_mock()
+
+    def environment_repair_as_mock(self) -> "MockEnvironmentRepairAdapter":
+        """Get environment repair service as MockEnvironmentRepairAdapter.
+
+        Raises TypeError if environment_repair_service is not MockEnvironmentRepairAdapter.
+        """
+        try:
+            from codetoreum.adapters.testing.mock_environment_repair_adapter import (
+                MockEnvironmentRepairAdapter,
+            )
+
+            if not isinstance(self.environment_repair_service, MockEnvironmentRepairAdapter):
+                msg = f"environment_repair_service is {type(self.environment_repair_service).__name__}, not MockEnvironmentRepairAdapter"
+                raise TypeError(msg)
+            return cast("MockEnvironmentRepairAdapter", self.environment_repair_service)
+        except ImportError as e:
+            msg = f"Failed to import MockEnvironmentRepairAdapter: {e}"
+            raise TypeError(msg) from e
+
+
+@dataclass
+class SimulationServices:
+    """Container for all application services."""
+
+    workflow_orchestrator: WorkflowOrchestrator
+    execution_service: ExecutionService
+    agent_scheduler: AgentScheduler
+    pipeline_manager: PipelineManager
+    review_service: ReviewService
+    feedback_processor: FeedbackProcessor
+    workspace_router: WorkspaceRouter
+    configuration_service: ConfigurationService
+    work_item_service: WorkItemService
+    # Default IPromptBuilder implementation (Phase D2). Currently unused;
+    # D3 wires it into the rewritten ClaudeCodeAdapter.
+    prompt_builder: IPromptBuilder
+    agent_execution_recovery_service: AgentExecutionRecoveryService | None = None
+    multi_project_orchestrator: Any | None = None  # MultiProjectOrchestrator
+    container_recovery_service: Any | None = None
+
+
+@dataclass
+class SimulationPorts:
+    """Container for all input/output port implementations."""
+
+    # Input ports (command)
+    workflow_command: IWorkflowCommandPort
+    work_item_command: IWorkItemCommandPort
+    workflow_definition_command: IWorkflowDefinitionCommandPort
+    orchestration_command: IOrchestrationCommandPort
+    agent_command: IAgentCommandPort
+    execution_command: IExecutionCommandPort
+    config_command: IConfigurationCommandPort
+
+    # Input ports (query)
+    task_query: ITaskQueryPort
+    work_item_query: IWorkItemQueryPort
+    workflow_query: IWorkflowQueryPort
+    workflow_run_query: IWorkflowRunQueryPort
+    agent_query: IAgentQueryPort
+    execution_query: IExecutionQueryPort
+    config_query: IConfigurationQueryPort
+    metrics_query: IMetricsQueryPort
+    workspace_query: IWorkspaceQueryPort
+    audit_query: IAuditQueryPort
+
+
+@dataclass
+class SimulationInfrastructure:
+    """
+    Container for infrastructure components.
+
+    Note: Clock is managed by SimulationEngine, not exposed here.
+    """
+
+    event_bus: EventBus
+    logger: logging.Logger
+    mock_tracer: MockTracer
+    causal_link_registry: CausalLinkRegistry
+    failed_event_store: IFailedEventStore
+
+
+class SimulationApplicationBootstrap:
+    """
+    Bootstrap the entire application stack in simulation mode.
+
+    This class wires up:
+    1. All 34 testing and simulation adapters
+    2. Infrastructure (event bus, clock, logger)
+    3. All application services
+    4. All input/output ports
+    5. FastAPI application
+    6. Conditionally auto-advance simulation clock (if configured via TimeConfig.auto_advance)
+
+    Usage:
+        bootstrap = SimulationApplicationBootstrap(config)
+        await bootstrap.setup()
+        app = bootstrap.app
+        # ... use app for testing
+        await bootstrap.teardown()
+    """
+
+    def __init__(self, config: SimulationConfig | None = None):
+        """
+        Initialize bootstrap with simulation configuration.
+
+        This creates an internal SimulationEngine that manages all timing
+        and time-aware components in simulation mode.
+
+        Args:
+            config: Simulation configuration (creates default if None)
+        """
+        self.config = config or SimulationConfig.create_fast_config("default")
+
+        # Components (initialized by setup())
+        self.adapters: SimulationAdapters | None = None
+        self.infrastructure: SimulationInfrastructure | None = None
+        self.services: SimulationServices | None = None
+        self.ports: SimulationPorts | None = None
+        self.app: FastAPI | None = None
+
+        # Internal state
+        self._is_setup = False
+        self._degraded_mode = BootstrapDegradedModeState()
+        self._adapter_factory: AdapterFactory | None = None
+        self._engine: SimulationEngine | None = None
+        self._board_event_handler: BoardColumnEventHandler | None = None
+        self._execution_timeout_watchdog: ExecutionTimeoutWatchdog | None = None
+        self._sla_expiry_watchdog: SLAExpiryWatchdog | None = None
+        self._column_progression_watchdog: ColumnProgressionWatchdog | None = None
+        self._queued_lock_service: FileBackedDistributedLock | None = None
+
+    @property
+    def is_degraded(self) -> bool:
+        """
+        Check if bootstrap is running in degraded mode.
+
+        Degraded mode occurs when critical phases fail (watchdogs, auto-advance, etc.)
+        but the bootstrap continues to allow testing/debugging.
+
+        Callers MUST check this property after setup() completes successfully
+        to determine if the system is operating with reduced functionality.
+
+        Returns:
+            True if any critical phase failed; False if setup is fully healthy.
+        """
+        return self._degraded_mode.is_degraded
+
+    @property
+    def degraded_mode_state(self) -> BootstrapDegradedModeState:
+        """
+        Get detailed degraded mode state.
+
+        Returns the full state including which phases failed and why.
+        Only relevant if is_degraded is True.
+        """
+        return self._degraded_mode
+
+    async def setup(self) -> FastAPI:
+        """
+        Set up the entire application stack.
+
+        This method executes bootstrap phases in order:
+        - Phase 0: Create simulation engine (encapsulates clock and timing)
+        - Phase 1: Create infrastructure (event bus, logger, error registry) - EARLY for subscriptions
+        - Phase 2: Create adapters (34 mock adapters for all output ports)
+        - Phase 3: Create services (11 application services with dependencies)
+        - Phase 4: Create ports (17 input port implementations)
+        - Phase 5: Create FastAPI app (wire all ports to API endpoints, register handlers)
+        - Phase 6: Conditionally start auto-advance clock (if configured)
+        - Phase 6b: Register stale lock watchdog (deadlock prevention)
+        - Phase 6c: Register execution timeout watchdog (runaway agent prevention)
+        - Phase 6d: Register SLA expiry watchdog (compliance enforcement)
+
+        Infrastructure is created before adapters to enable causal linking via event bus subscriptions.
+        Auto-advance and watchdogs are started after all event handlers are registered to ensure
+        tick-driven events have handlers.
+
+        **DEGRADED MODE**: If phases 6/6b/6c/6d fail, the bootstrap continues to allow testing
+        and debugging, but logs errors and marks components as degraded. Callers MUST check the
+        `is_degraded` property after setup() returns successfully to determine if critical
+        functionality is missing.
+
+        Returns:
+            Fully configured FastAPI application (check `is_degraded` property for health status)
+
+        Raises:
+            RuntimeError: If already set up or if core phases 0-5 fail (degraded mode is only
+                        for phases 6+)
+        """
+        if self._is_setup:
+            message = "Bootstrap already set up"
+            raise RuntimeError(message)
+
+        try:
+            logger.info("Starting simulation bootstrap...")
+
+            # Phase 0: Create simulation engine (encapsulates clock and timing)
+            logger.info("Phase 0: Creating simulation engine...")
+            self._engine = SimulationEngine.create(self.config)
+
+            # Phase 1 (early): Create infrastructure including event bus
+            # Created before adapters so they can subscribe to domain events
+            logger.info("Phase 1: Creating infrastructure...")
+            self.infrastructure = self._create_infrastructure()
+
+            # Phase 2: Create adapters (34 total: 33 via resolver + branch_resolution_service) with event bus subscriptions
+            logger.info("Phase 2: Creating 34 adapters...")
+            self.adapters = await self._create_adapters()
+
+            # Register causal links between adapters and domain events
+            logger.info("Phase 2b: Registering causal links...")
+            self._register_causal_links()
+
+            # Phase 3: Create services
+            logger.info("Phase 3: Creating services...")
+            self.services = await self._create_services()
+
+            # Phase 4: Create ports
+            logger.info("Phase 4: Creating ports...")
+            self.ports = self._create_ports()
+
+            # Phase 5: Create FastAPI app
+            logger.info("Phase 5: Creating FastAPI app...")
+            self.app = self._create_fastapi_app()
+
+            # Validate causal link consistency (Phase 5b)
+            logger.info("Phase 5b: Validating causal link consistency...")
+            self._validate_causal_links()
+
+            # Start failed event store retry processor (in-memory implementation in simulation)
+            # InMemoryFailedEventStore is a no-op for retry processing in simulation mode
+            if self.infrastructure and self.infrastructure.failed_event_store:
+                logger.debug("Failed event store is ready (no-op for in-memory implementation)")
+
+            # Phase 5c: Start AgentScheduler consumer loop.
+            # Must come after _create_services() so set_executor() has already been called.
+            # Matches the production bootstrap (production_bootstrap.py:367).
+            if self.services and self.services.agent_scheduler:
+                try:
+                    await self.services.agent_scheduler.start()
+                    logger.info("Phase 5c: AgentScheduler consumer loop started")
+                except Exception as e:
+                    logger.error(
+                        f"Failed to start AgentScheduler: {e}",
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                    )
+                    self._degraded_mode.mark_failed(BootstrapPhase.AUTO_ADVANCE, str(e))
+
+            # Phase 6: Start auto-advance if configured
+            # This must come after all event handlers are registered so tick-driven events have handlers
+            if self.config.time.auto_advance and self._engine:
+                try:
+                    logger.info(
+                        "Phase 6: Starting auto-advance at %sx speed",
+                        self.config.time.speed_multiplier,
+                    )
+                    await self._engine.start_auto_advance()
+                except RuntimeError as e:
+                    # If auto-advance is already running, log warning and continue in degraded mode
+                    error_msg = f"Auto-advance already running or failed to start: {e}"
+                    logger.warning(
+                        error_msg,
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                    )
+                    self._degraded_mode.mark_failed(BootstrapPhase.AUTO_ADVANCE, str(e))
+                except Exception as e:
+                    # Mark as degraded and log with full context
+                    error_msg = f"Unexpected error starting auto-advance: {e}"
+                    logger.error(
+                        error_msg,
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                    )
+                    self._degraded_mode.mark_failed(BootstrapPhase.AUTO_ADVANCE, str(e))
+                    # Continue without auto-advance rather than crashing the server
+                    logger.info("Continuing server startup in degraded mode without auto-advance")
+
+            # Phase 6c: Register execution timeout watchdog
+            # Must come after auto-advance starts and ExecutionServiceAgentExecutor is initialized
+            if self.adapters and self._engine:
+                try:
+                    logger.info("Phase 6c: Registering execution timeout watchdog...")
+                    # Type guard: agent_executor must be ExecutionServiceAgentExecutor, not None
+                    if self.adapters.agent_executor is None:
+                        raise RuntimeError("ExecutionServiceAgentExecutor not initialized in Phase 3")
+                    from codetoreum.adapters.secondary.execution_service_agent_executor import (
+                        ExecutionServiceAgentExecutor,
+                    )
+
+                    if not isinstance(self.adapters.agent_executor, ExecutionServiceAgentExecutor):
+                        raise TypeError(
+                            f"agent_executor must be ExecutionServiceAgentExecutor, "
+                            f"got {type(self.adapters.agent_executor).__name__}"
+                        )
+                    self._execution_timeout_watchdog = ExecutionTimeoutWatchdog(
+                        executor=self.adapters.agent_executor,
+                        event_emitter=self.adapters.event_emitter,
+                        clock=self._engine.get_clock_for_testing(),
+                        check_interval=timedelta(seconds=30),  # Check every 30 simulated seconds
+                    )
+                    self._execution_timeout_watchdog.start()
+                    logger.info("Execution timeout watchdog registered and started")
+                except Exception as e:
+                    # Mark as degraded - execution timeout detection is critical for runaway prevention
+                    error_msg = f"Failed to register execution timeout watchdog: {e}"
+                    logger.error(
+                        error_msg,
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                    )
+                    self._degraded_mode.mark_failed(BootstrapPhase.EXECUTION_TIMEOUT_WATCHDOG, str(e))
+                    # Continue without watchdog rather than crashing the server
+                    logger.warning(
+                        "Continuing server startup in degraded mode without execution timeout watchdog. "
+                        "Agents may run indefinitely if they hang."
+                    )
+
+            # Phase 6d: Register SLA expiry watchdog
+            # Must come after auto-advance starts and all adapters are initialized
+            if self.adapters and self._engine:
+                try:
+                    logger.info("Phase 6d: Registering SLA expiry watchdog...")
+                    self._sla_expiry_watchdog = SLAExpiryWatchdog(
+                        board_service=self.adapters.board,
+                        workflow_config_service=self.adapters.workflow_config,
+                        event_emitter=self.adapters.event_emitter,
+                        clock=self._engine.get_clock_for_testing(),
+                        check_interval=timedelta(seconds=60),  # Check every 60 simulated seconds
+                    )
+                    self._sla_expiry_watchdog.start()
+                    logger.info("SLA expiry watchdog registered and started")
+                except Exception as e:
+                    # Mark as degraded - SLA enforcement is critical for compliance
+                    error_msg = f"Failed to register SLA expiry watchdog: {e}"
+                    logger.error(
+                        error_msg,
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                    )
+                    self._degraded_mode.mark_failed(BootstrapPhase.SLA_EXPIRY_WATCHDOG, str(e))
+                    # Continue without watchdog rather than crashing the server
+                    logger.warning(
+                        "Continuing server startup in degraded mode without SLA expiry watchdog. "
+                        "SLA violations will not be detected."
+                    )
+
+            # Phase 6e: Register column progression watchdog
+            # Must come after auto-advance starts and all adapters are initialized
+            # Provides clock-driven autonomous progression as alternative to HTTP-triggered moves
+            if self.adapters and self._engine:
+                try:
+                    logger.info("Phase 6e: Registering column progression watchdog...")
+                    self._column_progression_watchdog = ColumnProgressionWatchdog(
+                        board_service=self.adapters.board,
+                        workflow_config_service=self.adapters.workflow_config,
+                        clock=self._engine.get_clock_for_testing(),
+                        check_interval=timedelta(seconds=30),  # Check every 30 simulated seconds
+                        dedup_window=timedelta(seconds=5),  # Dedup window for recent progressions
+                    )
+                    self._column_progression_watchdog.start()
+                    logger.info("Column progression watchdog registered and started")
+                except Exception as e:
+                    # Mark as degraded - column progression is essential for autonomous workflows
+                    error_msg = f"Failed to register column progression watchdog: {e}"
+                    logger.error(
+                        error_msg,
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                    )
+                    self._degraded_mode.mark_failed(BootstrapPhase.COLUMN_PROGRESSION_WATCHDOG, str(e))
+                    # Continue without watchdog - progression will work via HTTP calls only
+                    logger.warning(
+                        "Continuing server startup in degraded mode without column progression watchdog. "
+                        "Clock-driven progression will not work, but HTTP-triggered progression should work."
+                    )
+
+            self._is_setup = True
+
+            # Log degraded mode status before returning
+            if self.is_degraded:
+                logger.warning(self._degraded_mode.get_summary())
+                logger.warning(
+                    "Bootstrap completed in DEGRADED MODE with %d critical failures. "
+                    "Check is_degraded property and degraded_mode_state for details.",
+                    len(self._degraded_mode.failed_phases),
+                )
+            else:
+                logger.info("Simulation bootstrap completed successfully (fully healthy)")
+
+            return self.app
+
+        except Exception as e:
+            logger.error(
+                f"Bootstrap setup failed: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+            )
+            raise
+
+    async def teardown(self) -> None:
+        """
+        Clean up all resources.
+
+        Performs cleanup in reverse order:
+        - Stop all three watchdogs (prevent accessing cleaned-up resources)
+        - Stop dead letter queue retry processor
+        - Stop clock auto-advance (if running)
+        - Stop event bus
+        - Clear adapters
+        - Reset state
+
+        Raises:
+            Exception: Re-raises any exception encountered during cleanup with full context.
+                     The _is_setup flag is only cleared if all cleanup steps succeed,
+                     ensuring reliable state tracking even on failure.
+        """
+        if not self._is_setup:
+            return
+
+        try:
+            logger.info("Tearing down simulation bootstrap...")
+
+            # Stop AgentScheduler consumer loop before cleaning up adapters.
+            if self.services and self.services.agent_scheduler:
+                try:
+                    await self.services.agent_scheduler.stop()
+                    logger.debug("AgentScheduler consumer loop stopped")
+                except Exception:
+                    logger.warning("Error stopping AgentScheduler during teardown", exc_info=True)
+
+            # Stop all watchdogs before cleaning up adapters/infrastructure
+            # This prevents scheduled callbacks from firing during teardown and
+            # attempting to access None references (adapters, lock_service, etc.)
+            if self._execution_timeout_watchdog:
+                self._execution_timeout_watchdog.stop()
+                logger.debug("Execution timeout watchdog stopped")
+
+            if self._sla_expiry_watchdog:
+                self._sla_expiry_watchdog.stop()
+                logger.debug("SLA expiry watchdog stopped")
+
+            if self._column_progression_watchdog:
+                self._column_progression_watchdog.stop()
+                logger.debug("Column progression watchdog stopped")
+
+            # No cleanup needed for in-memory failed event store
+
+            # Stop simulation engine
+            if self._engine:
+                await self._engine.stop()
+
+            # Clean up resources
+            if self.infrastructure and self.infrastructure.event_bus:
+                # Event bus cleanup (no async stop needed for in-memory implementation)
+                self.infrastructure.event_bus.reset_statistics()
+
+            # Clear causal link registry
+            if self.infrastructure and self.infrastructure.causal_link_registry:
+                self.infrastructure.causal_link_registry.clear()
+
+            # Clear references
+            self.app = None
+            self.ports = None
+            self.services = None
+            self.infrastructure = None
+            self.adapters = None
+            self._adapter_factory = None
+            self._engine = None
+            self._execution_timeout_watchdog = None
+            self._sla_expiry_watchdog = None
+            self._column_progression_watchdog = None
+
+            self._is_setup = False
+            logger.info("Simulation bootstrap teardown complete")
+
+        except Exception as e:
+            logger.error(
+                f"Error during teardown: {e}",
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                exc_info=True,
+            )
+            # Re-raise to ensure caller (typically test fixture) knows teardown failed
+            raise
+
+    # =========================================================================
+    # DLQ Retry Handler
+    # =========================================================================
+
+    def _create_dlq_retry_handler(self):
+        """Create a DLQ retry handler closure for republishing failed events.
+
+        The handler captures the event bus at creation time and, when called
+        with (event_type, payload), reconstructs the domain event and publishes
+        it via the event bus. Raises ValueError for unknown event types.
+
+        Returns:
+            Async callable (event_type: str, payload: dict) -> None
+        """
+        event_bus = self.infrastructure.event_bus
+
+        # Map of supported event type names to their from_dict constructors
+        _known_event_types = {
+            "WorkItemColumnChanged": WorkItemColumnChangedEvent.from_dict,
+            "BoardReconciled": BoardReconciledEvent.from_dict,
+        }
+
+        async def retry_handler(event_type: str, payload: dict) -> None:
+            """Reconstruct and republish a failed event by its type name and payload."""
+            if event_type not in _known_event_types:
+                raise ValueError(f"Unknown event type: {event_type}")
+            # Ensure required base fields have defaults if not provided
+            enriched = dict(payload)
+            if "timestamp" not in enriched or not enriched.get("timestamp"):
+                from datetime import UTC as _UTC
+                from datetime import datetime
+
+                enriched["timestamp"] = datetime.now(_UTC).isoformat()
+            if "source" not in enriched or not enriched.get("source"):
+                enriched["source"] = "dlq_retry"
+            event = _known_event_types[event_type](enriched)
+            await event_bus.publish(event)
+
+        return retry_handler
+
+    # =========================================================================
+    # Phase 2: Create Adapters
+    # =========================================================================
+
+    async def _create_adapters(self) -> SimulationAdapters:
+        """
+        Create all 34 adapters: 33 via AdapterResolver + 1 manual post-processing.
+
+        Phase 2 bootstrap creates adapters following a partial dependency ordering:
+        1. Leaf adapters (no dependencies): event_store, config_store, metrics, encryption, identity_service
+        2. Event infrastructure: event_emitter, message_broker
+        3. Adapters depending on event_emitter: storage, container, version_control, board, queue_service
+        4. External systems: ticket_system, llm_provider
+        5. Coordination: discussion_adapter, lock_service
+        6. State: checkpoint_store, agent_repository, run_registry, branch_tracker, work_item_service,
+                   workflow_config, notifier
+        7. Composite: project_manager
+        8. Repository: (depends on event_emitter)
+        9. Engine-coupled: review_cycle, repair_cycle, pr_review_cycle (use SimulationEngine for clock injection)
+        10. Additional services: code_review, container_recovery, systemic_analysis_service,
+            environment_repair_service, ci_pipeline_service (33 total via resolver)
+        11. Manual post-processing: branch_resolution_service (34th adapter, created separately)
+
+        AdapterResolver validates credentials before construction and raises aggregated
+        configuration errors if any adapter is misconfigured.
+
+        All adapters are typed as port interfaces, allowing test code to use accessor
+        helpers (e.g., adapters.board_as_mock(), adapters.llm_as_mock()) to access
+        simulation-specific methods.
+
+        Returns:
+            SimulationAdapters with all 34 adapters typed as port interfaces
+        """
+        if not self._engine:
+            message = "SimulationEngine must be created before adapters"
+            raise RuntimeError(message)
+        if not self.infrastructure:
+            message = "Infrastructure (event bus) must be created before adapters"
+            raise RuntimeError(message)
+
+        # Phase 2: Create adapter factory and resolver
+        factory_config = AdapterFactoryConfig(
+            operation_mode=OperationMode.SIMULATION,
+            enable_resilience=False,  # ADR-005: No resilience in simulation
+        )
+        self._adapter_factory = AdapterFactory(factory_config)
+
+        # Create adapter dependencies for injection
+        # Note: event_emitter will be resolved by AdapterResolver and provided in resolved dict
+        deps = AdapterDependencies(
+            event_bus=self.infrastructure.event_bus,
+            event_emitter=CapturingMockEventEmitter(),  # Placeholder, will be replaced by resolver result
+            logger=self.infrastructure.logger,
+            engine=self._engine,
+            config=self.config,
+        )
+
+        # Create resolver with dependency order management
+        resolver = AdapterResolver(
+            adapter_config=self.config.adapters,
+            factory=self._adapter_factory,
+            dependencies=deps,
+        )
+
+        # Resolve all adapters in dependency order with credential validation
+        # resolve_all() now returns fully typed SimulationAdapters directly
+        resolved = resolver.resolve_all()
+
+        # Apply simulation-specific post-processing where needed
+        # (e.g., pre-configuring default project for tests)
+
+        # Post-process project manager: pre-configure default test project
+        if isinstance(resolved.project_manager, MockProjectManagerAdapter):
+            resolved.project_manager.add_project(
+                "default_project",
+                ProjectConfig(
+                    repo_url="https://vcs.example.com/org/default.git",
+                    branch="main",
+                    enabled=True,
+                    org="test-org",
+                ),
+            )
+
+        # Post-process message broker: initialize async
+        if isinstance(resolved.message_broker, InMemoryMessageBroker):
+            await resolved.message_broker.initialize()
+
+        # Post-process identity service: set bot username
+        if isinstance(resolved.identity_service, ConfigurableIdentityService):
+            resolved.identity_service.set_bot_username("codetoreum-bot")
+
+        # Wire systemic analysis service to repair cycle adapter for dispatch logic
+        # This enables the mock repair cycle adapter to dispatch to systemic_fix based on cross_cutting
+        from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
+
+        if isinstance(resolved.repair_cycle, MockRepairCycleAdapter):
+            resolved.repair_cycle.systemic_analysis_service = resolved.systemic_analysis_service
+            resolved.repair_cycle.environment_repair_service = resolved.environment_repair_service
+            resolved.repair_cycle.ci_pipeline_service = resolved.ci_pipeline
+
+        # Wire ticket system, board service, event emitter, event bus, and event store to PR review cycle adapter
+        # This enables the mock PR review cycle adapter to create sub-issues, move items, emit events, publish to the event bus, and persist to the event store
+        from codetoreum.adapters.testing.mock_pr_review_cycle_adapter import MockPRReviewCycleAdapter
+
+        if isinstance(resolved.pr_review_cycle, MockPRReviewCycleAdapter):
+            resolved.pr_review_cycle.ticket_system = resolved.ticket_system
+            resolved.pr_review_cycle.board_service = resolved.board
+            resolved.pr_review_cycle.event_emitter = resolved.event_emitter
+            resolved.pr_review_cycle.event_bus = self.infrastructure.event_bus
+            resolved.pr_review_cycle.event_store = resolved.event_store
+
+            # Wire event emitter to publish CodetoreumEvents to event bus
+            # This ensures that PR review cycle events emitted by the adapter reach the event bus handlers
+            def _publish_codetoreum_event_to_bus(event):  # type: ignore
+                import asyncio
+
+                # Create an async task to publish to event bus (fire and forget with error handling)
+                try:
+                    loop = asyncio.get_running_loop()
+                    task = loop.create_task(self.infrastructure.event_bus.publish(event))
+
+                    def task_done_callback(task_result: asyncio.Task[None]) -> None:
+                        """Log any unhandled exceptions from the PR review cycle bridge task."""
+                        try:
+                            task_result.result()
+                        except asyncio.CancelledError:
+                            # Task was cancelled - this is normal during shutdown
+                            pass
+                        except Exception as task_exception:
+                            # Unhandled exception in the bridge handler (e.g., event bus failure)
+                            # This logs the failure so it's not silently swallowed
+                            logger.error(
+                                f"Unhandled exception in PR review cycle event bridge for event type "
+                                f"{getattr(event, 'type', 'unknown')}: {task_exception}",
+                                exc_info=True,
+                                extra={
+                                    "error_type": type(task_exception).__name__,
+                                    "error_id": ErrorRegistry.ERR_INTERNAL_ERROR,
+                                },
+                            )
+
+                    task.add_done_callback(task_done_callback)
+                except RuntimeError as e:
+                    logger.error(
+                        f"Failed to schedule PR review cycle event bus publication task: {e}",
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                    )
+
+            # Subscribe to specific PR review cycle event types (not wildcard "all" events)
+            # This prevents capturing unrelated events from other adapters like board column changes
+            pr_review_cycle_event_types = [
+                "pr_review_cycle.started",
+                "pr_review_cycle.approved",
+                "pr_review_cycle.issues_found",
+                "pr_review_cycle.max_cycles_reached",
+                "pr_review_cycle.escalated",
+                "pr_review_cycle.code_review_started",
+                "pr_review_cycle.verification_started",
+                "pr_review_cycle.ci_check_completed",
+                "pr_review_cycle.consolidation_started",
+                "pr_review_cycle.phase_completed",
+                "pr_review_cycle.sub_issues_created",
+                "pr_review_cycle.consolidation_completed",
+            ]
+            for event_type in pr_review_cycle_event_types:
+                resolved.event_emitter.on(event_type, _publish_codetoreum_event_to_bus)
+            logger.info("Wired PR review cycle event emitter to event bus with 12 event types")
+
+        # NOTE: Do NOT wire board adapter directly to event_bus here.
+        # _register_board_event_bridge() registers local listeners that translate board events
+        # into domain events and publish them to the event bus. Direct wiring would cause
+        # double event processing: once via emit_async's direct publish, once via the bridge.
+        from codetoreum.adapters.testing.mock_board_adapter import MockBoardAdapter  # noqa: F401
+
+        # Create branch resolution adapter (mock adapter for simulation testing)
+        resolved.branch_resolution_service = MockBranchResolutionAdapter(clock=self._engine.get_clock_for_testing())
+
+        # Create audit store (not provided by resolver)
+        audit_store = InMemoryAuditStore()
+
+        logger.info("Created 34 simulation adapters (33 via AdapterResolver + branch_resolution_service)")
+
+        # Update audit_store in resolved adapters
+        resolved.audit_store = audit_store
+
+        # Set agent_executor to None (assigned in Phase 3)
+        resolved.agent_executor = None
+
+        # Create tracer with simulation clock
+        resolved.tracer = InMemoryTracer(time_source=lambda: self._engine.get_clock_for_testing().now())
+
+        # Wire the coding-agent adapter (Phase D3/D4). Simulation uses
+        # MockClaudeCodeAdapter for deterministic results; production wires
+        # the real ClaudeCodeAdapter via AdapterResolver.resolve_coding_agent.
+        resolved.coding_agent = MockClaudeCodeAdapter(event_bus=self.infrastructure.event_bus)
+
+        return resolved
+
+    # =========================================================================
+    # Phase 2b: Register Causal Links
+    # =========================================================================
+
+    def _register_causal_links(self) -> None:
+        """
+        Register causal dependencies between adapters and domain events.
+
+        This enables runtime enforcement and discoverability of causal links,
+        providing visibility into which adapters depend on which domain events.
+
+        Causal links are registered in the CausalLinkRegistry, enabling:
+        - Discovery of adapter dependencies (e.g., which adapters depend on container output)
+        - Cycle detection to ensure no circular dependencies
+        - Audit trail of system integration points
+        - Potential future enforcement of causal link consistency
+
+        Key dependencies documented here:
+        - InMemoryQueueService subscribes to WorkItemColumnChangedEvent
+        - (InMemoryStorageAdapter subscription retired in Phase D5)
+        - RepairCycleAdapter subscribes to WorkItemColumnChangedEvent
+        - ReviewCycleAdapter receives events via event emitter (event-driven)
+        """
+        if not self.infrastructure or not self.adapters:
+            logger.warning("Cannot register causal links: infrastructure or adapters not ready")
+            return
+
+        registry = self.infrastructure.causal_link_registry
+
+        # InMemoryStorageAdapter dependency edge retired in Phase D5
+        # (IStorage / Minio storage retired entirely).
+
+        # Container adapter → Repair cycle adapter (test output feeds repair decisions)
+        registry.register_dependency(
+            source="FakeContainerAdapter",
+            target="MockRepairCycleAdapter",
+            link_type=LinkType.TEST_RESULTS,
+            metadata={"event_type": "ContainerExecutionCompletedEvent", "purpose": "Drive repair cycle"},
+        )
+
+        # Coding-agent adapter → Review cycle adapter (code quality metrics
+        # inform review). The old MockLLMAdapter retired in Phase D5.
+        registry.register_dependency(
+            source="MockClaudeCodeAdapter",
+            target="MockReviewCycleAdapter",
+            link_type=LinkType.CODE_QUALITY,
+            metadata={"purpose": "Code quality assessment drives review cycle"},
+        )
+
+        # Event bus → Queue service (board position changes trigger queue updates)
+        registry.register_event_subscription(
+            publisher="EventBus",
+            subscriber="InMemoryQueueService",
+            event_type="WorkItemColumnChangedEvent",
+            metadata={"purpose": "Track work item position in queue"},
+        )
+
+        # Event bus → Repair cycle adapter (column changes trigger repair checks)
+        registry.register_event_subscription(
+            publisher="EventBus",
+            subscriber="MockRepairCycleAdapter",
+            event_type="WorkItemColumnChangedEvent",
+            metadata={"purpose": "Trigger repair cycle when item moves to repair stage"},
+        )
+
+        # InMemoryStorageAdapter event subscription retired in Phase D5.
+
+        logger.info(
+            f"Registered {len(registry.get_all_links())} causal links and "
+            f"{len(registry.get_all_subscriptions())} event subscriptions"
+        )
+
+    # =========================================================================
+    # Phase 5b: Validate Causal Links
+    # =========================================================================
+
+    def _validate_causal_links(self) -> None:
+        """
+        Validate causal link consistency and log dependency summary.
+
+        Ensures:
+        - No cycles in the dependency graph
+        - All registered links are acyclic
+
+        Provides visibility into the adapter dependency graph for debugging
+        and understanding system integration points.
+        """
+        if not self.infrastructure:
+            logger.warning("Cannot validate causal links: infrastructure not ready")
+            return
+
+        registry = self.infrastructure.causal_link_registry
+
+        try:
+            registry.validate_consistency()
+            logger.info("Causal link validation passed - no cycles detected")
+
+            # Log summary of causal links for debugging
+            all_links = registry.get_all_links()
+            all_subs = registry.get_all_subscriptions()
+
+            if all_links or all_subs:
+                logger.info(
+                    f"Causal link summary: {len(all_links)} direct dependencies, {len(all_subs)} event subscriptions"
+                )
+
+                # Log direct dependencies
+                for link in all_links:
+                    logger.debug(f"  {link.source} → {link.target} ({link.link_type.value})")
+
+                # Log event subscriptions
+                for sub in all_subs:
+                    logger.debug(f"  {sub.publisher} ⟹ {sub.subscriber} ({sub.event_type})")
+            else:
+                logger.info("No causal links registered (adapters may not use event subscriptions)")
+
+        except Exception as e:
+            logger.error(
+                f"Causal link validation failed: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+            )
+            raise
+
+    # =========================================================================
+    # Phase 1: Create Infrastructure (Early for Event Bus Subscriptions)
+    # =========================================================================
+
+    def _create_infrastructure(self) -> SimulationInfrastructure:
+        """
+        Create infrastructure components (event bus, logger, causal link registry, dead letter queue).
+
+        The SimulationEngine manages the clock internally. The engine is used
+        directly to access clock functionality, not through infrastructure.
+
+        The CausalLinkRegistry enables runtime enforcement and discoverability of
+        causal dependencies between adapters and domain events.
+
+        The InMemoryFailedEventStore captures failed event publishing attempts,
+        enabling deterministic simulation testing of event failure scenarios.
+
+        Returns:
+            SimulationInfrastructure with configured components
+        """
+        if not self._engine:
+            message = "SimulationEngine must be created before infrastructure"
+            raise RuntimeError(message)
+
+        # Create event bus
+        event_bus = EventBus()
+
+        # Get logger
+        app_logger = logging.getLogger("codetoreum")
+
+        # Create mock tracer for trace propagation testing in simulation mode
+        mock_tracer = MockTracer(service_name="simulation")
+
+        # Create causal link registry for managing adapter dependencies
+        causal_link_registry = CausalLinkRegistry()
+
+        # Create in-memory failed event store for simulation mode
+        # No production infrastructure contact (FR-1.5: simulation-only requirement)
+        # Provides fully deterministic behavior for testing event failure scenarios
+        from codetoreum.adapters.testing.in_memory_failed_event_store import (
+            InMemoryFailedEventStore,
+        )
+
+        failed_event_store = InMemoryFailedEventStore()
+
+        logger.info("Created infrastructure components (including CausalLinkRegistry and IFailedEventStore)")
+
+        # Note: Clock is no longer exposed here - it's managed by SimulationEngine
+        # The engine is the single point of control for all timing operations
+        return SimulationInfrastructure(
+            event_bus=event_bus,
+            logger=app_logger,
+            mock_tracer=mock_tracer,
+            causal_link_registry=causal_link_registry,
+            failed_event_store=failed_event_store,
+        )
+
+    # =========================================================================
+    # Phase 3: Create Services
+    # =========================================================================
+
+    async def _create_services(self) -> SimulationServices:
+        """
+        Create all 11 application services with proper dependencies.
+
+        Returns:
+            SimulationServices with all services configured
+        """
+        if not self.adapters or not self.infrastructure:
+            message = "Adapters and infrastructure must be created first"
+            raise RuntimeError(message)
+
+        # Configuration Service
+        configuration_service = ConfigurationService(
+            config_store=self.adapters.config_store,
+            event_bus=self.infrastructure.event_bus,
+            encryption_service=self.adapters.encryption,
+        )
+
+        # NOTE: For simulation mode, the mock port adapters (created in Phase 4)
+        # provide all functionality needed by FastAPI. Application services are
+        # only needed for production mode where they orchestrate between adapters.
+        # We create stubs here to satisfy the SimulationServices container structure.
+
+        # Execution Service — Phase D5: dispatches via ICodingAgent only.
+        # The legacy llm_provider / container / storage deps retired
+        # along with execute_with_llm / execute_with_container.
+        # Wrap execution_tracker for graceful degradation on tracker failures (parity with production).
+        execution_tracker_wrapped = BestEffortExecutionTrackerDecorator(
+            wrapped=self.adapters.execution_tracker
+        )
+        execution_service = ExecutionService(
+            coding_agent=self.adapters.coding_agent,
+            event_store=self.adapters.event_store,
+            execution_tracker=execution_tracker_wrapped,
+            vcs=self.adapters.version_control,
+        )
+
+        # Workspace Router
+        workspace_router = WorkspaceRouter(
+            vcs=self.adapters.version_control,
+            container=self.adapters.container,
+            event_store=self.adapters.event_store,
+            branch_resolution_service=self.adapters.branch_resolution_service,
+        )
+
+        # Phase 3a: Create AgentExecutionRecoveryService
+        # This service handles recovery from agent execution failures (completion callback failures,
+        # lock stuck detection, etc.). It's injected into both ExecutionServiceAgentExecutor
+        # (for completion callback failures) and BoardColumnEventHandler (for execution failures).
+        recovery_service = AgentExecutionRecoveryService(
+            board_service=self.adapters.board,
+            event_store=self.adapters.event_store,
+            run_registry=self.adapters.run_registry,
+            failed_event_store=self.infrastructure.failed_event_store,
+        )
+
+        # Phase 3b: Create ExecutionServiceAgentExecutor and wire into adapters
+        # This requires execution_service + workspace_router which are now available
+        # ExecutionServiceAgentExecutor is now the sole agent executor
+        execution_service_executor = ExecutionServiceAgentExecutor(
+            execution_service=execution_service,
+            workspace_router=workspace_router,
+            config_store=self.adapters.config_store,
+            agent_repository=self.adapters.agent_repository,
+            work_item_service=self.adapters.work_item_service,
+            run_registry=self.adapters.run_registry,
+            branch_tracker=self.adapters.branch_tracker,
+            vcs=self.adapters.version_control,
+            clock=self._engine.get_clock_for_testing(),
+            event_bus=self.infrastructure.event_bus,
+            recovery_service=recovery_service,
+            workflow_config_service=self.adapters.workflow_config,
+            # Use a temp directory: /workspace requires a Docker container with root.
+            workspace_base_dir=str(tempfile.gettempdir()) + "/codetoreum-sim-workspace",
+            default_board_id="board-1",
+        )
+        # Assign to agent_executor (the primary executor for the board handler)
+        self.adapters.agent_executor = execution_service_executor
+
+        # Review Service
+        review_service = ReviewService(
+            event_store=self.adapters.event_store,
+        )
+
+        # Feedback Processor
+        feedback_processor = FeedbackProcessor()
+
+        # Pipeline Manager
+        pipeline_manager = PipelineManager(
+            event_store=self.adapters.event_store,
+        )
+
+        # Agent Scheduler - create with simulation dependencies
+        # Import mock implementations from agent_scheduler module
+        task_queue = InMemoryTaskQueue()
+        resource_monitor = MockResourceMonitor()
+        rate_limiter = MockRateLimiter()
+        project_config = MockProjectConfiguration()
+        scheduling_events = MockSchedulingEvents()
+
+        agent_scheduler = AgentScheduler(
+            task_queue=task_queue,
+            resource_monitor=resource_monitor,
+            rate_limiter=rate_limiter,
+            config=project_config,
+            scheduling_events=scheduling_events,
+            event_store=self.adapters.event_store,
+        )
+        # Wire the executor into the scheduler so the consumer loop can dispatch tasks.
+        # start()/stop() are called in setup()/teardown() after services are created.
+        agent_scheduler.set_executor(execution_service_executor)
+
+        # Workflow Orchestrator - create with simulation dependencies
+        # Create mock implementations for workflow orchestrator dependencies
+        class SimulationWorkflowStateManager:
+            """Mock workflow state manager for simulation."""
+
+            def __init__(self):
+                self._states = {}
+
+            async def get_workflow_state(self, issue_id: str) -> "WorkflowState":
+                if issue_id not in self._states:
+                    self._states[issue_id] = WorkflowState(
+                        in_progress_tasks={}, current_column=None, current_agent=None
+                    )
+                return self._states[issue_id]
+
+            async def update_workflow_state(self, issue_id: str, state) -> None:
+                self._states[issue_id] = state
+
+        class SimulationDecisionEvents:
+            """Mock decision events for simulation."""
+
+            def __init__(self):
+                self.routing_decisions = []
+                self.progression_decisions = []
+
+            async def emit_routing_decision(self, decision) -> None:
+                self.routing_decisions.append(decision)
+
+            async def emit_progression_decision(self, decision) -> None:
+                self.progression_decisions.append(decision)
+
+        class SimulationProjectsAPI:
+            """Mock projects API for simulation."""
+
+            def __init__(self):
+                self.card_movements = []
+                self.labels_added = []
+
+            async def move_card_to_column(self, project: str, issue_number: int, column_name: str) -> None:
+                self.card_movements.append(
+                    {
+                        "project": project,
+                        "issue_number": issue_number,
+                        "column_name": column_name,
+                    }
+                )
+
+            async def add_label(self, project: str, issue_number: int, label: str) -> None:
+                self.labels_added.append({"project": project, "issue_number": issue_number, "label": label})
+
+        workflow_state_manager = SimulationWorkflowStateManager()
+        decision_events = SimulationDecisionEvents()
+        projects_api = SimulationProjectsAPI()
+
+        # Work Item Service — instantiated here (was previously below CLO)
+        # so CLO can receive it via constructor. Same event-store-backed
+        # service is reused by other application services downstream.
+        work_item_service = WorkItemService(
+            event_store=self.adapters.event_store,
+        )
+
+        # Conversational Loop Orchestrator — wired in Phase D5 carryover Item #1.
+        # Uses the same coding-agent + prompt-builder the simulation executor
+        # consumes so conversational turns share the per-execution event stream
+        # the rest of the pipeline emits. Failing fast if a dependency is
+        # missing avoids the prior silent-degradation None pattern.
+        if self.adapters.coding_agent is None:
+            msg = "Conversational Loop Orchestrator requires ICodingAgent; resolve coding_agent first."
+            raise RuntimeError(msg)
+        conversational_loop_orchestrator = ConversationalLoopOrchestrator(
+            discussion_adapter=self.adapters.discussion_adapter,
+            coding_agent=self.adapters.coding_agent,
+            prompt_builder=DefaultPromptBuilder(),
+            agent_repository=self.adapters.agent_repository,
+            work_item_service=work_item_service,
+            event_store=self.adapters.event_store,
+            event_emitter=self.adapters.event_emitter,
+        )
+        self.conversational_loop_orchestrator = conversational_loop_orchestrator
+
+        workflow_orchestrator = WorkflowOrchestrator(
+            task_queue=task_queue,  # Reuse same task queue
+            config=project_config,  # Reuse same config
+            workflow_state=workflow_state_manager,
+            decision_events=decision_events,
+            event_store=self.adapters.event_store,
+            ticket_system=self.adapters.ticket_system,
+            projects_api=projects_api,
+            event_bus=self.infrastructure.event_bus,
+            board_service=self.adapters.board,
+            workflow_config=self.adapters.workflow_config,
+            conversational_loop_orchestrator=conversational_loop_orchestrator,
+        )
+
+        # Container Recovery Service
+        container_recovery_service = ContainerRecoveryService(
+            recovery_adapter=self.adapters.container_recovery,
+            event_emitter=self.adapters.event_emitter,
+            container_timeout_hours=2,
+        )
+
+        # Multi-Project Orchestrator
+        multi_project_orchestrator = MultiProjectOrchestrator(
+            project_manager=self.adapters.project_manager,
+        )
+
+        logger.info(
+            "Created all application services with simulation dependencies "
+            "(including container recovery and multi-project orchestrator)"
+        )
+
+        return SimulationServices(
+            workflow_orchestrator=workflow_orchestrator,
+            execution_service=execution_service,
+            agent_scheduler=agent_scheduler,
+            pipeline_manager=pipeline_manager,
+            review_service=review_service,
+            feedback_processor=feedback_processor,
+            workspace_router=workspace_router,
+            configuration_service=configuration_service,
+            work_item_service=work_item_service,
+            prompt_builder=DefaultPromptBuilder(),
+            agent_execution_recovery_service=recovery_service,
+            multi_project_orchestrator=multi_project_orchestrator,
+            container_recovery_service=container_recovery_service,
+        )
+
+    # =========================================================================
+    # Phase 4: Create Ports
+    # =========================================================================
+
+    def _create_ports(self) -> SimulationPorts:
+        """
+        Wire services to input/output ports following hexagonal architecture.
+
+        Returns:
+            SimulationPorts with all port implementations
+        """
+        if not self.adapters or not self.services:
+            message = "Adapters and services must be created first"
+            raise RuntimeError(message)
+
+        # Create mock port adapters, injecting Phase 1 backing stores where available
+        # so query adapters read directly from the canonical data source.
+        work_item_command = MockWorkItemCommandAdapter()
+        work_item_query = MockWorkItemQueryAdapter(
+            ticket_adapter=self.adapters.ticket_system,
+        )
+        agent_command = MockAgentCommandAdapter()
+        agent_query = MockAgentQueryAdapter()
+        execution_command = MockExecutionCommandAdapter()
+        execution_query = MockExecutionQueryAdapter(
+            agent_executor=self.adapters.agent_executor,
+        )
+        config_query = MockConfigQueryAdapter(
+            config_store=self.adapters.config_store,
+        )
+        # Create metrics query adapter via engine (clock is injected internally)
+        if not self._engine:
+            message = "SimulationEngine must be created before ports"
+            raise RuntimeError(message)
+        metrics_query = self._engine.create_metrics_query_adapter(
+            metrics_adapter=self.adapters.metrics,
+            event_store=self.adapters.event_store,
+        )
+        workspace_query = MockWorkspaceQueryAdapter()
+        workflow_command = MockWorkflowCommandAdapter()
+        workflow_query = MockWorkflowQueryAdapter()
+        workflow_run_query = WorkflowRunQueryService(
+            event_store=self.adapters.event_store,
+            ticket_system=self.adapters.ticket_system,
+        )
+        orchestration_command = MockOrchestrationCommandAdapter()
+        workflow_definition_command = MockWorkflowDefinitionCommandAdapter()
+        config_command = MockConfigCommandAdapter()
+        task_query = MockTaskQueryAdapter()
+
+        # Create audit query adapter using mock adapter with audit store
+        audit_query = MockAuditQueryAdapter(audit_store=self.adapters.audit_store)
+
+        logger.info("Created all port implementations")
+
+        return SimulationPorts(
+            workflow_command=workflow_command,
+            work_item_command=work_item_command,
+            workflow_definition_command=workflow_definition_command,
+            orchestration_command=orchestration_command,
+            agent_command=agent_command,
+            execution_command=execution_command,
+            config_command=config_command,
+            task_query=task_query,
+            work_item_query=work_item_query,
+            workflow_query=workflow_query,
+            workflow_run_query=workflow_run_query,
+            agent_query=agent_query,
+            execution_query=execution_query,
+            config_query=config_query,
+            metrics_query=metrics_query,
+            workspace_query=workspace_query,
+            audit_query=audit_query,
+        )
+
+    # =========================================================================
+    # Phase 5: Create FastAPI App and Register Event Handlers
+    # =========================================================================
+
+    def _create_fastapi_app(self) -> FastAPI:
+        """
+        Create FastAPI application with all routers wired to ports.
+
+        This is the final step in Phase 5, which:
+        1. Creates FastAPI app instance using create_app() factory
+        2. Wires all 17 input ports (7 command + 10 query) to API endpoints
+        3. Wires infrastructure components (event store, event bus)
+        4. Wires application services (configuration service, logger, recovery service)
+        5. Configures CORS for localhost development
+        6. Disables authentication (ADR-003: simulation mode requirement)
+        7. Registers event handlers for cross-cutting concerns
+
+        Returns:
+            Configured FastAPI application ready for testing
+
+        Raises:
+            RuntimeError: If ports, infrastructure, or services not created first
+        """
+        if not self.adapters or not self.ports or not self.infrastructure or not self.services:
+            message = "Adapters, ports, infrastructure, and services must be created first"
+            raise RuntimeError(message)
+
+        # Create adapter for config service (wraps application service for FastAPI interface)
+        config_service_interface = MockConfigServiceAdapter(self.services.configuration_service)
+
+        # Create logger adapter for FastAPI
+        logger_interface = MockLoggerAdapter()
+
+        # Create FastAPI app using factory (ADR-003: disable auth, allow localhost CORS in simulation)
+        # Note: Cannot use ["*"] with credentials, so we explicitly allow common localhost ports
+        app = create_app(
+            workflow_command_port=self.ports.workflow_command,
+            task_query_port=self.ports.task_query,
+            config_command_port=self.ports.config_command,
+            config_query_port=self.ports.config_query,
+            metrics_query_port=self.ports.metrics_query,
+            workspace_query_port=self.ports.workspace_query,
+            work_item_command_port=self.ports.work_item_command,
+            work_item_query_port=self.ports.work_item_query,
+            workflow_query_port=self.ports.workflow_query,
+            workflow_run_query_port=self.ports.workflow_run_query,
+            workflow_definition_command_port=self.ports.workflow_definition_command,
+            orchestration_command_port=self.ports.orchestration_command,
+            agent_command_port=self.ports.agent_command,
+            agent_query_port=self.ports.agent_query,
+            execution_command_port=self.ports.execution_command,
+            execution_query_port=self.ports.execution_query,
+            event_store=self.adapters.event_store,
+            event_bus=self.infrastructure.event_bus,
+            config_service=config_service_interface,
+            logger=logger_interface,
+            board_service=self.adapters.board,
+            workflow_config_service=self.adapters.workflow_config,
+            audit_query_port=None,  # Defer to simulation bootstrap to include with event_store
+            disable_auth=True,  # ADR-003: Disable authentication in simulation
+            cors_origins=["*"],  # Allow all origins in simulation mode (auth is disabled)
+            container_recovery_service=self.services.container_recovery_service,
+            active_workflow_run_registry=self.adapters.run_registry,
+            distributed_lock=self.adapters.lock_service,
+            pipeline_queue=self.adapters.queue_service,
+            failed_event_store=self.infrastructure.failed_event_store,
+            orphan_scan_registry=None,  # Not yet implemented in simulation
+        )
+
+        # Mount simulation-only audit causal chain endpoint (never in production create_app)
+        # In simulation, we include the audit router with the InMemoryEventStore
+        # for causal chain traversal. We defer this to the bootstrap rather than create_app()
+        # to avoid registering the endpoint twice, which would cause duplicate operation ID warnings.
+        from codetoreum.adapters.primary.routers.audit import create_audit_router as create_audit_router_sim
+
+        audit_router_with_chains = create_audit_router_sim(
+            query_port=self.ports.audit_query,
+            event_store=self.adapters.event_store_as_memory(),
+            causal_link_registry=self.infrastructure.causal_link_registry,
+            simulation_clock=self._engine.get_clock_for_testing() if self._engine else None,
+        )
+        app.include_router(audit_router_with_chains)
+
+        # Mount simulation-only ticketing router (never in production create_app)
+        # Pass workflow_config_service to enable proper staging column detection (issue #442)
+        sim_router = create_simulation_ticketing_router(
+            self.adapters.ticket_system,
+            self.adapters.board,
+            self.adapters.workflow_config,
+            self.adapters.work_item_service,
+        )
+        app.include_router(sim_router)
+
+        # Mount simulation-only clock control router (never in production create_app)
+        clock_router = create_simulation_clock_router(self._engine)
+        app.include_router(clock_router)
+
+        # Mount simulation-only board state snapshot router (never in production create_app)
+        board_state_router = create_simulation_board_state_router(
+            board_adapter=self.adapters.board_as_mock(),
+            run_registry=self.adapters.run_registry_as_memory(),
+            ticket_adapter=self.adapters.ticket_as_mock(),
+            clock=self._engine,
+        )
+        app.include_router(board_state_router)
+
+        # Mount simulation-only SSE stream router (never in production create_app)
+        stream_router = create_simulation_stream_router(self.infrastructure.event_bus, self._engine)
+        app.include_router(stream_router)
+
+        # Mount simulation-only executions status router (never in production create_app)
+        executions_router = create_simulation_executions_router(
+            run_registry=self.adapters.run_registry_as_memory(),
+            event_store=self.adapters.event_store_as_memory(),
+            clock=self._engine,
+        )
+        app.include_router(executions_router)
+
+        logger.info("Created FastAPI application with all ports wired")
+
+        # Bridge board adapter events to central EventBus
+        self._register_board_event_bridge()
+
+        # Register board column event handler for automation (agent execution + auto-progression)
+        self._register_board_column_handler()
+
+        # Subscribe ConversationalLoopOrchestrator to workitem.column_changed events
+        # so it can terminate sessions when items leave conversational columns.
+        # CLO is wired in _create_services (Phase D5 carryover Item #1); fail
+        # loudly if the field is missing rather than silently skipping.
+        if not getattr(self, "conversational_loop_orchestrator", None):
+            msg = (
+                "Conversational Loop Orchestrator not wired; "
+                "_create_services must construct it before _create_fastapi_app runs."
+            )
+            raise RuntimeError(msg)
+        # NOTE: EventBus routes callbacks by event.event_type (Python class name), not dot notation.
+        self.infrastructure.event_bus.subscribe(
+            "WorkItemColumnChangedEvent",
+            self.conversational_loop_orchestrator.handle_column_change_event,
+        )
+        logger.info("Subscribed ConversationalLoopOrchestrator to WorkItemColumnChangedEvent events")
+
+        # Register repair cycle event handler with event bus
+        # This allows the handler to listen for WorkItemColumnChanged events
+        # and invoke the repair cycle when items enter the configured repair cycle stage
+        self._register_repair_cycle_handler()
+
+        # Register PR review cycle event handler with event bus
+        # This allows the handler to manage PR review cycle lifecycle
+        self._register_pr_review_cycle_handler()
+
+        # Register PR review cycle outcome event handler with event bus
+        # This handler listens for PR review cycle completion events and moves work items
+        # to the appropriate next column based on cycle outcome
+        self._register_pr_review_cycle_outcome_event_handler()
+
+        # Register review event handler with event bus (FR-7.2)
+        # This handler listens for review cycle events and has CI pipeline service wired
+        self._register_review_event_handler()
+
+        # Register branch resolution event handler with event bus
+        # This handler logs branch resolution events with structured fields for audit trail
+        self._register_branch_resolution_handler()
+
+        # Wire branch resolution adapter to event bus
+        # This allows the adapter to emit events that are persisted to the event store
+        self._wire_branch_resolution_adapter()
+
+        return app
+
+    def _register_repair_cycle_handler(self) -> None:
+        """
+        Register repair cycle event handler with the event bus.
+
+        Part of Phase 5: Event handler registration for cross-cutting concerns.
+
+        This handler listens for WorkItemColumnChanged events and invokes
+        the repair cycle when items enter the configured repair cycle stage.
+
+        The SimulationEngine injects the clock into the handler, keeping
+        simulation details encapsulated and allowing deterministic test
+        execution with controlled timing.
+
+        Logs a warning if components are not yet initialized, allowing
+        graceful degradation if called before full setup completion.
+        """
+        if not self.adapters or not self.infrastructure or not self._engine:
+            logger.warning("Cannot register repair cycle handler: components not ready")
+            return
+
+        handler = self._engine.create_repair_cycle_event_handler(
+            repair_cycle=self.adapters.repair_cycle,
+            workflow_config=self.adapters.workflow_config,
+            event_bus=self.infrastructure.event_bus,
+            ci_pipeline_service=self.adapters.ci_pipeline,
+        )
+
+        self.infrastructure.event_bus.register_handler(handler)
+        logger.info("Registered RepairCycleEventHandler with event bus")
+
+    def _register_pr_review_cycle_handler(self) -> None:
+        """
+        Register PR review cycle dispatch handler with the event bus.
+
+        Part of Phase 5: Event handler registration for cross-cutting concerns.
+
+        Creates a PRReviewCycleDispatchHandler that listens for WorkItemColumnChangedEvent
+        and initiates PR review cycles when items enter columns with pr_review_cycle_config.
+
+        Logs a warning if components are not yet initialized, allowing
+        graceful degradation if called before full setup completion.
+        """
+        if not self.adapters or not self.infrastructure:
+            logger.warning("Cannot register PR review cycle handler: components not ready")
+            return
+
+        # Create PR review cycle dispatch handler
+        handler = PRReviewCycleDispatchHandler(
+            pr_review_cycle=self.adapters.pr_review_cycle,
+            workflow_config=self.adapters.workflow_config,
+            work_item_service=self.adapters.work_item_service,
+            active_workflow_run_registry=self.adapters.run_registry,
+        )
+
+        # Register handler with event bus
+        self.infrastructure.event_bus.register_handler(handler)
+        logger.info("Registered PRReviewCycleDispatchHandler with event bus")
+
+    def _register_pr_review_cycle_outcome_event_handler(self) -> None:
+        """
+        Register PR review cycle outcome event handler with the event bus.
+
+        Part of Phase 5: Event handler registration for cross-cutting concerns.
+
+        This handler listens for PR review cycle outcome events (PRReviewCycleApprovedEvent,
+        PRReviewCycleIssuesFoundEvent, PRReviewCycleMaxCyclesReachedEvent) and moves work
+        items to the appropriate next column based on cycle outcome.
+
+        Logs a warning if components are not yet initialized, allowing graceful degradation
+        if called before full setup completion.
+        """
+        if not self.adapters or not self.infrastructure:
+            logger.warning("Cannot register PR review cycle outcome handler: components not ready")
+            return
+
+        handler = PRReviewCycleEventHandler(
+            board_service=self.adapters.board,
+        )
+
+        self.infrastructure.event_bus.register_handler(handler)
+        logger.info("Registered PRReviewCycleEventHandler with event bus")
+
+    def _register_review_event_handler(self) -> None:
+        """
+        Register review event handler with the event bus.
+
+        Part of Phase 5: Event handler registration for cross-cutting concerns.
+
+        This handler listens for review cycle events (ReviewCycleCreated, ReviewIterationStarted,
+        ReviewFeedbackSubmitted, ReviewCycleApproved, ReviewCycleRejected, ReviewCycleEscalated)
+        and processes them with optional CI pipeline service integration (FR-7.2).
+
+        The CI pipeline service is injected to allow the handler to execute CI checks
+        as part of the review cycle when configured.
+
+        Logs a warning if components are not yet initialized, allowing graceful degradation
+        if called before full setup completion.
+        """
+        if not self.adapters or not self.services:
+            logger.warning("Cannot register review event handler: components not ready")
+            return
+
+        handler = ReviewEventHandler(
+            review_service=self.services.review_service,
+            ci_pipeline_service=self.adapters.ci_pipeline,
+        )
+
+        self.infrastructure.event_bus.register_handler(handler)
+        logger.info("Registered ReviewEventHandler with event bus and CI pipeline service wired (FR-7.2)")
+
+    def _register_branch_resolution_handler(self) -> None:
+        """
+        Register branch resolution event handler with the event bus.
+
+        Part of Phase 5: Event handler registration for cross-cutting concerns.
+
+        This handler subscribes to all branch resolution events (BranchResolvedEvent,
+        BranchReusedEvent, BranchCreatedEvent) and logs them with structured fields
+        for complete audit trail and metrics tracking.
+
+        Raises RuntimeError if components are not yet initialized, indicating a bootstrap
+        ordering bug that must be fixed.
+        """
+        if not self.infrastructure or not self._engine:
+            error_msg = "Cannot register branch resolution handler: components not ready"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
+
+        handler = self._engine.create_branch_resolution_event_handler(
+            event_bus=self.infrastructure.event_bus,
+        )
+
+        self.infrastructure.event_bus.register_handler(handler)
+        logger.info("Registered BranchResolutionEventHandler with event bus")
+
+    def _wire_branch_resolution_adapter(self) -> None:
+        """
+        Wire branch resolution adapter to the central event bus.
+
+        Part of Phase 5: Adapter wiring for event emission.
+
+        The MockBranchResolutionAdapter emits CodetoreumEvent objects that need
+        to be published to the central event bus for event sourcing and audit trail.
+        This method registers event handlers on the adapter that publish events
+        to the event bus via async tasks, ensuring failures are logged and tracked.
+
+        Raises RuntimeError if components are not yet initialized, indicating a bootstrap
+        ordering bug that must be fixed.
+        """
+        if not self.adapters or not self.infrastructure:
+            error_msg = "Cannot wire branch resolution adapter: components not ready"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
+
+        from codetoreum.infrastructure.event_bus_wiring import (
+            wire_adapters_to_event_bus,
+        )
+
+        event_bus = self.infrastructure.event_bus
+        branch_resolution = self.adapters.branch_resolution_service
+
+        # Wire the branch resolution adapter to publish its events to the event bus
+        wire_adapters_to_event_bus(
+            event_bus=event_bus,
+            branch_resolution_service=branch_resolution,
+        )
+
+        logger.info("Wired MockBranchResolutionAdapter to event bus")
+
+    def _register_board_event_bridge(self) -> None:
+        """
+        Bridge board adapter events to the central EventBus.
+
+        The MockBoardAdapter emits CodetoreumEvent objects (which have `.type`),
+        but the EventBus expects CodetoreumEvent objects (which have `.event_type`).
+        This bridge translates between the two event hierarchies before publishing.
+
+        CRITICAL: Event publishing is awaited (not fire-and-forget) to ensure failures
+        are captured by the dead letter queue. Silent failures would disable automation
+        for affected work items. See issue #371.
+
+        Raises RuntimeError if components are not yet initialized, indicating a bootstrap
+        ordering bug that must be fixed.
+        """
+        if not self.adapters or not self.infrastructure:
+            error_msg = "Cannot register board event bridge: components not ready"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
+
+        event_bus = self.infrastructure.event_bus
+        ticket_adapter = self.adapters.ticket_system
+        failed_event_store = self.infrastructure.failed_event_store
+
+        # Map board columns to work item statuses
+        _column_to_status = {
+            "Backlog": WorkItemStatus.NEW,
+            "Ready": WorkItemStatus.ASSIGNED,
+            "In Progress": WorkItemStatus.IN_PROGRESS,
+            "Review": WorkItemStatus.UNDER_REVIEW,
+            "Done": WorkItemStatus.COMPLETED,
+        }
+
+        def board_column_changed_bridge(event):
+            """Translate WorkItemColumnChangedEvent (CodetoreumEvent) to WorkItemColumnChanged (CodetoreumEvent).
+
+            Also syncs work item status in the ticket adapter so the UX reflects the current column position.
+
+            CRITICAL: This bridge runs as a fire-and-forget async task created via loop.create_task().
+            However, failures within the task are NOT silent:
+            1. Event publishing failures are caught and sent to the dead letter queue for automatic retry
+            2. Task exceptions are logged via a done callback, preventing silent swallowing of errors
+            3. The DLQ retry processor handles transient/permanent classification and exponential backoff
+
+            This architecture prevents silent automation failures while allowing the event bridge
+            to be non-blocking (critical for the sync event adapter callback pattern).
+            """
+            try:
+                loop = asyncio.get_running_loop()
+                domain_event = WorkItemColumnChangedEvent(
+                    type="workitem.column_changed",
+                    timestamp=datetime.now(UTC).isoformat(),
+                    source="simulation_board_adapter",
+                    work_item_id=event.work_item_id,
+                    board_id=event.board_id,
+                    project_id=event.project_id,
+                    from_column=event.from_column,
+                    to_column=event.to_column,
+                    moved_by=event.moved_by,
+                )
+
+                # Create task to handle event publishing with dead letter queue fallback
+                # Add done callback to log any unhandled exceptions (safety net for failures
+                # in _handle_column_changed_event itself, such as DLQ unavailability)
+                task = loop.create_task(_handle_column_changed_event(domain_event, event.work_item_id, event.to_column))
+
+                def task_done_callback(task_result: asyncio.Task[None]) -> None:
+                    """Log any unhandled exceptions from the bridge task."""
+                    try:
+                        task_result.result()
+                    except asyncio.CancelledError:
+                        # Task was cancelled - this is normal during shutdown
+                        pass
+                    except Exception as task_exception:
+                        # Unhandled exception in the bridge handler (e.g., DLQ failure)
+                        # This logs the failure so it's not silently swallowed
+                        logger.error(
+                            f"Unhandled exception in board column event bridge for {event.work_item_id}: "
+                            f"{task_exception}",
+                            exc_info=True,
+                            extra={
+                                "work_item_id": event.work_item_id,
+                                "error_type": type(task_exception).__name__,
+                                "error_id": ErrorRegistry.ERR_INTERNAL_ERROR,
+                            },
+                        )
+
+                task.add_done_callback(task_done_callback)
+
+            except RuntimeError as e:
+                logger.error(
+                    f"Failed to schedule board column event bridge task: {e}",
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                )
+
+        async def _handle_column_changed_event(
+            domain_event: WorkItemColumnChangedEvent, work_item_id: str, to_column: str
+        ) -> None:
+            """Handle publishing WorkItemColumnChanged event with dead letter queue fallback.
+
+            This function:
+            1. Publishes the event to the event bus (which triggers automation)
+            2. Syncs work item status in the ticket adapter
+            3. On failure, sends the event to the dead letter queue for retry
+
+            Awaiting this function ensures that if publishing fails, we capture the
+            failure properly instead of silently losing the event.
+            """
+            try:
+                # Publish the event - this will trigger BoardColumnEventHandler and automation
+                await event_bus.publish(domain_event)
+                logger.debug(
+                    f"Successfully published WorkItemColumnChangedEvent for {work_item_id}",
+                    extra={"work_item_id": work_item_id, "event_type": "WorkItemColumnChangedEvent"},
+                )
+            except Exception as publish_error:
+                # Publishing failed - send to failed event store for retry
+                # This preserves the event and allows operators to investigate/recover
+                from codetoreum.infrastructure.event_bus import EventBusError
+                from codetoreum.ports.output.failed_event_store import FailureReason
+
+                event_type = domain_event.event_type
+
+                # Classify the error as transient or permanent
+                # EventBusError wraps the original error in __cause__
+                is_transient = False
+                original_error_type = type(publish_error).__name__
+
+                if isinstance(publish_error, EventBusError) and publish_error.__cause__:
+                    # Check the wrapped cause for transient error types
+                    cause = publish_error.__cause__
+                    if isinstance(cause, (ConnectionError, TimeoutError)):
+                        is_transient = True
+                        original_error_type = type(cause).__name__
+                elif isinstance(publish_error, (ConnectionError, TimeoutError)):
+                    # Direct transient error (not wrapped)
+                    is_transient = True
+
+                await failed_event_store.add_failed_event(
+                    event_type=event_type,
+                    event_data=domain_event.to_dict(),
+                    failure_reason=FailureReason.TRANSIENT_ERROR if is_transient else FailureReason.PROCESSING_ERROR,
+                    error_message=str(publish_error),
+                    metadata={
+                        "work_item_id": work_item_id,
+                        "original_error": original_error_type,
+                    },
+                )
+
+                logger.error(
+                    f"Event publishing failed for work_item {work_item_id} - "
+                    f"queued to dead letter queue: {publish_error}",
+                    exc_info=True,
+                    extra={
+                        "work_item_id": work_item_id,
+                        "event_type": event_type,
+                        "error_type": type(publish_error).__name__,
+                        "error_id": ErrorRegistry.ERR_INTERNAL_ERROR,
+                    },
+                )
+
+            # Sync work item status based on target column (best-effort, separate from publishing)
+            # This is fire-and-forget because it's non-critical UI sync, separate from core automation
+            target_status = _column_to_status.get(to_column)
+            if target_status is not None:
+                try:
+                    await _sync_work_item_status(work_item_id, target_status)
+                except Exception as sync_error:
+                    # Status sync failures are best-effort and don't affect automation
+                    logger.warning(
+                        f"Best-effort status sync failed for {work_item_id} -> {target_status.value}: {sync_error}",
+                        exc_info=True,
+                        extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                    )
+
+        async def _sync_work_item_status(work_item_id: str, target_status: WorkItemStatus) -> None:
+            """Best-effort sync of work item status in ticket adapter.
+
+            The domain model validates transitions strictly, so some jumps
+            (e.g. NEW -> IN_PROGRESS) will be rejected. We apply intermediate
+            steps where needed and silently ignore validation failures.
+            """
+            try:
+                work_item = await ticket_adapter.get_work_item(work_item_id)
+                if work_item.status == target_status:
+                    return
+
+                # For ASSIGNED: use assign_agent directly since update_status
+                # doesn't handle NEW -> ASSIGNED
+                if target_status == WorkItemStatus.ASSIGNED:
+                    if work_item.status == WorkItemStatus.NEW:
+                        work_item.assign_agent("simulation-agent", "Board column sync")
+                        work_item.clear_events()
+                    return
+
+                # For IN_PROGRESS: must go through ASSIGNED first
+                if target_status == WorkItemStatus.IN_PROGRESS:
+                    if work_item.status == WorkItemStatus.NEW:
+                        work_item.assign_agent("simulation-agent", "Board column sync")
+                        work_item.clear_events()
+                    if work_item.status == WorkItemStatus.ASSIGNED:
+                        await ticket_adapter.update_status(work_item_id, WorkItemStatus.IN_PROGRESS)
+                    return
+
+                # For UNDER_REVIEW: must go through ASSIGNED -> IN_PROGRESS first
+                if target_status == WorkItemStatus.UNDER_REVIEW:
+                    if work_item.status == WorkItemStatus.NEW:
+                        work_item.assign_agent("simulation-agent", "Board column sync")
+                        work_item.clear_events()
+                    if work_item.status == WorkItemStatus.ASSIGNED:
+                        await ticket_adapter.update_status(work_item_id, WorkItemStatus.IN_PROGRESS)
+                    # Re-read after intermediate transition
+                    work_item = await ticket_adapter.get_work_item(work_item_id)
+                    if work_item.status == WorkItemStatus.IN_PROGRESS:
+                        await ticket_adapter.update_status(work_item_id, WorkItemStatus.UNDER_REVIEW)
+                    return
+
+                # For COMPLETED: must go through the full chain
+                if target_status == WorkItemStatus.COMPLETED:
+                    if work_item.status == WorkItemStatus.NEW:
+                        work_item.assign_agent("simulation-agent", "Board column sync")
+                        work_item.clear_events()
+                    if work_item.status == WorkItemStatus.ASSIGNED:
+                        await ticket_adapter.update_status(work_item_id, WorkItemStatus.IN_PROGRESS)
+                    work_item = await ticket_adapter.get_work_item(work_item_id)
+                    if work_item.status == WorkItemStatus.IN_PROGRESS:
+                        await ticket_adapter.update_status(work_item_id, WorkItemStatus.UNDER_REVIEW)
+                    work_item = await ticket_adapter.get_work_item(work_item_id)
+                    if work_item.status == WorkItemStatus.UNDER_REVIEW:
+                        await ticket_adapter.update_status(work_item_id, WorkItemStatus.COMPLETED)
+                    return
+
+                # Fallback: try direct update
+                await ticket_adapter.update_status(work_item_id, target_status)
+
+            except Exception as e:
+                logger.warning(
+                    f"Best-effort status sync failed for {work_item_id} -> {target_status.value}: {e}",
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                )
+
+        def board_reconciled_bridge(event):
+            """Bridge BoardReconciledEvent to event bus for handler dispatch.
+
+            CRITICAL: This bridge runs as a fire-and-forget async task created via loop.create_task().
+            However, failures within the task are NOT silent:
+            1. Event publishing failures are caught and sent to the dead letter queue for automatic retry
+            2. Task exceptions are logged via a done callback, preventing silent swallowing of errors
+            3. The DLQ retry processor handles transient/permanent classification and exponential backoff
+
+            This architecture prevents silent automation failures while allowing the event bridge
+            to be non-blocking (critical for the sync event adapter callback pattern).
+            """
+            try:
+                loop = asyncio.get_running_loop()
+                domain_event = BoardReconciledEvent(
+                    type="board.reconciled",
+                    timestamp=datetime.now(UTC).isoformat(),
+                    source="simulation_board_adapter",
+                    project_id=event.project_id,
+                    board_id=event.board_id,
+                    columns_added=tuple(event.columns_added) if hasattr(event, "columns_added") else (),
+                    columns_removed=tuple(event.columns_removed) if hasattr(event, "columns_removed") else (),
+                    items_moved=0,
+                )
+
+                # Create task to handle event publishing with dead letter queue fallback
+                # Add done callback to log any unhandled exceptions (safety net for failures
+                # in _handle_board_reconciled_event itself, such as DLQ unavailability)
+                task = loop.create_task(_handle_board_reconciled_event(domain_event, event.board_id))
+
+                def task_done_callback(task_result: asyncio.Task[None]) -> None:
+                    """Log any unhandled exceptions from the bridge task."""
+                    try:
+                        task_result.result()
+                    except asyncio.CancelledError:
+                        # Task was cancelled - this is normal during shutdown
+                        pass
+                    except Exception as task_exception:
+                        # Unhandled exception in the bridge handler (e.g., DLQ failure)
+                        # This logs the failure so it's not silently swallowed
+                        logger.error(
+                            f"Unhandled exception in board reconciliation event bridge for {event.board_id}: "
+                            f"{task_exception}",
+                            exc_info=True,
+                            extra={
+                                "board_id": event.board_id,
+                                "error_type": type(task_exception).__name__,
+                                "error_id": ErrorRegistry.ERR_INTERNAL_ERROR,
+                            },
+                        )
+
+                task.add_done_callback(task_done_callback)
+
+            except RuntimeError as e:
+                logger.error(
+                    f"Failed to schedule board reconciliation event bridge task: {e}",
+                    exc_info=True,
+                    extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+                )
+
+        async def _handle_board_reconciled_event(domain_event: BoardReconciledEvent, board_id: str) -> None:
+            """Handle publishing BoardReconciledEvent with dead letter queue fallback.
+
+            Awaiting this function ensures that if publishing fails, we capture the
+            failure properly instead of silently losing the event.
+            """
+            try:
+                await event_bus.publish(domain_event)
+                logger.debug(
+                    f"Successfully published BoardReconciledEvent for {board_id}",
+                    extra={"board_id": board_id, "event_type": "BoardReconciledEvent"},
+                )
+            except Exception as publish_error:
+                # Publishing failed - send to failed event store for retry
+                from codetoreum.infrastructure.event_bus import EventBusError
+                from codetoreum.ports.output.failed_event_store import FailureReason
+
+                event_type = domain_event.event_type
+
+                # Classify the error as transient or permanent
+                # EventBusError wraps the original error in __cause__
+                is_transient = False
+                original_error_type = type(publish_error).__name__
+
+                if isinstance(publish_error, EventBusError) and publish_error.__cause__:
+                    # Check the wrapped cause for transient error types
+                    cause = publish_error.__cause__
+                    if isinstance(cause, (ConnectionError, TimeoutError)):
+                        is_transient = True
+                        original_error_type = type(cause).__name__
+                elif isinstance(publish_error, (ConnectionError, TimeoutError)):
+                    # Direct transient error (not wrapped)
+                    is_transient = True
+
+                await failed_event_store.add_failed_event(
+                    event_type=event_type,
+                    event_data=domain_event.payload,
+                    failure_reason=FailureReason.TRANSIENT_ERROR if is_transient else FailureReason.PROCESSING_ERROR,
+                    error_message=str(publish_error),
+                    metadata={
+                        "board_id": board_id,
+                        "original_error": original_error_type,
+                    },
+                )
+
+                logger.error(
+                    f"Event publishing failed for board {board_id} - queued to failed event store: {publish_error}",
+                    exc_info=True,
+                    extra={
+                        "board_id": board_id,
+                        "event_type": event_type,
+                        "error_type": original_error_type,
+                        "error_id": ErrorRegistry.ERR_INTERNAL_ERROR,
+                    },
+                )
+
+        self.adapters.board.on("workitem.column_changed", board_column_changed_bridge)
+        self.adapters.board.on("board.reconciled", board_reconciled_bridge)
+        logger.info("Registered board event bridge to central EventBus")
+
+    def _register_board_column_handler(self) -> None:
+        """Register BoardColumnEventHandler for automated column processing.
+
+        Creates the handler with its 5 dependencies (plus optional recovery_service)
+        and registers it with the event bus. The handler subscribes to both
+        WorkItemColumnChangedEvent (column movement automation) and
+        AgentExecutionCompletedEvent (auto-progression after the executor
+        finishes). This closes the loop: column change → agent execution →
+        executor publishes AgentExecutionCompletedEvent → auto-progress to
+        next column.
+
+        The executor → handler auto-progression path is now event-bus mediated
+        (see INV-05 in `bootstrap/ARCHITECTURE.md` §6); the legacy
+        `set_completion_handler` callback is no longer used.
+        """
+        if not self.adapters or not self.infrastructure:
+            logger.warning("Cannot register board column handler: components not ready")
+            return
+
+        # At this point, agent_executor is ExecutionServiceAgentExecutor (assigned in Phase 3)
+        if self.adapters.agent_executor is None:
+            logger.warning("Cannot register board column handler: agent_executor not yet initialized")
+            return
+
+        # Retrieve the recovery_service that was created in Phase 3a and stored in SimulationServices
+        # The recovery_service is needed for handling agent execution failures in the handler
+        recovery_service = None
+        if self.services:
+            recovery_service = self.services.agent_execution_recovery_service
+
+        work_item_svc = self.services.work_item_service if self.services else None
+        if work_item_svc is None:
+            logger.warning("Cannot register board column handler: work_item_service not ready")
+            return
+
+        handler = BoardColumnEventHandler(
+            board_service=self.adapters.board,
+            distributed_lock=self.adapters.lock_service,
+            pipeline_queue=self.adapters.queue_service,
+            workflow_config=self.adapters.workflow_config,
+            agent_executor=self.adapters.agent_executor,
+            event_bus=self.infrastructure.event_bus,
+            work_item_service=work_item_svc,
+            event_store=self.adapters.event_store,
+            run_registry=self.adapters.run_registry,
+            event_emitter=self.adapters.event_emitter,
+            recovery_service=recovery_service,
+        )
+
+        # Store reference to handler for potential future reference
+        self._board_event_handler = handler
+
+        # register_handler subscribes BoardColumnEventHandler to both
+        # WorkItemColumnChangedEvent and AgentExecutionCompletedEvent (the
+        # latter replaces the legacy executor.set_completion_handler callback).
+        self.infrastructure.event_bus.register_handler(handler)
+        logger.info("Registered BoardColumnEventHandler with event bus")
+
+    # =========================================================================
+    # Public API
+    # =========================================================================
+
+    @property
+    def engine(self) -> SimulationEngine | None:
+        """
+        Get the SimulationEngine instance.
+
+        The engine manages all simulation timing and coordinates time-aware
+        components. Use this to advance time or access clock operations.
+
+        Returns:
+            SimulationEngine instance (None if not yet set up)
+        """
+        return self._engine
+
+    @property
+    def causal_link_registry(self) -> CausalLinkRegistry | None:
+        """
+        Get the CausalLinkRegistry instance.
+
+        The registry manages causal dependencies between adapters and domain events,
+        providing:
+        - Discovery of adapter integration points
+        - Cycle detection for dependency consistency
+        - Audit trail of system wiring
+        - Runtime enforcement of causal constraints
+
+        Returns:
+            CausalLinkRegistry instance (None if not yet set up)
+        """
+        return self.infrastructure.causal_link_registry if self.infrastructure else None

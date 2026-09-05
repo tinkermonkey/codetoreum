@@ -1,0 +1,22 @@
+# Stress Test Scenario — Orchestrator: Workflow Definitions
+#
+# Port/Interface: IWorkflowConfigService (workflow domain model)
+# Adapter (sim): InMemoryConfigStore
+
+workflows:
+  - name: "parallel-workflow"
+    description: "Simple workflow optimized for parallel execution"
+    stages:
+      - name: "process"
+        agent_type: "worker"
+        description: "Process work item"
+        order: 1
+        max_retries: 2
+        timeout_seconds: 300
+
+      - name: "validate"
+        agent_type: "validator"
+        description: "Validate output"
+        order: 2
+        max_retries: 1
+        timeout_seconds: 180

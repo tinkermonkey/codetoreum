@@ -1,0 +1,7 @@
+# External data: Projects for repair cycle test
+
+projects:
+  - name: "repair_cycle_test_project"
+    description: "Test project for repair cycle agent config"
+    repository_url: "https://github.com/demo-org/repair-cycle-test.git"
+    default_branch: "main"

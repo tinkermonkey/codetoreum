@@ -1,0 +1,90 @@
+ux.librarycomponent.flow-canvas:
+  id: 63b0efff-5c79-4221-a889-058f653005ea
+  path: ux.librarycomponent.flow-canvas
+  spec_node_id: ux.librarycomponent
+  type: librarycomponent
+  layer_id: ux
+  name: Flow Canvas
+  description: React Flow canvas component for rendering workflow graph with
+    draggable nodes and animated edges
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: frontend/src/components/workflow-flow/FlowCanvas.tsx
+        symbol: FlowCanvas
+  metadata:
+    created_at: 2026-05-08T11:11:48.492Z
+    updated_at: 2026-05-08T11:11:48.493Z
+    version: 1
+ux.librarycomponent.workflow-flow-nodes:
+  id: 3948c319-bfa7-4446-bfdb-78e25c2421f2
+  path: ux.librarycomponent.workflow-flow-nodes
+  spec_node_id: ux.librarycomponent
+  type: librarycomponent
+  layer_id: ux
+  name: Workflow Flow Nodes
+  description: Custom React Flow node components for agent execution, cycle
+    bounding, decision, and workflow event visualization
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: frontend/src/components/workflow-flow/nodes/AgentExecutionNode.tsx
+        symbol: AgentExecutionNode
+  metadata:
+    created_at: 2026-05-08T11:11:50.555Z
+    updated_at: 2026-05-08T11:11:50.555Z
+    version: 1
+ux.librarycomponent.system-status-header:
+  id: e03475d8-3dc0-44e4-a1ff-6823f61d5dea
+  path: ux.librarycomponent.system-status-header
+  spec_node_id: ux.librarycomponent
+  type: librarycomponent
+  layer_id: ux
+  name: System Status Header
+  description: Persistent system health monitoring component showing active
+    agents, circuit breakers, and API usage cards
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: frontend/src/components/system-status/SystemStatusHeader.tsx
+        symbol: SystemStatusHeader
+  metadata:
+    created_at: 2026-05-08T11:11:54.197Z
+    updated_at: 2026-05-08T11:11:54.197Z
+    version: 1
+ux.librarycomponent.workflow-stage-editor:
+  id: b93add17-72c6-4e8d-ab74-bbd35f6918ae
+  path: ux.librarycomponent.workflow-stage-editor
+  spec_node_id: ux.librarycomponent
+  type: librarycomponent
+  layer_id: ux
+  name: Workflow Stage Editor
+  description: Drag-and-drop stage editor component for defining pipeline stages
+    and their configuration
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: frontend/src/components/workflow-editor/StageEditor.tsx
+        symbol: StageEditor
+  metadata:
+    created_at: 2026-05-08T11:11:55.329Z
+    updated_at: 2026-05-08T11:11:55.329Z
+    version: 1
+ux.librarycomponent.workflow-run-list:
+  id: 37ac6a1a-22da-49f5-a1c6-f5e218c31cbc
+  path: ux.librarycomponent.workflow-run-list
+  spec_node_id: ux.librarycomponent
+  type: librarycomponent
+  layer_id: ux
+  name: Workflow Run List
+  description: Component displaying paginated list of pipeline workflow runs with
+    status and timeline
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: frontend/src/components/workflow-runs/WorkflowRunList.tsx
+        symbol: WorkflowRunList
+  metadata:
+    created_at: 2026-05-08T11:11:58.691Z
+    updated_at: 2026-05-08T11:11:58.691Z
+    version: 1

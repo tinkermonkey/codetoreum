@@ -1,0 +1,49 @@
+# Failure Recovery Scenario — Orchestrator: Board Column Policy
+#
+# Port/Interface: IWorkflowConfigService
+# Adapter (sim): InMemoryWorkflowConfigService
+#
+# Board layout:
+#   Backlog (manual)
+#   → In Progress (automated, flaky_agent, PIPELINE TRIGGER, on_failure → Failed)
+#   → Failed (manual — human decides: retry or escalate)
+#   → Recovery (automated, recovery_agent, auto-progress)
+#   → Done (exit)
+
+board_policies:
+  - board_id: "board-1"
+    column_configs:
+      - name: "Backlog"
+        type: "manual"
+        is_pipeline_trigger: false
+        is_exit_column: false
+        auto_progress_on_completion: false
+
+      - name: "In Progress"
+        type: "automated"
+        agent_id: "flaky_agent"
+        is_pipeline_trigger: true
+        is_exit_column: false
+        auto_progress_on_completion: true
+        on_failure_column: "Failed"
+        sla_seconds: 1800
+
+      - name: "Failed"
+        type: "manual"                      # Human decides: retry or escalate
+        is_pipeline_trigger: false
+        is_exit_column: false
+        auto_progress_on_completion: false
+
+      - name: "Recovery"
+        type: "automated"
+        agent_id: "recovery_agent"
+        is_pipeline_trigger: false
+        is_exit_column: false
+        auto_progress_on_completion: true
+        sla_seconds: 900
+
+      - name: "Done"
+        type: "manual"
+        is_pipeline_trigger: false
+        is_exit_column: true
+        auto_progress_on_completion: false

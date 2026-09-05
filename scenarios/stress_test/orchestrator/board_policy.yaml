@@ -1,0 +1,30 @@
+# Stress Test Scenario — Orchestrator: Board Column Policy
+#
+# Port/Interface: IWorkflowConfigService
+# Adapter (sim): InMemoryWorkflowConfigService
+#
+# Minimal 3-column board for maximum throughput:
+#   Backlog (manual) → In Progress (automated, worker, PIPELINE TRIGGER) → Done (exit)
+
+board_policies:
+  - board_id: "board-1"
+    column_configs:
+      - name: "Backlog"
+        type: "manual"
+        is_pipeline_trigger: false
+        is_exit_column: false
+        auto_progress_on_completion: false
+
+      - name: "In Progress"
+        type: "automated"
+        agent_id: "worker"
+        is_pipeline_trigger: true
+        is_exit_column: false
+        auto_progress_on_completion: true
+        sla_seconds: 300
+
+      - name: "Done"
+        type: "manual"
+        is_pipeline_trigger: false
+        is_exit_column: true
+        auto_progress_on_completion: false

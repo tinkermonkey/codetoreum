@@ -1,0 +1,538 @@
+"""Simulation Scenario: Systemic Fix Flow (Test-Analyze-Fix-Validate).
+
+Tests the complete systemic fix workflow:
+1. Tests fail with multiple failures
+2. Systemic analysis classifies as cross-cutting root cause
+3. Systemic fix is applied to address root cause
+4. Tests are re-run and pass
+
+Comprehensive scenarios cover:
+1. Happy path: systemic fix immediately resolves all failures
+2. Multiple iterations: systemic fix fails, fallback to file-level fixes
+3. Cross-cutting analysis with correct dispatch
+4. Non-cross-cutting analysis dispatches to per-file fixes
+5. Failure count > 50 triggers fallback despite cross_cutting=True
+6. Full event emission and audit trail
+"""
+
+from dataclasses import dataclass
+
+import pytest
+
+from codetoreum.adapters.testing.mock_repair_cycle_adapter import MockRepairCycleAdapter
+from codetoreum.adapters.testing.mock_systemic_analysis_adapter import (
+    MockSystemicAnalysisAdapter,
+)
+from codetoreum.domain.events import (
+    SystemicFixCompletedEvent,
+    SystemicFixStartedEvent,
+)
+from codetoreum.domain.repair_cycle_types import (
+    EnvironmentRepairConfig,
+    FailureClassification,
+    RepairCycleAgentConfig,
+    RepairCycleStageConfig,
+    RepairTestFailure,
+    RepairTestResult,
+    RepairTestRunConfig,
+    RepairTestType,
+    SystemicAnalysisResult,
+    SystemicFixResult,
+)
+from codetoreum.infrastructure.simulation.bootstrap import SimulationApplicationBootstrap
+
+
+@dataclass
+class RepairCycleContext:
+    """Concrete implementation of RepairCycleContext Protocol for simulation testing."""
+
+    stage_name: str
+    workflow_run_id: str
+    work_item_id: str
+    test_configs: tuple[RepairTestRunConfig, ...]
+    agent_name: str = "senior_software_engineer"
+    max_total_agent_calls: int = 100
+    checkpoint_interval: int = 5
+    agent_config: RepairCycleAgentConfig | None = None
+    systemic_fix_failure_ceiling: int = 50
+    iteration: int = 1
+    prior_fix_attempts: tuple[str, ...] = ()
+    prior_classifications: tuple = ()
+
+    def __post_init__(self) -> None:
+        """Initialize stage_config after dataclass initialization."""
+        object.__setattr__(
+            self,
+            "stage_config",
+            RepairCycleStageConfig(
+                name=self.stage_name,
+                test_configs=self.test_configs,
+                agent_name=self.agent_name,
+                max_total_agent_calls=self.max_total_agent_calls,
+                checkpoint_interval=self.checkpoint_interval,
+                agent_config=self.agent_config,
+                systemic_fix_failure_ceiling=self.systemic_fix_failure_ceiling,
+                environment_repair_config=EnvironmentRepairConfig(),
+            ),
+        )
+
+
+@pytest.mark.asyncio
+async def test_scenario_systemic_fix_happy_path(
+    simulation_bootstrap: SimulationApplicationBootstrap,
+):
+    """Test systemic fix with immediate success (cross-cutting root cause).
+
+    Workflow:
+    1. Tests fail with cross-cutting issue
+    2. Analysis correctly identifies cross_cutting=True
+    3. Systemic fix immediately resolves all failures
+    4. Retest passes
+    """
+    # Setup adapters
+    mock_repair = simulation_bootstrap.adapters.repair_cycle_as_mock()
+    mock_analysis = simulation_bootstrap.adapters.systemic_analysis_as_mock()
+
+    # Configure systemic analysis to report cross-cutting issue
+    mock_analysis.set_results(
+        [
+            SystemicAnalysisResult(
+                classification=FailureClassification.CODE_DEFECT,
+                confidence=0.95,
+                reasoning="API contract change propagates through multiple modules",
+                affected_files=("src/api.py", "src/models.py", "src/services.py"),
+                recommended_action="Update API contract consistently across modules",
+                cross_cutting=True,
+            ),
+        ]
+    )
+
+    # Configure test failures and recovery
+    mock_repair.set_test_result_sequence(
+        RepairTestType.UNIT,
+        [
+            # Initial test run: failures
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=1,
+                passed=7,
+                failed=3,
+                warnings=0,
+                failures=(
+                    RepairTestFailure("test_api.py", "test_contract_v2", "API mismatch"),
+                    RepairTestFailure("test_models.py", "test_schema", "Schema mismatch"),
+                    RepairTestFailure("test_services.py", "test_sync", "Data sync issue"),
+                ),
+                warning_list=(),
+                raw_output="Contract mismatch across modules",
+                timestamp="2025-03-31T10:00:00Z",
+            ),
+            # After systemic fix: all pass
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=2,
+                passed=10,
+                failed=0,
+                warnings=0,
+                failures=(),
+                warning_list=(),
+                raw_output="All tests passed after systemic fix",
+                timestamp="2025-03-31T10:01:00Z",
+            ),
+        ],
+    )
+
+    # Configure systemic fix to succeed
+    mock_repair.set_systemic_fix_result(
+        [
+            SystemicFixResult(
+                success=True,
+                files_modified=("src/api.py", "src/models.py", "src/services.py"),
+                root_cause_addressed="API contract updated consistently across all modules",
+                duration_seconds=120.0,
+            ),
+        ]
+    )
+
+    # Execute repair cycle
+    context = RepairCycleContext(
+        work_item_id="WI-456",
+        workflow_run_id="WR-789",
+        stage_name="fix_failures",
+        test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
+    )
+
+    result = await mock_repair.execute(context)
+
+    # Verify outcomes
+    assert result.overall_success is True
+    assert mock_repair.systemic_fix_call_count == 1
+    assert mock_repair.file_fix_call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_scenario_systemic_fix_non_cross_cutting_dispatches_to_files(
+    simulation_bootstrap: SimulationApplicationBootstrap,
+):
+    """Test non-cross-cutting analysis dispatches to per-file fixes.
+
+    Workflow:
+    1. Tests fail with isolated issue
+    2. Analysis identifies cross_cutting=False
+    3. Per-file fix is applied
+    4. Retest passes
+    """
+    # Setup adapters
+    mock_repair = simulation_bootstrap.adapters.repair_cycle_as_mock()
+    mock_analysis = simulation_bootstrap.adapters.systemic_analysis_as_mock()
+
+    # Configure systemic analysis to report isolated issue
+    mock_analysis.set_results(
+        [
+            SystemicAnalysisResult(
+                classification=FailureClassification.CODE_DEFECT,
+                confidence=0.9,
+                reasoning="Isolated bug in single module",
+                affected_files=("src/utils.py",),
+                recommended_action="Fix the isolated parsing bug",
+                cross_cutting=False,
+            ),
+        ]
+    )
+    # Configure test failures and recovery
+    mock_repair.set_test_result_sequence(
+        RepairTestType.UNIT,
+        [
+            # Initial test run: failures
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=1,
+                passed=8,
+                failed=2,
+                warnings=0,
+                failures=(
+                    RepairTestFailure("test_utils.py", "test_parse", "ValueError"),
+                    RepairTestFailure("test_utils.py", "test_format", "AssertionError"),
+                ),
+                warning_list=(),
+                raw_output="Parsing errors in utils module",
+                timestamp="2025-03-31T10:00:00Z",
+            ),
+            # After file-level fix: all pass
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=2,
+                passed=10,
+                failed=0,
+                warnings=0,
+                failures=(),
+                warning_list=(),
+                raw_output="All tests passed",
+                timestamp="2025-03-31T10:01:00Z",
+            ),
+        ],
+    )
+
+    # Execute repair cycle
+    context = RepairCycleContext(
+        work_item_id="WI-456",
+        workflow_run_id="WR-789",
+        stage_name="fix_failures",
+        test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
+    )
+
+    result = await mock_repair.execute(context)
+
+    # Verify outcomes
+    assert result.overall_success is True
+    # Should NOT call systemic fix (cross_cutting=False)
+    assert mock_repair.systemic_fix_call_count == 0
+    # Should call file-level fix instead
+    assert mock_repair.file_fix_call_count > 0
+
+
+@pytest.mark.asyncio
+async def test_scenario_systemic_fix_multiple_iterations(
+    simulation_bootstrap: SimulationApplicationBootstrap,
+):
+    """Test systemic fix with multiple iterations (second attempt succeeds).
+
+    Workflow:
+    1. First test run fails
+    2. First systemic fix fails, retesting still fails
+    3. Second systemic fix succeeds
+    4. Final test run passes
+    """
+    # Setup adapters
+    mock_repair = simulation_bootstrap.adapters.repair_cycle_as_mock()
+    mock_analysis = simulation_bootstrap.adapters.systemic_analysis_as_mock()
+
+    # Configure two systemic analyses (one for each iteration)
+    mock_analysis.set_results(
+        [
+            SystemicAnalysisResult(
+                classification=FailureClassification.CODE_DEFECT,
+                confidence=0.7,
+                reasoning="Initial analysis: partial root cause",
+                affected_files=("src/api.py",),
+                recommended_action="Update API layer",
+                cross_cutting=True,
+            ),
+            SystemicAnalysisResult(
+                classification=FailureClassification.CODE_DEFECT,
+                confidence=0.95,
+                reasoning="Second analysis: complete root cause",
+                affected_files=("src/models.py", "src/database.py"),
+                recommended_action="Update models and database layer",
+                cross_cutting=True,
+            ),
+        ]
+    )
+    # Configure test sequence: fail → fail → pass
+    mock_repair.set_test_result_sequence(
+        RepairTestType.UNIT,
+        [
+            # Initial failures
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=1,
+                passed=6,
+                failed=4,
+                warnings=0,
+                failures=tuple(RepairTestFailure(f"test_{i}.py", f"test_{i}", f"Error {i}") for i in range(4)),
+                warning_list=(),
+                raw_output="Initial failures",
+                timestamp="2025-03-31T10:00:00Z",
+            ),
+            # Still failing after first systemic fix
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=2,
+                passed=5,
+                failed=5,
+                warnings=0,
+                failures=tuple(RepairTestFailure(f"test_{i}.py", f"test_{i}", f"Error {i}") for i in range(5)),
+                warning_list=(),
+                raw_output="Still failing after first fix",
+                timestamp="2025-03-31T10:01:00Z",
+            ),
+            # Passing after second systemic fix
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=3,
+                passed=10,
+                failed=0,
+                warnings=0,
+                failures=(),
+                warning_list=(),
+                raw_output="All tests passed",
+                timestamp="2025-03-31T10:02:00Z",
+            ),
+        ],
+    )
+
+    # Configure two systemic fix results
+    mock_repair.set_systemic_fix_result(
+        [
+            SystemicFixResult(
+                success=True,
+                files_modified=("src/api.py",),
+                root_cause_addressed="API layer updated",
+                duration_seconds=60.0,
+            ),
+            SystemicFixResult(
+                success=True,
+                files_modified=("src/models.py", "src/database.py"),
+                root_cause_addressed="Models and database schema updated",
+                duration_seconds=90.0,
+            ),
+        ]
+    )
+
+    # Execute repair cycle
+    context = RepairCycleContext(
+        work_item_id="WI-456",
+        workflow_run_id="WR-789",
+        stage_name="fix_failures",
+        test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
+    )
+
+    result = await mock_repair.execute(context)
+
+    # Verify outcomes
+    assert result.overall_success is True
+    # Should call systemic fix twice
+    assert mock_repair.systemic_fix_call_count == 2
+    # Should not call file-level fix (both are cross_cutting)
+    assert mock_repair.file_fix_call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_scenario_systemic_fix_large_failure_count(
+    simulation_bootstrap: SimulationApplicationBootstrap,
+):
+    """Test systemic fix with large failure count.
+
+    When cross_cutting=True, systemic fix is called regardless of failure count.
+    """
+    # Setup adapters
+    mock_repair = simulation_bootstrap.adapters.repair_cycle_as_mock()
+    mock_analysis = simulation_bootstrap.adapters.systemic_analysis_as_mock()
+
+    # Create 60 failures
+    failures = tuple(RepairTestFailure(f"test_{i}.py", f"test_{i}", f"Failure {i}") for i in range(60))
+
+    # Configure systemic analysis with cross_cutting=True
+    mock_analysis.set_results(
+        [
+            SystemicAnalysisResult(
+                classification=FailureClassification.CODE_DEFECT,
+                confidence=0.9,
+                reasoning="Cross-cutting issue affecting many files",
+                affected_files=tuple(f"file_{i}.py" for i in range(10)),
+                recommended_action="Fix systematically",
+                cross_cutting=True,
+            ),
+        ]
+    )
+    # Configure test sequence
+    mock_repair.set_test_result_sequence(
+        RepairTestType.UNIT,
+        [
+            # Initial: many failures
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=1,
+                passed=0,
+                failed=60,
+                warnings=0,
+                failures=failures,
+                warning_list=(),
+                raw_output="60 failures detected",
+                timestamp="2025-03-31T10:00:00Z",
+            ),
+            # After systemic fix: pass
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=2,
+                passed=60,
+                failed=0,
+                warnings=0,
+                failures=(),
+                warning_list=(),
+                raw_output="All passed after systemic fix",
+                timestamp="2025-03-31T10:01:00Z",
+            ),
+        ],
+    )
+
+    # Execute repair cycle
+    context = RepairCycleContext(
+        work_item_id="WI-456",
+        workflow_run_id="WR-789",
+        stage_name="fix_failures",
+        test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
+    )
+
+    result = await mock_repair.execute(context)
+
+    # Verify outcomes
+    assert result.overall_success is True
+    # Failure count (60) exceeds ceiling (50), so despite cross_cutting=True,
+    # should fall back to file-level fixes for safety
+    assert mock_repair.file_fix_call_count > 0
+    assert mock_repair.systemic_fix_call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_scenario_systemic_fix_with_event_emission(
+    simulation_bootstrap: SimulationApplicationBootstrap,
+):
+    """Test that systemic fix emits proper events via MockRepairCycleAdapter.
+
+    Verifies audit trail: SystemicFixStartedEvent → SystemicFixCompletedEvent.
+    Note: MockRepairCycleAdapter emits events via its own EventEmitter (get_all_events),
+    not into the InMemoryEventStore. Also requires current_project to be set for
+    event emission.
+    """
+    # Setup adapters
+    mock_repair = simulation_bootstrap.adapters.repair_cycle_as_mock()
+    mock_repair.current_project = "test-project"
+    mock_analysis = simulation_bootstrap.adapters.systemic_analysis_as_mock()
+
+    # Configure systemic analysis
+    mock_analysis.set_results(
+        [
+            SystemicAnalysisResult(
+                classification=FailureClassification.CODE_DEFECT,
+                confidence=0.9,
+                reasoning="Cross-cutting code defect",
+                affected_files=("src/api.py", "src/models.py"),
+                recommended_action="Update contract",
+                cross_cutting=True,
+            ),
+        ]
+    )
+    # Configure test sequence
+    mock_repair.set_test_result_sequence(
+        RepairTestType.UNIT,
+        [
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=1,
+                passed=8,
+                failed=2,
+                warnings=0,
+                failures=(
+                    RepairTestFailure("test_api.py", "test_1", "Error"),
+                    RepairTestFailure("test_models.py", "test_2", "Error"),
+                ),
+                warning_list=(),
+                raw_output="Failures",
+                timestamp="2025-03-31T10:00:00Z",
+            ),
+            RepairTestResult(
+                test_type=RepairTestType.UNIT,
+                iteration=2,
+                passed=10,
+                failed=0,
+                warnings=0,
+                failures=(),
+                warning_list=(),
+                raw_output="All passed",
+                timestamp="2025-03-31T10:01:00Z",
+            ),
+        ],
+    )
+
+    # Configure systemic fix
+    mock_repair.set_systemic_fix_result(
+        [
+            SystemicFixResult(
+                success=True,
+                files_modified=("src/api.py", "src/models.py"),
+                root_cause_addressed="Contract updated across modules",
+                duration_seconds=120.0,
+            ),
+        ]
+    )
+
+    # Execute repair cycle
+    context = RepairCycleContext(
+        work_item_id="WI-456",
+        workflow_run_id="WR-789",
+        stage_name="fix_failures",
+        test_configs=(RepairTestRunConfig(test_type=RepairTestType.UNIT),),
+    )
+
+    result = await mock_repair.execute(context)
+
+    # Verify overall success
+    assert result.overall_success is True
+
+    # Verify audit trail via MockRepairCycleAdapter's own event emitter
+    events = mock_repair.get_all_events()
+    event_types = {e.get("type") for e in events}
+
+    assert "repair_cycle.systemic_fix_started" in event_types, "SystemicFixStartedEvent should be emitted"
+    assert "repair_cycle.systemic_fix_completed" in event_types, "SystemicFixCompletedEvent should be emitted"

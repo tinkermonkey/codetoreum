@@ -1,0 +1,13 @@
+# Smoke Scenario — External: Board Item Placements
+#
+# Port/Interface: IBoardService
+# Adapter (sim): MockBoardAdapter
+# Skipped when using real adapters (items are already on the board)
+
+board_placements:
+  - work_item_title: "Implement login page"
+    column: "Backlog"
+  - work_item_title: "Fix null pointer exception in user service"
+    column: "Backlog"
+  - work_item_title: "Add pagination to items list endpoint"
+    column: "Backlog"

@@ -1,0 +1,75 @@
+{
+  "project": {
+    "id": "rounds",
+    "name": "rounds",
+    "github_org": "tinkermonkey",
+    "github_repo": "rounds",
+    "description": "Semi-automated software medic",
+    "default_branch": "main"
+  },
+  "agents": [
+    {
+      "name": "senior_software_engineer",
+      "description": "Implements features and fixes bugs with full codebase access",
+      "coding_agent": "claude-code",
+      "invocation": {
+        "mode": "containerized",
+        "model": "claude-sonnet-4-6",
+        "timeout_seconds": 3600,
+        "mode_config": {
+          "image": "codetoreum-agent:latest",
+          "cpu_limit": "2",
+          "memory_limit": "4g"
+        }
+      },
+      "capabilities": [
+        "code_generation",
+        "debugging",
+        "refactoring",
+        "testing"
+      ],
+      "makes_code_changes": true,
+      "commit_policy": "on_success"
+    }
+  ],
+  "board": {
+    "id": "PVT_kwHOABgBzM4BZT2D",
+    "name": "Rounds - Codetoreum SDLC",
+    "columns": [
+      {
+        "name": "Backlog",
+        "type": "manual",
+        "agent_id": null,
+        "is_pipeline_trigger": false,
+        "is_exit_column": false,
+        "auto_progress_on_completion": false
+      },
+      {
+        "name": "Development",
+        "type": "automated",
+        "agent_id": "senior_software_engineer",
+        "is_pipeline_trigger": true,
+        "is_exit_column": false,
+        "auto_progress_on_completion": true,
+        "sla_seconds": 3600,
+        "on_failure_column": "Backlog"
+      },
+      {
+        "name": "Testing",
+        "type": "manual",
+        "agent_id": null,
+        "is_pipeline_trigger": false,
+        "is_exit_column": false,
+        "auto_progress_on_completion": false
+      },
+      {
+        "name": "Done",
+        "type": "manual",
+        "agent_id": null,
+        "is_pipeline_trigger": false,
+        "is_exit_column": true,
+        "auto_progress_on_completion": false
+      }
+    ]
+  }
+}

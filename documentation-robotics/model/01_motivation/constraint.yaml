@@ -1,0 +1,100 @@
+motivation.constraint.domain-layer-zero-external-dependencies:
+  id: 9331102b-f802-4d39-bfe9-fcbd838c5bfa
+  path: motivation.constraint.domain-layer-zero-external-dependencies
+  spec_node_id: motivation.constraint
+  type: constraint
+  layer_id: motivation
+  name: Domain Layer Zero External Dependencies
+  description: "The domain layer (src/codetoreum/domain/) must have zero external
+    library or service dependencies. It contains only pure Python business
+    logic: domain models, domain events, and domain services. Any violation of
+    this boundary breaks the hexagonal architecture guarantee."
+  attributes:
+    constraintType: technical
+    documentation: Enforced by architecture review. ~95 domain model classes and 151
+      CodetoreumEvent subclasses must remain dependency-free. External
+      interactions only via port interfaces in ports/output/.
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: CLAUDE.md
+        symbol: Key Constraints
+  metadata:
+    created_at: 2026-05-08T20:44:33.862Z
+    updated_at: 2026-05-08T20:44:33.862Z
+    version: 1
+motivation.constraint.all-external-interactions-via-port-interfaces:
+  id: a945e83e-00cc-41de-a516-2f826057e411
+  path: motivation.constraint.all-external-interactions-via-port-interfaces
+  spec_node_id: motivation.constraint
+  type: constraint
+  layer_id: motivation
+  name: All External Interactions via Port Interfaces
+  description: "Every external system interaction (GitHub, Docker, LLM, Redis,
+    PostgreSQL, Elasticsearch) must flow through a named port interface (59
+    total: 19 input + 40 output). Direct adapter-to-adapter calls or
+    domain-to-infrastructure calls are prohibited."
+  attributes:
+    constraintType: technical
+    documentation: 59 port interfaces defined in ports/input/ (19) and ports/output/
+      (40). Adapters are swappable behind these contracts. No direct coupling
+      allowed across the hexagonal boundary.
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: CLAUDE.md
+        symbol: Key Constraints
+  metadata:
+    created_at: 2026-05-08T20:44:39.026Z
+    updated_at: 2026-05-08T20:44:39.026Z
+    version: 1
+motivation.constraint.domain-events-must-be-immutable:
+  id: e6466302-6ad2-4768-a246-72c5793fde39
+  path: motivation.constraint.domain-events-must-be-immutable
+  spec_node_id: motivation.constraint
+  type: constraint
+  layer_id: motivation
+  name: Domain Events Must Be Immutable
+  description: "All domain event classes must be immutable frozen dataclasses. No
+    field may be mutated after construction. This guarantees audit integrity: an
+    event in the store is always the exact record of the state change that
+    occurred."
+  attributes:
+    constraintType: technical
+    documentation: Enforced via @dataclass(frozen=True) on all 151 CodetoreumEvent
+      subclasses in domain/events/. Serialization support is provided without
+      mutation.
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/events/
+        symbol: CodetoreumEvent
+  metadata:
+    created_at: 2026-05-08T20:44:43.357Z
+    updated_at: 2026-05-08T20:44:43.357Z
+    version: 1
+motivation.constraint.configuration-must-be-database-backed:
+  id: 0ef01762-0b23-4c77-a356-53014c975278
+  path: motivation.constraint.configuration-must-be-database-backed
+  spec_node_id: motivation.constraint
+  type: constraint
+  layer_id: motivation
+  name: Configuration Must Be Database-Backed
+  description: All runtime configuration (project settings, workflow definitions,
+    agent configurations, environment variables) must be stored in PostgreSQL
+    and managed via a web UI. YAML-based configuration files are prohibited in
+    production. Only simulation testing uses YAML scenario definitions.
+  attributes:
+    constraintType: technical
+    documentation: Production config backed by PostgreSQL via SQLAlchemy. Web
+      dashboard provides UI management. Simulation-only YAML scenario
+      definitions in scenarios/ directory are the sole exception.
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: CLAUDE.md
+        symbol: Configuration Management
+  metadata:
+    created_at: 2026-05-08T20:44:48.285Z
+    updated_at: 2026-05-08T20:44:48.285Z
+    version: 1

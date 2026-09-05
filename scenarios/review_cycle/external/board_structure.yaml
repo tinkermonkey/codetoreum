@@ -1,0 +1,16 @@
+# Review Cycle Scenario — External: Board Structure
+#
+# Port/Interface: IBoardService
+# Adapter (sim): MockBoardAdapter
+# Skipped when using real adapters (board already exists in GitHub Projects/Linear/etc.)
+
+boards:
+  - board_id: "board-review"
+    board_name: "Review Cycle Board"
+    columns:
+      - "Backlog"
+      - "In Progress"
+      - "Awaiting Review"
+      - "Review"
+      - "Changes Requested"
+      - "Done"

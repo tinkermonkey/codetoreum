@@ -1,0 +1,806 @@
+"""Git repository adapter for IRepository interface."""
+
+import asyncio
+import logging
+import os
+import subprocess
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
+
+from codetoreum.domain.types import BranchName, CommitHash, RepositoryId
+from codetoreum.ports.exceptions import (
+    AuthenticationError,
+    MergeConflictError,
+    RepositoryError,
+    ResourceNotFoundError,
+    ValidationError,
+)
+from codetoreum.ports.output.repository import (
+    CommitAuthor,
+    CommitInfo,
+    IRepository,
+    MergeResult,
+    RepositoryStatus,
+)
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class GitConfig:
+    """Configuration for Git repository adapter."""
+
+    # Git executable
+    git_path: str = "git"
+
+    # Default author (used when not specified)
+    default_author_name: str | None = None
+    default_author_email: str | None = None
+
+    # Authentication
+    ssh_key_path: str | None = None
+    credential_helper: str | None = None
+
+    # Behavior
+    default_branch: str = "main"
+    auto_create_remote_branch: bool = True
+
+    # Timeouts
+    timeout_seconds: int = 300
+
+
+class GitRepositoryAdapter(IRepository):
+    """
+    Git repository adapter using Git CLI.
+
+    This adapter implements repository operations using the git command-line tool.
+    It provides a clean interface for cloning, branching, committing, and pushing.
+    """
+
+    def __init__(self, config: GitConfig):
+        """
+        Initialize Git adapter.
+
+        Args:
+            config: Git configuration
+        """
+        self.config = config
+
+    def _sanitize_git_args(self, args: list[str]) -> list[str]:
+        """
+        Sanitize git command arguments to prevent injection.
+
+        Args:
+            args: Git command arguments
+
+        Returns:
+            Sanitized arguments
+
+        Raises:
+            ValidationError: Invalid arguments
+        """
+        sanitized = []
+        for arg in args:
+            # Remove null bytes and ensure arguments are strings
+            if not isinstance(arg, str):
+                msg = f"Invalid argument type: {type(arg)}"
+                raise ValidationError(msg)
+
+            sanitized_arg = arg.replace("\x00", "")
+
+            # Validate argument doesn't contain dangerous patterns
+            if sanitized_arg.startswith("-") and ".." in sanitized_arg:
+                msg = f"Potentially dangerous argument: {arg}"
+                raise ValidationError(msg)
+
+            sanitized.append(sanitized_arg)
+
+        return sanitized
+
+    async def _run_git_command(
+        self,
+        args: list[str],
+        cwd: Path | None = None,
+        env: dict | None = None,
+        check: bool = True,
+    ) -> subprocess.CompletedProcess:
+        """
+        Run git command asynchronously with security measures.
+
+        Args:
+            args: Git command arguments
+            cwd: Working directory
+            env: Environment variables
+            check: Raise exception on non-zero exit code
+
+        Returns:
+            Completed process
+
+        Raises:
+            RepositoryError: Command failed
+            ValidationError: Invalid arguments
+        """
+        # Sanitize arguments
+        sanitized_args = self._sanitize_git_args(args)
+        cmd = [self.config.git_path] + sanitized_args
+
+        # Set up clean git environment.
+        # Strip parent-process credential helpers that hijack HTTPS auth
+        # — VS Code injects GIT_ASKPASS pointing at a UNIX socket helper
+        # that refuses connections when git runs outside the editor.
+        git_env = {
+            k: v
+            for k, v in os.environ.items()
+            if k not in {"GIT_ASKPASS", "SSH_ASKPASS"} and not k.startswith("VSCODE_GIT_")
+        }
+        # Disable global and system git config to avoid issues
+        git_env["GIT_CONFIG_GLOBAL"] = "/dev/null"
+        git_env["GIT_CONFIG_SYSTEM"] = "/dev/null"
+        # Refuse interactive prompts so missing credentials fail fast.
+        git_env["GIT_TERMINAL_PROMPT"] = "0"
+
+        # If a GitHub token is present, inject an HTTPS extraheader scoped
+        # to github.com so authenticated push/pull/fetch/clone "just work"
+        # for HTTPS remotes. Scoping the key to https://github.com/ keeps
+        # the header off any other remote.
+        github_token = os.environ.get("GITHUB_TOKEN")
+        if github_token:
+            # GitHub HTTPS auth accepts HTTP Basic where the username is
+            # `x-access-token` and the password is the token. Bearer works
+            # for OAuth app tokens but not classic PATs (ghp_...) — Basic
+            # is the lowest-common-denominator scheme that works for both.
+            import base64 as _b64
+
+            _basic = _b64.b64encode(f"x-access-token:{github_token}".encode()).decode()
+            extra_param = f"'http.https://github.com/.extraheader=AUTHORIZATION: " f"basic {_basic}'"
+            existing = git_env.get("GIT_CONFIG_PARAMETERS", "").strip()
+            git_env["GIT_CONFIG_PARAMETERS"] = f"{existing} {extra_param}".strip() if existing else extra_param
+
+        # Merge with provided environment variables
+        if env:
+            git_env.update(env)
+
+        loop = asyncio.get_event_loop()
+
+        def _run():
+            try:
+                # Explicit shell=False for security
+                result = subprocess.run(
+                    cmd,
+                    cwd=cwd,
+                    env=git_env,
+                    capture_output=True,
+                    text=True,
+                    timeout=self.config.timeout_seconds,
+                    check=check,
+                    shell=False,  # Explicit: prevent shell injection
+                )
+                return result
+            except subprocess.CalledProcessError as e:
+                # Check for specific error conditions
+                error_text = e.stderr.lower()
+
+                if "authentication" in error_text or "permission denied" in error_text:
+                    msg = f"Git authentication failed: {e.stderr}"
+                    raise AuthenticationError(msg) from e
+                if "conflict" in error_text or "merge conflict" in error_text:
+                    msg = f"Merge conflict detected: {e.stderr}"
+                    raise MergeConflictError(msg) from e
+                if "not found" in error_text:
+                    msg = "Git resource"
+                    raise ResourceNotFoundError(msg, str(args)) from e
+                msg = f"Git command failed: {e.stderr}"
+                raise RepositoryError(msg) from e
+            except subprocess.TimeoutExpired as e:
+                msg = f"Git command timed out after {self.config.timeout_seconds}s"
+                raise RepositoryError(msg) from e
+            except FileNotFoundError as e:
+                msg = f"Git executable not found at: {self.config.git_path}"
+                raise RepositoryError(msg) from e
+
+        return await loop.run_in_executor(None, _run)
+
+    async def clone(
+        self,
+        url: str,
+        destination: Path,
+        branch: BranchName | None = None,
+    ) -> RepositoryId:
+        """Clone a repository, or refresh an existing clone in place.
+
+        If ``destination`` already exists and contains a git repository
+        with the same ``origin`` URL, the directory is reused: we fetch
+        from origin so subsequent operations see the latest refs. This
+        keeps retries idempotent — the prior bootstrap behaviour raised
+        ``destination path already exists and is not an empty directory``
+        on any rerun.
+        """
+        if not url:
+            msg = "Repository URL is required"
+            raise ValidationError(msg)
+
+        if not destination:
+            msg = "Destination path is required"
+            raise ValidationError(msg)
+
+        if destination.exists():
+            git_dir = destination / ".git"
+            if git_dir.exists():
+                try:
+                    existing_url_proc = await self._run_git_command(
+                        ["remote", "get-url", "origin"],
+                        cwd=destination,
+                    )
+                    existing_url = existing_url_proc.stdout.strip()
+                except RepositoryError:
+                    existing_url = ""
+
+                if existing_url == url:
+                    logger.info(
+                        "Reusing existing clone at %s (origin matches %s); fetching",
+                        destination,
+                        url,
+                    )
+                    await self._run_git_command(["fetch", "origin"], cwd=destination)
+                    if branch:
+                        await self._run_git_command(["checkout", branch], cwd=destination)
+                    return RepositoryId(str(destination.absolute()))
+
+                msg = (
+                    f"Destination {destination} already exists with a different "
+                    f"origin ({existing_url or 'no origin'} vs {url})"
+                )
+                raise RepositoryError(msg)
+
+            if any(destination.iterdir()):
+                msg = (
+                    f"Destination {destination} exists, is non-empty, and is not a git "
+                    "repository; refusing to clone over it"
+                )
+                raise RepositoryError(msg)
+
+        # Build clone command
+        args = ["clone"]
+
+        if branch:
+            args.extend(["--branch", branch])
+
+        args.extend([url, str(destination)])
+
+        # Execute clone
+        await self._run_git_command(args)
+
+        # Return repository ID (using destination path as ID)
+        return RepositoryId(str(destination.absolute()))
+
+    async def checkout(
+        self,
+        repo_path: Path,
+        branch: BranchName,
+        create: bool = False,
+    ) -> None:
+        """Checkout a branch."""
+        if not repo_path or not repo_path.exists():
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
+
+        args = ["checkout"]
+
+        if create:
+            args.append("-b")
+
+        args.append(branch)
+
+        await self._run_git_command(args, cwd=repo_path)
+
+    async def create_branch(
+        self,
+        repo_path: Path,
+        branch_name: BranchName,
+        from_branch: BranchName | None = None,
+    ) -> None:
+        """Create a new branch."""
+        if not repo_path or not repo_path.exists():
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
+
+        args = ["branch", branch_name]
+
+        if from_branch:
+            args.append(from_branch)
+
+        await self._run_git_command(args, cwd=repo_path)
+
+    async def stage_files(
+        self,
+        repo_path: Path,
+        files: list[str],
+    ) -> None:
+        """Stage files for commit.
+
+        Adds the specified files to the repository's staging area. This is a
+        prerequisite to committing - staging and committing are independent
+        operations that follow real git semantics.
+
+        Args:
+            repo_path: Path to the repository
+            files: List of file paths to stage
+
+        Raises:
+            RepositoryError: Stage operation failed
+            ValidationError: Invalid file paths or repo_path
+        """
+        if not repo_path or not repo_path.exists():
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
+
+        if not files:
+            msg = "Files list is required and cannot be empty"
+            raise ValidationError(msg)
+
+        # Stage each file individually to preserve proper git semantics
+        for file in files:
+            await self._run_git_command(["add", file], cwd=repo_path)
+
+    async def commit(
+        self,
+        repo_path: Path,
+        message: str,
+        author_name: str,
+        author_email: str,
+        files: list[str] | None = None,
+    ) -> CommitHash:
+        """Create a commit."""
+        if not repo_path or not repo_path.exists():
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
+
+        if not message:
+            msg = "Commit message is required"
+            raise ValidationError(msg)
+
+        # Stage files only if explicitly provided
+        # If no files provided, commit uses whatever is already staged (real git semantics)
+        if files:
+            for file in files:
+                await self._run_git_command(["add", file], cwd=repo_path)
+
+        # Set up environment with author info
+        env = os.environ.copy()
+        env["GIT_AUTHOR_NAME"] = author_name
+        env["GIT_AUTHOR_EMAIL"] = author_email
+        env["GIT_COMMITTER_NAME"] = author_name
+        env["GIT_COMMITTER_EMAIL"] = author_email
+
+        # Create commit
+        await self._run_git_command(["commit", "-m", message], cwd=repo_path, env=env)
+
+        # Get commit SHA
+        result = await self._run_git_command(["rev-parse", "HEAD"], cwd=repo_path)
+        commit_sha = result.stdout.strip()
+
+        return CommitHash(commit_sha)
+
+    async def push(
+        self,
+        repo_path: Path,
+        remote: str = "origin",
+        branch: str | None = None,
+        force: bool = False,
+    ) -> None:
+        """Push commits to remote."""
+        if not repo_path or not repo_path.exists():
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
+
+        args = ["push"]
+
+        if force:
+            args.append("--force")
+
+        args.append(remote)
+
+        if branch:
+            # Set upstream if auto-create is enabled
+            if self.config.auto_create_remote_branch:
+                args.extend(["--set-upstream", branch])
+            else:
+                args.append(branch)
+
+        await self._run_git_command(args, cwd=repo_path)
+
+    async def pull(
+        self,
+        repo_path: Path,
+        remote: str = "origin",
+        branch: str | None = None,
+    ) -> None:
+        """Pull commits from remote."""
+        if not repo_path or not repo_path.exists():
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
+
+        args = ["pull", remote]
+
+        if branch:
+            args.append(branch)
+
+        await self._run_git_command(args, cwd=repo_path)
+
+    async def fetch(
+        self,
+        repo_path: Path,
+        remote: str = "origin",
+        prune: bool = False,
+    ) -> None:
+        """Fetch from remote."""
+        if not repo_path or not repo_path.exists():
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
+
+        args = ["fetch", remote]
+
+        if prune:
+            args.append("--prune")
+
+        await self._run_git_command(args, cwd=repo_path)
+
+    async def diff(
+        self,
+        repo_path: Path,
+        base: str,
+        target: str,
+    ) -> str:
+        """Get diff between two refs."""
+        if not repo_path or not repo_path.exists():
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
+
+        result = await self._run_git_command(
+            ["diff", f"{base}...{target}"],
+            cwd=repo_path,
+            check=False,
+        )
+
+        return result.stdout
+
+    async def status(self, repo_path: Path) -> RepositoryStatus:
+        """Get repository status."""
+        if not repo_path or not repo_path.exists():
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
+
+        # Get current branch
+        # Use check=False because this may fail if there are no commits yet
+        result = await self._run_git_command(
+            ["rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=repo_path,
+            check=False,
+        )
+
+        # If there are no commits yet, HEAD doesn't exist. Use default branch name.
+        if result.returncode != 0:
+            # Get the default branch name from config, or use "main"
+            try:
+                result = await self._run_git_command(
+                    ["config", "--get", "init.defaultBranch"],
+                    cwd=repo_path,
+                    check=False,
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    current_branch = BranchName(result.stdout.strip())
+                else:
+                    # Fallback to config default
+                    logger.warning(
+                        "Failed to detect default branch, using config value",
+                        extra={"default_branch": self.config.default_branch, "repo_path": str(repo_path)},
+                    )
+                    current_branch = BranchName(self.config.default_branch)
+            except Exception as e:
+                logger.warning(
+                    "Exception detecting default branch, using config value",
+                    extra={"error": str(e), "default_branch": self.config.default_branch, "repo_path": str(repo_path)},
+                    exc_info=True,
+                )
+                current_branch = BranchName(self.config.default_branch)
+        else:
+            current_branch = BranchName(result.stdout.strip())
+
+        # Get status (short format)
+        result = await self._run_git_command(
+            ["status", "--short", "--porcelain"],
+            cwd=repo_path,
+        )
+
+        # Parse status output
+        staged_files = []
+        unstaged_files = []
+        untracked_files = []
+
+        for line in result.stdout.splitlines():
+            if not line:
+                continue
+
+            status_code = line[:2]
+            filename = line[3:]
+
+            if status_code[0] in ("M", "A", "D", "R", "C"):
+                staged_files.append(filename)
+            if status_code[1] in ("M", "D"):
+                unstaged_files.append(filename)
+            if status_code == "??":
+                untracked_files.append(filename)
+
+        # Check ahead/behind remote
+        ahead_count = 0
+        behind_count = 0
+
+        try:
+            # Detect the actual remote for this branch
+            remote_name = "origin"  # default
+            result = await self._run_git_command(
+                ["config", "--get", f"branch.{current_branch}.remote"],
+                cwd=repo_path,
+                check=False,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                remote_name = result.stdout.strip()
+
+            result = await self._run_git_command(
+                ["rev-list", "--left-right", "--count", f"{remote_name}/{current_branch}...HEAD"],
+                cwd=repo_path,
+                check=False,
+            )
+
+            if result.returncode == 0 and result.stdout.strip():
+                parts = result.stdout.strip().split()
+                if len(parts) == 2:
+                    behind_count, ahead_count = map(int, parts)
+            elif result.returncode != 0:
+                logger.warning(
+                    "Failed to determine ahead/behind counts for remote tracking branch",
+                    extra={"current_branch": str(current_branch), "remote": remote_name, "repo_path": str(repo_path)},
+                )
+        except Exception as e:
+            logger.warning(
+                "Exception determining ahead/behind counts, remote tracking branch may not exist",
+                extra={"error": str(e), "current_branch": str(current_branch), "repo_path": str(repo_path)},
+                exc_info=True,
+            )
+
+        return RepositoryStatus(
+            current_branch=current_branch,
+            is_dirty=bool(staged_files or unstaged_files or untracked_files),
+            staged_files=tuple(staged_files),
+            unstaged_files=tuple(unstaged_files),
+            untracked_files=tuple(untracked_files),
+            ahead_count=ahead_count,
+            behind_count=behind_count,
+        )
+
+    async def list_branches(
+        self,
+        repo_path: Path,
+        remote: bool = False,
+    ) -> list[str]:
+        """List branches."""
+        if not repo_path or not repo_path.exists():
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
+
+        args = ["branch", "--list"]
+
+        if remote:
+            args.append("--remote")
+
+        result = await self._run_git_command(args, cwd=repo_path)
+
+        # Parse branch list
+        branches = []
+        for line in result.stdout.splitlines():
+            # Remove leading * and whitespace
+            branch = line.strip().lstrip("* ")
+            if branch:
+                # Remove remote prefix if present
+                if remote and "/" in branch:
+                    branch = branch.split("/", 1)[1]
+                branches.append(branch)
+
+        return branches
+
+    async def merge(
+        self,
+        repo_path: Path,
+        branch: str,
+        strategy: str = "merge",
+    ) -> MergeResult:
+        """Merge a branch."""
+        if not repo_path or not repo_path.exists():
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
+
+        if strategy not in ("merge", "rebase", "squash"):
+            msg = f"Invalid merge strategy: {strategy}"
+            raise ValidationError(msg)
+
+        try:
+            if strategy == "merge":
+                await self._run_git_command(["merge", branch], cwd=repo_path)
+            elif strategy == "rebase":
+                await self._run_git_command(["rebase", branch], cwd=repo_path)
+            elif strategy == "squash":
+                await self._run_git_command(["merge", "--squash", branch], cwd=repo_path)
+
+            # Get merge commit SHA
+            result = await self._run_git_command(["rev-parse", "HEAD"], cwd=repo_path)
+            commit_sha = CommitHash(result.stdout.strip())
+
+            return MergeResult(
+                success=True,
+                conflicts=(),
+                merge_commit=commit_sha,
+            )
+
+        except MergeConflictError:
+            # Get list of conflicted files
+            result = await self._run_git_command(
+                ["diff", "--name-only", "--diff-filter=U"],
+                cwd=repo_path,
+                check=False,
+            )
+
+            conflicts = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+            return MergeResult(
+                success=False,
+                conflicts=tuple(conflicts),
+                merge_commit=None,
+            )
+
+    async def get_file_content(
+        self,
+        repo_path: Path,
+        file_path: str,
+        ref: str | None = None,
+    ) -> str:
+        """Get content of a file at a specific ref."""
+        if not repo_path or not repo_path.exists():
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
+
+        if ref:
+            # Get file from git object database
+            result = await self._run_git_command(
+                ["show", f"{ref}:{file_path}"],
+                cwd=repo_path,
+            )
+            return result.stdout
+        # Read from working tree
+        full_path = repo_path / file_path
+        if not full_path.exists():
+            msg = "File"
+            raise ResourceNotFoundError(msg, file_path)
+
+        return full_path.read_text()
+
+    async def get_commit_info(
+        self,
+        repo_path: Path,
+        commit_sha: str,
+    ) -> CommitInfo:
+        """Get information about a commit."""
+        if not repo_path or not repo_path.exists():
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
+
+        # Get commit info in JSON format
+        result = await self._run_git_command(
+            [
+                "show",
+                "--format=%H%n%an%n%ae%n%at%n%s%n%b",
+                "--no-patch",
+                commit_sha,
+            ],
+            cwd=repo_path,
+        )
+
+        lines = result.stdout.splitlines()
+        if len(lines) < 5:
+            msg = f"Invalid commit info format for {commit_sha}"
+            raise RepositoryError(msg)
+
+        author = CommitAuthor(name=lines[1], email=lines[2])
+        return CommitInfo(
+            sha=lines[0],
+            author=author,
+            message=lines[4],
+            timestamp=datetime.fromtimestamp(int(lines[3]), tz=UTC),
+            body="\n".join(lines[5:]) if len(lines) > 5 else "",
+        )
+
+    async def get_commit_history(
+        self,
+        repo_path: Path,
+        branch: str | None = None,
+        limit: int = 100,
+        since: datetime | None = None,
+    ) -> list[CommitInfo]:
+        """Get commit history."""
+        if not repo_path or not repo_path.exists():
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
+
+        args = [
+            "log",
+            f"--max-count={limit}",
+            "--format=%H|%an|%ae|%at|%s",
+        ]
+
+        if since:
+            args.append(f"--since={since.isoformat()}")
+
+        if branch:
+            args.append(branch)
+
+        result = await self._run_git_command(args, cwd=repo_path)
+
+        commits = []
+        for line in result.stdout.splitlines():
+            if not line:
+                continue
+
+            parts = line.split("|", 4)
+            if len(parts) == 5:
+                author = CommitAuthor(name=parts[1], email=parts[2])
+                commits.append(
+                    CommitInfo(
+                        sha=parts[0],
+                        author=author,
+                        message=parts[4],
+                        timestamp=datetime.fromtimestamp(int(parts[3]), tz=UTC),
+                    )
+                )
+
+        return commits
+
+    async def add_remote(
+        self,
+        repo_path: Path,
+        name: str,
+        url: str,
+    ) -> None:
+        """Add a remote."""
+        if not repo_path or not repo_path.exists():
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
+
+        if not name or not url:
+            msg = "Remote name and URL are required"
+            raise ValidationError(msg)
+
+        await self._run_git_command(["remote", "add", name, url], cwd=repo_path)
+
+    async def remove_remote(
+        self,
+        repo_path: Path,
+        name: str,
+    ) -> None:
+        """Remove a remote."""
+        if not repo_path or not repo_path.exists():
+            msg = f"Repository path does not exist: {repo_path}"
+            raise ValidationError(msg)
+
+        if not name:
+            msg = "Remote name is required"
+            raise ValidationError(msg)
+
+        await self._run_git_command(["remote", "remove", name], cwd=repo_path)
+
+    async def __aenter__(self):
+        """Async context manager entry."""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        return False  # Don't suppress exceptions

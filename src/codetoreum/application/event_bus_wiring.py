@@ -1,0 +1,146 @@
+"""Wire up event bus to application services and handlers."""
+
+import logging
+
+from codetoreum.application.execution_service import ExecutionService
+from codetoreum.application.review_service import ReviewService
+from codetoreum.application.workflow_orchestrator import WorkflowOrchestrator
+from codetoreum.infrastructure.event_bus import EventBus
+from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
+from codetoreum.ports.output import IRepairCycle
+from codetoreum.ports.output.branch_resolution_service import IBranchResolutionService
+from codetoreum.ports.output.ci_pipeline_service import ICIPipelineService
+
+logger = logging.getLogger(__name__)
+
+
+class EventBusWiringError(Exception):
+    """Raised when event bus wiring fails."""
+
+
+class EventBusRegistry:
+    """
+    Registry for event bus and handlers.
+
+    Manages the lifecycle of:
+    - Event bus instance
+    - Event handlers
+    - Handler registration
+    - Dependencies between handlers and services
+    """
+
+    def __init__(
+        self,
+        event_bus: EventBus | None = None,
+        max_retries: int = 3,
+        retry_delay_seconds: float = 1.0,
+    ):
+        """
+        Initialize event bus registry.
+
+        Args:
+            event_bus: Optional event bus instance (creates new if not provided)
+            max_retries: Maximum retry attempts for failed handlers
+            retry_delay_seconds: Delay between retries
+        """
+        self.event_bus = event_bus or EventBus(
+            max_retries=max_retries,
+            retry_delay_seconds=retry_delay_seconds,
+        )
+
+        # Track registered handlers
+        self._handlers: dict = {}
+        self._services: dict = {}
+
+    def register_services(
+        self,
+        workflow_orchestrator: WorkflowOrchestrator | None = None,
+        execution_service: ExecutionService | None = None,
+        review_service: ReviewService | None = None,
+        repair_cycle: IRepairCycle | None = None,
+        branch_resolution_service: IBranchResolutionService | None = None,
+        ci_pipeline_service: ICIPipelineService | None = None,
+        clock: SimulationClock | None = None,
+    ) -> None:
+        """
+        Register application services.
+
+        Args:
+            workflow_orchestrator: Workflow orchestrator service
+            execution_service: Execution service
+            review_service: Review service
+            repair_cycle: Repair cycle adapter (for repair cycle automation)
+            branch_resolution_service: Branch resolution service (for branch resolution events)
+            ci_pipeline_service: CI pipeline service (for repair cycle)
+            clock: Simulation clock (for repair cycle)
+
+        Raises:
+            EventBusWiringError: If registration fails
+        """
+        try:
+            if workflow_orchestrator:
+                self._services["workflow_orchestrator"] = workflow_orchestrator
+                logger.info("Registered workflow orchestrator service")
+
+            if execution_service:
+                self._services["execution_service"] = execution_service
+                logger.info("Registered execution service")
+
+            if review_service:
+                self._services["review_service"] = review_service
+                logger.info("Registered review service")
+
+            if repair_cycle:
+                self._services["repair_cycle"] = repair_cycle
+                logger.info("Registered repair cycle adapter")
+
+            if branch_resolution_service:
+                self._services["branch_resolution_service"] = branch_resolution_service
+                logger.info("Registered branch resolution service")
+
+            if ci_pipeline_service:
+                self._services["ci_pipeline_service"] = ci_pipeline_service
+                logger.info("Registered CI pipeline service")
+
+            if clock:
+                self._services["clock"] = clock
+                logger.info("Registered simulation clock")
+
+        except (
+            Exception
+        ) as e:  # justification: service registration failure is fatal; re-raise as EventBusWiringError to fail fast during bootstrap
+            message = f"Failed to register services: {e}"
+            raise EventBusWiringError(message) from e
+
+    def unregister_handlers(self) -> None:
+        """Unregister all handlers from the event bus."""
+        for handler_name, handler in self._handlers.items():
+            self.event_bus.unregister_handler(handler)
+            logger.info(f"Unregistered {handler_name} handler")
+
+        self._handlers.clear()
+
+    def get_handler(self, handler_name: str) -> object:
+        """
+        Get a registered handler by name.
+
+        Args:
+            handler_name: Name of handler ("workflow", "execution", "review")
+
+        Returns:
+            Event handler instance or None if not registered
+        """
+        return self._handlers.get(handler_name)
+
+    def get_statistics(self) -> dict:
+        """
+        Get event bus statistics.
+
+        Returns:
+            Dictionary with event bus statistics
+        """
+        return self.event_bus.get_statistics()
+
+    def reset_statistics(self) -> None:
+        """Reset event bus statistics."""
+        self.event_bus.reset_statistics()

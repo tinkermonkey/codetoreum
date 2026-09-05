@@ -1,0 +1,192 @@
+- type: add
+  elementId: apm.metricinstrument.circuit-breaker-state-metrics
+  layerName: apm
+  after:
+    id: 0fbdd877-4ec7-4729-b5fb-ec2beaabe3b7
+    path: apm.metricinstrument.circuit-breaker-state-metrics
+    spec_node_id: apm.metricinstrument
+    type: metricinstrument
+    layer_id: apm
+    name: CircuitBreaker State Metrics
+    description: Metric instrument tracking circuit breaker state transitions
+      (CLOSED/OPEN/HALF_OPEN) and failure counts for external service calls.
+      Records total_calls, total_failures, total_successes, and current state
+      per service. Used for resilience observability and detecting cascading
+      failures.
+    attributes:
+      type: ObservableGauge
+      unit: state
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/infrastructure/resilience/circuit_breaker.py
+          symbol: CircuitBreaker
+    metadata:
+      created_at: 2026-05-09T09:23:40.994Z
+      updated_at: 2026-05-09T09:23:40.994Z
+      version: 1
+  timestamp: 2026-05-09T09:23:41.015Z
+  sequenceNumber: 0
+- type: add
+  elementId: apm.span.dead-letter-queue-processing-span
+  layerName: apm
+  after:
+    id: eb53fefb-3cc6-45ac-bc81-df07ab1a58f8
+    path: apm.span.dead-letter-queue-processing-span
+    spec_node_id: apm.span
+    type: span
+    layer_id: apm
+    name: Dead Letter Queue Processing Span
+    description: Distributed trace span covering the full lifecycle of failed event
+      processing through the DeadLetterQueue. Tracks retry attempts, delay
+      intervals, and final disposition (requeued, permanently failed, or
+      recovered). Enables debugging of event processing failures and retry
+      storms.
+    attributes:
+      traceId: dlq-trace
+      spanId: dlq-span
+      traceState: ""
+      parentSpanId: ""
+      spanKind: INTERNAL
+      startTimeUnixNano: "0"
+      endTimeUnixNano: "0"
+      droppedAttributesCount: 0
+      droppedEventsCount: "0"
+      droppedLinksCount: "0"
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/infrastructure/dead_letter_queue.py
+          symbol: DeadLetterQueue
+    metadata:
+      created_at: 2026-05-09T09:23:45.953Z
+      updated_at: 2026-05-09T09:23:45.953Z
+      version: 1
+  timestamp: 2026-05-09T09:23:45.978Z
+  sequenceNumber: 1
+- type: add
+  elementId: apm.span.repair-cycle-profiling-span
+  layerName: apm
+  after:
+    id: 2923ea51-f726-4a39-b005-fb52f726538f
+    path: apm.span.repair-cycle-profiling-span
+    spec_node_id: apm.span
+    type: span
+    layer_id: apm
+    name: Repair Cycle Profiling Span
+    description: Distributed trace span for repair cycle operation profiling.
+      Captures memory usage (via tracemalloc), CPU percent, operation duration,
+      and peak resource consumption. Produced by RepairCycleProfiler and
+      RepairCycleProfilerContext for bottleneck identification across repair
+      iterations.
+    attributes:
+      traceId: profiler-trace
+      spanId: profiler-span
+      traceState: ""
+      parentSpanId: ""
+      spanKind: INTERNAL
+      startTimeUnixNano: "0"
+      endTimeUnixNano: "0"
+      droppedAttributesCount: 0
+      droppedEventsCount: "0"
+      droppedLinksCount: "0"
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/infrastructure/repair_cycle_profiling.py
+          symbol: RepairCycleProfiler
+    metadata:
+      created_at: 2026-05-09T09:23:52.092Z
+      updated_at: 2026-05-09T09:23:52.092Z
+      version: 1
+  timestamp: 2026-05-09T09:23:52.117Z
+  sequenceNumber: 2
+- type: add
+  elementId: apm.metricinstrument.performance-threshold-metrics
+  layerName: apm
+  after:
+    id: 9a5924ee-4bcb-449e-ad91-144764a2ddf3
+    path: apm.metricinstrument.performance-threshold-metrics
+    spec_node_id: apm.metricinstrument
+    type: metricinstrument
+    layer_id: apm
+    name: Performance Threshold Metrics
+    description: Metric instrument for PerformanceThresholdMonitor tracking
+      violations of configured performance thresholds (duration, memory, CPU)
+      across repair cycle operations. Emits threshold violation counts per
+      operation type enabling SLO enforcement and alerting on regression.
+    attributes:
+      type: Counter
+      unit: violations
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/infrastructure/repair_cycle_profiling.py
+          symbol: PerformanceThresholdMonitor
+    metadata:
+      created_at: 2026-05-09T09:24:15.488Z
+      updated_at: 2026-05-09T09:24:15.488Z
+      version: 1
+  timestamp: 2026-05-09T09:24:15.512Z
+  sequenceNumber: 3
+- type: add
+  elementId: apm.span.event-replay-span
+  layerName: apm
+  after:
+    id: 64b7270b-65f8-4eb2-87f2-5de2cd8a0299
+    path: apm.span.event-replay-span
+    spec_node_id: apm.span
+    type: span
+    layer_id: apm
+    name: Event Replay Span
+    description: Distributed trace span for EventReplayer operations. Covers
+      replay-from-timestamp and replay-for-aggregate workflows including event
+      filtering, time manipulation, dry-run mode, and progress tracking. Tracks
+      events_replayed count, error count, and replay duration for debugging and
+      recovery use cases.
+    attributes:
+      traceId: replay-trace
+      spanId: replay-span
+      traceState: ""
+      parentSpanId: ""
+      spanKind: INTERNAL
+      startTimeUnixNano: "0"
+      endTimeUnixNano: "0"
+      droppedAttributesCount: 0
+      droppedEventsCount: "0"
+      droppedLinksCount: "0"
+    source_reference:
+      provenance: extracted
+      locations:
+        - file: src/codetoreum/infrastructure/event_replayer.py
+          symbol: EventReplayer
+    metadata:
+      created_at: 2026-05-09T09:24:20.277Z
+      updated_at: 2026-05-09T09:24:20.277Z
+      version: 1
+  timestamp: 2026-05-09T09:24:20.302Z
+  sequenceNumber: 4
+- type: relationship-add
+  elementId: apm.span.repair-cycle-profiling-span::monitors::application.applicationcomponent.repair-cycle-event-handler
+  layerName: apm
+  after:
+    source: apm.span.repair-cycle-profiling-span
+    target: application.applicationcomponent.repair-cycle-event-handler
+    predicate: monitors
+    layer: apm
+    targetLayer: application
+    category: structural
+  timestamp: 2026-05-09T09:24:37.387Z
+  sequenceNumber: 5
+- type: relationship-add
+  elementId: apm.metricinstrument.circuit-breaker-state-metrics::monitors::application.applicationservice.workflow-orchestrator
+  layerName: apm
+  after:
+    source: apm.metricinstrument.circuit-breaker-state-metrics
+    target: application.applicationservice.workflow-orchestrator
+    predicate: monitors
+    layer: apm
+    targetLayer: application
+    category: structural
+  timestamp: 2026-05-09T09:24:40.431Z
+  sequenceNumber: 6

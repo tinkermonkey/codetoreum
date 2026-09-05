@@ -1,0 +1,29 @@
+# Planning & Design Review Cycle Scenario — Orchestrator: Project Configuration
+#
+# Port/Interface: IConfigStore
+# Adapter (sim): InMemoryConfigStore
+#
+# Two projects: planning (upstream) and SDLC execution (downstream).
+
+project_configs:
+  - id: "planning-project-1"
+    name: "Planning & Design"
+    github_org: "example"
+    github_repo: "planning-repo"
+    tech_stacks:
+      python: "3.11"
+    testing:
+      command: "pytest"
+      framework: "pytest"
+    environment_variables: {}
+
+  - id: "sdlc-project-1"
+    name: "SDLC Execution"
+    github_org: "example"
+    github_repo: "sdlc-repo"
+    tech_stacks:
+      python: "3.11"
+    testing:
+      command: "pytest"
+      framework: "pytest"
+    environment_variables: {}

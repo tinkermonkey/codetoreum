@@ -1,0 +1,19 @@
+# Dev Environment Repair Scenario — External: Board Structure
+#
+# Port/Interface: IBoardService
+# Adapter (sim): MockBoardAdapter
+# Skipped when using real adapters (board already exists in GitHub Projects/Linear/etc.)
+#
+# 6-column board matching the benchmark run (context-studio #376):
+#   Backlog → Ready* → Development → Code Review → Testing → Staged
+
+boards:
+  - board_id: "dev-board-1"
+    board_name: "Dev Environment Repair Board"
+    columns:
+      - "Backlog"
+      - "Ready"
+      - "Development"
+      - "Code Review"
+      - "Testing"
+      - "Staged"

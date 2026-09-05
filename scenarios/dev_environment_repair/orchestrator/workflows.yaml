@@ -1,0 +1,33 @@
+# Dev Environment Repair Scenario — Orchestrator: Workflow Definitions
+#
+# Port/Interface: IWorkflowConfigService (workflow domain model)
+# Adapter (sim): InMemoryConfigStore
+#
+# 3-stage pipeline covering the pre-repair path.
+# The repair cycle itself is triggered by the Testing column config and
+# managed by IRepairCycleService — it is not a workflow stage.
+
+workflows:
+  - name: "dev-env-repair-workflow"
+    description: "Full pipeline through development, review, testing, and repair cycle"
+    stages:
+      - name: "implementation"
+        agent_type: "senior_software_engineer"
+        description: "Implement the feature or fix"
+        order: 1
+        max_retries: 3
+        timeout_seconds: 7200
+
+      - name: "code-review"
+        agent_type: "code_reviewer"
+        description: "Review code quality; failure routes back to Development"
+        order: 2
+        max_retries: 2
+        timeout_seconds: 3600
+
+      - name: "testing"
+        agent_type: "qa_engineer"
+        description: "Run tests; triggers repair cycle if failures are found"
+        order: 3
+        max_retries: 2
+        timeout_seconds: 5400

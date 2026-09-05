@@ -1,0 +1,68 @@
+motivation.goal.automate-software-development-workflows:
+  id: 11f06e65-dbd9-41eb-8ac5-f47819dc58e3
+  path: motivation.goal.automate-software-development-workflows
+  spec_node_id: motivation.goal
+  type: goal
+  layer_id: motivation
+  name: Automate Software Development Workflows
+  description: Enable end-to-end automation of software development tasks using
+    specialized AI agents integrated with GitHub
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: README.md
+  metadata:
+    created_at: 2026-05-08T11:10:38.154Z
+    updated_at: 2026-05-08T11:10:38.154Z
+    version: 1
+motivation.goal.full-testability-without-external-services:
+  id: 75341479-587c-43c3-8dd7-76bb1c2a2717
+  path: motivation.goal.full-testability-without-external-services
+  spec_node_id: motivation.goal
+  type: goal
+  layer_id: motivation
+  name: Full Testability Without External Services
+  description: Support complete end-to-end testing in simulation mode with
+    deterministic mock adapters and no external service dependencies
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: README.md
+  metadata:
+    created_at: 2026-05-08T11:10:39.887Z
+    updated_at: 2026-05-08T11:10:39.887Z
+    version: 1
+motivation.goal.complete-observability-via-event-sourcing:
+  id: 3f5fe9c8-d77c-4a55-922b-04205178fa78
+  path: motivation.goal.complete-observability-via-event-sourcing
+  spec_node_id: motivation.goal
+  type: goal
+  layer_id: motivation
+  name: Complete Observability via Event Sourcing
+  description: Provide immutable audit trail of all system state changes with
+    event replay capability for debugging and compliance
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: README.md
+  metadata:
+    created_at: 2026-05-08T11:10:43.589Z
+    updated_at: 2026-05-08T11:10:43.589Z
+    version: 1
+motivation.goal.plugin-extensibility:
+  id: a15a6924-cc55-4b9d-8e5b-1063c95da736
+  path: motivation.goal.plugin-extensibility
+  spec_node_id: motivation.goal
+  type: goal
+  layer_id: motivation
+  name: Plugin Extensibility
+  description: Allow swappable implementations for ticket systems, LLM providers,
+    and external integrations via port interfaces
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: README.md
+  metadata:
+    created_at: 2026-05-08T11:10:44.691Z
+    updated_at: 2026-05-08T11:10:44.691Z
+    version: 1

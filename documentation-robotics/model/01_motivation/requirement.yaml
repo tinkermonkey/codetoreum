@@ -1,0 +1,79 @@
+motivation.requirement.full-end-to-end-testability-without-external-services:
+  id: 624c0051-9cca-4c3c-ae17-e8b1eb66d04a
+  path: motivation.requirement.full-end-to-end-testability-without-external-services
+  spec_node_id: motivation.requirement
+  type: requirement
+  layer_id: motivation
+  name: Full End-to-End Testability Without External Services
+  description: The system must support complete end-to-end workflow testing
+    without any external service dependencies (GitHub, Docker, Claude API).
+    Achieved via the simulation framework with 54 mock/in-memory adapters,
+    deterministic LLM responses, and time manipulation (10-100x faster than real
+    execution).
+  attributes:
+    requirementType: non-functional
+    priority: critical
+    documentation: Realized by SimulationBootstrap, SimulationRunner,
+      SimulationClock, and 54 mock adapters in adapters/testing/ and
+      adapters/primary/input_port_adapters/mock/
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/infrastructure/simulation/bootstrap.py
+        symbol: SimulationBootstrap
+  metadata:
+    created_at: 2026-05-08T20:44:17.790Z
+    updated_at: 2026-05-08T20:44:17.790Z
+    version: 1
+motivation.requirement.vendor-agnostic-llm-provider-support:
+  id: 2397948e-441d-4437-afc9-1c7b4d3e8d2c
+  path: motivation.requirement.vendor-agnostic-llm-provider-support
+  spec_node_id: motivation.requirement
+  type: requirement
+  layer_id: motivation
+  name: Vendor-Agnostic LLM Provider Support
+  description: The system must not couple to any single LLM provider. All LLM
+    interactions must flow through the ILLMProvider output port interface,
+    enabling swappable implementations. Claude Code is the primary provider but
+    the architecture must accommodate alternatives.
+  attributes:
+    requirementType: non-functional
+    priority: high
+    documentation: Enforced by the ILLMProvider output port in ports/output/.
+      ClaudeCodeAdapter is the production implementation; MockLLMAdapter is used
+      in simulation.
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/ports/output/
+        symbol: ILLMProvider
+  metadata:
+    created_at: 2026-05-08T20:44:22.580Z
+    updated_at: 2026-05-08T20:44:22.580Z
+    version: 1
+motivation.requirement.complete-audit-trail-for-all-state-changes:
+  id: 1457025c-75e2-480c-ac52-2d24282968a6
+  path: motivation.requirement.complete-audit-trail-for-all-state-changes
+  spec_node_id: motivation.requirement
+  type: requirement
+  layer_id: motivation
+  name: Complete Audit Trail for All State Changes
+  description: Every state change in the system must be captured as an immutable
+    domain event persisted to the event store (Redis-backed InMemoryEventStore
+    in simulation). The system must support event replay for debugging. 151
+    CodetoreumEvent subclasses cover the full state lifecycle.
+  attributes:
+    requirementType: non-functional
+    priority: critical
+    documentation: Realized by 151 CodetoreumEvent subclasses in domain/events/,
+      Redis-backed event store, and IEventStore output port. Supports full
+      replay and audit.
+  source_reference:
+    provenance: extracted
+    locations:
+      - file: src/codetoreum/domain/events/
+        symbol: CodetoreumEvent
+  metadata:
+    created_at: 2026-05-08T20:44:27.644Z
+    updated_at: 2026-05-08T20:44:27.644Z
+    version: 1

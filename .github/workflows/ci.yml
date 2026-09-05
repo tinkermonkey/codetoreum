@@ -1,0 +1,71 @@
+name: CI
+
+# CI intentionally disabled while the orchestrator manages this project.
+# The orchestrator runs pre-commit, unit, and integration checks internally
+# via its repair cycle. Re-enable by restoring the on: triggers below.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.11']
+
+    services:
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install poetry
+          poetry install
+
+      - name: Lint with ruff
+        run: |
+          poetry run ruff check src tests
+
+      - name: Format check with black
+        run: |
+          poetry run black --check src tests
+
+      - name: Type check with mypy
+        run: |
+          poetry run mypy src
+
+      - name: Run tests with per-layer coverage enforcement
+        run: |
+          python3 scripts/enforce_coverage.py
+        env:
+          REDIS_URL: redis://localhost:6379
+          # Token scoped by workflow-level permissions (contents:read, actions:read)
+          # 'actions' scope required for tests that query CI status via GitHub API / gh CLI
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false

@@ -1,0 +1,595 @@
+testing.testcasesketch.scenario-01-simple-workflow:
+  id: 5e98afc8-6e3e-41bc-97df-27fca6f606e6
+  path: testing.testcasesketch.scenario-01-simple-workflow
+  spec_node_id: testing.testcasesketch
+  type: testcasesketch
+  layer_id: testing
+  name: "Scenario 01: Simple Workflow"
+  description: "Basic single-agent workflow: work item enters trigger column,
+    agent executes, item advances to exit column; validates fundamental
+    WorkflowOrchestrator and AgentScheduler coordination"
+  attributes:
+    status: automated
+    implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/scenarios/scenario_01_simple_workflow.py
+  metadata:
+    created_at: 2026-05-08T12:18:23.165Z
+    updated_at: 2026-05-08T12:18:23.165Z
+    version: 1
+testing.testcasesketch.scenario-02-parallel-executions:
+  id: cb58a723-0c31-4df0-bffe-52d50892f895
+  path: testing.testcasesketch.scenario-02-parallel-executions
+  spec_node_id: testing.testcasesketch
+  type: testcasesketch
+  layer_id: testing
+  name: "Scenario 02: Parallel Executions"
+  description: Multiple work items processed concurrently by parallel agent
+    executions; validates AgentScheduler concurrency controls, pipeline lock
+    management, and queue ordering
+  attributes:
+    status: automated
+    implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/scenarios/scenario_02_parallel_executions.py
+  metadata:
+    created_at: 2026-05-08T12:18:23.585Z
+    updated_at: 2026-05-08T12:18:23.585Z
+    version: 1
+testing.testcasesketch.scenario-03-review-cycle:
+  id: cbc574f1-d2c2-4393-885d-2184dcc6ce31
+  path: testing.testcasesketch.scenario-03-review-cycle
+  spec_node_id: testing.testcasesketch
+  type: testcasesketch
+  layer_id: testing
+  name: "Scenario 03: Review Cycle"
+  description: "Maker-checker review cycle: agent completes work, reviewer
+    approves or rejects, feedback loop triggers re-work; validates ReviewService
+    and ReviewCycle domain model"
+  attributes:
+    status: automated
+    implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/scenarios/scenario_03_review_cycle.py
+  metadata:
+    created_at: 2026-05-08T12:18:24.024Z
+    updated_at: 2026-05-08T12:18:24.024Z
+    version: 1
+testing.testcasesketch.scenario-04-execution-failure:
+  id: ede1f3eb-18fb-4f97-9398-c2a0b7d0dc21
+  path: testing.testcasesketch.scenario-04-execution-failure
+  spec_node_id: testing.testcasesketch
+  type: testcasesketch
+  layer_id: testing
+  name: "Scenario 04: Execution Failure"
+  description: Agent execution fails mid-workflow; validates error handling,
+    circuit breaker activation, dead letter queue, and retry/recovery mechanisms
+    in ExecutionService
+  attributes:
+    status: automated
+    implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/scenarios/scenario_04_execution_failure.py
+  metadata:
+    created_at: 2026-05-08T12:18:29.700Z
+    updated_at: 2026-05-08T12:18:29.700Z
+    version: 1
+testing.testcasesketch.scenario-05-complex-workflow:
+  id: 3ae3d4c8-2a7f-4884-801b-9b0389d03353
+  path: testing.testcasesketch.scenario-05-complex-workflow
+  spec_node_id: testing.testcasesketch
+  type: testcasesketch
+  layer_id: testing
+  name: "Scenario 05: Complex Workflow"
+  description: Multi-stage pipeline with conditional branching, parallel stages,
+    and inter-stage dependencies; validates WorkflowOrchestrator stage
+    transition logic and PipelineStage entry conditions
+  attributes:
+    status: automated
+    implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/scenarios/scenario_05_complex_workflow.py
+  metadata:
+    created_at: 2026-05-08T12:18:30.120Z
+    updated_at: 2026-05-08T12:18:30.120Z
+    version: 1
+testing.testcasesketch.scenario-06-sdlc-pipeline:
+  id: 23dff1c9-192b-4412-bade-64bbce946156
+  path: testing.testcasesketch.scenario-06-sdlc-pipeline
+  spec_node_id: testing.testcasesketch
+  type: testcasesketch
+  layer_id: testing
+  name: "Scenario 06: SDLC Pipeline"
+  description: "Full 7-stage SDLC pipeline (canonical workflow): planning, design,
+    implementation, review, testing, deployment, release; validates end-to-end
+    orchestration of the complete software development lifecycle"
+  attributes:
+    status: automated
+    implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/scenarios/scenario_06_sdlc_pipeline.py
+  metadata:
+    created_at: 2026-05-08T12:18:30.544Z
+    updated_at: 2026-05-08T12:18:30.544Z
+    version: 1
+testing.testcasesketch.scenario-06b-sdlc-pipeline-with-repair:
+  id: ca4f5219-d060-4e9a-94b7-4654c16762e7
+  path: testing.testcasesketch.scenario-06b-sdlc-pipeline-with-repair
+  spec_node_id: testing.testcasesketch
+  type: testcasesketch
+  layer_id: testing
+  name: "Scenario 06b: SDLC Pipeline With Repair"
+  description: "Full 7-stage SDLC pipeline with integrated repair cycle: agent
+    execution failure triggers automated test-fix-validate loop before pipeline
+    continues; validates RepairCycleAdapter integration within SDLC
+    orchestration"
+  attributes:
+    status: automated
+    implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/scenarios/scenario_06_sdlc_pipeline_with_repair.py
+  metadata:
+    created_at: 2026-05-08T12:18:37.877Z
+    updated_at: 2026-05-08T12:18:37.877Z
+    version: 1
+testing.testcasesketch.scenario-07-repair-cycle-test-fix-validate:
+  id: 5e36ce93-067f-4d07-868d-f54e69176ce6
+  path: testing.testcasesketch.scenario-07-repair-cycle-test-fix-validate
+  spec_node_id: testing.testcasesketch
+  type: testcasesketch
+  layer_id: testing
+  name: "Scenario 07: Repair Cycle Test-Fix-Validate"
+  description: Repair cycle with iterative test-fix-validate loops; agent
+    identifies failure, applies fix, re-runs tests, iterates until passing or
+    max attempts reached; validates ContainerRecoveryService and RepairCycle
+    domain model
+  attributes:
+    status: automated
+    implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/scenarios/scenario_07_repair_cycle.py
+  metadata:
+    created_at: 2026-05-08T12:18:38.312Z
+    updated_at: 2026-05-08T12:18:38.312Z
+    version: 1
+testing.testcasesketch.scenario-09-queue-position-ordering:
+  id: 382bf4cd-0bd5-4d24-a78f-a89b69dc6555
+  path: testing.testcasesketch.scenario-09-queue-position-ordering
+  spec_node_id: testing.testcasesketch
+  type: testcasesketch
+  layer_id: testing
+  name: "Scenario 09: Queue Position Ordering"
+  description: "Pipeline lock queue ordering: multiple work items compete for the
+    same pipeline lock; validates IPipelineLockService queue position assignment
+    and fair ordering via InMemoryQueueService"
+  attributes:
+    status: automated
+    implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/scenarios/scenario_09_queue_position_ordering.py
+  metadata:
+    created_at: 2026-05-08T12:18:38.761Z
+    updated_at: 2026-05-08T12:18:38.761Z
+    version: 1
+testing.testcasesketch.scenario-10-agent-execution:
+  id: 9fa12791-b129-466b-bab6-283737981881
+  path: testing.testcasesketch.scenario-10-agent-execution
+  spec_node_id: testing.testcasesketch
+  type: testcasesketch
+  layer_id: testing
+  name: "Scenario 10: Agent Execution"
+  description: "Agent execution lifecycle: container creation, context file
+    mounting (issue.txt, code/, previous_stage.txt), LLM invocation, output
+    capture, container teardown; validates ExecutionService and WorkspaceRouter"
+  attributes:
+    status: automated
+    implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/scenarios/scenario_10_agent_execution.py
+  metadata:
+    created_at: 2026-05-08T12:18:46.053Z
+    updated_at: 2026-05-08T12:18:46.053Z
+    version: 1
+testing.testcasesketch.scenario-10b-multi-turn-dialogue:
+  id: c6a2ace9-429d-43f6-a074-28de09853843
+  path: testing.testcasesketch.scenario-10b-multi-turn-dialogue
+  spec_node_id: testing.testcasesketch
+  type: testcasesketch
+  layer_id: testing
+  name: "Scenario 10b: Multi-Turn Dialogue"
+  description: "Conversational loop with multi-turn agent dialogue: comment
+    triggers response, agent engages in back-and-forth conversation, loop
+    terminates on resolution; validates ConversationalLoopOrchestrator"
+  attributes:
+    status: automated
+    implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/scenarios/scenario_10_conversational_modes.py
+  metadata:
+    created_at: 2026-05-08T12:18:46.518Z
+    updated_at: 2026-05-08T12:18:46.518Z
+    version: 1
+testing.testcasesketch.scenario-12-container-failure-recovery:
+  id: 2c7652c3-fc7c-4d7a-b934-a48b62f2f21f
+  path: testing.testcasesketch.scenario-12-container-failure-recovery
+  spec_node_id: testing.testcasesketch
+  type: testcasesketch
+  layer_id: testing
+  name: "Scenario 12: Container Failure Recovery"
+  description: Container fails mid-execution; ContainerRecoveryService detects
+    failure, cleans up dead container, re-creates with same context, resumes
+    execution from last checkpoint; validates recovery and resilience patterns
+  attributes:
+    status: automated
+    implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/scenarios/scenario_07_repair_cycle.py
+        symbol: test_scenario_12_warnings_without_review_enabled
+  metadata:
+    created_at: 2026-05-08T12:18:46.989Z
+    updated_at: 2026-05-08T12:18:46.989Z
+    version: 1
+testing.testcasesketch.scenario-13-multi-project-orchestration:
+  id: 5338bdd8-30de-454f-bf75-c1687bd177a5
+  path: testing.testcasesketch.scenario-13-multi-project-orchestration
+  spec_node_id: testing.testcasesketch
+  type: testcasesketch
+  layer_id: testing
+  name: "Scenario 13: Multi-Project Orchestration"
+  description: MultiProjectOrchestrator coordinates work items across multiple
+    projects simultaneously; validates cross-project isolation, resource
+    allocation, and per-project workflow configuration
+  attributes:
+    status: automated
+    implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/scenarios/scenario_13_multi_project.py
+  metadata:
+    created_at: 2026-05-08T12:18:54.260Z
+    updated_at: 2026-05-08T12:18:54.260Z
+    version: 1
+testing.testcasesketch.scenario-environment-repair:
+  id: 151806fd-6073-4cc0-8eb7-18f31ae8f5e3
+  path: testing.testcasesketch.scenario-environment-repair
+  spec_node_id: testing.testcasesketch
+  type: testcasesketch
+  layer_id: testing
+  name: "Scenario: Environment Repair"
+  description: "Dev environment repair automation: broken environment detected,
+    repair agent applies fixes, validates environment is healthy; uses
+    MockEnvironmentRepairAdapter; maps to scenarios/dev_environment_repair YAML"
+  attributes:
+    status: automated
+    implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/scenarios/scenario_environment_repair.py
+  metadata:
+    created_at: 2026-05-08T12:18:54.990Z
+    updated_at: 2026-05-08T12:18:54.990Z
+    version: 1
+testing.testcasesketch.board-automation-scenario-a-e2e-cascade:
+  id: 46dfe660-0fdc-49aa-96fb-238aee06ffca
+  path: testing.testcasesketch.board-automation-scenario-a-e2e-cascade
+  spec_node_id: testing.testcasesketch
+  type: testcasesketch
+  layer_id: testing
+  name: "Board Automation Scenario A: E2E Cascade"
+  description: "Board automation end-to-end: work item triggers cascade from
+    trigger column through intermediate stages to exit column; tests item
+    cascade, lock-release-after-cascade, cascade-stop-on-agent-failure, and
+    autonomous progression via API or clock tick"
+  attributes:
+    status: automated
+    implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/test_board_automation_e2e.py
+  metadata:
+    created_at: 2026-05-08T12:19:14.989Z
+    updated_at: 2026-05-08T12:19:14.989Z
+    version: 1
+testing.testcasesketch.board-automation-scenario-b-lock-contention:
+  id: b423aa41-0401-4fa1-84cf-58dae4e60f7b
+  path: testing.testcasesketch.board-automation-scenario-b-lock-contention
+  spec_node_id: testing.testcasesketch
+  type: testcasesketch
+  layer_id: testing
+  name: "Board Automation Scenario B: Lock Contention"
+  description: "Pipeline lock contention with queue ordering: multiple items
+    compete for exclusive lock, validates lock_contention_queue_ordering and
+    queue_reordering_by_position; tests fair scheduling under concurrent board
+    automation"
+  attributes:
+    status: automated
+    implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/test_board_automation_scenario_b.py
+  metadata:
+    created_at: 2026-05-08T12:19:15.502Z
+    updated_at: 2026-05-08T12:19:15.502Z
+    version: 1
+testing.testcasesketch.board-automation-scenario-c-review-rejection-loop:
+  id: 28c38baf-f7c9-44db-8d4e-acd8df7542f6
+  path: testing.testcasesketch.board-automation-scenario-c-review-rejection-loop
+  spec_node_id: testing.testcasesketch
+  type: testcasesketch
+  layer_id: testing
+  name: "Board Automation Scenario C: Review Rejection Loop"
+  description: "Board automation with review rejection cycles: item enters review
+    column, reviewer rejects, item loops back to implementation column for
+    rework; tests multi-rejection cycles and review-blocked-outcome edge cases"
+  attributes:
+    status: automated
+    implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/test_board_automation_scenario_c.py
+  metadata:
+    created_at: 2026-05-08T12:19:16.007Z
+    updated_at: 2026-05-08T12:19:16.007Z
+    version: 1
+testing.testcasesketch.board-automation-scenario-d-edge-cases:
+  id: 43b529ec-a5a6-4469-a57a-7e7c61834002
+  path: testing.testcasesketch.board-automation-scenario-d-edge-cases
+  spec_node_id: testing.testcasesketch
+  type: testcasesketch
+  layer_id: testing
+  name: "Board Automation Scenario D: Edge Cases"
+  description: "Edge cases in board automation: boundary conditions for column
+    transitions, invalid state transitions, concurrent column moves, and agent
+    execution edge cases not covered by scenarios A-C"
+  attributes:
+    status: automated
+    implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: tests/simulation/test_board_automation_edge_cases.py
+  metadata:
+    created_at: 2026-05-08T12:19:19.551Z
+    updated_at: 2026-05-08T12:19:19.551Z
+    version: 1
+testing.testcasesketch.yaml-scenario-smoke:
+  id: 173d62e5-4fb6-4ee2-9b63-66df2b5def85
+  path: testing.testcasesketch.yaml-scenario-smoke
+  spec_node_id: testing.testcasesketch
+  type: testcasesketch
+  layer_id: testing
+  name: "YAML Scenario: Smoke"
+  description: Minimal smoke test scenario (scenarios/smoke/); basic configuration
+    with minimal agents and work items to verify the simulation framework boots
+    and runs without errors; fast feedback gate before full scenario suite
+  attributes:
+    status: automated
+    implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: scenarios/smoke/scenario.md
+  metadata:
+    created_at: 2026-05-08T12:19:27.172Z
+    updated_at: 2026-05-08T12:19:27.172Z
+    version: 1
+testing.testcasesketch.yaml-scenario-sdlc-pipeline:
+  id: dfa09256-a42c-4970-9d61-e36eb8c25050
+  path: testing.testcasesketch.yaml-scenario-sdlc-pipeline
+  spec_node_id: testing.testcasesketch
+  type: testcasesketch
+  layer_id: testing
+  name: "YAML Scenario: SDLC Pipeline"
+  description: "Full 7-stage SDLC pipeline YAML definition
+    (scenarios/sdlc_pipeline/); canonical workflow for simulation testing used
+    as reference for integration verification; description: Full 7-stage SDLC
+    pipeline"
+  attributes:
+    status: automated
+    implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: scenarios/sdlc_pipeline/scenario.md
+  metadata:
+    created_at: 2026-05-08T12:19:27.730Z
+    updated_at: 2026-05-08T12:19:27.730Z
+    version: 1
+testing.testcasesketch.yaml-scenario-review-cycle:
+  id: 36f6f3d7-eddd-4976-b08f-8b9fa6489306
+  path: testing.testcasesketch.yaml-scenario-review-cycle
+  spec_node_id: testing.testcasesketch
+  type: testcasesketch
+  layer_id: testing
+  name: "YAML Scenario: Review Cycle"
+  description: Maker-checker review board with human gate before automated review
+    (scenarios/review_cycle/); YAML-defined workflow with reviewer approval
+    column and automated review integration
+  attributes:
+    status: automated
+    implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: scenarios/review_cycle/scenario.md
+  metadata:
+    created_at: 2026-05-08T12:19:28.270Z
+    updated_at: 2026-05-08T12:19:28.270Z
+    version: 1
+testing.testcasesketch.yaml-scenario-failure-recovery:
+  id: 80bad031-7ca2-4cf7-9550-9eef3815009b
+  path: testing.testcasesketch.yaml-scenario-failure-recovery
+  spec_node_id: testing.testcasesketch
+  type: testcasesketch
+  layer_id: testing
+  name: "YAML Scenario: Failure Recovery"
+  description: Error handling and recovery mechanisms
+    (scenarios/failure_recovery/); tests circuit breaker activation, retry
+    logic, and graceful degradation when external services fail
+  attributes:
+    status: automated
+    implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: scenarios/failure_recovery/scenario.md
+  metadata:
+    created_at: 2026-05-08T12:19:34.371Z
+    updated_at: 2026-05-08T12:19:34.371Z
+    version: 1
+testing.testcasesketch.yaml-scenario-repair-cycle:
+  id: dc43d985-0f49-4b1a-b201-4d736d598dcb
+  path: testing.testcasesketch.yaml-scenario-repair-cycle
+  spec_node_id: testing.testcasesketch
+  type: testcasesketch
+  layer_id: testing
+  name: "YAML Scenario: Repair Cycle"
+  description: Repair cycle agents feature test (scenarios/repair_cycle_test/);
+    YAML-defined test-fix-validate loop for automated repair workflow validation
+  attributes:
+    status: automated
+    implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: scenarios/repair_cycle_test/scenario.md
+  metadata:
+    created_at: 2026-05-08T12:19:35.298Z
+    updated_at: 2026-05-08T12:19:35.298Z
+    version: 1
+testing.testcasesketch.yaml-scenario-dev-environment-repair:
+  id: 23e34d2f-3e7a-441e-9900-828ca4a0a9cc
+  path: testing.testcasesketch.yaml-scenario-dev-environment-repair
+  spec_node_id: testing.testcasesketch
+  type: testcasesketch
+  layer_id: testing
+  name: "YAML Scenario: Dev Environment Repair"
+  description: Automated dev environment repair
+    (scenarios/dev_environment_repair/); agent detects broken dev environment,
+    applies repairs, validates health; maps to scenario_environment_repair.py in
+    tests
+  attributes:
+    status: automated
+    implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: scenarios/dev_environment_repair/scenario.md
+  metadata:
+    created_at: 2026-05-08T12:19:35.901Z
+    updated_at: 2026-05-08T12:19:35.901Z
+    version: 1
+testing.testcasesketch.yaml-scenario-planning-design-pipeline:
+  id: 2ce378fc-5927-42bf-9748-a766cb283421
+  path: testing.testcasesketch.yaml-scenario-planning-design-pipeline
+  spec_node_id: testing.testcasesketch
+  type: testcasesketch
+  layer_id: testing
+  name: "YAML Scenario: Planning Design Pipeline"
+  description: Planning and design stage pipeline
+    (scenarios/planning_design_pipeline/); multi-stage workflow covering
+    requirements analysis, system design, and architecture review stages
+  attributes:
+    status: automated
+    implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: scenarios/planning_design_pipeline/scenario.md
+  metadata:
+    created_at: 2026-05-08T12:19:42.372Z
+    updated_at: 2026-05-08T12:19:42.372Z
+    version: 1
+testing.testcasesketch.yaml-scenario-planning-design-review-cycle:
+  id: 5928a822-9101-4040-8825-d332542d1fa7
+  path: testing.testcasesketch.yaml-scenario-planning-design-review-cycle
+  spec_node_id: testing.testcasesketch
+  type: testcasesketch
+  layer_id: testing
+  name: "YAML Scenario: Planning Design Review Cycle"
+  description: Planning and design with review cycle
+    (scenarios/planning_design_review_cycle/); combines multi-stage planning
+    pipeline with maker-checker review for design artifacts
+  attributes:
+    status: automated
+    implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: scenarios/planning_design_review_cycle/scenario.md
+  metadata:
+    created_at: 2026-05-08T12:19:42.919Z
+    updated_at: 2026-05-08T12:19:42.919Z
+    version: 1
+testing.testcasesketch.yaml-scenario-pr-feedback-child-issue:
+  id: 7dc2bd8d-9822-4ce5-9058-360cad507b6c
+  path: testing.testcasesketch.yaml-scenario-pr-feedback-child-issue
+  spec_node_id: testing.testcasesketch
+  type: testcasesketch
+  layer_id: testing
+  name: "YAML Scenario: PR Feedback Child Issue"
+  description: PR feedback triggers child issue creation
+    (scenarios/pr_feedback_child_issue/); reviewer comments on PR create linked
+    child work items that are automatically routed to appropriate workflow
+    columns
+  attributes:
+    status: automated
+    implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: scenarios/pr_feedback_child_issue/scenario.md
+  metadata:
+    created_at: 2026-05-08T12:19:43.451Z
+    updated_at: 2026-05-08T12:19:43.451Z
+    version: 1
+testing.testcasesketch.yaml-scenario-stress-test:
+  id: 26ddfcfa-ba47-4d9e-8850-0d6ba4350595
+  path: testing.testcasesketch.yaml-scenario-stress-test
+  spec_node_id: testing.testcasesketch
+  type: testcasesketch
+  layer_id: testing
+  name: "YAML Scenario: Stress Test"
+  description: High-volume stress test (scenarios/stress_test/); large number of
+    concurrent work items and agent executions to test scalability, resource
+    limits, and performance under load; verifies no memory leaks or deadlocks
+  attributes:
+    status: automated
+    implementationFormat: automated
+  source_reference:
+    provenance: manual
+    locations:
+      - file: scenarios/stress_test/scenario.md
+  metadata:
+    created_at: 2026-05-08T12:19:47.803Z
+    updated_at: 2026-05-08T12:19:47.803Z
+    version: 1
