@@ -554,7 +554,7 @@ class ResilientDiscussionAdapterDecorator(IDiscussionAdapter):
 
     def __init__(
         self,
-        wrapped,
+        wrapped: IDiscussionAdapter,
         rate_limiter: IRateLimiter | None = None,
         circuit_breaker: ICircuitBreaker | None = None,
         retry_policy: IRetryPolicy | None = None,
