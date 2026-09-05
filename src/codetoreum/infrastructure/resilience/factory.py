@@ -24,6 +24,12 @@ from .decorators import (
     ResilientDiscussionAdapterDecorator,
     ResilientTicketSystemDecorator,
 )
+from .interfaces import (
+    ICircuitBreaker,
+    IRateLimiter,
+    IRetryPolicy,
+    ITimeout,
+)
 from .mocks import MockCircuitBreaker, MockRateLimiter, MockRetryPolicy, MockTimeout
 from .rate_limiter import TokenBucketRateLimiter
 from .retry_policy import ExponentialBackoffRetry
@@ -50,7 +56,7 @@ class ResilienceFactory:
 
     def _build_resilience_components(
         self, cfg: dict[str, Any]
-    ) -> tuple[Any, Any, Any, Any]:
+    ) -> tuple[IRateLimiter, ICircuitBreaker, IRetryPolicy, ITimeout]:
         """
         Build resilience components based on operation mode.
 
