@@ -64,7 +64,7 @@ from codetoreum.ports.output.coding_agent import (
     CodingAgentResult,
     ICodingAgent,
 )
-from codetoreum.ports.output.identity_service import IIdentityService, BotIdentityConfig
+from codetoreum.ports.output.identity_service import BotIdentityConfig, IIdentityService
 
 logger = logging.getLogger(__name__)
 
@@ -348,9 +348,9 @@ class TestConversationalLoopProductionE2E:
                 assert "Codetoreum Verification Response" in bot_response.body
                 logger.info("[E2E Test] ✓ Bot response content verified")
             else:
-                logger.info("[E2E Test] ℹ  No bot response found in thread (expected if test comment not yet visible)")
+                logger.info("[E2E Test] i  No bot response found in thread (expected if test comment not yet visible)")
         else:
-            logger.info("[E2E Test] ℹ  No discussion thread or comments found (expected for initial test run)")
+            logger.info("[E2E Test] i  No discussion thread or comments found (expected for initial test run)")
 
         # Log successful validation
         logger.info(
