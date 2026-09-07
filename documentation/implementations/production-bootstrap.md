@@ -107,7 +107,7 @@ def resolve_metrics(self) -> IMetrics:
 
 **Metrics recorded**:
 The `RepairCycleMetricsCollector` records repair-cycle metrics via the resolved adapter:
-- Counters: `codetoreum_repair_cycle_started_total`, `codetoreum_repair_cycle_completed_total`, `codetoreum_repair_cycle_fast_failed_total`, `codetoreum_repair_cycle_test_executions_total`, `codetoreum_repair_cycle_files_fixed_total`, `codetoreum_repair_cycle_warnings_reviewed_total`
+- Counters: `codetoreum_repair_cycle_started_total`, `codetoreum_repair_cycle_completed_total`, `codetoreum_repair_cycle_successful_total`, `codetoreum_repair_cycle_failed_total`, `codetoreum_repair_cycle_fast_failed_total`, `codetoreum_repair_cycle_test_executions_total`, `codetoreum_repair_cycle_test_failures_total`, `codetoreum_repair_cycle_files_fixed_total`, `codetoreum_repair_cycle_warnings_reviewed_total`
 - Gauges: `codetoreum_repair_cycle_active_count`, `codetoreum_repair_cycle_max_iterations_reached_total`
 - Histograms: `codetoreum_repair_cycle_duration_seconds`, `codetoreum_repair_cycle_test_execution_duration_seconds`, `codetoreum_repair_cycle_file_fix_duration_seconds`, `codetoreum_repair_cycle_iterations_count`
 - Summaries: `codetoreum_repair_cycle_agent_calls_per_cycle`, `codetoreum_repair_cycle_files_fixed_per_cycle`
@@ -137,7 +137,10 @@ Tests in `test_metrics_bootstrap_resolution.py` verify:
 - `test_prometheus_metrics_adapter_class_has_required_methods()`: Confirms adapter supports async methods `increment_counter()`, `record_histogram()`, `set_gauge()`, etc.
 
 **End-to-end verification**:
-A synthetic execution (e.g., via simulation test or repair-cycle scenario) exercises the metrics calls, and `GET /metrics` subsequently returns non-zero values for the corresponding metric families, confirming the full path works end-to-end.
+Tests validate the metrics recording path:
+- `test_end_to_end_metrics_recording_and_scraping()` verifies that metrics are recorded via the adapter's `increment_counter()` method and are present in the Prometheus registry via `REGISTRY.collect()` (direct registry access, not HTTP scraping).
+- `test_metrics_endpoint_http_scrape()` validates that the `/metrics` HTTP endpoint returns Prometheus-formatted output with metric data.
+- A synthetic execution (e.g., via simulation test or repair-cycle scenario) exercises the metrics calls to confirm the full recording path works end-to-end.
 
 ### Phase 4c — `ICodingAgent` resolution (DEF-015 D3/D4)
 
