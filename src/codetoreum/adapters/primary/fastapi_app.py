@@ -31,11 +31,17 @@ from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
 from starlette.middleware.base import BaseHTTPMiddleware
 
+logger = logging.getLogger(__name__)
+
 try:
     from prometheus_client import make_asgi_app
 
     PROMETHEUS_CLIENT_AVAILABLE = True
 except ImportError:
+    logger.warning(
+        "Optional prometheus_client not available, skipping prometheus metrics registration",
+        exc_info=True,
+    )
     PROMETHEUS_CLIENT_AVAILABLE = False
 
 from codetoreum.adapters.primary.api_models import (
@@ -105,8 +111,6 @@ from codetoreum.ports.output.workflow_config_service import IWorkflowConfigServi
 
 # Load environment variables from .env file
 load_dotenv()
-
-logger = logging.getLogger(__name__)
 
 
 # ============================================================================

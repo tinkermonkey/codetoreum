@@ -160,7 +160,8 @@ CRITICAL_ADAPTER_SLOTS = {
     "container_recovery",  # Required for fail-fast safety if mock is detected in production (Story 5)
 }
 
-# Slots without production implementations (not on MVP critical path)
+# Slots where mock implementations are acceptable (non-critical to correctness)
+# These slots may have production implementations but do not block work-item progression
 NON_CRITICAL_SLOTS = {
     "event_store",  # InMemoryEventStore acceptable for MVP
     "metrics",  # Observability concern, not correctness; system functions identically with or without real metrics
