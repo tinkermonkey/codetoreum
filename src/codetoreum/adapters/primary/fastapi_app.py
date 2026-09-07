@@ -25,6 +25,7 @@ from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, Query, Request, Response, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from prometheus_client import make_asgi_app
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -394,6 +395,12 @@ def create_app(
 
     # Add error handling middleware
     app.add_middleware(BaseHTTPMiddleware, dispatch=error_handling_middleware)
+
+    # Mount Prometheus scrape endpoint (unauthenticated)
+    # Returns metrics in Prometheus text exposition format
+    # Mounted unconditionally, regardless of which metrics adapter is selected
+    prometheus_app = make_asgi_app()
+    app.mount("/metrics", prometheus_app)
 
     # Add CORS middleware - use environment variables for production
     # Environment variables:
