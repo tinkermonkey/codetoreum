@@ -599,8 +599,7 @@ class AdapterFactory:
                 version="1.0.0",
                 tags=["production", "prometheus"],
                 config_schema=AdapterCredentialRequirement(
-                    env_vars=("PROMETHEUS_URL",),
-                    description="Prometheus server URL",
+                    description="Registers metrics in-process for pull-based Prometheus scraping; no credentials required",
                 ),
             )
 
