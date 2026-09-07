@@ -443,6 +443,7 @@ class TestMetricsBootstrapResolution:
         FastAPI auth dependencies, but this behavior must be enforced by tests
         to prevent accidental refactoring to a regular FastAPI route.
         """
+        from codetoreum.adapters.primary.fastapi_app import create_app
         from codetoreum.adapters.primary.input_port_adapters.mock import (
             MockAgentCommandAdapter,
             MockAgentQueryAdapter,
@@ -463,7 +464,6 @@ class TestMetricsBootstrapResolution:
             MockWorkItemQueryAdapter,
             MockWorkspaceQueryAdapter,
         )
-        from codetoreum.adapters.primary.fastapi_app import create_app
         from codetoreum.adapters.testing import (
             InMemoryEventStore,
             InMemoryFailedEventStore,
