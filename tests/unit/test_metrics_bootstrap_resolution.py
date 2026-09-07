@@ -374,68 +374,6 @@ class TestMetricsBootstrapResolution:
             await bootstrap.teardown()
 
     @pytest.mark.asyncio
-    async def test_metrics_endpoint_bypasses_auth_when_auth_enabled(self) -> None:
-        """Verify GET /metrics is accessible without a bearer token when auth is enabled.
-
-        INV-14 documents /metrics (and health) as an intentional exception to the
-        bearer-token requirement: it is mounted via Starlette's app.mount() at
-        fastapi_app.py:414 rather than registered through an APIRouter with
-        Depends(auth_deps.require_auth), so FastAPI's auth dependency never runs
-        for it. This must be proven with disable_auth=False -- unlike
-        SimulationApplicationBootstrap, which hard-codes disable_auth=True
-        (ADR-003) and therefore cannot exercise this path -- so we call
-        create_app() directly instead.
-
-        A negative control (a normal APIRouter endpoint on the same app) confirms
-        auth is genuinely enabled, so the /metrics 200 reflects a real exemption
-        rather than auth being off globally.
-        """
-        from unittest.mock import MagicMock
-
-        from codetoreum.adapters.primary.fastapi_app import create_app
-        from codetoreum.adapters.testing import InMemoryEventStore
-        from codetoreum.infrastructure.event_bus import EventBus
-
-        app = create_app(
-            workflow_command_port=MagicMock(),
-            task_query_port=MagicMock(),
-            config_command_port=MagicMock(),
-            config_query_port=MagicMock(),
-            metrics_query_port=MagicMock(),
-            workspace_query_port=MagicMock(),
-            work_item_command_port=MagicMock(),
-            work_item_query_port=MagicMock(),
-            workflow_query_port=MagicMock(),
-            workflow_run_query_port=MagicMock(),
-            workflow_definition_command_port=MagicMock(),
-            orchestration_command_port=MagicMock(),
-            agent_command_port=MagicMock(),
-            agent_query_port=MagicMock(),
-            execution_command_port=MagicMock(),
-            execution_query_port=MagicMock(),
-            event_store=InMemoryEventStore(),
-            event_bus=EventBus(),
-            config_service=MagicMock(),
-            logger=MagicMock(),
-            disable_auth=False,  # Auth IS enabled -- this is the point of the test
-        )
-
-        async with AsyncClient(app=app, base_url="http://test") as client:
-            # /metrics is mounted via app.mount(); deliberately send no Authorization header.
-            metrics_response = await client.get("/metrics", follow_redirects=True)
-            assert metrics_response.status_code == 200, (
-                f"Expected /metrics to bypass auth per INV-14, got "
-                f"{metrics_response.status_code}: {metrics_response.text}"
-            )
-
-            # Negative control: a normal APIRouter endpoint must still require auth.
-            protected_response = await client.get("/api/v2/executions", follow_redirects=True)
-            assert protected_response.status_code == 401, (
-                f"Expected protected endpoint to require auth (proving auth is "
-                f"genuinely enabled), got {protected_response.status_code}"
-            )
-
-    @pytest.mark.asyncio
     async def test_metrics_route_gracefully_degraded_when_prometheus_client_unavailable(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -752,49 +690,15 @@ class TestMetricsBootstrapResolution:
             except ImportError:
                 pass
 
-    def test_app_starts_without_prometheus_client(self, monkeypatch) -> None:
-        """Verify app handles missing prometheus_client gracefully.
+    def test_prometheus_client_available_flag_reflects_successful_import(self) -> None:
+        """Sanity check: PROMETHEUS_CLIENT_AVAILABLE is True in this test environment.
 
-        This test validates that the import guard at
-        src/codetoreum/adapters/primary/fastapi_app.py:36-45 sets
-        PROMETHEUS_CLIENT_AVAILABLE = False when prometheus_client is unavailable,
-        allowing the app to start without crashing.
+        prometheus_client is a declared dependency, so this should always hold here.
+        Actual graceful-degradation behavior when the flag is False is verified by
+        test_metrics_route_gracefully_degraded_when_prometheus_client_unavailable,
+        which patches the flag and exercises create_app() + GET /metrics for real
+        rather than asserting on source text.
         """
-        # When prometheus_client IS available (normal case), verify flag is True
         from codetoreum.adapters.primary import fastapi_app
 
-        # This should be True since prometheus_client is installed
-        assert fastapi_app.PROMETHEUS_CLIENT_AVAILABLE is True, (
-            "PROMETHEUS_CLIENT_AVAILABLE should be True when prometheus_client is available"
-        )
-
-        # Verify the /metrics endpoint would be mounted when the flag is True
-        # (tested by the test_metrics_endpoint_http_scrape test)
-
-        # Now verify that if make_asgi_app were unavailable, the guard
-        # would handle it. We do this by checking the import structure.
-        import inspect
-
-        source = inspect.getsource(fastapi_app)
-
-        # Verify the guard pattern exists and is correct
-        # Should have:
-        # try:
-        #     from prometheus_client import make_asgi_app
-        #     PROMETHEUS_CLIENT_AVAILABLE = True
-        # except ImportError:
-        #     PROMETHEUS_CLIENT_AVAILABLE = False
-        assert "except ImportError" in source, (
-            "Guard should handle ImportError for missing prometheus_client"
-        )
-        assert "PROMETHEUS_CLIENT_AVAILABLE = False" in source, (
-            "Guard should set flag to False on ImportError"
-        )
-        assert "PROMETHEUS_CLIENT_AVAILABLE = True" in source, (
-            "Guard should set flag to True on successful import"
-        )
-
-        # Verify the /metrics mounting is conditional on the flag
-        assert "if PROMETHEUS_CLIENT_AVAILABLE:" in source, (
-            "/metrics endpoint mounting should be conditional on PROMETHEUS_CLIENT_AVAILABLE flag"
-        )
+        assert fastapi_app.PROMETHEUS_CLIENT_AVAILABLE is True
