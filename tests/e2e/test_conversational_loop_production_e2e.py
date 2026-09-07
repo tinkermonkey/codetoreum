@@ -233,7 +233,14 @@ class TestConversationalLoopProductionE2E:
         discussion_adapter = GitHubDiscussionAdapter(github_config, MockIdentityService())
         logger.info("[E2E Test] ✓ GitHubDiscussionAdapter created (real production adapter)")
 
-        # Step 3: Wire adapters to event bus (validates the bootstrap wiring pattern)
+        # Step 3: Mock add_comment on the real adapter to track when it's called
+        # (This validates that orchestrator actually posts the response to GitHub)
+        original_add_comment = discussion_adapter.add_comment
+        discussion_adapter.add_comment = AsyncMock(
+            side_effect=original_add_comment
+        )
+
+        # Step 4: Wire adapters to event bus (validates the bootstrap wiring pattern)
         # This is the key line that was missing in the original test
         wire_adapters_to_event_bus(
             event_bus=event_bus,
@@ -241,7 +248,7 @@ class TestConversationalLoopProductionE2E:
         )
         logger.info("[E2E Test] ✓ Adapters wired to event bus (wire_adapters_to_event_bus)")
 
-        # Step 4: Create ConversationalLoopOrchestrator and subscribe to event bus
+        # Step 5: Create ConversationalLoopOrchestrator and subscribe to event bus
         # (This is how the real production bootstrap registers it)
         # Use AsyncMock for async dependencies to avoid "can't be used in 'await' expression"
         session_state = ConversationalSessionState(
@@ -279,7 +286,7 @@ class TestConversationalLoopProductionE2E:
         )
         logger.info("[E2E Test] ✓ ConversationalLoopOrchestrator subscribed to CommentNeedsResponseEvent")
 
-        # Step 5: Create test comment
+        # Step 6: Create test comment
         test_comment = Comment(
             id=f"e2e-test-{int(datetime.now(UTC).timestamp() * 1000)}",
             author="e2e-test-human",
@@ -290,7 +297,7 @@ class TestConversationalLoopProductionE2E:
         )
         logger.info("[E2E Test] Created test comment (ID: %s)", test_comment.id)
 
-        # Step 6: Create CommentNeedsResponseEvent
+        # Step 7: Create CommentNeedsResponseEvent
         event = CommentNeedsResponseEvent(
             type="comment.needs_response",
             timestamp=datetime.now(UTC).isoformat(),
@@ -305,7 +312,7 @@ class TestConversationalLoopProductionE2E:
         )
         logger.info("[E2E Test] CommentNeedsResponseEvent created, publishing to event bus")
 
-        # Step 7: Publish event to event bus (CRITICAL: this validates subscription wiring)
+        # Step 8: Publish event to event bus (CRITICAL: this validates subscription wiring)
         # This is the key difference from the original test which called
         # handle_comment_event directly without going through the event bus
         await event_bus.publish(event)
@@ -315,7 +322,7 @@ class TestConversationalLoopProductionE2E:
 
         logger.info("[E2E Test] ✓ CommentNeedsResponseEvent published to event bus")
 
-        # Step 8: Verify coding agent was invoked (via orchestrator subscription routing)
+        # Step 9: Verify coding agent was invoked (via orchestrator subscription routing)
         assert len(mock_coding_agent.executions) > 0, (
             "Coding agent should be invoked by orchestrator via event bus subscription. "
             "This validates that CommentNeedsResponseEvent was routed from the event bus "
@@ -326,7 +333,18 @@ class TestConversationalLoopProductionE2E:
             mock_coding_agent.last_execution.id if mock_coding_agent.last_execution else "unknown",
         )
 
-        # Step 9: Fetch the discussion thread to verify response was posted to GitHub
+        # Step 10: CRITICAL ASSERTION - Verify that add_comment() was called
+        # This validates that the orchestrator actually posted the response to GitHub
+        assert discussion_adapter.add_comment.called, (
+            "Orchestrator must call discussion_adapter.add_comment() to post the response. "
+            "This is the critical action that verifies the response is posted to real GitHub. "
+            "If this assertion fails, the orchestrator is not invoking the adapter's add_comment method."
+        )
+        logger.info(
+            "[E2E Test] ✓ add_comment() was invoked on GitHub adapter (response posted)"
+        )
+
+        # Step 11: Fetch the discussion thread to verify response was posted to GitHub
         logger.info("[E2E Test] Fetching GitHub discussion thread to verify response...")
         thread = await discussion_adapter.get_thread(work_item_id)
 
@@ -359,8 +377,10 @@ class TestConversationalLoopProductionE2E:
             "  - Event Bus: ✅ Created and operational\n"
             "  - Adapter Wiring: ✅ wire_adapters_to_event_bus called (production pattern)\n"
             "  - Discussion Adapter: ✅ Real GitHubDiscussionAdapter (not mock)\n"
+            "  - add_comment Mock: ✅ Wrapped to track invocations\n"
             "  - Orchestrator Subscription: ✅ Subscribed to CommentNeedsResponseEvent\n"
             "  - Event Routing: ✅ CommentNeedsResponseEvent → EventBus → Orchestrator\n"
             "  - Agent Invocation: ✅ Mock agent invoked via event bus routing\n"
-            "  - GitHub Posting: ✅ Response posted to real GitHub (if credentials valid)"
+            "  - GitHub Posting: ✅ add_comment() invoked (response posted to real GitHub)\n"
+            "  - Thread Verification: ✅ GitHub thread retrieved and bot response validated"
         )
