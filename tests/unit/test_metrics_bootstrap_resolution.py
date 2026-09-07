@@ -6,8 +6,10 @@ resolved adapter records metrics end-to-end that can be scraped via /metrics.
 """
 
 import asyncio
+import logging
 
 import pytest
+from httpx import AsyncClient
 
 from codetoreum.adapters.secondary.prometheus_metrics_adapter import (
     PrometheusMetricsAdapter,
@@ -23,34 +25,35 @@ from codetoreum.infrastructure.bootstrap.production_bootstrap import (
     CRITICAL_ADAPTER_SLOTS,
     NON_CRITICAL_SLOTS,
 )
-from codetoreum.infrastructure.bootstrap.production_engine_stub import (
-    ProductionEngineStub,
-)
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.simulation.simulation_config import (
     AdapterSelectionConfig,
+    SimulationConfig,
 )
+from codetoreum.infrastructure.simulation.simulation_engine import SimulationEngine
 
 
 @pytest.fixture(autouse=True)
 def _clear_prometheus_registry():
     """Clear Prometheus registry before each test to avoid collisions."""
+    logger = logging.getLogger(__name__)
+
     try:
         from prometheus_client import REGISTRY
 
-        # Collect all collectors to unregister
         collectors_to_remove = list(REGISTRY._collector_to_names.keys())
         for collector in collectors_to_remove:
             try:
                 REGISTRY.unregister(collector)
-            except Exception:
+            except ValueError:
                 pass
-    except Exception:
-        pass
+            except AttributeError as e:
+                logger.warning(f"Failed to unregister collector: {e}")
+    except ImportError as e:
+        logger.warning(f"prometheus_client import failed during cleanup: {e}")
 
     yield
 
-    # Clean up after test
     try:
         from prometheus_client import REGISTRY
 
@@ -58,10 +61,12 @@ def _clear_prometheus_registry():
         for collector in collectors_to_remove:
             try:
                 REGISTRY.unregister(collector)
-            except Exception:
+            except ValueError:
                 pass
-    except Exception:
-        pass
+            except AttributeError as e:
+                logger.warning(f"Failed to unregister collector during teardown: {e}")
+    except ImportError as e:
+        logger.warning(f"prometheus_client import failed during teardown: {e}")
 
 
 class TestMetricsBootstrapResolution:
@@ -86,8 +91,8 @@ class TestMetricsBootstrapResolution:
         """Verify AdapterResolver.resolve_metrics() is configured for PrometheusMetricsAdapter.
 
         This test validates that when metrics="prometheus", the resolver is
-        configured to create a real PrometheusMetricsAdapter by checking the
-        factory registry without instantiating (to avoid Prometheus global registry issues).
+        configured to create a real PrometheusMetricsAdapter and can successfully
+        instantiate it.
         """
         # Create test adapter config
         adapter_config = AdapterSelectionConfig(
@@ -109,17 +114,19 @@ class TestMetricsBootstrapResolution:
         )
 
         event_bus = EventBus()
-        engine_stub = ProductionEngineStub()
+        config = SimulationConfig.create_fast_config("test_resolver")
+        engine = SimulationEngine.create(config)
         factory = AdapterFactory()
         event_emitter = CapturingMockEventEmitter()
         failed_event_store = InMemoryFailedEventStore()
+        logger = logging.getLogger(__name__)
 
         adapter_deps = AdapterDependencies(
             event_bus=event_bus,
             event_emitter=event_emitter,
-            logger=None,
-            engine=engine_stub,
-            config=None,
+            logger=logger,
+            engine=engine,
+            config=config,
             failed_event_store=failed_event_store,
         )
 
@@ -141,6 +148,11 @@ class TestMetricsBootstrapResolution:
         # Verify it's not a simulation-only adapter (should be production-ready)
         if metadata.config_schema:
             assert not metadata.config_schema.simulation_only
+
+        # Verify resolve_metrics() can instantiate the adapter
+        metrics_adapter = resolver.resolve_metrics()
+        assert metrics_adapter is not None
+        assert isinstance(metrics_adapter, PrometheusMetricsAdapter)
 
     def test_prometheus_metrics_adapter_has_repair_cycle_metrics(self) -> None:
         """Verify that PrometheusMetricsAdapter initializes all repair cycle metrics.
@@ -201,17 +213,19 @@ class TestMetricsBootstrapResolution:
         try:
             # Create minimal dependencies for resolver
             event_bus = EventBus()
-            engine_stub = ProductionEngineStub()
+            config = SimulationConfig.create_fast_config("test_credentials")
+            engine = SimulationEngine.create(config)
             factory = AdapterFactory()
             event_emitter = CapturingMockEventEmitter()
             failed_event_store = InMemoryFailedEventStore()
+            logger = logging.getLogger(__name__)
 
             adapter_deps = AdapterDependencies(
                 event_bus=event_bus,
                 event_emitter=event_emitter,
-                logger=None,
-                engine=engine_stub,
-                config=None,
+                logger=logger,
+                engine=engine,
+                config=config,
                 failed_event_store=failed_event_store,
             )
 
@@ -305,3 +319,56 @@ class TestMetricsBootstrapResolution:
         assert found_value > 0, (
             f"Expected non-zero value for metric, got {found_value}"
         )
+
+    @pytest.mark.asyncio
+    async def test_metrics_endpoint_http_scrape(self) -> None:
+        """HTTP-level test: GET /metrics endpoint returns Prometheus-formatted output.
+
+        This test validates that the /metrics endpoint mounted in the FastAPI app
+        is actually scraped and returns metrics in the Prometheus text format.
+        """
+        from codetoreum.infrastructure.simulation.bootstrap import (
+            SimulationApplicationBootstrap,
+        )
+
+        # Create the simulation app with bootstrap
+        config = SimulationConfig.create_fast_config("test_http_metrics")
+        bootstrap = SimulationApplicationBootstrap(config)
+        await bootstrap.setup()
+        app = bootstrap.app
+
+        # Record a metric so there's something to scrape
+        adapter = PrometheusMetricsAdapter()
+        metric_name = "codetoreum_repair_cycle_started_total"
+        await adapter.increment_counter(
+            name=metric_name,
+            labels={"agent_name": "http_test", "stage_name": "test"},
+        )
+
+        try:
+            # Make HTTP request to the /metrics endpoint with follow_redirects
+            async with AsyncClient(app=app, base_url="http://test") as client:
+                response = await client.get("/metrics", follow_redirects=True)
+
+            # Verify HTTP response
+            assert response.status_code == 200, (
+                f"Expected 200, got {response.status_code}: {response.text}"
+            )
+
+            # Verify response contains Prometheus format (TYPE and HELP lines)
+            content = response.text
+            assert "# HELP" in content or "# TYPE" in content, (
+                "Response should contain Prometheus metadata comments"
+            )
+
+            # Verify the specific metric is in the scraped output
+            assert "codetoreum_repair_cycle_started_total" in content, (
+                "Expected metric not found in /metrics response"
+            )
+
+            # Verify the metric value appears in the response
+            assert 'agent_name="http_test"' in content, (
+                "Expected label value not found in /metrics response"
+            )
+        finally:
+            await bootstrap.teardown()
