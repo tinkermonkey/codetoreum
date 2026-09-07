@@ -23,6 +23,7 @@ from codetoreum.domain.events.work_item_events import (
 from codetoreum.domain.types import CommentId, ProjectId, UserId, WorkItemId
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
 from codetoreum.ports.exceptions import (
+    ConfigurationError,
     ResourceNotFoundError,
     ValidationError,
 )
@@ -433,11 +434,11 @@ class InMemoryTicketAdapter(MockEventEmitter, ITicketSystem):
             str: Repository identifier (synthetic for testing)
 
         Raises:
-            ValidationError: If project_id is empty or invalid
+            ConfigurationError: If project_id is empty or invalid
         """
         if not project_id:
             msg = "project_id cannot be empty"
-            raise ValidationError(msg)
+            raise ConfigurationError(msg)
         return f"test-repo-{project_id}"
 
     # ===== Comment Operations =====
