@@ -25,12 +25,18 @@ from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, Query, Request, Response, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from prometheus_client import make_asgi_app
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
 from starlette.middleware.base import BaseHTTPMiddleware
+
+try:
+    from prometheus_client import make_asgi_app
+
+    PROMETHEUS_CLIENT_AVAILABLE = True
+except ImportError:
+    PROMETHEUS_CLIENT_AVAILABLE = False
 
 from codetoreum.adapters.primary.api_models import (
     DependencyStatus,
@@ -398,9 +404,10 @@ def create_app(
 
     # Mount Prometheus scrape endpoint (unauthenticated)
     # Returns metrics in Prometheus text exposition format
-    # Mounted unconditionally, regardless of which metrics adapter is selected
-    prometheus_app = make_asgi_app()
-    app.mount("/metrics", prometheus_app)
+    # Mounted only if prometheus_client is available; degradation is graceful
+    if PROMETHEUS_CLIENT_AVAILABLE:
+        prometheus_app = make_asgi_app()
+        app.mount("/metrics", prometheus_app)
 
     # Add CORS middleware - use environment variables for production
     # Environment variables:
