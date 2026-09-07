@@ -295,7 +295,7 @@ Summary:
 
 ### 1. Test Code
 - **File**: `tests/e2e/test_conversational_loop_production_e2e.py`
-- **Lines of Code**: 366
+- **Lines of Code**: 377
 - **Test Classes**: 1 (TestConversationalLoopProductionE2E)
 - **Test Methods**: 1 (test_event_bus_wiring_validation)
 
@@ -388,7 +388,7 @@ Future work could add:
 
 | Criterion | Status | Evidence |
 |-----------|--------|----------|
-| Test code exists for E2E scenario | ✅ READY | `tests/e2e/test_conversational_loop_production_e2e.py` (366 LOC) implements production wiring validation |
+| Test code exists for E2E scenario | ✅ READY | `tests/e2e/test_conversational_loop_production_e2e.py` (377 LOC) implements production wiring validation |
 | Production bootstrap wiring tested | ✅ READY | Test calls `wire_adapters_to_event_bus()` and validates event routing (production pattern) |
 | Event bus subscription validated | ✅ READY | Test subscribes ConversationalLoopOrchestrator to CommentNeedsResponseEvent on event bus; await added to publish |
 | Event routing verified | ✅ READY | Test publishes to event bus (with await) and confirms orchestrator invoked via subscription; session state initialized |
@@ -411,7 +411,7 @@ Future work could add:
 
 **Original Issues Addressed**:
 1. ❌ README.md documented non-existent test methods (`test_conversational_loop_posts_to_real_github`, `test_conversational_loop_event_trail`)
-2. ❌ Verification-evidence.md claimed ~500 LOC and 2 test methods (actual: 366 LOC, 1 test method)
+2. ❌ Verification-evidence.md claimed ~500 LOC and 2 test methods (actual: 377 LOC, 1 test method)
 3. ❌ Fabricated pytest output referencing non-existent test in verification-evidence.md (line 259)
 4. ❌ No hard assertion that `add_comment()` was called on the adapter — test only checked for agent invocation
 

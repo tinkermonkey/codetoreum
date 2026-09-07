@@ -127,16 +127,16 @@ On successful run, you'll see:
 **Verification steps**:
 1. Creates EventBus (production infrastructure)
 2. Instantiates GitHubDiscussionAdapter with real GitHub credentials
-3. Calls `wire_adapters_to_event_bus()` (production bootstrap pattern)
-4. Subscribes ConversationalLoopOrchestrator to CommentNeedsResponseEvent
-5. Creates test comment to simulate human input
-6. Emits CommentNeedsResponseEvent
-7. Publishes event to event bus (validates subscription routing)
+3. Mocks add_comment() to track invocations
+4. Calls `wire_adapters_to_event_bus()` (production bootstrap pattern)
+5. Subscribes ConversationalLoopOrchestrator to CommentNeedsResponseEvent
+6. Creates test comment to simulate human input
+7. Emits and publishes CommentNeedsResponseEvent to event bus (validates subscription routing)
 8. Orchestrator processes event via subscription (not direct call)
 9. Coding agent is invoked by orchestrator
-10. Fetches GitHub thread to verify response posting
-11. Validates bot response is visible on real GitHub
-12. Verifies full event path: EventBus → wire_adapters_to_event_bus → subscription → orchestrator
+10. Asserts add_comment() was called (verifies response posted to GitHub)
+11. Fetches GitHub thread to verify response posting
+12. Validates bot response is visible on real GitHub
 
 **Accepts**: ✅ All verification steps complete, event bus routing validated, coding agent invoked
 

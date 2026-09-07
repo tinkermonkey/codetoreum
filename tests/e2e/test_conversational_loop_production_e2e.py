@@ -5,12 +5,14 @@ using production-level wiring validation:
 
 1. Set up event bus and adapter wiring (validates wire_adapters_to_event_bus)
 2. Verify ConversationalLoopOrchestrator is subscribed to CommentNeedsResponseEvent
-3. Emit CommentNeedsResponseEvent to the central event bus
-4. Event bus routes to ConversationalLoopOrchestrator (validates subscription wiring)
-5. Orchestrator processes comment and invokes coding agent
-6. Coding agent generates response
-7. Response is posted to the real GitHub discussion/issue via add_comment()
-8. Verify the comment is visible on GitHub and event trail is complete
+3. Mock add_comment() on the adapter to track GitHub posting invocations
+4. Emit CommentNeedsResponseEvent to the central event bus
+5. Event bus routes to ConversationalLoopOrchestrator (validates subscription wiring)
+6. Orchestrator processes comment and invokes coding agent
+7. Coding agent generates response
+8. Response is posted to the real GitHub discussion/issue via add_comment()
+9. Assert add_comment() was called (hard verification of GitHub posting)
+10. Verify the comment is visible on GitHub and event trail is complete
 
 Requirements:
 - GITHUB_TOKEN env var with valid personal access token (requires repo scope)
@@ -312,9 +314,7 @@ class TestConversationalLoopProductionE2E:
         )
         logger.info("[E2E Test] CommentNeedsResponseEvent created, publishing to event bus")
 
-        # Step 8: Publish event to event bus (CRITICAL: this validates subscription wiring)
-        # This is the key difference from the original test which called
-        # handle_comment_event directly without going through the event bus
+        # Step 8: Publish event to event bus (validates subscription routing vs direct call)
         await event_bus.publish(event)
 
         # Give the event bus a moment to process the event
@@ -323,23 +323,14 @@ class TestConversationalLoopProductionE2E:
         logger.info("[E2E Test] ✓ CommentNeedsResponseEvent published to event bus")
 
         # Step 9: Verify coding agent was invoked (via orchestrator subscription routing)
-        assert len(mock_coding_agent.executions) > 0, (
-            "Coding agent should be invoked by orchestrator via event bus subscription. "
-            "This validates that CommentNeedsResponseEvent was routed from the event bus "
-            "to the subscribed orchestrator handler."
-        )
+        assert len(mock_coding_agent.executions) > 0, "Coding agent must be invoked by orchestrator via event bus subscription."
         logger.info(
             "[E2E Test] ✓ Coding agent invoked via event bus routing (execution ID: %s)",
             mock_coding_agent.last_execution.id if mock_coding_agent.last_execution else "unknown",
         )
 
-        # Step 10: CRITICAL ASSERTION - Verify that add_comment() was called
-        # This validates that the orchestrator actually posted the response to GitHub
-        assert discussion_adapter.add_comment.called, (
-            "Orchestrator must call discussion_adapter.add_comment() to post the response. "
-            "This is the critical action that verifies the response is posted to real GitHub. "
-            "If this assertion fails, the orchestrator is not invoking the adapter's add_comment method."
-        )
+        # Step 10: Verify add_comment() was called (critical: validates response posted to GitHub)
+        assert discussion_adapter.add_comment.called, "Orchestrator must call add_comment() to post response to GitHub."
         logger.info(
             "[E2E Test] ✓ add_comment() was invoked on GitHub adapter (response posted)"
         )
