@@ -31,6 +31,19 @@ from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
 from starlette.middleware.base import BaseHTTPMiddleware
 
+logger = logging.getLogger(__name__)
+
+try:
+    from prometheus_client import make_asgi_app
+
+    PROMETHEUS_CLIENT_AVAILABLE = True
+except ImportError:
+    logger.warning(
+        "Optional prometheus_client not available, skipping prometheus metrics registration",
+        exc_info=True,
+    )
+    PROMETHEUS_CLIENT_AVAILABLE = False
+
 from codetoreum.adapters.primary.api_models import (
     DependencyStatus,
     HealthCheckResponse,
@@ -98,8 +111,6 @@ from codetoreum.ports.output.workflow_config_service import IWorkflowConfigServi
 
 # Load environment variables from .env file
 load_dotenv()
-
-logger = logging.getLogger(__name__)
 
 
 # ============================================================================
@@ -394,6 +405,13 @@ def create_app(
 
     # Add error handling middleware
     app.add_middleware(BaseHTTPMiddleware, dispatch=error_handling_middleware)
+
+    # Mount Prometheus scrape endpoint (unauthenticated)
+    # Returns metrics in Prometheus text exposition format
+    # Mounted only if prometheus_client is available; degradation is graceful
+    if PROMETHEUS_CLIENT_AVAILABLE:
+        prometheus_app = make_asgi_app()
+        app.mount("/metrics", prometheus_app)
 
     # Add CORS middleware - use environment variables for production
     # Environment variables:

@@ -23,11 +23,9 @@ from codetoreum.ports.input.metrics_query import (
 )
 
 if TYPE_CHECKING:
-    from codetoreum.adapters.testing.in_memory_metrics_adapter import (
-        InMemoryMetricsAdapter,
-    )
     from codetoreum.infrastructure.simulation.simulation_clock import SimulationClock
     from codetoreum.ports.output.event_store import IEventStore
+    from codetoreum.ports.output.metrics import IMetrics
 
 
 class MockMetricsQueryAdapter(IMetricsQueryPort):
@@ -35,14 +33,14 @@ class MockMetricsQueryAdapter(IMetricsQueryPort):
     Mock implementation of IMetricsQueryPort using in-memory storage.
 
     Integrates with:
-    - InMemoryMetricsAdapter for metrics data
+    - IMetrics implementation for metrics data
     - IEventStore for event-based metrics
     - SimulationClock for time-based queries
     """
 
     def __init__(
         self,
-        metrics_adapter: Optional["InMemoryMetricsAdapter"] = None,
+        metrics_adapter: Optional["IMetrics"] = None,
         event_store: Optional["IEventStore"] = None,
         clock: Optional["SimulationClock"] = None,
     ):

@@ -345,6 +345,7 @@ def test_non_critical_adapter_slots_defined() -> None:
 
     expected_non_critical = {
         "event_store",  # InMemoryEventStore acceptable for MVP
+        "metrics",  # Observability concern, not correctness; system functions identically with or without real metrics
         "review_cycle",
         "pr_review_cycle",
         "systemic_analysis",

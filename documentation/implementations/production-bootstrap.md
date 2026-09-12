@@ -77,6 +77,71 @@ Tests in `test_repair_cycle_bootstrap_resolution.py` verify:
 - `test_repair_cycle_is_non_critical_slot()`: Confirms repair_cycle is in NON_CRITICAL_SLOTS (background workflows, not critical path).
 - The Phase 1 fix (checkpoint_store wiring) is validated via hard key access (`self._resolved["checkpoint_store"]`) — missing dependencies raise `KeyError` at bootstrap time, preventing silent `None` propagation to runtime (issue #967).
 
+### Phase 2 — Metrics adapter resolution (Issue #1015 Phase 5)
+
+The metrics slot is resolved during Phase 2 adapter resolution, choosing between in-memory (for simulation/testing) or Prometheus (for production observability). The `metrics="prometheus"` configuration in `ProductionApplicationBootstrap.__init__()` ensures the real `PrometheusMetricsAdapter` is wired end-to-end for production monitoring.
+
+**Configuration in ProductionApplicationBootstrap**:
+```python
+adapter_config = AdapterSelectionConfig(
+    metrics="prometheus",  # Production Prometheus adapter for observability
+    # ... other adapters
+)
+```
+
+**Resolver path** (Phase 2, `AdapterResolver.resolve_metrics()`):
+- If `metrics == "in_memory"`: Factory creates in-memory test adapter (for simulation only)
+- If `metrics == "prometheus"`: Factory creates production adapter using prometheus_client library
+
+```python
+def resolve_metrics(self) -> IMetrics:
+    """Resolve metrics adapter."""
+    return self._factory.create_metrics(adapter_name=self._config.metrics)
+```
+
+**Key properties**:
+- **Namespace**: `codetoreum` — prefix for all metrics (e.g., `codetoreum_repair_cycle_*`)
+- **Subsystem**: `repair_cycle` — metrics category for repair-cycle observability
+- **Registry**: Global Prometheus client registry (handles metric registration and scraping)
+- **No credentials required**: Prometheus adapter uses in-process client library, not HTTP API; does not require `PROMETHEUS_URL` env var
+
+**Metrics recorded**:
+The `RepairCycleMetricsCollector` records repair-cycle metrics via the resolved adapter:
+- Counters: `codetoreum_repair_cycle_started_total`, `codetoreum_repair_cycle_completed_total`, `codetoreum_repair_cycle_successful_total`, `codetoreum_repair_cycle_failed_total`, `codetoreum_repair_cycle_fast_failed_total`, `codetoreum_repair_cycle_test_executions_total`, `codetoreum_repair_cycle_test_failures_total`, `codetoreum_repair_cycle_files_fixed_total`, `codetoreum_repair_cycle_warnings_reviewed_total`
+- Gauges: `codetoreum_repair_cycle_active_count`, `codetoreum_repair_cycle_max_iterations_reached_total`
+- Histograms: `codetoreum_repair_cycle_duration_seconds`, `codetoreum_repair_cycle_test_execution_duration_seconds`, `codetoreum_repair_cycle_file_fix_duration_seconds`, `codetoreum_repair_cycle_iterations_count`
+- Summaries: `codetoreum_repair_cycle_agent_calls_per_cycle`, `codetoreum_repair_cycle_files_fixed_per_cycle`
+
+**Scraping endpoint**:
+The FastAPI application mounts Prometheus ASGI middleware at `/metrics`. The endpoint serves metrics in Prometheus text format:
+```
+GET /metrics
+```
+
+Returns metrics like:
+```
+# HELP codetoreum_repair_cycle_started_total Total repair cycles started
+# TYPE codetoreum_repair_cycle_started_total counter
+codetoreum_repair_cycle_started_total{agent_name="test_agent",stage_name="testing"} 1.0
+```
+
+**Classification**: `metrics` is in `NON_CRITICAL_SLOTS` (not CRITICAL_ADAPTER_SLOTS). Metrics are observability concern, not correctness; system functions identically with or without real metrics (mock metrics work for MVP).
+
+**Validation outcome** (Issue #1015 Phase 5):
+Tests in `test_metrics_bootstrap_resolution.py` verify:
+- `test_metrics_is_non_critical_slot()`: Confirms metrics is in NON_CRITICAL_SLOTS (observability, not correctness path).
+- `test_bootstrap_default_config_sets_prometheus_metrics()`: Confirms ProductionApplicationBootstrap defaults metrics to `"prometheus"`.
+- `test_adapter_resolver_resolves_prometheus_metrics()`: Confirms AdapterResolver can resolve the Prometheus adapter and factory has it registered (not simulation-only).
+- `test_prometheus_metrics_adapter_has_repair_cycle_metrics()`: Confirms PrometheusMetricsAdapter initializes all repair-cycle metric families.
+- `test_resolver_validates_credentials_without_prometheus_url()`: Confirms `AdapterResolver.validate_credentials()` passes without `PROMETHEUS_URL` env var set (no credentials required).
+- `test_prometheus_metrics_adapter_class_has_required_methods()`: Confirms adapter supports async methods `increment_counter()`, `record_histogram()`, `set_gauge()`, etc.
+
+**End-to-end verification**:
+Tests validate the metrics recording path:
+- `test_end_to_end_metrics_recording_and_scraping()` verifies that metrics are recorded via the adapter's `increment_counter()` method and are present in the Prometheus registry via `REGISTRY.collect()` (direct registry access, not HTTP scraping).
+- `test_metrics_endpoint_http_scrape()` validates that the `/metrics` HTTP endpoint returns Prometheus-formatted output with metric data.
+- A synthetic execution (e.g., via simulation test or repair-cycle scenario) exercises the metrics calls to confirm the full recording path works end-to-end.
+
 ### Phase 4c — `ICodingAgent` resolution (DEF-015 D3/D4)
 
 The `coding_agent` slot replaces the retired `llm_provider` slot (the `ILLMProvider` port deleted in D5). The slot is resolved *after* Phase 4 resilience decoration so the resilient `IContainer` is passed into the containerized strategy.

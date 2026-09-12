@@ -81,7 +81,7 @@ export GITHUB_TEST_WORK_ITEM_ID=123
 python -m pytest tests/e2e/test_conversational_loop_production_e2e.py::TestConversationalLoopProductionE2E -v -s
 
 # Single specific test
-python -m pytest tests/e2e/test_conversational_loop_production_e2e.py::TestConversationalLoopProductionE2E::test_conversational_loop_posts_to_real_github -v -s
+python -m pytest tests/e2e/test_conversational_loop_production_e2e.py::TestConversationalLoopProductionE2E::test_event_bus_wiring_validation -v -s
 
 # All E2E tests
 python -m pytest tests/e2e/ -v -s
@@ -101,54 +101,46 @@ python -m pytest tests/e2e/test_conversational_loop_production_e2e.py -v -s
 On successful run, you'll see:
 
 ```
-[E2E Test] Starting conversational loop verification with GitHub my-org/test-repo, work item 123
-[E2E Test] ✓ Conversational loop initialized, session ID: conv_session_123_1234567890
-[E2E Test] ✓ GitHub discussion monitoring started for work item 123
-[E2E Test] Created test comment (ID: e2e-test-1234567890) to trigger agent response
-[E2E Test] CommentNeedsResponseEvent created, triggering CLO.handle_comment_event()
-[E2E Test] ✓ Comment event handled by orchestrator
-[E2E Test] ✓ Coding agent invoked (execution ID: exec-abc123)
+[E2E Test] Starting event bus wiring validation for GitHub my-org/test-repo, work item 123
+[E2E Test] ✓ Event bus created
+[E2E Test] ✓ GitHubDiscussionAdapter created (real production adapter)
+[E2E Test] ✓ Adapters wired to event bus (wire_adapters_to_event_bus)
+[E2E Test] ✓ ConversationalLoopOrchestrator subscribed to CommentNeedsResponseEvent
+[E2E Test] Created test comment (ID: e2e-test-1234567890)
+[E2E Test] CommentNeedsResponseEvent created, publishing to event bus
+[E2E Test] ✓ CommentNeedsResponseEvent published to event bus
+[E2E Test] ✓ Coding agent invoked via event bus routing (execution ID: exec-abc123)
+[E2E Test] ✓ add_comment() was invoked on GitHub adapter (response posted)
 [E2E Test] Fetching GitHub discussion thread to verify response...
 [E2E Test] ✓ GitHub discussion thread retrieved with N comments
 [E2E Test] ✓ Bot response found in discussion (author: codetoreum-e2e-test, ID: comment-id-123)
 [E2E Test] ✓ Bot response content verified
-[E2E Test] ✓ Session state persisted with checkpoint: e2e-test-1234567890
-[E2E Test] ✅ End-to-end verification complete!
+[E2E Test] ✅ Production wiring validation complete!
 ```
 
 ## Test Cases
 
-### 1. `test_conversational_loop_posts_to_real_github`
+### `test_event_bus_wiring_validation`
 
-**Primary E2E test**: Full conversational loop flow
+**Primary E2E test**: Production event bus wiring validation
 
 **Verification steps**:
-1. Initializes conversational loop for work item
-2. Starts monitoring GitHub discussion
-3. Creates test comment to simulate human input
-4. Emits CommentNeedsResponseEvent
-5. Orchestrator handles event and invokes coding agent
-6. Agent generates response
-7. Response posted to GitHub via add_comment()
-8. Fetches thread and verifies comment is visible
-9. Validates session state persisted correctly
-10. Cleans up session
+1. Creates EventBus (production infrastructure)
+2. Instantiates GitHubDiscussionAdapter with real GitHub credentials
+3. Mocks add_comment() to track invocations
+4. Calls `wire_adapters_to_event_bus()` (production bootstrap pattern)
+5. Subscribes ConversationalLoopOrchestrator to CommentNeedsResponseEvent
+6. Creates test comment to simulate human input
+7. Emits and publishes CommentNeedsResponseEvent to event bus (validates subscription routing)
+8. Orchestrator processes event via subscription (not direct call)
+9. Coding agent is invoked by orchestrator
+10. Asserts add_comment() was called (verifies response posted to GitHub)
+11. Fetches GitHub thread to verify response posting
+12. Validates bot response is visible on real GitHub
 
-**Accepts**: ✅ All verification steps complete, comment visible on GitHub
+**Accepts**: ✅ All verification steps complete, event bus routing validated, coding agent invoked
 
-**Rejects**: ❌ Any step fails, comment not visible, or event path broken
-
-### 2. `test_conversational_loop_event_trail`
-
-**Audit trail verification**: Captures complete event sequence
-
-**Logged events**:
-1. CommentNeedsResponseEvent (adapter detection)
-2. AgentExecutionStarted (orchestrator invocation)
-3. AgentResponsePosted (adapter posting)
-4. SessionStateUpdated (checkpoint persistence)
-
-**Output**: JSON event trail showing each step with timestamp
+**Rejects**: ❌ Event bus routing fails, orchestrator not invoked, or adapter wiring not functional
 
 ## Troubleshooting
 

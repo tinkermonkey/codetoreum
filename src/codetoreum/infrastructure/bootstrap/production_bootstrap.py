@@ -160,9 +160,11 @@ CRITICAL_ADAPTER_SLOTS = {
     "container_recovery",  # Required for fail-fast safety if mock is detected in production (Story 5)
 }
 
-# Slots without production implementations (not on MVP critical path)
+# Slots where mock implementations are acceptable (non-critical to correctness)
+# These slots may have production implementations but do not block work-item progression
 NON_CRITICAL_SLOTS = {
     "event_store",  # InMemoryEventStore acceptable for MVP
+    "metrics",  # Observability concern, not correctness; system functions identically with or without real metrics
     "review_cycle",
     "pr_review_cycle",
     "systemic_analysis",
@@ -289,6 +291,7 @@ class ProductionApplicationBootstrap:
                 config_store="elasticsearch",  # Persist project/agent/board configs to ES
                 project_manager="elasticsearch",  # Read live project configs from ES
                 encryption="local_key",  # Fernet keyed by ENCRYPTION_KEY_BASE64 env var
+                metrics="prometheus",  # Prometheus-backed metrics for production observability
                 lock_service="redis",  # Persistent pipeline lock; survives restart, coordinates instances
                 run_registry="redis",  # Persistent active-run records; closes DEF-002 across restart
                 branch_tracker="redis",  # Persistent work_item -> branch mapping; survives restart
