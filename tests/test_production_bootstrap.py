@@ -90,16 +90,16 @@ async def test_critical_adapters_have_failure_routes() -> None:
     assert bootstrap.infrastructure is not None
     assert bootstrap.infrastructure.failed_event_store is not None
 
-    # Verify critical adapters have non-None failure routes (exactly 5 critical adapters)
+    # Verify critical adapters have non-None failure routes (exactly 6 critical adapters)
     critical_adapters_with_failure_routes = [
         adapter
-        for slot_name in ["board", "ticket", "version_control", "container", "code_review"]
+        for slot_name in ["board", "ticket", "version_control", "container", "code_review", "queue_service"]
         if (adapter := bootstrap.adapters.__dict__.get(slot_name))
         and getattr(adapter, "failed_event_store", None) is not None
     ]
     assert (
-        len(critical_adapters_with_failure_routes) == 5
-    ), "All 5 critical adapters should have non-None failure routes"
+        len(critical_adapters_with_failure_routes) == 6
+    ), "All 6 critical adapters should have non-None failure routes"
 
     # Verify DLQ retry processor was started (Phase 5d-2)
     # The failed_event_store should be a DeadLetterQueueFailedEventStoreAdapter
@@ -334,6 +334,7 @@ def test_critical_adapter_slots_defined() -> None:
         "container",
         "code_review",
         "container_recovery",
+        "queue_service",
     }
 
     assert expected_critical == CRITICAL_ADAPTER_SLOTS
@@ -356,7 +357,9 @@ def test_non_critical_adapter_slots_defined() -> None:
         "discussion_adapter",  # Discussion handling is non-critical; does not block work-item progression
     }
 
-    assert expected_non_critical == NON_CRITICAL_SLOTS
+    assert expected_non_critical == NON_CRITICAL_SLOTS, (
+        f"Non-critical slots mismatch. Expected {expected_non_critical}, got {NON_CRITICAL_SLOTS}"
+    )
 
 
 @pytest.mark.asyncio

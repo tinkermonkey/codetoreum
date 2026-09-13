@@ -7,6 +7,7 @@ from typing import Any
 
 from codetoreum.ports.output.container import IContainer
 from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
+from codetoreum.ports.output.pipeline_queue_service import IPipelineQueueService
 from codetoreum.ports.output.repository import IRepository
 from codetoreum.ports.output.ticket_system import ITicketSystem
 from codetoreum.ports.output.version_control_service import IVersionControlService
@@ -21,6 +22,7 @@ from .config import (
 )
 from .decorators import (
     BestEffortExecutionTrackerDecorator,
+    BestEffortPipelineQueueServiceDecorator,
     ResilientDiscussionAdapterDecorator,
     ResilientTicketSystemDecorator,
 )
@@ -232,3 +234,22 @@ class ResilienceFactory:
             IWorkExecutionStateTracker: Wrapped adapter with best-effort resilience
         """
         return BestEffortExecutionTrackerDecorator(wrapped=adapter)
+
+    def create_best_effort_pipeline_queue_service(
+        self, adapter: IPipelineQueueService
+    ) -> IPipelineQueueService:
+        """
+        Create best-effort pipeline queue service decorator.
+
+        Wraps the queue service with graceful degradation: failures in queue
+        operations are logged but do not block pipeline progression. Queue
+        tracking is essential for ordering but transient failures should not
+        prevent work-item advancement through the pipeline.
+
+        Args:
+            adapter: Underlying pipeline queue service adapter
+
+        Returns:
+            IPipelineQueueService: Wrapped adapter with best-effort resilience
+        """
+        return BestEffortPipelineQueueServiceDecorator(wrapped=adapter)

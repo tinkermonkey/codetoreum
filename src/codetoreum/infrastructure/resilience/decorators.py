@@ -27,6 +27,11 @@ from codetoreum.ports.output.board_service import (
 from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
 from codetoreum.ports.output.monitoring import MonitoringConfig, MonitoringStatus
 from codetoreum.ports.output.ticket_system import ITicketSystem
+from codetoreum.ports.output.pipeline_queue_service import (
+    IPipelineQueueService,
+    PipelineQueueEntry,
+    QueueStatus,
+)
 from codetoreum.ports.output.work_execution_state_tracker import (
     ExecutionState,
     IWorkExecutionStateTracker,
@@ -858,3 +863,194 @@ class BestEffortExecutionTrackerDecorator(IWorkExecutionStateTracker):
     ) -> None:
         """Pass through to wrapped adapter."""
         return await self._wrapped.mark_execution_failed(project, work_item_id, agent, reason)
+
+
+# ============================================================================
+# Best-Effort Pipeline Queue Service Decorator
+# ============================================================================
+
+
+class BestEffortPipelineQueueServiceDecorator(IPipelineQueueService):
+    """Wraps IPipelineQueueService with graceful degradation.
+
+    Catches exceptions in queue operations and logs with exc_info=True,
+    allowing the pipeline to proceed even if queue operations fail. This implements
+    the "best-effort" resilience policy: queue tracking is essential for ordering
+    but transient failures should not block work-item progression.
+
+    All methods pass through to the wrapped adapter and catch exceptions,
+    logging errors without raising to allow pipeline continuity.
+
+    Exposes failed_event_store attribute for INV-20 failure routing compliance.
+    """
+
+    def __init__(self, wrapped: IPipelineQueueService) -> None:
+        """
+        Initialize the decorator.
+
+        Args:
+            wrapped: The underlying pipeline queue service adapter
+        """
+        self._wrapped = wrapped
+        # Expose failed_event_store from wrapped adapter for INV-20 failure routing
+        self.failed_event_store = getattr(wrapped, "failed_event_store", None)
+
+    async def is_item_in_queue(self, work_item_id: str) -> bool:
+        """Check if item is in queue with graceful degradation on failure.
+
+        If the check fails, logs the error and returns False to avoid blocking
+        pipeline progression.
+
+        Args:
+            work_item_id: Work item identifier
+
+        Returns:
+            bool: True if item is in queue, False otherwise or on failure
+        """
+        try:
+            return await self._wrapped.is_item_in_queue(work_item_id)
+        except Exception as e:
+            logger.error(
+                f"Failed to check if work item {work_item_id} is in queue: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+            )
+            return False
+
+    async def enqueue_item(
+        self,
+        project_id: str,
+        board_id: str,
+        work_item_id: str,
+        position_in_column: int,
+        timestamp: datetime,
+    ) -> None:
+        """Enqueue item with graceful degradation on failure.
+
+        If enqueueing fails, logs the error but allows pipeline to proceed.
+        Queue ordering may be lost but work-item progression continues.
+
+        Args:
+            project_id: Project identifier
+            board_id: Board identifier
+            work_item_id: Work item identifier
+            position_in_column: Position in column
+            timestamp: Queue timestamp
+        """
+        try:
+            await self._wrapped.enqueue_item(project_id, board_id, work_item_id, position_in_column, timestamp)
+        except Exception as e:
+            logger.error(
+                f"Failed to enqueue work item {work_item_id} in queue "
+                f"(project={project_id}, board={board_id}): {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+            )
+
+    async def mark_item_active(self, work_item_id: str) -> None:
+        """Mark item as active with graceful degradation on failure.
+
+        If marking fails, logs the error but allows execution to proceed.
+        Item will remain in WAITING state but execution continues.
+
+        Args:
+            work_item_id: Work item identifier
+        """
+        try:
+            await self._wrapped.mark_item_active(work_item_id)
+        except Exception as e:
+            logger.error(
+                f"Failed to mark work item {work_item_id} as active: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+            )
+
+    async def remove_from_queue(self, work_item_id: str) -> bool:
+        """Remove item from queue with graceful degradation on failure.
+
+        If removal fails, logs the error and returns False to indicate failure,
+        but allows pipeline cleanup to proceed.
+
+        Args:
+            work_item_id: Work item identifier
+
+        Returns:
+            bool: True if removed, False if not in queue or on failure
+        """
+        try:
+            return await self._wrapped.remove_from_queue(work_item_id)
+        except Exception as e:
+            logger.error(
+                f"Failed to remove work item {work_item_id} from queue: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+            )
+            return False
+
+    async def get_next_waiting_item(self, project_id: str, board_id: str) -> PipelineQueueEntry | None:
+        """Get next waiting item with graceful degradation on failure.
+
+        If retrieval fails, logs the error and returns None to indicate no item
+        is available, allowing pipeline to retry or skip.
+
+        Args:
+            project_id: Project identifier
+            board_id: Board identifier
+
+        Returns:
+            PipelineQueueEntry or None if not available or on failure
+        """
+        try:
+            return await self._wrapped.get_next_waiting_item(project_id, board_id)
+        except Exception as e:
+            logger.error(
+                f"Failed to get next waiting item from queue "
+                f"(project={project_id}, board={board_id}): {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+            )
+            return None
+
+    async def get_queue_entries(self, project_id: str, board_id: str) -> list[PipelineQueueEntry]:
+        """Get queue entries with graceful degradation on failure.
+
+        If retrieval fails, logs the error and returns empty list to indicate
+        no entries are available.
+
+        Args:
+            project_id: Project identifier
+            board_id: Board identifier
+
+        Returns:
+            List of PipelineQueueEntry or empty list on failure
+        """
+        try:
+            return await self._wrapped.get_queue_entries(project_id, board_id)
+        except Exception as e:
+            logger.error(
+                f"Failed to get queue entries (project={project_id}, board={board_id}): {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+            )
+            return []
+
+    async def sync_queue_with_board(self, project_id: str, board_id: str, column: str) -> None:
+        """Sync queue with board with graceful degradation on failure.
+
+        If sync fails, logs the error but allows pipeline to proceed with
+        potentially stale queue state.
+
+        Args:
+            project_id: Project identifier
+            board_id: Board identifier
+            column: Board column name
+        """
+        try:
+            await self._wrapped.sync_queue_with_board(project_id, board_id, column)
+        except Exception as e:
+            logger.error(
+                f"Failed to sync queue with board (project={project_id}, board={board_id}, column={column}): {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_INTERNAL_ERROR},
+            )
+

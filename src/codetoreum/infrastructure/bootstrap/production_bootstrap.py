@@ -146,7 +146,7 @@ from codetoreum.ports.output.prompt_builder import IPromptBuilder
 
 logger = logging.getLogger(__name__)
 
-# Critical execution path slots (7 total)
+# Critical execution path slots (8 total)
 # event_store excluded: InMemoryEventStore is acceptable for MVP
 CRITICAL_ADAPTER_SLOTS = {
     "board",
@@ -158,6 +158,7 @@ CRITICAL_ADAPTER_SLOTS = {
     "container",
     "code_review",
     "container_recovery",  # Required for fail-fast safety if mock is detected in production (Story 5)
+    "queue_service",  # Pipeline queue service is critical for work-item ordering (BA FR7/US6)
 }
 
 # Slots where mock implementations are acceptable (non-critical to correctness)
@@ -172,7 +173,6 @@ NON_CRITICAL_SLOTS = {
     "repair_cycle",
     "ci_pipeline",
     "execution_tracker",  # Execution state tracking; critical for recovery but non-critical for MVP
-    "queue_service",  # Pipeline queue; uses execution_tracker as controlling precedent for non-critical classification
     "discussion_adapter",  # Discussion handling is non-critical; does not block work-item progression
 }
 
@@ -1005,6 +1005,13 @@ class ProductionApplicationBootstrap:
                 self.adapters.discussion_adapter
             )
             logger.debug("Applied resilience to discussion adapter")
+
+        # Pipeline queue service (critical for work-item ordering and progression)
+        if self.adapters.queue_service:
+            self.adapters.queue_service = resilience_factory.create_best_effort_pipeline_queue_service(
+                self.adapters.queue_service
+            )
+            logger.debug("Applied best-effort resilience to pipeline queue service")
 
         logger.info("Resilience decorators applied to critical adapters")
 
