@@ -632,6 +632,52 @@ class MockDiscussionAdapter(MockEventEmitter, IDiscussionAdapter):
 
         del self._monitoring[work_item_id]
 
+    # Webhook Handler
+
+    async def handle_webhook(self, payload: dict) -> None:
+        """Process webhook event from external service.
+
+        For the mock adapter, this is a no-op. Real implementations would
+        parse the payload and emit appropriate events.
+
+        Args:
+            payload: Webhook payload (ignored in mock)
+        """
+
+    # Resource Management
+
+    async def close(self) -> None:
+        """Close and clean up adapter resources.
+
+        For the mock adapter, this is a no-op since there are no external resources.
+        """
+
+    async def __aenter__(self) -> "MockDiscussionAdapter":
+        """Enter async context manager.
+
+        Returns:
+            The adapter instance (self)
+        """
+        return self
+
+    async def __aexit__(
+        self, exc_type: Any, exc_val: Any, exc_tb: Any
+    ) -> bool:
+        """Exit async context manager.
+
+        Ensures clean resource cleanup when exiting async context.
+
+        Args:
+            exc_type: Exception type if an exception occurred
+            exc_val: Exception value if an exception occurred
+            exc_tb: Exception traceback if an exception occurred
+
+        Returns:
+            False to propagate exceptions
+        """
+        await self.close()
+        return False
+
     # Helper Methods
 
     def _get_iso_timestamp(self) -> str:
