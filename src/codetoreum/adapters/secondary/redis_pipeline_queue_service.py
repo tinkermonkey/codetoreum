@@ -65,6 +65,14 @@ class RedisPipelineQueueService(IPipelineQueueService):
         - Graceful degradation on board service failures
         - Metadata corruption handling with event emission
         - Event emission via IEventEmitter (not EventBus)
+
+    Concurrency Notes:
+        - mark_item_active uses three sequential Redis commands (hget metadata, check status, hset update)
+          without atomic guarantees. This is suitable for the current single-instance deployment model
+          where only one orchestrator accesses the queue. Full atomic CAS (Lua script) is deferred to
+          multi-instance deployment when multiple orchestrators may execute concurrently.
+        - enqueue_item uses atomic HSETNX for reverse index + pipeline for queue data, with cleanup
+          on pipeline failure to prevent orphaned entries.
     """
 
     def __init__(
@@ -212,11 +220,16 @@ class RedisPipelineQueueService(IPipelineQueueService):
             raise DuplicateQueueEntryError(msg)
 
         # Add to queue (atomically with pipeline)
-        pipe = self._redis.pipeline(transaction=True)
-        await pipe.zadd(queue_key, {work_item_id: float(position_in_column)})
-        await pipe.hset(meta_key, work_item_id, json.dumps(metadata))
-        await pipe.sadd(pipeline_registry_key, pipeline_coords)
-        await pipe.execute()
+        try:
+            pipe = self._redis.pipeline(transaction=True)
+            await pipe.zadd(queue_key, {work_item_id: float(position_in_column)})
+            await pipe.hset(meta_key, work_item_id, json.dumps(metadata))
+            await pipe.sadd(pipeline_registry_key, pipeline_coords)
+            await pipe.execute()
+        except Exception:
+            # Pipeline failed - remove orphaned reverse index entry to prevent future duplicates
+            await self._redis.hdel(reverse_index_key, work_item_id)
+            raise
 
         # Emit event
         self._emit_event(
@@ -490,9 +503,32 @@ class RedisPipelineQueueService(IPipelineQueueService):
             # Check if waiting
             if metadata.get("status") == QueueStatus.WAITING.value:
                 # Found next waiting item
-                return self._reconstruct_entry(
-                    project_id, board_id, work_item_id, int(score), metadata
-                )
+                try:
+                    return self._reconstruct_entry(
+                        project_id, board_id, work_item_id, int(score), metadata
+                    )
+                except ValueError as e:
+                    # Status is invalid - emit corruption event and skip
+                    self._emit_event(
+                        QueueMetadataCorruptionEvent(
+                            type="queue.metadata_corruption",
+                            timestamp=datetime.now(UTC).isoformat(),
+                            source="redis_pipeline_queue_service",
+                            queue_name=f"{project_id}:{board_id}",
+                            work_item_id=work_item_id,
+                            error_details=f"Invalid status value: {metadata.get('status')}",
+                            project_id=project_id,
+                        )
+                    )
+                    logger.warning(
+                        f"Skipping {work_item_id} in queue {project_id}/{board_id}: {str(e)}",
+                        extra={
+                            "work_item_id": work_item_id,
+                            "project_id": project_id,
+                            "board_id": board_id,
+                        },
+                    )
+                    continue
 
         return None
 
@@ -705,19 +741,50 @@ class RedisPipelineQueueService(IPipelineQueueService):
                             old_position = int(
                                 await self._redis.zscore(queue_key, work_item_id) or 0
                             )
-                        except Exception:
-                            # Metadata corrupt - update anyway
-                            metadata = {
-                                "status": QueueStatus.WAITING.value,
-                                "queued_at": now.isoformat(),
-                            }
-                            old_position = 0
+                        except Exception as e:
+                            # Metadata corrupt - emit corruption event and skip update
+                            self._emit_event(
+                                QueueMetadataCorruptionEvent(
+                                    type="queue.metadata_corruption",
+                                    timestamp=now.isoformat(),
+                                    source="redis_pipeline_queue_service",
+                                    queue_name=f"{project_id}:{board_id}",
+                                    work_item_id=work_item_id,
+                                    error_details=f"Failed to parse metadata during sync: {type(e).__name__}: {e!s}",
+                                    project_id=project_id,
+                                )
+                            )
+                            logger.warning(
+                                f"Skipping position update for {work_item_id} in queue {project_id}/{board_id}: metadata corrupted ({type(e).__name__})",
+                                extra={
+                                    "work_item_id": work_item_id,
+                                    "project_id": project_id,
+                                    "board_id": board_id,
+                                },
+                            )
+                            continue
                     else:
-                        metadata = {
-                            "status": QueueStatus.WAITING.value,
-                            "queued_at": now.isoformat(),
-                        }
-                        old_position = 0
+                        # Metadata missing - emit corruption event and skip update
+                        self._emit_event(
+                            QueueMetadataCorruptionEvent(
+                                type="queue.metadata_corruption",
+                                timestamp=now.isoformat(),
+                                source="redis_pipeline_queue_service",
+                                queue_name=f"{project_id}:{board_id}",
+                                work_item_id=work_item_id,
+                                error_details="Metadata hash not found during sync",
+                                project_id=project_id,
+                            )
+                        )
+                        logger.warning(
+                            f"Skipping position update for {work_item_id} in queue {project_id}/{board_id}: metadata missing",
+                            extra={
+                                "work_item_id": work_item_id,
+                                "project_id": project_id,
+                                "board_id": board_id,
+                            },
+                        )
+                        continue
 
                     # Update position and timestamp (atomically)
                     metadata["last_position_check"] = now.isoformat()

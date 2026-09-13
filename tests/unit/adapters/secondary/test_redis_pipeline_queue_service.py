@@ -410,6 +410,78 @@ class TestRedisPipelineQueueService(TestPipelineQueueServiceContract):
             await service.mark_item_active("nonexistent")
 
     @pytest.mark.asyncio
+    async def test_mark_item_active_raises_on_corrupted_metadata(self):
+        """Marking item with corrupted metadata should raise InvalidQueueStateError."""
+        redis_client = MockRedis()
+        board_service = MockBoardService()
+        event_emitter = MockEventEmitter()
+
+        service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=event_emitter,
+        )
+
+        now = datetime.now(UTC)
+        await service.enqueue_item("proj-1", "board-1", "item-123", position_in_column=0, timestamp=now)
+
+        # Corrupt the metadata by storing invalid JSON
+        meta_key = f"codetoreum:qsvc:meta:proj-1:board-1"
+        await redis_client.hset(meta_key, "item-123", "not valid json")
+
+        with pytest.raises(InvalidQueueStateError) as exc_info:
+            await service.mark_item_active("item-123")
+        assert "corrupted metadata" in str(exc_info.value).lower()
+
+    @pytest.mark.asyncio
+    async def test_mark_item_active_raises_on_missing_status(self):
+        """Marking item with missing status field should raise InvalidQueueStateError."""
+        redis_client = MockRedis()
+        board_service = MockBoardService()
+        event_emitter = MockEventEmitter()
+
+        service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=event_emitter,
+        )
+
+        now = datetime.now(UTC)
+        await service.enqueue_item("proj-1", "board-1", "item-123", position_in_column=0, timestamp=now)
+
+        # Corrupt the metadata by removing the status field
+        meta_key = f"codetoreum:qsvc:meta:proj-1:board-1"
+        await redis_client.hset(meta_key, "item-123", '{"queued_at": "2025-01-01T00:00:00"}')
+
+        with pytest.raises(InvalidQueueStateError) as exc_info:
+            await service.mark_item_active("item-123")
+        assert "missing status" in str(exc_info.value).lower()
+
+    @pytest.mark.asyncio
+    async def test_mark_item_active_raises_on_invalid_status(self):
+        """Marking item with invalid status enum should raise InvalidQueueStateError."""
+        redis_client = MockRedis()
+        board_service = MockBoardService()
+        event_emitter = MockEventEmitter()
+
+        service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=event_emitter,
+        )
+
+        now = datetime.now(UTC)
+        await service.enqueue_item("proj-1", "board-1", "item-123", position_in_column=0, timestamp=now)
+
+        # Corrupt the metadata by storing an invalid status value
+        meta_key = f"codetoreum:qsvc:meta:proj-1:board-1"
+        await redis_client.hset(meta_key, "item-123", '{"status": "INVALID_STATUS", "queued_at": "2025-01-01T00:00:00"}')
+
+        with pytest.raises(InvalidQueueStateError) as exc_info:
+            await service.mark_item_active("item-123")
+        assert "invalid status" in str(exc_info.value).lower()
+
+    @pytest.mark.asyncio
     async def test_is_item_in_queue_uses_reverse_index(self):
         """is_item_in_queue should work across multiple pipelines via reverse index."""
         redis_client = MockRedis()
@@ -616,6 +688,92 @@ class TestRedisPipelineQueueService(TestPipelineQueueServiceContract):
         # Corrupted entry is skipped, so no entries returned
         assert len(entries) == 0
         # But corruption event is still emitted
+        corruption_events = [e for e in event_emitter.events if isinstance(e, QueueMetadataCorruptionEvent)]
+        assert len(corruption_events) == 1
+        assert corruption_events[0].work_item_id == "item-1"
+
+    @pytest.mark.asyncio
+    async def test_get_next_waiting_item_skips_corrupted_metadata(self):
+        """get_next_waiting_item should skip items with corrupted metadata and emit corruption event."""
+        redis_client = MockRedis()
+        board_service = MockBoardService()
+        event_emitter = MockEventEmitter()
+
+        service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=event_emitter,
+        )
+
+        now = datetime.now(UTC)
+        # Add one item with corrupted JSON
+        queue_key = service._queue_key("proj-1", "board-1")
+        meta_key = service._metadata_key("proj-1", "board-1")
+        await redis_client.zadd(queue_key, {"item-1": 0.0})
+        await redis_client.hset(meta_key, "item-1", "not valid json")
+
+        # Add one valid item after it
+        await redis_client.zadd(queue_key, {"item-2": 1.0})
+        await redis_client.hset(meta_key, "item-2", '{"status": "waiting"}')
+
+        # Setup reverse index
+        reverse_index_key = service._reverse_index_key()
+        await redis_client.hset(reverse_index_key, "item-1", "proj-1\x1fboard-1")
+        await redis_client.hset(reverse_index_key, "item-2", "proj-1\x1fboard-1")
+
+        # get_next_waiting_item should skip corrupted item-1 and return item-2
+        event_emitter.events.clear()
+        result = await service.get_next_waiting_item("proj-1", "board-1")
+
+        assert result is not None
+        assert result.work_item_id == "item-2"
+        # Corruption event should be emitted for item-1
+        corruption_events = [e for e in event_emitter.events if isinstance(e, QueueMetadataCorruptionEvent)]
+        assert len(corruption_events) == 1
+        assert corruption_events[0].work_item_id == "item-1"
+
+    @pytest.mark.asyncio
+    async def test_get_next_waiting_item_handles_reconstruct_errors(self):
+        """get_next_waiting_item should catch and skip if _reconstruct_entry raises ValueError."""
+        redis_client = MockRedis()
+        board_service = MockBoardService()
+        event_emitter = MockEventEmitter()
+
+        service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=event_emitter,
+        )
+
+        # Add two items with valid status
+        queue_key = service._queue_key("proj-1", "board-1")
+        meta_key = service._metadata_key("proj-1", "board-1")
+        await redis_client.zadd(queue_key, {"item-1": 0.0})
+        await redis_client.hset(meta_key, "item-1", '{"status": "waiting"}')
+
+        await redis_client.zadd(queue_key, {"item-2": 1.0})
+        await redis_client.hset(meta_key, "item-2", '{"status": "waiting"}')
+
+        # Setup reverse index
+        reverse_index_key = service._reverse_index_key()
+        await redis_client.hset(reverse_index_key, "item-1", "proj-1\x1fboard-1")
+        await redis_client.hset(reverse_index_key, "item-2", "proj-1\x1fboard-1")
+
+        # Mock _reconstruct_entry to raise ValueError for item-1
+        original_reconstruct = service._reconstruct_entry
+        def mock_reconstruct(project_id, board_id, work_item_id, position, metadata):
+            if work_item_id == "item-1":
+                raise ValueError(f"Work item {work_item_id} has invalid status in metadata")
+            return original_reconstruct(project_id, board_id, work_item_id, position, metadata)
+        service._reconstruct_entry = mock_reconstruct
+
+        # get_next_waiting_item should skip item-1 (which raises ValueError) and return item-2
+        event_emitter.events.clear()
+        result = await service.get_next_waiting_item("proj-1", "board-1")
+
+        assert result is not None
+        assert result.work_item_id == "item-2"
+        # Corruption event should be emitted for item-1
         corruption_events = [e for e in event_emitter.events if isinstance(e, QueueMetadataCorruptionEvent)]
         assert len(corruption_events) == 1
         assert corruption_events[0].work_item_id == "item-1"
