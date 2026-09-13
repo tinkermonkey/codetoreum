@@ -22,8 +22,8 @@ from .config import (
 )
 from .decorators import (
     BestEffortExecutionTrackerDecorator,
-    ResilientPipelineQueueServiceDecorator,
     ResilientDiscussionAdapterDecorator,
+    ResilientPipelineQueueServiceDecorator,
     ResilientTicketSystemDecorator,
 )
 from .interfaces import (
@@ -269,11 +269,10 @@ class ResilienceFactory:
                 timeout=AsyncTimeout(),
                 default_timeout_seconds=30.0,
             )
-        else:
-            return ResilientPipelineQueueServiceDecorator(
-                wrapped=adapter,
-                circuit_breaker=MockCircuitBreaker(),
-                retry_policy=MockRetryPolicy(),
-                timeout=MockTimeout(),
-                default_timeout_seconds=30.0,
-            )
+        return ResilientPipelineQueueServiceDecorator(
+            wrapped=adapter,
+            circuit_breaker=MockCircuitBreaker(),
+            retry_policy=MockRetryPolicy(),
+            timeout=MockTimeout(),
+            default_timeout_seconds=30.0,
+        )

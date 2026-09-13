@@ -1,11 +1,12 @@
 """Unit tests for ResilientPipelineQueueServiceDecorator."""
 
-import pytest
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from codetoreum.infrastructure.resilience.decorators import ResilientPipelineQueueServiceDecorator
+import pytest
+
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.infrastructure.resilience.decorators import ResilientPipelineQueueServiceDecorator
 from codetoreum.ports.output.failed_event_store import FailureReason
 from codetoreum.ports.output.pipeline_queue_service import IPipelineQueueService, PipelineQueueEntry
 

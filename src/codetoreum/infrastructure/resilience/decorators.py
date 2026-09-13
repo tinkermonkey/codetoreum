@@ -14,7 +14,6 @@ from codetoreum.domain.comment import Comment
 from codetoreum.domain.types import ProjectId, UserId, WorkItemId
 from codetoreum.domain.work_item import WorkItem, WorkItemPriority, WorkItemStatus
 from codetoreum.infrastructure.error_ids import ErrorRegistry
-from codetoreum.ports.output.failed_event_store import FailureReason
 from codetoreum.ports.output.board_service import (
     BoardColumn,
     BoardConfig,
@@ -26,12 +25,13 @@ from codetoreum.ports.output.board_service import (
     WorkItemPosition,
 )
 from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
+from codetoreum.ports.output.failed_event_store import FailureReason
 from codetoreum.ports.output.monitoring import MonitoringConfig, MonitoringStatus
-from codetoreum.ports.output.ticket_system import ITicketSystem
 from codetoreum.ports.output.pipeline_queue_service import (
     IPipelineQueueService,
     PipelineQueueEntry,
 )
+from codetoreum.ports.output.ticket_system import ITicketSystem
 from codetoreum.ports.output.work_execution_state_tracker import (
     ExecutionState,
     IWorkExecutionStateTracker,
