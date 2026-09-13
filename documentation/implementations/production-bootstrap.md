@@ -160,15 +160,27 @@ adapter_config = AdapterSelectionConfig(
 
 ```python
 def resolve_queue_service(self) -> IPipelineQueueService:
-    """Resolve queue service adapter."""
-    return self._factory.create_queue_service(adapter_name=self._config.queue_service)
+    """Resolve pipeline queue service adapter."""
+    if self._config.queue_service == "redis":
+        redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+        redis_client = aioredis.from_url(redis_url)
+        board_service = self._resolved.get("board")
+        if board_service is None:
+            raise AdapterConfigurationError([...])
+        return self._factory.create_pipeline_queue_service(
+            adapter_name=self._config.queue_service,
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=self._resolved["event_emitter"],
+            failed_event_store=self._deps.failed_event_store,
+        )
 ```
 
 **Key properties**:
-- **Backend**: Redis persistent list (`pipeline:queue:<project_id>`) for execution ordering and crash recovery
-- **Features**: Board-synced pipeline positions, audit logging, dead-letter capture for failed enqueues, event bus integration for position-change notifications
-- **Dependencies injected**: `board_service`, `event_emitter`, `event_bus`, `failed_event_store` (INV-20 forward compatibility)
-- **No time_source on Redis**: Unlike in-memory variant (which accepts optional `SimulationClock` for testing), Redis branch skips time_source injection
+- **Backend**: Redis sorted set with companion metadata structures (key pattern `codetoreum:qsvc:<project_id>:<board_id>`) for position-based ordering and crash recovery. Includes metadata hash, global reverse-index hash for O(1) work-item lookup, and pipeline registry set.
+- **Features**: Board-synced pipeline positions, audit logging, dead-letter capture for failed enqueues, event emission via IEventEmitter for position-change notifications
+- **Dependencies injected**: `redis_client`, `board_service`, `event_emitter`, `failed_event_store` (INV-20 forward compatibility). Note: does **not** use `event_bus` (event emission goes through `IEventEmitter` instead, per architecture)
+- **Data structures**: Sorted set per pipeline for work-item ordering by board position; metadata hash for status/timestamps; global reverse index (`codetoreum:qsvc:item-lookup`) for cross-pipeline membership lookup; pipeline registry set (`codetoreum:qsvc:pipelines`) for sync operations
 
 **Queue ordering and recovery**:
 The Redis implementation persists pipeline stage positions across container restarts:
@@ -180,19 +192,14 @@ The Redis implementation persists pipeline stage positions across container rest
 `queue_service` is in `NON_CRITICAL_SLOTS` (not CRITICAL_ADAPTER_SLOTS). Pipeline queuing is a backend concern; execution proceeds identically whether queued in memory or Redis. Execution path does not fail if queuing degrades — incomplete enqueues are caught by `ContainerRecoveryService` during startup, which reconciles queued work against the board. (Controlled precedent: `execution_tracker` is also NON_CRITICAL_SLOTS per INV-20.)
 
 **Validation outcome** (Issue #1016 Phase 4–5):
-Tests in `test_queue_service_bootstrap_resolution.py` verify:
-- `test_queue_service_is_non_critical_slot()`: Confirms queue_service is in NON_CRITICAL_SLOTS (pipeline queuing, not critical execution path).
-- `test_bootstrap_default_config_sets_redis_queue_service()`: Confirms ProductionApplicationBootstrap defaults queue_service to `"redis"`.
-- `test_adapter_resolver_resolves_redis_queue_service()`: Confirms AdapterResolver can resolve the Redis adapter with aioredis client and all dependencies injected.
-- `test_redis_queue_service_persistence_across_restart()`: Confirms queued executions survive container restart via Redis list persistence.
-- `test_queue_service_dead_letter_capture()`: Confirms failed enqueues are captured in dead-letter queue with full event context.
-- `test_resolver_validates_redis_connection()`: Confirms `AdapterResolver.validate_credentials()` verifies Redis connectivity before bootstrap proceeds (REDIS_URL env var required and tested).
-
-**End-to-end verification**:
-Contract tests validate the queue persistence path:
-- `test_redis_pipeline_queue_service_contracts()` verifies CRUD operations, ordering preservation, and restart durability against Redis list primitives.
-- `test_pipeline_queue_integrated_with_board_sync()` confirms that pipeline positions stay synchronized with board service during enqueue/dequeue cycles.
-- `test_container_recovery_requeues_stalled_executions()` validates that `ContainerRecoveryService` correctly dequeues and re-enqueues stalled work on bootstrap (using phase 3 slot classification).
+Tests in `test_redis_pipeline_queue_service.py` verify:
+- **Data structure correctness**: Sorted sets for position-based ordering (verified in `test_restart_durability_queued_item_survives`, `test_restart_durability_multiple_items_preserve_order`).
+- **Reverse-index lookup**: O(1) cross-pipeline membership checks via `test_is_item_in_queue_uses_reverse_index`.
+- **Event emission**: Queue state changes emit domain events via `IEventEmitter` (verified in `test_enqueue_emits_queue_item_added_event`, `test_remove_emits_queue_item_removed_event`).
+- **Metadata durability**: Corrupted metadata is detected and logged (verified in `test_get_queue_entries_emits_corruption_event_on_missing_metadata`, `test_get_queue_entries_emits_corruption_event_on_malformed_metadata`).
+- **Board synchronization**: Queue positions stay consistent with board service state (verified in `test_sync_queue_adds_new_items`, `test_sync_queue_removes_old_items`, `test_sync_queue_updates_positions`).
+- **Graceful degradation**: Failed board service calls do not crash the queue (verified in `test_sync_queue_gracefully_handles_board_service_failure`, `test_sync_queue_gracefully_handles_missing_column`).
+- **Duplicate prevention**: Re-enqueuing an item raises an error (verified in `test_duplicate_enqueue_raises_error`).
 
 ### Phase 4c — `ICodingAgent` resolution (DEF-015 D3/D4)
 
