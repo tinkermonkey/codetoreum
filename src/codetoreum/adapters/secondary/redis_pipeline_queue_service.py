@@ -758,9 +758,8 @@ class RedisPipelineQueueService(IPipelineQueueService):
         except QueueServiceError:
             raise
         except Exception as e:
-            msg = f"Failed to fetch board {project_id}/{board_id} for queue sync: {e}"
             logger.error(
-                msg,
+                f"Failed to fetch board {project_id}/{board_id} for queue sync",
                 exc_info=True,
                 extra={
                     "project_id": project_id,
@@ -770,7 +769,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
                     "error_id": ErrorRegistry.ERR_QUEUE_SYNC_ERROR,
                 },
             )
-            raise QueueServiceError(msg) from e
+            raise
 
     async def _sync_queue_with_board_internal(
         self, project_id: str, board_id: str, column: str, board

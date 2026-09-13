@@ -379,5 +379,4 @@ class IPipelineQueueService(ABC):
 
         Raises:
             QueueValidationError: Invalid parameters
-            QueueServiceError: Board service communication failure
         """

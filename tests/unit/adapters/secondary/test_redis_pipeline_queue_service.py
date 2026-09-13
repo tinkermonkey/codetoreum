@@ -607,7 +607,7 @@ class TestRedisPipelineQueueService(TestPipelineQueueServiceContract):
 
     @pytest.mark.asyncio
     async def test_sync_queue_raises_on_board_service_failure(self):
-        """sync_queue_with_board should raise QueueServiceError on board service failure."""
+        """sync_queue_with_board should raise the raw exception on board service failure."""
         redis_client = MockRedis()
         board_service = AsyncMock()
         board_service.get_board.side_effect = Exception("Board service error")
@@ -619,8 +619,8 @@ class TestRedisPipelineQueueService(TestPipelineQueueServiceContract):
             event_emitter=event_emitter,
         )
 
-        # This should raise QueueServiceError
-        with pytest.raises(QueueServiceError, match="Failed to fetch board"):
+        # This should raise the original Exception, not wrapped in QueueServiceError
+        with pytest.raises(Exception, match="Board service error"):
             await service.sync_queue_with_board("proj-1", "board-1", "TODO")
 
     @pytest.mark.asyncio
@@ -834,8 +834,6 @@ class TestRedisPipelineQueueService(TestPipelineQueueServiceContract):
         redis_client.pipeline = failing_pipeline
 
         # Make hdel also fail
-        original_hdel = redis_client.hdel
-
         async def failing_hdel(*args, **kwargs):
             raise RuntimeError("Cleanup hdel failed")
 
