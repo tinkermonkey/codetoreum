@@ -805,11 +805,12 @@ class TestRedisPipelineQueueService(TestPipelineQueueServiceContract):
     @pytest.mark.asyncio
     async def test_adapter_no_duplicate_events_on_enqueue(self):
         """Verify PipelineQueueServiceAdapter doesn't emit duplicate events on enqueue."""
+        from types import MappingProxyType
+
         from codetoreum.adapters.secondary.pipeline_queue_service_adapter import (
             PipelineQueueServiceAdapter,
         )
         from codetoreum.ports.output.pipeline_queue import QueueEntry
-        from types import MappingProxyType
 
         redis_client = MockRedis()
         board_service = MockBoardService()
@@ -848,11 +849,12 @@ class TestRedisPipelineQueueService(TestPipelineQueueServiceContract):
     @pytest.mark.asyncio
     async def test_adapter_no_duplicate_events_on_remove(self):
         """Verify PipelineQueueServiceAdapter doesn't emit duplicate events on remove."""
+        from types import MappingProxyType
+
         from codetoreum.adapters.secondary.pipeline_queue_service_adapter import (
             PipelineQueueServiceAdapter,
         )
         from codetoreum.ports.output.pipeline_queue import QueueEntry
-        from types import MappingProxyType
 
         redis_client = MockRedis()
         board_service = MockBoardService()
@@ -903,16 +905,15 @@ class TestRedisPipelineQueueService(TestPipelineQueueServiceContract):
         scan detects and releases the orphaned lock, allowing the surviving queue entry to
         become the next lock holder.
         """
+        from types import MappingProxyType
+
         from codetoreum.adapters.secondary.pipeline_queue_service_adapter import (
             PipelineQueueServiceAdapter,
         )
         from codetoreum.application.event_handlers.pipeline_orchestrator import (
             PipelineOrchestrator,
         )
-        from codetoreum.ports.output.distributed_lock import (
-            IDistributedLock, LockHolder, ReleaseResult
-        )
-        from types import MappingProxyType
+        from codetoreum.ports.output.distributed_lock import IDistributedLock, LockHolder, ReleaseResult
 
         # Phase 1: Original process - enqueue items with lock held
         redis_client = MockRedis()
