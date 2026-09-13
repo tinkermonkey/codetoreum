@@ -957,7 +957,9 @@ class ResilientPipelineQueueServiceDecorator(IPipelineQueueService):
     ) -> T:
         """Execute operation with resilience patterns.
 
-        Applies circuit breaker, timeout, and retry.
+        Applies circuit breaker, timeout, and retry. Business errors
+        (QueueServiceError subclasses) bypass circuit breaker failure
+        counting and propagate directly to the caller.
 
         Args:
             operation: The async operation to execute
@@ -966,19 +968,48 @@ class ResilientPipelineQueueServiceDecorator(IPipelineQueueService):
 
         Returns:
             Result of the operation
+
+        Raises:
+            QueueServiceError: Business errors bypass resilience patterns
+            Exception: Transient errors after retries
         """
+        # Sentinel object to detect business errors without raising
+        # This prevents QueueServiceError from propagating through the
+        # circuit breaker's exception handler, which would incorrectly
+        # count it as a transient failure
+        _business_error_marker = object()
+        business_error_holder: dict[str, Exception | object] = {"error": _business_error_marker}
+
+        async def wrapped_operation():
+            try:
+                return await operation()
+            except QueueServiceError as e:
+                business_error_holder["error"] = e
+                # Return the marker instead of raising, so exception
+                # doesn't reach circuit breaker
+                return _business_error_marker  # type: ignore
+
         # Apply circuit breaker wraps the rest
         if self._circuit_breaker:
-            return await self._circuit_breaker.call(
+            result = await self._circuit_breaker.call(
                 self._execute_with_timeout_and_retry,
                 operation_name,
-                operation,
+                wrapped_operation,
                 operation_name,
                 timeout_seconds or self._default_timeout,
             )
-        return await self._execute_with_timeout_and_retry(
-            operation, operation_name, timeout_seconds or self._default_timeout
+            # Check if a business error was captured
+            if result is _business_error_marker:
+                raise business_error_holder["error"]
+            return result
+
+        result = await self._execute_with_timeout_and_retry(
+            wrapped_operation, operation_name, timeout_seconds or self._default_timeout
         )
+        # Check if a business error was captured
+        if result is _business_error_marker:
+            raise business_error_holder["error"]
+        return result
 
     async def _execute_with_timeout_and_retry(
         self, operation: Callable[[], T], operation_name: str, timeout_seconds: float
