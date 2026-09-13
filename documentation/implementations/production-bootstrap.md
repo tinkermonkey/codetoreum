@@ -189,7 +189,7 @@ The Redis implementation persists pipeline stage positions across container rest
 - Dead-letter queue captures enqueue failures with full event provenance for diagnostics
 
 **Slot classification** (Phase 3 decision from issue #1016):
-`queue_service` is in `NON_CRITICAL_SLOTS` (not CRITICAL_ADAPTER_SLOTS). Pipeline queuing is a backend concern; execution proceeds identically whether queued in memory or Redis. Execution path does not fail if queuing degrades — incomplete enqueues are caught by `ContainerRecoveryService` during startup, which reconciles queued work against the board. (Controlled precedent: `execution_tracker` is also NON_CRITICAL_SLOTS per INV-20.)
+`queue_service` is in `CRITICAL_ADAPTER_SLOTS` — pipeline queue service is critical for work-item ordering (BA FR7/US6). Phase 3 critical-path enforcement validates that no mock queue service is deployed to production. In-memory queuing is acceptable for simulation only; production uses Redis-backed `RedisPipelineQueueService` for crash-resilient pipeline ordering. The critical classification ensures that production bootstrap refuses to start if a mock queue adapter is detected, preventing silent work-item ordering failures.
 
 **Validation outcome** (Issue #1016 Phase 4–5):
 Tests in `test_redis_pipeline_queue_service.py` verify:
