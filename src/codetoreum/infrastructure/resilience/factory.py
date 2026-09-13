@@ -252,7 +252,7 @@ class ResilienceFactory:
         Returns:
             IPipelineQueueService: Wrapped adapter with hybrid resilience
         """
-        if self._mode == OperationMode.PRODUCTION:
+        if self.mode == OperationMode.PRODUCTION:
             circuit_breaker = CircuitBreaker(
                 failure_threshold=5,
                 recovery_timeout=60,

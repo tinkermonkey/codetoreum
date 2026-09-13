@@ -891,7 +891,6 @@ class ResilientPipelineQueueServiceDecorator(IPipelineQueueService):
     def __init__(
         self,
         wrapped: IPipelineQueueService,
-        rate_limiter: IRateLimiter | None = None,
         circuit_breaker: ICircuitBreaker | None = None,
         retry_policy: IRetryPolicy | None = None,
         timeout: ITimeout | None = None,
@@ -902,14 +901,12 @@ class ResilientPipelineQueueServiceDecorator(IPipelineQueueService):
 
         Args:
             wrapped: The underlying pipeline queue service adapter
-            rate_limiter: Optional rate limiter
             circuit_breaker: Optional circuit breaker
             retry_policy: Optional retry policy
             timeout: Optional timeout handler
             default_timeout_seconds: Default operation timeout
         """
         self._wrapped = wrapped
-        self._rate_limiter = rate_limiter
         self._circuit_breaker = circuit_breaker
         self._retry_policy = retry_policy
         self._timeout = timeout
