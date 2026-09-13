@@ -248,7 +248,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
                     },
                 )
             # Re-raise the original pipeline error (not the cleanup error)
-            raise pipeline_error
+            raise
 
         # Emit event
         await self._emit_event(
