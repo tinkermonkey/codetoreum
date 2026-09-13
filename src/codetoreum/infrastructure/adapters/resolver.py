@@ -530,6 +530,7 @@ class AdapterResolver:
         return self._factory.create_pipeline_queue_service(
             adapter_name=self._config.queue_service,
             event_emitter=self._resolved["event_emitter"],
+            event_bus=self._deps.event_bus,
             time_source=lambda: self._deps.engine.get_clock_for_testing().now(),
             failed_event_store=self._deps.failed_event_store,
         )
