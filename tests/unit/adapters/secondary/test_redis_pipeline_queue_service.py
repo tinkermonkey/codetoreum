@@ -680,3 +680,213 @@ class TestRedisPipelineQueueService(TestPipelineQueueServiceContract):
 
         assert len(entries2) == 1
         assert entries2[0].work_item_id == "item-2"
+
+    # ===== Restart Durability Tests =====
+
+    @pytest.mark.asyncio
+    async def test_restart_durability_queued_item_survives(self):
+        """Verify a queued item survives process restart in Redis."""
+        redis_client = MockRedis()
+        board_service = MockBoardService()
+        event_emitter = MockEventEmitter()
+
+        service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=event_emitter,
+        )
+
+        now = datetime.now(UTC)
+        # Enqueue a work item
+        await service.enqueue_item("proj-1", "board-1", "item-123", position_in_column=0, timestamp=now)
+
+        # Verify item is in queue before "restart"
+        assert await service.is_item_in_queue("item-123") is True
+        entries = await service.get_queue_entries("proj-1", "board-1")
+        assert len(entries) == 1
+        assert entries[0].work_item_id == "item-123"
+
+        # Simulate process restart by creating new service with same Redis client
+        new_service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=MockEventEmitter(),
+        )
+
+        # Verify item still in queue after "restart"
+        assert await new_service.is_item_in_queue("item-123") is True
+        entries = await new_service.get_queue_entries("proj-1", "board-1")
+        assert len(entries) == 1
+        assert entries[0].work_item_id == "item-123"
+        assert entries[0].status == QueueStatus.WAITING
+        assert entries[0].position_in_column == 0
+
+    @pytest.mark.asyncio
+    async def test_restart_durability_multiple_items_preserve_order(self):
+        """Verify multiple queued items survive restart and maintain order."""
+        redis_client = MockRedis()
+        board_service = MockBoardService()
+        event_emitter = MockEventEmitter()
+
+        service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=event_emitter,
+        )
+
+        now = datetime.now(UTC)
+        # Enqueue multiple items out of order
+        await service.enqueue_item("proj-1", "board-1", "item-3", position_in_column=2, timestamp=now)
+        await service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+        await service.enqueue_item("proj-1", "board-1", "item-2", position_in_column=1, timestamp=now)
+
+        # Verify order before restart
+        entries_before = await service.get_queue_entries("proj-1", "board-1")
+        assert len(entries_before) == 3
+        assert [e.work_item_id for e in entries_before] == ["item-1", "item-2", "item-3"]
+        assert [e.position_in_column for e in entries_before] == [0, 1, 2]
+
+        # Simulate process restart
+        new_service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=MockEventEmitter(),
+        )
+
+        # Verify order after restart
+        entries_after = await new_service.get_queue_entries("proj-1", "board-1")
+        assert len(entries_after) == 3
+        assert [e.work_item_id for e in entries_after] == ["item-1", "item-2", "item-3"]
+        assert [e.position_in_column for e in entries_after] == [0, 1, 2]
+
+    @pytest.mark.asyncio
+    async def test_restart_durability_marked_active_item_preserved(self):
+        """Verify marked-active items survive restart with status preserved."""
+        redis_client = MockRedis()
+        board_service = MockBoardService()
+        event_emitter = MockEventEmitter()
+
+        service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=event_emitter,
+        )
+
+        now = datetime.now(UTC)
+        await service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+        await service.enqueue_item("proj-1", "board-1", "item-2", position_in_column=1, timestamp=now)
+
+        # Mark first item as active
+        await service.mark_item_active("item-1")
+
+        # Verify status before restart
+        entries_before = await service.get_queue_entries("proj-1", "board-1")
+        assert entries_before[0].work_item_id == "item-1"
+        assert entries_before[0].status == QueueStatus.ACTIVE
+        assert entries_before[1].work_item_id == "item-2"
+        assert entries_before[1].status == QueueStatus.WAITING
+
+        # Simulate process restart
+        new_service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=MockEventEmitter(),
+        )
+
+        # Verify status after restart
+        entries_after = await new_service.get_queue_entries("proj-1", "board-1")
+        assert entries_after[0].work_item_id == "item-1"
+        assert entries_after[0].status == QueueStatus.ACTIVE
+        assert entries_after[1].work_item_id == "item-2"
+        assert entries_after[1].status == QueueStatus.WAITING
+
+    # ===== PipelineQueueServiceAdapter No-Duplicate-Events Tests =====
+
+    @pytest.mark.asyncio
+    async def test_adapter_no_duplicate_events_on_enqueue(self):
+        """Verify PipelineQueueServiceAdapter doesn't emit duplicate events on enqueue."""
+        from codetoreum.adapters.secondary.pipeline_queue_service_adapter import (
+            PipelineQueueServiceAdapter,
+        )
+        from codetoreum.ports.output.pipeline_queue import QueueEntry
+        from types import MappingProxyType
+
+        redis_client = MockRedis()
+        board_service = MockBoardService()
+        event_emitter = MockEventEmitter()
+
+        service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=event_emitter,
+        )
+
+        adapter = PipelineQueueServiceAdapter(service)
+
+        now = datetime.now(UTC)
+        entry = QueueEntry(
+            work_item_id="item-1",
+            stage_name="ready",
+            board_position=0,
+            enqueued_at=now,
+            metadata=MappingProxyType({"project_id": "proj-1", "board_id": "board-1"}),
+        )
+
+        # Clear events and enqueue through adapter
+        event_emitter.events.clear()
+        result = await adapter.enqueue("proj-1:board-1", entry)
+
+        # Verify enqueue succeeded
+        assert result.already_present is False
+
+        # Verify exactly ONE QueueItemAddedEvent emitted (from service, not adapter)
+        added_events = [e for e in event_emitter.events if isinstance(e, QueueItemAddedEvent)]
+        assert len(added_events) == 1
+        assert added_events[0].item_id == "item-1"
+        assert added_events[0].source == "redis_pipeline_queue_service"
+
+    @pytest.mark.asyncio
+    async def test_adapter_no_duplicate_events_on_remove(self):
+        """Verify PipelineQueueServiceAdapter doesn't emit duplicate events on remove."""
+        from codetoreum.adapters.secondary.pipeline_queue_service_adapter import (
+            PipelineQueueServiceAdapter,
+        )
+        from codetoreum.ports.output.pipeline_queue import QueueEntry
+        from types import MappingProxyType
+
+        redis_client = MockRedis()
+        board_service = MockBoardService()
+        event_emitter = MockEventEmitter()
+
+        service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=event_emitter,
+        )
+
+        adapter = PipelineQueueServiceAdapter(service)
+
+        now = datetime.now(UTC)
+        entry = QueueEntry(
+            work_item_id="item-1",
+            stage_name="ready",
+            board_position=0,
+            enqueued_at=now,
+            metadata=MappingProxyType({"project_id": "proj-1", "board_id": "board-1"}),
+        )
+
+        # Enqueue first
+        await adapter.enqueue("proj-1:board-1", entry)
+        event_emitter.events.clear()
+
+        # Remove through adapter
+        result = await adapter.remove("proj-1:board-1", "item-1")
+
+        # Verify removal succeeded
+        assert result is True
+
+        # Verify exactly ONE QueueItemRemovedEvent emitted (from service, not adapter)
+        removed_events = [e for e in event_emitter.events if isinstance(e, QueueItemRemovedEvent)]
+        assert len(removed_events) == 1
+        assert removed_events[0].item_id == "item-1"
+        assert removed_events[0].source == "redis_pipeline_queue_service"
