@@ -31,6 +31,7 @@ from codetoreum.ports.output.pipeline_queue_service import (
     DuplicateQueueEntryError,
     InvalidQueueStateError,
     QueueItemNotFoundError,
+    QueueServiceError,
     QueueStatus,
     QueueValidationError,
 )
@@ -605,8 +606,8 @@ class TestRedisPipelineQueueService(TestPipelineQueueServiceContract):
         assert len(position_change_events) > 0
 
     @pytest.mark.asyncio
-    async def test_sync_queue_gracefully_handles_board_service_failure(self):
-        """sync_queue_with_board should not raise on board service failure."""
+    async def test_sync_queue_raises_on_board_service_failure(self):
+        """sync_queue_with_board should raise QueueServiceError on board service failure."""
         redis_client = MockRedis()
         board_service = AsyncMock()
         board_service.get_board.side_effect = Exception("Board service error")
@@ -618,8 +619,9 @@ class TestRedisPipelineQueueService(TestPipelineQueueServiceContract):
             event_emitter=event_emitter,
         )
 
-        # This should not raise
-        await service.sync_queue_with_board("proj-1", "board-1", "TODO")
+        # This should raise QueueServiceError
+        with pytest.raises(QueueServiceError, match="Failed to fetch board"):
+            await service.sync_queue_with_board("proj-1", "board-1", "TODO")
 
     @pytest.mark.asyncio
     async def test_sync_queue_gracefully_handles_missing_column(self):
@@ -800,6 +802,50 @@ class TestRedisPipelineQueueService(TestPipelineQueueServiceContract):
 
         with pytest.raises(DuplicateQueueEntryError):
             await service.enqueue_item("proj-1", "board-1", "item-123", position_in_column=1, timestamp=now)
+
+    @pytest.mark.asyncio
+    async def test_enqueue_pipeline_failure_logs_cleanup_failure(self):
+        """When pipeline fails and cleanup also fails, log cleanup failure and re-raise original error."""
+        redis_client = MockRedis()
+        board_service = MockBoardService()
+        event_emitter = MockEventEmitter()
+
+        service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=event_emitter,
+        )
+
+        # Make pipeline raise an error
+        original_pipeline = redis_client.pipeline
+
+        def failing_pipeline(transaction=True):
+            pipe = original_pipeline(transaction=transaction)
+            # Save original execute
+            original_execute = pipe.execute
+
+            async def failing_execute():
+                await original_execute()
+                raise RuntimeError("Pipeline execution failed")
+
+            pipe.execute = failing_execute
+            return pipe
+
+        redis_client.pipeline = failing_pipeline
+
+        # Make hdel also fail
+        original_hdel = redis_client.hdel
+
+        async def failing_hdel(*args, **kwargs):
+            raise RuntimeError("Cleanup hdel failed")
+
+        redis_client.hdel = failing_hdel
+
+        now = datetime.now(UTC)
+
+        # This should raise the original pipeline error, not the cleanup error
+        with pytest.raises(RuntimeError, match="Pipeline execution failed"):
+            await service.enqueue_item("proj-1", "board-1", "item-123", position_in_column=0, timestamp=now)
 
     @pytest.mark.asyncio
     async def test_remove_nonexistent_returns_false(self):

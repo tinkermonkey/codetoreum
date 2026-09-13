@@ -40,6 +40,7 @@ from codetoreum.ports.output.pipeline_queue_service import (
     NonNegativeInt,
     PipelineQueueEntry,
     QueueItemNotFoundError,
+    QueueServiceError,
     QueueStatus,
     QueueValidationError,
 )
@@ -229,10 +230,25 @@ class RedisPipelineQueueService(IPipelineQueueService):
             await pipe.hset(meta_key, work_item_id, json.dumps(metadata))
             await pipe.sadd(pipeline_registry_key, pipeline_coords)
             await pipe.execute()
-        except Exception:
+        except Exception as pipeline_error:
             # Pipeline failed - remove orphaned reverse index entry to prevent future duplicates
-            await self._redis.hdel(reverse_index_key, work_item_id)
-            raise
+            try:
+                await self._redis.hdel(reverse_index_key, work_item_id)
+            except Exception as cleanup_error:
+                logger.error(
+                    f"Failed to clean up reverse index entry for {work_item_id} after pipeline failure. "
+                    f"Original error: {pipeline_error.__class__.__name__}: {pipeline_error}",
+                    exc_info=True,
+                    extra={
+                        "work_item_id": work_item_id,
+                        "project_id": project_id,
+                        "board_id": board_id,
+                        "cleanup_error": str(cleanup_error),
+                        "error_id": ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE,
+                    },
+                )
+            # Re-raise the original pipeline error (not the cleanup error)
+            raise pipeline_error
 
         # Emit event
         await self._emit_event(
@@ -713,8 +729,8 @@ class RedisPipelineQueueService(IPipelineQueueService):
         2. Adds entries for newly discovered items in column
         3. Updates position and timestamp for existing entries
 
-        Gracefully handles exceptions without raising, matching InMemoryQueueService.
-        Errors in specific operations are logged but don't prevent other operations.
+        Raises QueueServiceError on board service communication failures, allowing
+        the resilient decorator to apply retry, circuit-breaker, and DLQ routing.
 
         Args:
             project_id: Project identifier
@@ -723,6 +739,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
 
         Raises:
             QueueValidationError: Invalid parameters
+            QueueServiceError: Board service communication failure
         """
         if not project_id:
             msg = "project_id cannot be empty"
@@ -738,9 +755,12 @@ class RedisPipelineQueueService(IPipelineQueueService):
         try:
             board = await self._board_service.get_board(project_id, board_id)
             await self._sync_queue_with_board_internal(project_id, board_id, column, board)
+        except QueueServiceError:
+            raise
         except Exception as e:
+            msg = f"Failed to fetch board {project_id}/{board_id} for queue sync: {e}"
             logger.error(
-                f"Failed to fetch board {project_id}/{board_id} for queue sync.",
+                msg,
                 exc_info=True,
                 extra={
                     "project_id": project_id,
@@ -750,7 +770,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
                     "error_id": ErrorRegistry.ERR_QUEUE_SYNC_ERROR,
                 },
             )
-            return
+            raise QueueServiceError(msg) from e
 
     async def _sync_queue_with_board_internal(
         self, project_id: str, board_id: str, column: str, board
