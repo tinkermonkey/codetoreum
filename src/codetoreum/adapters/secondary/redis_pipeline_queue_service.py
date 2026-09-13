@@ -451,38 +451,38 @@ class RedisPipelineQueueService(IPipelineQueueService):
         queue_key = self._queue_key(project_id, board_id)
         meta_key = self._metadata_key(project_id, board_id)
 
-        # Sync with board before selecting next item
-        # Get current queue items to determine which column to sync
+        # Sync with board before selecting next item - fetch board once to avoid redundant I/O
         try:
-            queue_items = await self._redis.zrange(queue_key, 0, -1)
-            queue_item_ids = {
-                item.decode("utf-8") if isinstance(item, bytes) else item for item in queue_items
-            }
+            board = await self._board_service.get_board(project_id, board_id)
+            try:
+                queue_items = await self._redis.zrange(queue_key, 0, -1)
+                queue_item_ids = {
+                    item.decode("utf-8") if isinstance(item, bytes) else item for item in queue_items
+                }
 
-            if queue_item_ids:
-                # Get board to find which column contains these items
-                try:
-                    board = await self._board_service.get_board(project_id, board_id)
+                if queue_item_ids:
+                    # Find which column contains these items and sync it
                     for col in board.columns:
-                        # Check if any queue items are in this column
                         if any(item_id in col.work_item_ids for item_id in queue_item_ids):
-                            # Sync this column before selecting
-                            await self.sync_queue_with_board(project_id, board_id, col.name)
+                            # Sync using internal helper - pass pre-fetched board to avoid redundant I/O
+                            await self._sync_queue_with_board_internal(
+                                project_id, board_id, col.name, board
+                            )
                             break
-                except Exception as e:
-                    logger.warning(
-                        f"Failed to sync queue with board before selecting next item for {project_id}/{board_id}",
-                        exc_info=True,
-                        extra={
-                            "project_id": project_id,
-                            "board_id": board_id,
-                            "error_type": type(e).__name__,
-                        },
-                    )
-                    # Continue with current queue state if sync fails
+            except Exception as e:
+                logger.warning(
+                    f"Failed to sync queue with board before selecting next item for {project_id}/{board_id}",
+                    exc_info=True,
+                    extra={
+                        "project_id": project_id,
+                        "board_id": board_id,
+                        "error_type": type(e).__name__,
+                    },
+                )
+                # Continue with current queue state if sync fails
         except Exception as e:
             logger.warning(
-                f"Failed to read queue items for pre-selection sync in {project_id}/{board_id}",
+                f"Failed to fetch board for pre-selection sync in {project_id}/{board_id}",
                 exc_info=True,
                 extra={
                     "project_id": project_id,
@@ -490,7 +490,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
                     "error_type": type(e).__name__,
                 },
             )
-            # Continue with current queue state if we can't read items
+            # Continue with current queue state if board fetch fails
 
         # Get all items from sorted set (lowest score first)
         items = await self._redis.zrange(queue_key, 0, -1, withscores=True)
@@ -734,9 +734,10 @@ class RedisPipelineQueueService(IPipelineQueueService):
             msg = "column cannot be empty"
             raise QueueValidationError(msg)
 
-        # Fetch board state with separate error handling
+        # Fetch board state and delegate to internal helper
         try:
             board = await self._board_service.get_board(project_id, board_id)
+            await self._sync_queue_with_board_internal(project_id, board_id, column, board)
         except Exception as e:
             logger.error(
                 f"Failed to fetch board {project_id}/{board_id} for queue sync.",
@@ -751,6 +752,26 @@ class RedisPipelineQueueService(IPipelineQueueService):
             )
             return
 
+    async def _sync_queue_with_board_internal(
+        self, project_id: str, board_id: str, column: str, board
+    ) -> None:
+        """Internal sync implementation that accepts pre-fetched board data.
+
+        This avoids redundant I/O when called from get_next_waiting_item where
+        the board has already been fetched. The public sync_queue_with_board
+        method fetches the board and delegates here.
+
+        Performs three operations:
+        1. Removes entries for items no longer in column
+        2. Adds entries for newly discovered items in column
+        3. Updates position and timestamp for existing entries
+
+        Args:
+            project_id: Project identifier
+            board_id: Board identifier
+            column: Board column name to sync with
+            board: Pre-fetched board data to avoid redundant I/O
+        """
         # Find target column with separate error handling
         target_column = None
         for col in board.columns:

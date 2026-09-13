@@ -1379,3 +1379,165 @@ class TestRedisPipelineQueueService(TestPipelineQueueServiceContract):
 
         # This should not raise despite item add failure
         await service.sync_queue_with_board("proj-1", "board-1", "TODO")
+
+    # ===== Tests for sync-before-select behavior (addressing issue #1056) =====
+
+    @pytest.mark.asyncio
+    async def test_get_next_waiting_item_syncs_with_board_before_selection(self):
+        """get_next_waiting_item must call sync_queue_with_board before selecting.
+
+        This test verifies that pre-selection sync actually happens by mocking
+        the board service to track sync operations.
+        """
+        redis_client = MockRedis()
+        board_service = MockBoardService()
+        event_emitter = MockEventEmitter()
+
+        service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=event_emitter,
+        )
+
+        # Setup initial queue with items at positions 0 and 1
+        now = datetime.now(UTC)
+        await service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+        await service.enqueue_item("proj-1", "board-1", "item-2", position_in_column=1, timestamp=now)
+
+        # Setup board with same items
+        board_service.set_column("proj-1", "board-1", "TODO", ["item-1", "item-2"])
+
+        # Track get_board calls to verify sync is being attempted
+        get_board_call_count = {"count": 0}
+        original_get_board = board_service.get_board
+
+        async def tracked_get_board(project_id, board_id):
+            get_board_call_count["count"] += 1
+            return await original_get_board(project_id, board_id)
+
+        board_service.get_board = tracked_get_board
+
+        # Call get_next_waiting_item - it should fetch board for sync
+        result = await service.get_next_waiting_item("proj-1", "board-1")
+
+        # Verify board was fetched (called once in get_next_waiting_item)
+        assert get_board_call_count["count"] >= 1, "get_next_waiting_item should fetch board for pre-selection sync"
+        assert result is not None
+        assert result.work_item_id == "item-1"
+
+    @pytest.mark.asyncio
+    async def test_get_next_waiting_item_reflects_post_sync_order(self):
+        """When board order differs from queue order, returned item should reflect post-sync order.
+
+        This test ensures that board position changes are reflected in the selection,
+        not just in the queue state.
+        """
+        redis_client = MockRedis()
+        board_service = MockBoardService()
+        event_emitter = MockEventEmitter()
+
+        service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=event_emitter,
+        )
+
+        # Setup queue with item-1 at position 0, item-2 at position 1
+        now = datetime.now(UTC)
+        await service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+        await service.enqueue_item("proj-1", "board-1", "item-2", position_in_column=1, timestamp=now)
+
+        # Setup board with REVERSED order (item-2 now at position 0, item-1 at position 1)
+        # This simulates a user manually reordering cards
+        board_service.set_column("proj-1", "board-1", "TODO", ["item-2", "item-1"])
+
+        # Call get_next_waiting_item
+        result = await service.get_next_waiting_item("proj-1", "board-1")
+
+        # After sync, item-2 should be returned (it's now at position 0 on board)
+        # This proves that sync was performed and its result was used
+        assert result is not None, "Should return a waiting item"
+        assert result.work_item_id == "item-2", f"Expected item-2 (post-sync position 0), got {result.work_item_id}"
+        assert result.position_in_column == 0, f"Expected position 0, got {result.position_in_column}"
+
+    @pytest.mark.asyncio
+    async def test_get_next_waiting_item_graceful_degradation_when_board_service_fails(self):
+        """When board service fails during pre-selection sync, selection continues with stale queue.
+
+        This test verifies that a board service failure does not prevent queue selection,
+        implementing graceful degradation.
+        """
+        redis_client = MockRedis()
+        board_service = AsyncMock(spec=IBoardService)
+        event_emitter = MockEventEmitter()
+
+        service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=event_emitter,
+        )
+
+        # Setup queue with items
+        now = datetime.now(UTC)
+        await service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+        await service.enqueue_item("proj-1", "board-1", "item-2", position_in_column=1, timestamp=now)
+
+        # Make board service raise an exception
+        board_service.get_board.side_effect = Exception("Board service unreachable")
+
+        # Call get_next_waiting_item - should NOT raise, should return stale data
+        result = await service.get_next_waiting_item("proj-1", "board-1")
+
+        # Should return the first waiting item from stale queue (graceful degradation)
+        assert result is not None, "Should return item from stale queue when board service fails"
+        assert result.work_item_id == "item-1", "Should return first item from queue"
+        assert result.position_in_column == 0
+
+    @pytest.mark.asyncio
+    async def test_get_next_waiting_item_returns_none_when_queue_empty(self):
+        """get_next_waiting_item should return None when queue is empty."""
+        redis_client = MockRedis()
+        board_service = MockBoardService()
+        event_emitter = MockEventEmitter()
+
+        service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=event_emitter,
+        )
+
+        # No items in queue
+        result = await service.get_next_waiting_item("proj-1", "board-1")
+
+        assert result is None, "Should return None when queue is empty"
+
+    @pytest.mark.asyncio
+    async def test_get_next_waiting_item_skips_active_items(self):
+        """get_next_waiting_item should skip ACTIVE items and return first WAITING item."""
+        redis_client = MockRedis()
+        board_service = MockBoardService()
+        event_emitter = MockEventEmitter()
+
+        service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=event_emitter,
+        )
+
+        # Setup queue with items
+        now = datetime.now(UTC)
+        await service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+        await service.enqueue_item("proj-1", "board-1", "item-2", position_in_column=1, timestamp=now)
+
+        # Mark first item as active
+        await service.mark_item_active("item-1")
+
+        # Setup board
+        board_service.set_column("proj-1", "board-1", "TODO", ["item-1", "item-2"])
+
+        # Should return second item (first WAITING item)
+        result = await service.get_next_waiting_item("proj-1", "board-1")
+
+        assert result is not None
+        assert result.work_item_id == "item-2", "Should skip ACTIVE item and return first WAITING"
+        assert result.status == QueueStatus.WAITING
