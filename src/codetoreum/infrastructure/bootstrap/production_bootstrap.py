@@ -1008,7 +1008,7 @@ class ProductionApplicationBootstrap:
 
         # Pipeline queue service (critical for work-item ordering and progression)
         if self.adapters.queue_service:
-            self.adapters.queue_service = resilience_factory.create_best_effort_pipeline_queue_service(
+            self.adapters.queue_service = resilience_factory.create_resilient_pipeline_queue_service(
                 self.adapters.queue_service
             )
             logger.debug("Applied resilient decorator to pipeline queue service")

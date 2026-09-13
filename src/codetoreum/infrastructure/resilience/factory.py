@@ -235,7 +235,7 @@ class ResilienceFactory:
         """
         return BestEffortExecutionTrackerDecorator(wrapped=adapter)
 
-    def create_best_effort_pipeline_queue_service(
+    def create_resilient_pipeline_queue_service(
         self, adapter: IPipelineQueueService
     ) -> IPipelineQueueService:
         """
@@ -243,8 +243,12 @@ class ResilienceFactory:
 
         Applies resilience patterns (circuit-breaker, retry, timeout) to
         write-path operations (enqueue, mark active, remove, sync) to maintain
-        ordering guarantees on CRITICAL slot. Read-only operations use
-        best-effort degradation with safe defaults and DLQ routing.
+        ordering guarantees. Read-only operations use best-effort degradation
+        with safe defaults and DLQ routing.
+
+        Deterministic business errors (DuplicateQueueEntryError, InvalidQueueStateError,
+        QueueItemNotFoundError) are NOT retried, allowing callers to distinguish
+        them from transient failures and handle them appropriately.
 
         Args:
             adapter: Underlying pipeline queue service adapter
