@@ -78,6 +78,7 @@ class InMemoryQueueService(IPipelineQueueService):
         time_source: Callable[[], datetime] | None = None,
         event_emitter: IEventEmitter | None = None,
         event_bus: EventBus | None = None,
+        failed_event_store=None,
     ) -> None:
         """Initialize empty queue service.
 
@@ -87,6 +88,7 @@ class InMemoryQueueService(IPipelineQueueService):
                         manipulation in simulation testing. Defaults to datetime.now(timezone.utc)
             event_emitter: Optional IEventEmitter for emitting domain events. Defaults to MockEventEmitter
             event_bus: Optional EventBus for subscribing to domain events (e.g., WorkItemColumnChangedEvent)
+            failed_event_store: Optional failure route for INV-20 compliance (forward compatibility)
         """
         self._queues: dict[str, list[PipelineQueueEntry]] = {}
         self._board_positions: dict[str, list[str]] = {}  # For set_board_order test helper
@@ -96,6 +98,7 @@ class InMemoryQueueService(IPipelineQueueService):
         self._time_source = time_source or (lambda: datetime.now(UTC))
         self._event_emitter = event_emitter or MockEventEmitter()
         self._event_bus = event_bus
+        self.failed_event_store = failed_event_store
 
         # Subscribe to board position changes if event bus provided. The
         # EventBus dispatches by event-type string, so the handler only

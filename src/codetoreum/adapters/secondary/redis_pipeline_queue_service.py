@@ -72,6 +72,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
         board_service: IBoardService,
         event_emitter: IEventEmitter,
         key_prefix: str = _KEY_PREFIX,
+        failed_event_store=None,
     ) -> None:
         """Initialize Redis-backed queue service.
 
@@ -80,11 +81,13 @@ class RedisPipelineQueueService(IPipelineQueueService):
             board_service: Board service for queue synchronization
             event_emitter: Event emitter for domain events
             key_prefix: Redis key prefix (default: "codetoreum:qsvc")
+            failed_event_store: Optional failure route for INV-20 compliance (forward compatibility)
         """
         self._redis = redis_client
         self._board_service = board_service
         self._event_emitter = event_emitter
         self._key_prefix = key_prefix
+        self.failed_event_store = failed_event_store
 
     def _queue_key(self, project_id: str, board_id: str) -> str:
         """Get Redis sorted set key for a pipeline queue."""

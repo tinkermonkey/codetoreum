@@ -172,6 +172,7 @@ NON_CRITICAL_SLOTS = {
     "repair_cycle",
     "ci_pipeline",
     "execution_tracker",  # Execution state tracking; critical for recovery but non-critical for MVP
+    "queue_service",  # Pipeline queue; uses execution_tracker as controlling precedent for non-critical classification
     "discussion_adapter",  # Discussion handling is non-critical; does not block work-item progression
 }
 

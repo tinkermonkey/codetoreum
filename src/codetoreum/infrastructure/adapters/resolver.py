@@ -503,7 +503,7 @@ class AdapterResolver:
 
         For "redis", constructs an aioredis client from REDIS_URL and injects
         the board_service and event_emitter dependencies so queue entries can
-        be synced with board state.
+        be synced with board state. Passes failed_event_store for forward compatibility.
         """
         if self._config.queue_service == "redis":
             import os
@@ -525,11 +525,13 @@ class AdapterResolver:
                 redis_client=redis_client,
                 board_service=board_service,
                 event_emitter=self._resolved["event_emitter"],
+                failed_event_store=self._deps.failed_event_store,
             )
         return self._factory.create_pipeline_queue_service(
             adapter_name=self._config.queue_service,
             event_emitter=self._resolved["event_emitter"],
             time_source=lambda: self._deps.engine.get_clock_for_testing().now(),
+            failed_event_store=self._deps.failed_event_store,
         )
 
     def resolve_checkpoint_store(self) -> IRepairCycleCheckpointStore:
