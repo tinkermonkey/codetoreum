@@ -27,8 +27,10 @@ from codetoreum.domain.events.queue_events import (
     QueuePositionChangedEvent,
 )
 from codetoreum.infrastructure.error_ids import ErrorRegistry
+from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.ports.output.board_service import IBoardService
 from codetoreum.ports.output.event_emitter import IEventEmitter
+from codetoreum.ports.output.failed_event_store import IFailedEventStore
 from codetoreum.ports.output.pipeline_queue_service import (
     DuplicateQueueEntryError,
     InvalidQueueStateError,
@@ -71,6 +73,8 @@ class RedisPipelineQueueService(IPipelineQueueService):
         redis_client: aioredis.Redis,
         board_service: IBoardService,
         event_emitter: IEventEmitter,
+        event_bus: EventBus | None = None,
+        failed_event_store: IFailedEventStore | None = None,
         key_prefix: str = _KEY_PREFIX,
     ) -> None:
         """Initialize Redis-backed queue service.
@@ -79,11 +83,15 @@ class RedisPipelineQueueService(IPipelineQueueService):
             redis_client: Redis async client
             board_service: Board service for queue synchronization
             event_emitter: Event emitter for domain events
+            event_bus: Event bus for event publishing (optional, INV-20)
+            failed_event_store: Failed event store for routing failures (optional, INV-20)
             key_prefix: Redis key prefix (default: "codetoreum:qsvc")
         """
         self._redis = redis_client
         self._board_service = board_service
         self._event_emitter = event_emitter
+        self._event_bus = event_bus
+        self._failed_event_store = failed_event_store
         self._key_prefix = key_prefix
 
     def _queue_key(self, project_id: str, board_id: str) -> str:
