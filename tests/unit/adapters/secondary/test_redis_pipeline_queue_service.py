@@ -890,3 +890,121 @@ class TestRedisPipelineQueueService(TestPipelineQueueServiceContract):
         assert len(removed_events) == 1
         assert removed_events[0].item_id == "item-1"
         assert removed_events[0].source == "redis_pipeline_queue_service"
+
+    # ===== Orphan Recovery Integration Tests =====
+
+    @pytest.mark.asyncio
+    async def test_restart_with_held_lock_and_queued_items(self):
+        """End-to-end restart scenario: held lock, process restart, orphan-recovery scan.
+
+        This test verifies acceptance criterion 3: enqueue a work item while a pipeline lock
+        is held, terminate the process, restart it, and confirm (a) the queue entry survives
+        with correct ordering, and (b) PipelineOrchestrator.on_startup()'s orphan-recovery
+        scan detects and releases the orphaned lock, allowing the surviving queue entry to
+        become the next lock holder.
+        """
+        from codetoreum.adapters.secondary.pipeline_queue_service_adapter import (
+            PipelineQueueServiceAdapter,
+        )
+        from codetoreum.application.event_handlers.pipeline_orchestrator import (
+            PipelineOrchestrator,
+        )
+        from codetoreum.ports.output.distributed_lock import (
+            IDistributedLock, LockHolder, ReleaseResult
+        )
+        from types import MappingProxyType
+
+        # Phase 1: Original process - enqueue items with lock held
+        redis_client = MockRedis()
+        board_service = MockBoardService()
+        event_emitter = MockEventEmitter()
+
+        queue_service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=event_emitter,
+        )
+
+        now = datetime.now(UTC)
+        project_id = "proj-1"
+        board_id = "board-1"
+        lock_key = f"{project_id}:{board_id}"
+
+        # Enqueue multiple items
+        await queue_service.enqueue_item(project_id, board_id, "item-1", position_in_column=0, timestamp=now)
+        await queue_service.enqueue_item(project_id, board_id, "item-2", position_in_column=1, timestamp=now)
+        await queue_service.enqueue_item(project_id, board_id, "item-3", position_in_column=2, timestamp=now)
+
+        # Verify items are queued
+        entries_before = await queue_service.get_queue_entries(project_id, board_id)
+        assert len(entries_before) == 3
+        assert [e.work_item_id for e in entries_before] == ["item-1", "item-2", "item-3"]
+
+        # Simulate a lock being held by item-1 (orphaned because no active run)
+        mock_lock = MagicMock(spec=IDistributedLock)
+        mock_lock.try_acquire = AsyncMock()
+        mock_lock.release = AsyncMock()
+        mock_lock.get_all_holders = AsyncMock()
+
+        # Setup: one lock held by item-1, no active runs
+        lock_holder = LockHolder(
+            lock_key=lock_key,
+            holder_id="item-1",
+            acquired_at=now,
+            ttl_seconds=7200,
+            expires_at=now,
+            holder_metadata=MappingProxyType({"project_id": project_id, "board_id": board_id}),
+        )
+        mock_lock.get_all_holders.return_value = [lock_holder]
+
+        # Release will succeed
+        mock_lock.release.return_value = ReleaseResult(released=True, reason=None, lock_key=lock_key)
+
+        # Mock run registry with no active runs
+        mock_run_registry = MagicMock()
+        mock_run_registry.get_active_run = AsyncMock(return_value=None)
+
+        mock_event_emitter_orch = MagicMock()
+        mock_event_emitter_orch.emit = MagicMock()
+
+        # Phase 2: Process restart - create new instances with same Redis
+        new_queue_service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=MockEventEmitter(),
+        )
+
+        # Verify queue entries survived restart
+        entries_after = await new_queue_service.get_queue_entries(project_id, board_id)
+        assert len(entries_after) == 3
+        assert [e.work_item_id for e in entries_after] == ["item-1", "item-2", "item-3"]
+
+        # Phase 3: on_startup() detects orphaned lock and releases it
+        # Create adapter to bridge IPipelineQueueService to IPipelineQueue
+        queue_adapter = PipelineQueueServiceAdapter(new_queue_service)
+
+        # Create PipelineOrchestrator with mock lock/registry and adapted queue
+        orchestrator = PipelineOrchestrator(
+            distributed_lock=mock_lock,
+            pipeline_queue=queue_adapter,
+            run_registry=mock_run_registry,
+            event_emitter=mock_event_emitter_orch,
+        )
+
+        # Run the orphan-recovery scan
+        await orchestrator.on_startup()
+
+        # Phase 4: Verify outcomes
+        # 1. Orphaned lock was detected and released
+        mock_lock.get_all_holders.assert_called_once()
+        mock_lock.release.assert_called_once_with(lock_key=lock_key, holder_id="item-1")
+
+        # 2. Queue entries still exist and are retrievable
+        entries_final = await new_queue_service.get_queue_entries(project_id, board_id)
+        assert len(entries_final) == 3
+        assert [e.work_item_id for e in entries_final] == ["item-1", "item-2", "item-3"]
+
+        # 3. The surviving queue entry is still available for the next lock holder to claim
+        next_entry = await queue_adapter.peek(lock_key)
+        assert next_entry is not None
+        assert next_entry.work_item_id == "item-1"  # First item in queue (after restart)
