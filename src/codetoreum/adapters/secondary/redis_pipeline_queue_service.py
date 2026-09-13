@@ -202,23 +202,23 @@ class RedisPipelineQueueService(IPipelineQueueService):
         meta_key = self._metadata_key(project_id, board_id)
         pipeline_registry_key = self._pipeline_registry_key()
 
-        # Add to sorted set (score = position_in_column, lower scores = higher priority)
-        await self._redis.zadd(queue_key, {work_item_id: float(position_in_column)})
-
         # Store metadata in hash
         metadata = {
             "status": QueueStatus.WAITING.value,
             "queued_at": timestamp.isoformat(),
             "last_position_check": timestamp.isoformat(),
         }
-        await self._redis.hset(meta_key, work_item_id, json.dumps(metadata))
 
         # Update reverse index
-        pipeline_coords = f"{project_id}:{board_id}"
-        await self._redis.hset(reverse_index_key, work_item_id, pipeline_coords)
+        pipeline_coords = f"{project_id}\x1f{board_id}"
 
-        # Register pipeline if not already present
-        await self._redis.sadd(pipeline_registry_key, pipeline_coords)
+        # Atomically perform all writes using Redis pipeline
+        pipe = self._redis.pipeline(transaction=True)
+        await pipe.zadd(queue_key, {work_item_id: float(position_in_column)})
+        await pipe.hset(meta_key, work_item_id, json.dumps(metadata))
+        await pipe.hset(reverse_index_key, work_item_id, pipeline_coords)
+        await pipe.sadd(pipeline_registry_key, pipeline_coords)
+        await pipe.execute()
 
         # Emit event
         self._emit_event(
@@ -263,8 +263,8 @@ class RedisPipelineQueueService(IPipelineQueueService):
         if isinstance(pipeline_coords, bytes):
             pipeline_coords = pipeline_coords.decode("utf-8")
 
-        # Parse project_id:board_id
-        parts = pipeline_coords.split(":")
+        # Parse project_id\x1fboard_id
+        parts = pipeline_coords.split("\x1f", maxsplit=1)
         if len(parts) != 2:
             msg = f"Invalid pipeline coordinates: {pipeline_coords}"
             raise QueueItemNotFoundError(msg)
@@ -322,8 +322,8 @@ class RedisPipelineQueueService(IPipelineQueueService):
         if isinstance(pipeline_coords, bytes):
             pipeline_coords = pipeline_coords.decode("utf-8")
 
-        # Parse project_id:board_id
-        parts = pipeline_coords.split(":")
+        # Parse project_id\x1fboard_id
+        parts = pipeline_coords.split("\x1f", maxsplit=1)
         if len(parts) != 2:
             return False
         project_id, board_id = parts
@@ -331,15 +331,15 @@ class RedisPipelineQueueService(IPipelineQueueService):
         queue_key = self._queue_key(project_id, board_id)
         meta_key = self._metadata_key(project_id, board_id)
 
-        # Remove from sorted set
+        # Check if item is in sorted set
         removed = await self._redis.zrem(queue_key, work_item_id)
 
         if removed:
-            # Remove metadata
-            await self._redis.hdel(meta_key, work_item_id)
-
-            # Remove from reverse index
-            await self._redis.hdel(reverse_index_key, work_item_id)
+            # Atomically remove metadata and reverse index
+            pipe = self._redis.pipeline(transaction=True)
+            await pipe.hdel(meta_key, work_item_id)
+            await pipe.hdel(reverse_index_key, work_item_id)
+            await pipe.execute()
 
             # Emit event
             self._emit_event(
@@ -359,8 +359,9 @@ class RedisPipelineQueueService(IPipelineQueueService):
     async def get_next_waiting_item(self, project_id: str, board_id: str) -> PipelineQueueEntry | None:
         """Get next waiting item from queue.
 
-        Syncs with board state first to ensure order matches current board
-        positions, then returns the waiting item with lowest position_in_column.
+        Returns the waiting item with lowest position_in_column from the queue.
+        Callers are responsible for calling sync_queue_with_board explicitly
+        before this method to ensure the queue matches board state.
 
         Args:
             project_id: Project identifier
@@ -380,16 +381,6 @@ class RedisPipelineQueueService(IPipelineQueueService):
             msg = "board_id cannot be empty"
             raise QueueValidationError(msg)
 
-        # Sync queue with board first
-        try:
-            await self.sync_queue_with_board(project_id, board_id, "TODO")
-        except Exception:
-            # Graceful degradation - continue with current queue state
-            logger.warning(
-                f"sync_queue_with_board failed for {project_id}/{board_id}",
-                exc_info=True,
-            )
-
         queue_key = self._queue_key(project_id, board_id)
         meta_key = self._metadata_key(project_id, board_id)
 
@@ -404,13 +395,43 @@ class RedisPipelineQueueService(IPipelineQueueService):
             # Get metadata
             raw_meta = await self._redis.hget(meta_key, work_item_id)
             if not raw_meta:
-                continue
+                # Metadata missing - emit corruption event and return best-effort entry
+                self._emit_event(
+                    QueueMetadataCorruptionEvent(
+                        type="queue.metadata_corruption",
+                        timestamp=datetime.now(UTC).isoformat(),
+                        source="redis_pipeline_queue_service",
+                        queue_name=f"{project_id}:{board_id}",
+                        work_item_id=work_item_id,
+                        error_details="Metadata hash not found",
+                        project_id=project_id,
+                    )
+                )
+                # Return best-effort entry with defaults
+                return self._reconstruct_entry(
+                    project_id, board_id, work_item_id, int(score), {}
+                )
 
             try:
                 meta_str = raw_meta.decode("utf-8") if isinstance(raw_meta, bytes) else raw_meta
                 metadata = json.loads(meta_str)
-            except Exception:
-                continue
+            except Exception as e:
+                # Metadata corrupt - emit event and return best-effort entry
+                self._emit_event(
+                    QueueMetadataCorruptionEvent(
+                        type="queue.metadata_corruption",
+                        timestamp=datetime.now(UTC).isoformat(),
+                        source="redis_pipeline_queue_service",
+                        queue_name=f"{project_id}:{board_id}",
+                        work_item_id=work_item_id,
+                        error_details=f"Failed to parse metadata: {type(e).__name__}: {e!s}",
+                        project_id=project_id,
+                    )
+                )
+                # Return best-effort entry with defaults
+                return self._reconstruct_entry(
+                    project_id, board_id, work_item_id, int(score), {}
+                )
 
             # Check if waiting
             if metadata.get("status") == QueueStatus.WAITING.value:
@@ -460,7 +481,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
             raw_meta = await self._redis.hget(meta_key, work_item_id)
 
             if not raw_meta:
-                # Metadata missing - emit corruption event and skip
+                # Metadata missing - emit corruption event and return best-effort entry
                 self._emit_event(
                     QueueMetadataCorruptionEvent(
                         type="queue.metadata_corruption",
@@ -472,13 +493,17 @@ class RedisPipelineQueueService(IPipelineQueueService):
                         project_id=project_id,
                     )
                 )
+                entry = self._reconstruct_entry(
+                    project_id, board_id, work_item_id, int(score), {}
+                )
+                entries.append(entry)
                 continue
 
             try:
                 meta_str = raw_meta.decode("utf-8") if isinstance(raw_meta, bytes) else raw_meta
                 metadata = json.loads(meta_str)
             except Exception as e:
-                # Metadata corrupt - emit event and skip
+                # Metadata corrupt - emit event and return best-effort entry
                 self._emit_event(
                     QueueMetadataCorruptionEvent(
                         type="queue.metadata_corruption",
@@ -490,6 +515,10 @@ class RedisPipelineQueueService(IPipelineQueueService):
                         project_id=project_id,
                     )
                 )
+                entry = self._reconstruct_entry(
+                    project_id, board_id, work_item_id, int(score), {}
+                )
+                entries.append(entry)
                 continue
 
             entry = self._reconstruct_entry(
@@ -628,7 +657,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
                     await self._redis.hset(meta_key, work_item_id, json.dumps(metadata))
 
                     # Update reverse index and pipeline registry
-                    pipeline_coords = f"{project_id}:{board_id}"
+                    pipeline_coords = f"{project_id}\x1f{board_id}"
                     await self._redis.hset(reverse_index_key, work_item_id, pipeline_coords)
                     await self._redis.sadd(self._pipeline_registry_key(), pipeline_coords)
 

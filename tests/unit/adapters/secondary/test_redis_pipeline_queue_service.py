@@ -21,7 +21,7 @@ from codetoreum.domain.events.queue_events import (
     QueueMetadataCorruptionEvent,
     QueuePositionChangedEvent,
 )
-from codetoreum.ports.output.board_service import BoardColumn, IBoardService
+from codetoreum.ports.output.board_service import IBoardService
 from codetoreum.ports.output.event_emitter import IEventEmitter
 from codetoreum.ports.output.pipeline_queue_service import (
     DuplicateQueueEntryError,
@@ -35,11 +35,56 @@ from tests.unit.ports.output.test_pipeline_queue_service_contract import (
 )
 
 
+class MockPipeline:
+    """Mock Redis pipeline for transactional operations."""
+
+    def __init__(self, redis_client):
+        self._redis = redis_client
+        self._commands = []
+
+    async def zadd(self, key: str, mapping: dict) -> "MockPipeline":
+        """Buffer ZADD command."""
+        self._commands.append(("zadd", (key, mapping)))
+        return self
+
+    async def hset(self, key: str, field_or_mapping, value=None) -> "MockPipeline":
+        """Buffer HSET command."""
+        self._commands.append(("hset", (key, field_or_mapping, value)))
+        return self
+
+    async def hdel(self, key: str, *fields) -> "MockPipeline":
+        """Buffer HDEL command."""
+        self._commands.append(("hdel", (key, fields)))
+        return self
+
+    async def sadd(self, key: str, *members) -> "MockPipeline":
+        """Buffer SADD command."""
+        self._commands.append(("sadd", (key, members)))
+        return self
+
+    async def execute(self):
+        """Execute all buffered commands."""
+        for cmd, args in self._commands:
+            if cmd == "zadd":
+                await self._redis.zadd(args[0], args[1])
+            elif cmd == "hset":
+                await self._redis.hset(args[0], args[1], args[2])
+            elif cmd == "hdel":
+                await self._redis.hdel(args[0], *args[1])
+            elif cmd == "sadd":
+                await self._redis.sadd(args[0], *args[1])
+        return self._commands
+
+
 class MockRedis:
     """Mock Redis client for testing."""
 
     def __init__(self):
         self._data = {}  # Main data storage
+
+    def pipeline(self, transaction=False):
+        """Create a mock pipeline for transactional operations."""
+        return MockPipeline(self)
 
     async def zadd(self, key: str, mapping: dict) -> int:
         """Mock ZADD - add to sorted set."""
@@ -487,7 +532,7 @@ class TestRedisPipelineQueueService(TestPipelineQueueServiceContract):
 
     @pytest.mark.asyncio
     async def test_get_queue_entries_emits_corruption_event_on_missing_metadata(self):
-        """get_queue_entries should emit corruption event for missing metadata."""
+        """get_queue_entries should emit corruption event and return best-effort entry for missing metadata."""
         redis_client = MockRedis()
         board_service = MockBoardService()
         event_emitter = MockEventEmitter()
@@ -502,18 +547,21 @@ class TestRedisPipelineQueueService(TestPipelineQueueServiceContract):
         queue_key = service._queue_key("proj-1", "board-1")
         await redis_client.zadd(queue_key, {"item-1": 0.0})
 
-        # Get entries should skip corrupted item and emit event
+        # Get entries should return best-effort entry and emit corruption event
         event_emitter.events.clear()
         entries = await service.get_queue_entries("proj-1", "board-1")
 
-        assert len(entries) == 0
+        assert len(entries) == 1
+        assert entries[0].work_item_id == "item-1"
+        assert entries[0].position_in_column == 0
+        assert entries[0].status == QueueStatus.WAITING
         corruption_events = [e for e in event_emitter.events if isinstance(e, QueueMetadataCorruptionEvent)]
         assert len(corruption_events) == 1
         assert corruption_events[0].work_item_id == "item-1"
 
     @pytest.mark.asyncio
     async def test_get_queue_entries_emits_corruption_event_on_malformed_metadata(self):
-        """get_queue_entries should emit corruption event for malformed JSON metadata."""
+        """get_queue_entries should emit corruption event and return best-effort entry for malformed JSON."""
         redis_client = MockRedis()
         board_service = MockBoardService()
         event_emitter = MockEventEmitter()
@@ -530,11 +578,14 @@ class TestRedisPipelineQueueService(TestPipelineQueueServiceContract):
         await redis_client.zadd(queue_key, {"item-1": 0.0})
         await redis_client.hset(meta_key, "item-1", "not valid json")
 
-        # Get entries should skip corrupted item and emit event
+        # Get entries should return best-effort entry and emit corruption event
         event_emitter.events.clear()
         entries = await service.get_queue_entries("proj-1", "board-1")
 
-        assert len(entries) == 0
+        assert len(entries) == 1
+        assert entries[0].work_item_id == "item-1"
+        assert entries[0].position_in_column == 0
+        assert entries[0].status == QueueStatus.WAITING
         corruption_events = [e for e in event_emitter.events if isinstance(e, QueueMetadataCorruptionEvent)]
         assert len(corruption_events) == 1
         assert corruption_events[0].work_item_id == "item-1"
