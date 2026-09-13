@@ -142,6 +142,8 @@ class RedisPipelineQueueService(IPipelineQueueService):
         Creates a new queue entry with status=WAITING. Raises DuplicateQueueEntryError
         if item already exists in queue.
 
+        Uses HSETNX on the reverse index for atomic duplicate detection.
+
         Args:
             project_id: Project identifier
             board_id: Board identifier
@@ -184,13 +186,8 @@ class RedisPipelineQueueService(IPipelineQueueService):
         if isinstance(timestamp, str):
             timestamp = datetime.fromisoformat(timestamp)
 
-        # Check if already in queue via reverse index
+        # Prepare keys
         reverse_index_key = self._reverse_index_key()
-        if await self._redis.hexists(reverse_index_key, work_item_id):
-            msg = f"Work item {work_item_id} already in queue"
-            raise DuplicateQueueEntryError(msg)
-
-        # Add to queue
         queue_key = self._queue_key(project_id, board_id)
         meta_key = self._metadata_key(project_id, board_id)
         pipeline_registry_key = self._pipeline_registry_key()
@@ -205,11 +202,19 @@ class RedisPipelineQueueService(IPipelineQueueService):
         # Update reverse index
         pipeline_coords = f"{project_id}\x1f{board_id}"
 
-        # Atomically perform all writes using Redis pipeline
+        # Atomically check duplicate using HSETNX on reverse index
+        # HSETNX returns 1 if field was set, 0 if field already existed
+        dup_check = await self._redis.hsetnx(reverse_index_key, work_item_id, pipeline_coords)
+
+        if not dup_check:
+            # Field already exists - this is a duplicate
+            msg = f"Work item {work_item_id} already in queue"
+            raise DuplicateQueueEntryError(msg)
+
+        # Add to queue (atomically with pipeline)
         pipe = self._redis.pipeline(transaction=True)
         await pipe.zadd(queue_key, {work_item_id: float(position_in_column)})
         await pipe.hset(meta_key, work_item_id, json.dumps(metadata))
-        await pipe.hset(reverse_index_key, work_item_id, pipeline_coords)
         await pipe.sadd(pipeline_registry_key, pipeline_coords)
         await pipe.execute()
 
@@ -230,7 +235,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
         """Mark a queued item as active (holding the lock).
 
         Changes item status from WAITING to ACTIVE. Raises QueueItemNotFoundError
-        if item not found, and InvalidQueueStateError if already active.
+        if item not found, and InvalidQueueStateError if already active or corrupted.
 
         Args:
             work_item_id: Work item to mark active
@@ -238,7 +243,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
         Raises:
             QueueValidationError: Invalid work_item_id
             QueueItemNotFoundError: Item not in queue
-            InvalidQueueStateError: Item already marked active
+            InvalidQueueStateError: Item already marked active or metadata corrupted
         """
         if not work_item_id:
             msg = "work_item_id cannot be empty"
@@ -265,26 +270,68 @@ class RedisPipelineQueueService(IPipelineQueueService):
 
         meta_key = self._metadata_key(project_id, board_id)
 
-        # Get current status
+        # Get current metadata
         raw_meta = await self._redis.hget(meta_key, work_item_id)
         if not raw_meta:
             msg = f"Work item {work_item_id} metadata not found"
             raise QueueItemNotFoundError(msg)
 
+        # Parse metadata - distinguish corruption from valid status
         try:
             meta_str = raw_meta.decode("utf-8") if isinstance(raw_meta, bytes) else raw_meta
             metadata = json.loads(meta_str)
-        except Exception as e:
-            msg = f"Failed to parse metadata for {work_item_id}: {e}"
-            raise QueueItemNotFoundError(msg) from e
+        except (json.JSONDecodeError, ValueError, UnicodeDecodeError) as e:
+            # Metadata is corrupted (not a simple absence)
+            msg = f"Work item {work_item_id} has corrupted metadata"
+            logger.error(
+                msg,
+                extra={
+                    "work_item_id": work_item_id,
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "error": str(e),
+                    "raw_meta_type": type(raw_meta).__name__,
+                },
+                exc_info=True,
+            )
+            raise InvalidQueueStateError(msg) from e
 
         # Check current status
-        current_status = metadata.get("status", QueueStatus.WAITING.value)
+        current_status = metadata.get("status")
+        if not current_status:
+            msg = f"Work item {work_item_id} has missing status in metadata"
+            logger.error(
+                msg,
+                extra={
+                    "work_item_id": work_item_id,
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "metadata": metadata,
+                },
+            )
+            raise InvalidQueueStateError(msg)
+
         if current_status == QueueStatus.ACTIVE.value:
             msg = f"Work item {work_item_id} is already marked active"
             raise InvalidQueueStateError(msg)
 
-        # Update status
+        # Validate status is valid before updating
+        try:
+            QueueStatus(current_status)
+        except ValueError as e:
+            msg = f"Work item {work_item_id} has invalid status '{current_status}'"
+            logger.error(
+                msg,
+                extra={
+                    "work_item_id": work_item_id,
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "status": current_status,
+                },
+            )
+            raise InvalidQueueStateError(msg) from e
+
+        # Update status to ACTIVE
         metadata["status"] = QueueStatus.ACTIVE.value
         await self._redis.hset(meta_key, work_item_id, json.dumps(metadata))
 
@@ -356,6 +403,8 @@ class RedisPipelineQueueService(IPipelineQueueService):
         Callers are responsible for calling sync_queue_with_board explicitly
         before this method to ensure the queue matches board state.
 
+        Corrupted items are skipped to prevent double-execution of ACTIVE items.
+
         Args:
             project_id: Project identifier
             board_id: Board identifier
@@ -388,7 +437,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
             # Get metadata
             raw_meta = await self._redis.hget(meta_key, work_item_id)
             if not raw_meta:
-                # Metadata missing - emit corruption event and return best-effort entry
+                # Metadata missing - emit corruption event and skip (don't return)
                 self._emit_event(
                     QueueMetadataCorruptionEvent(
                         type="queue.metadata_corruption",
@@ -400,16 +449,22 @@ class RedisPipelineQueueService(IPipelineQueueService):
                         project_id=project_id,
                     )
                 )
-                # Return best-effort entry with defaults
-                return self._reconstruct_entry(
-                    project_id, board_id, work_item_id, int(score), {}
+                # Skip corrupted item - continue to next
+                logger.warning(
+                    f"Skipping {work_item_id} in queue {project_id}/{board_id}: metadata missing",
+                    extra={
+                        "work_item_id": work_item_id,
+                        "project_id": project_id,
+                        "board_id": board_id,
+                    },
                 )
+                continue
 
             try:
                 meta_str = raw_meta.decode("utf-8") if isinstance(raw_meta, bytes) else raw_meta
                 metadata = json.loads(meta_str)
             except Exception as e:
-                # Metadata corrupt - emit event and return best-effort entry
+                # Metadata corrupt - emit event and skip (don't return)
                 self._emit_event(
                     QueueMetadataCorruptionEvent(
                         type="queue.metadata_corruption",
@@ -421,10 +476,16 @@ class RedisPipelineQueueService(IPipelineQueueService):
                         project_id=project_id,
                     )
                 )
-                # Return best-effort entry with defaults
-                return self._reconstruct_entry(
-                    project_id, board_id, work_item_id, int(score), {}
+                # Skip corrupted item - continue to next
+                logger.warning(
+                    f"Skipping {work_item_id} in queue {project_id}/{board_id}: metadata corrupted ({type(e).__name__})",
+                    extra={
+                        "work_item_id": work_item_id,
+                        "project_id": project_id,
+                        "board_id": board_id,
+                    },
                 )
+                continue
 
             # Check if waiting
             if metadata.get("status") == QueueStatus.WAITING.value:
@@ -440,6 +501,9 @@ class RedisPipelineQueueService(IPipelineQueueService):
 
         Returns all entries (both WAITING and ACTIVE), sorted by position_in_column
         in ascending order (lowest position = highest priority).
+
+        Corrupted entries are skipped to prevent returning entries with
+        incorrect status (e.g., ACTIVE entries defaulting to WAITING).
 
         Args:
             project_id: Project identifier
@@ -474,7 +538,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
             raw_meta = await self._redis.hget(meta_key, work_item_id)
 
             if not raw_meta:
-                # Metadata missing - emit corruption event and return best-effort entry
+                # Metadata missing - emit corruption event and skip (don't include)
                 self._emit_event(
                     QueueMetadataCorruptionEvent(
                         type="queue.metadata_corruption",
@@ -486,17 +550,21 @@ class RedisPipelineQueueService(IPipelineQueueService):
                         project_id=project_id,
                     )
                 )
-                entry = self._reconstruct_entry(
-                    project_id, board_id, work_item_id, int(score), {}
+                logger.warning(
+                    f"Skipping {work_item_id} in queue {project_id}/{board_id}: metadata missing",
+                    extra={
+                        "work_item_id": work_item_id,
+                        "project_id": project_id,
+                        "board_id": board_id,
+                    },
                 )
-                entries.append(entry)
                 continue
 
             try:
                 meta_str = raw_meta.decode("utf-8") if isinstance(raw_meta, bytes) else raw_meta
                 metadata = json.loads(meta_str)
             except Exception as e:
-                # Metadata corrupt - emit event and return best-effort entry
+                # Metadata corrupt - emit event and skip (don't include)
                 self._emit_event(
                     QueueMetadataCorruptionEvent(
                         type="queue.metadata_corruption",
@@ -508,16 +576,43 @@ class RedisPipelineQueueService(IPipelineQueueService):
                         project_id=project_id,
                     )
                 )
-                entry = self._reconstruct_entry(
-                    project_id, board_id, work_item_id, int(score), {}
+                logger.warning(
+                    f"Skipping {work_item_id} in queue {project_id}/{board_id}: metadata corrupted ({type(e).__name__})",
+                    extra={
+                        "work_item_id": work_item_id,
+                        "project_id": project_id,
+                        "board_id": board_id,
+                    },
                 )
-                entries.append(entry)
                 continue
 
-            entry = self._reconstruct_entry(
-                project_id, board_id, work_item_id, int(score), metadata
-            )
-            entries.append(entry)
+            try:
+                entry = self._reconstruct_entry(
+                    project_id, board_id, work_item_id, int(score), metadata
+                )
+                entries.append(entry)
+            except ValueError as e:
+                # Status is invalid - emit corruption event and skip
+                self._emit_event(
+                    QueueMetadataCorruptionEvent(
+                        type="queue.metadata_corruption",
+                        timestamp=datetime.now(UTC).isoformat(),
+                        source="redis_pipeline_queue_service",
+                        queue_name=f"{project_id}:{board_id}",
+                        work_item_id=work_item_id,
+                        error_details=f"Invalid status value: {metadata.get('status')}",
+                        project_id=project_id,
+                    )
+                )
+                logger.warning(
+                    f"Skipping {work_item_id} in queue {project_id}/{board_id}: {str(e)}",
+                    extra={
+                        "work_item_id": work_item_id,
+                        "project_id": project_id,
+                        "board_id": board_id,
+                    },
+                )
+                continue
 
         return entries
 
@@ -690,10 +785,13 @@ class RedisPipelineQueueService(IPipelineQueueService):
             board_id: Board identifier
             work_item_id: Work item identifier
             position: Position score from sorted set
-            metadata: Metadata dict from hash
+            metadata: Metadata dict from hash (must contain valid "status" key)
 
         Returns:
             PipelineQueueEntry instance
+
+        Raises:
+            ValueError: If status is missing or invalid
         """
         try:
             queued_at_str = metadata.get("queued_at", datetime.now(UTC).isoformat())
@@ -715,11 +813,35 @@ class RedisPipelineQueueService(IPipelineQueueService):
         except Exception:
             last_position_check = datetime.now(UTC)
 
-        status_str = metadata.get("status", QueueStatus.WAITING.value)
+        # Status is required and must be valid - don't silently default to WAITING
+        status_str = metadata.get("status")
+        if not status_str:
+            msg = f"Work item {work_item_id} has missing status in metadata"
+            logger.error(
+                msg,
+                extra={
+                    "work_item_id": work_item_id,
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "metadata": metadata,
+                },
+            )
+            raise ValueError(msg)
+
         try:
             status = QueueStatus(status_str)
-        except ValueError:
-            status = QueueStatus.WAITING
+        except ValueError as e:
+            msg = f"Work item {work_item_id} has invalid status '{status_str}' in metadata"
+            logger.error(
+                msg,
+                extra={
+                    "work_item_id": work_item_id,
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "status": status_str,
+                },
+            )
+            raise ValueError(msg) from e
 
         return PipelineQueueEntry(
             project_id=project_id,

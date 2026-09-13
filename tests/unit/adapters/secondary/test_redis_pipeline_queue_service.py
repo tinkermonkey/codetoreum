@@ -186,6 +186,18 @@ class MockRedis:
             return value.encode() if isinstance(value, str) else value
         return None
 
+    async def hsetnx(self, key: str, field: str, value) -> int:
+        """Mock HSETNX - set hash field only if it doesn't exist.
+
+        Returns 1 if the field was set, 0 if the field already existed.
+        """
+        if key not in self._data:
+            self._data[key] = {}
+        if field in self._data[key]:
+            return 0  # Field already exists
+        self._data[key][field] = value
+        return 1  # Field was set
+
     async def hdel(self, key: str, *fields) -> int:
         """Mock HDEL - delete hash fields."""
         if key not in self._data:
@@ -552,7 +564,7 @@ class TestRedisPipelineQueueService(TestPipelineQueueServiceContract):
 
     @pytest.mark.asyncio
     async def test_get_queue_entries_emits_corruption_event_on_missing_metadata(self):
-        """get_queue_entries should emit corruption event and return best-effort entry for missing metadata."""
+        """get_queue_entries should emit corruption event and skip corrupted entry."""
         redis_client = MockRedis()
         board_service = MockBoardService()
         event_emitter = MockEventEmitter()
@@ -567,21 +579,20 @@ class TestRedisPipelineQueueService(TestPipelineQueueServiceContract):
         queue_key = service._queue_key("proj-1", "board-1")
         await redis_client.zadd(queue_key, {"item-1": 0.0})
 
-        # Get entries should return best-effort entry and emit corruption event
+        # Get entries should skip corrupted entry and emit corruption event
         event_emitter.events.clear()
         entries = await service.get_queue_entries("proj-1", "board-1")
 
-        assert len(entries) == 1
-        assert entries[0].work_item_id == "item-1"
-        assert entries[0].position_in_column == 0
-        assert entries[0].status == QueueStatus.WAITING
+        # Corrupted entry is skipped, so no entries returned
+        assert len(entries) == 0
+        # But corruption event is still emitted
         corruption_events = [e for e in event_emitter.events if isinstance(e, QueueMetadataCorruptionEvent)]
         assert len(corruption_events) == 1
         assert corruption_events[0].work_item_id == "item-1"
 
     @pytest.mark.asyncio
     async def test_get_queue_entries_emits_corruption_event_on_malformed_metadata(self):
-        """get_queue_entries should emit corruption event and return best-effort entry for malformed JSON."""
+        """get_queue_entries should emit corruption event and skip corrupted entry."""
         redis_client = MockRedis()
         board_service = MockBoardService()
         event_emitter = MockEventEmitter()
@@ -598,14 +609,13 @@ class TestRedisPipelineQueueService(TestPipelineQueueServiceContract):
         await redis_client.zadd(queue_key, {"item-1": 0.0})
         await redis_client.hset(meta_key, "item-1", "not valid json")
 
-        # Get entries should return best-effort entry and emit corruption event
+        # Get entries should skip corrupted entry and emit corruption event
         event_emitter.events.clear()
         entries = await service.get_queue_entries("proj-1", "board-1")
 
-        assert len(entries) == 1
-        assert entries[0].work_item_id == "item-1"
-        assert entries[0].position_in_column == 0
-        assert entries[0].status == QueueStatus.WAITING
+        # Corrupted entry is skipped, so no entries returned
+        assert len(entries) == 0
+        # But corruption event is still emitted
         corruption_events = [e for e in event_emitter.events if isinstance(e, QueueMetadataCorruptionEvent)]
         assert len(corruption_events) == 1
         assert corruption_events[0].work_item_id == "item-1"
