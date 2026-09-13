@@ -176,9 +176,8 @@ class MockRedis:
         if isinstance(field_or_mapping, dict):
             self._data[key].update(field_or_mapping)
             return len(field_or_mapping)
-        else:
-            self._data[key][field_or_mapping] = value
-            return 1
+        self._data[key][field_or_mapping] = value
+        return 1
 
     async def hget(self, key: str, field: str):
         """Mock HGET - get hash field."""

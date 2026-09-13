@@ -17,7 +17,6 @@ semantics.
 import json
 import logging
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
 
 import redis.asyncio as aioredis
 
@@ -40,10 +39,6 @@ from codetoreum.ports.output.pipeline_queue_service import (
     QueueStatus,
     QueueValidationError,
 )
-
-if TYPE_CHECKING:
-    from codetoreum.infrastructure.event_bus import EventBus
-    from codetoreum.ports.output.failed_event_store import IFailedEventStore
 
 logger = logging.getLogger(__name__)
 
