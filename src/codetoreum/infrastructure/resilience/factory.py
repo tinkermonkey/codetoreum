@@ -259,8 +259,7 @@ class ResilienceFactory:
         if self.mode == OperationMode.PRODUCTION:
             circuit_breaker = CircuitBreaker(
                 failure_threshold=5,
-                recovery_timeout=60,
-                name="queue_service",
+                timeout_seconds=60,
             )
             return ResilientPipelineQueueServiceDecorator(
                 wrapped=adapter,

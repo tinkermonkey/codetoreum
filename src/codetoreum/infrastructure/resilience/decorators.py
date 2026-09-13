@@ -30,6 +30,7 @@ from codetoreum.ports.output.monitoring import MonitoringConfig, MonitoringStatu
 from codetoreum.ports.output.pipeline_queue_service import (
     IPipelineQueueService,
     PipelineQueueEntry,
+    QueueServiceError,
 )
 from codetoreum.ports.output.ticket_system import ITicketSystem
 from codetoreum.ports.output.work_execution_state_tracker import (
@@ -1102,8 +1103,9 @@ class ResilientPipelineQueueServiceDecorator(IPipelineQueueService):
     ) -> None:
         """Enqueue item with resilience patterns.
 
-        Write operation. Applies circuit-breaker, retry, and timeout.
-        Failures are logged and routed to DLQ, then re-raised.
+        Write operation. Applies circuit-breaker, retry, and timeout to transient errors.
+        Deterministic business errors (QueueServiceError subclasses) bypass resilience
+        and are re-raised immediately without circuit-breaker counting.
 
         Args:
             project_id: Project identifier
@@ -1113,7 +1115,8 @@ class ResilientPipelineQueueServiceDecorator(IPipelineQueueService):
             timestamp: Queue timestamp
 
         Raises:
-            Exception: If the operation fails after retries
+            QueueServiceError: If a business error occurs (not retried)
+            Exception: If a transient error fails after retries
         """
         try:
             await self._execute_resilient(
@@ -1122,6 +1125,8 @@ class ResilientPipelineQueueServiceDecorator(IPipelineQueueService):
                 ),
                 operation_name="enqueue_item",
             )
+        except QueueServiceError:
+            raise
         except Exception as e:
             logger.error(
                 f"Failed to enqueue work item {work_item_id} "
@@ -1145,20 +1150,24 @@ class ResilientPipelineQueueServiceDecorator(IPipelineQueueService):
     async def mark_item_active(self, work_item_id: str) -> None:
         """Mark item as active with resilience patterns.
 
-        Write operation. Applies circuit-breaker, retry, and timeout.
-        Failures are logged and routed to DLQ, then re-raised.
+        Write operation. Applies circuit-breaker, retry, and timeout to transient errors.
+        Deterministic business errors (QueueServiceError subclasses) bypass resilience
+        and are re-raised immediately without circuit-breaker counting.
 
         Args:
             work_item_id: Work item identifier
 
         Raises:
-            Exception: If the operation fails after retries
+            QueueServiceError: If a business error occurs (not retried)
+            Exception: If a transient error fails after retries
         """
         try:
             await self._execute_resilient(
                 operation=lambda: self._wrapped.mark_item_active(work_item_id),
                 operation_name="mark_item_active",
             )
+        except QueueServiceError:
+            raise
         except Exception as e:
             logger.error(
                 f"Failed to mark work item {work_item_id} as active: {e}",
@@ -1176,8 +1185,9 @@ class ResilientPipelineQueueServiceDecorator(IPipelineQueueService):
     async def remove_from_queue(self, work_item_id: str) -> bool:
         """Remove item from queue with resilience patterns.
 
-        Write operation. Applies circuit-breaker, retry, and timeout.
-        Failures are logged and routed to DLQ, then re-raised.
+        Write operation. Applies circuit-breaker, retry, and timeout to transient errors.
+        Deterministic business errors (QueueServiceError subclasses) bypass resilience
+        and are re-raised immediately without circuit-breaker counting.
 
         Args:
             work_item_id: Work item identifier
@@ -1186,13 +1196,16 @@ class ResilientPipelineQueueServiceDecorator(IPipelineQueueService):
             bool: True if removed, False if not in queue
 
         Raises:
-            Exception: If the operation fails after retries
+            QueueServiceError: If a business error occurs (not retried)
+            Exception: If a transient error fails after retries
         """
         try:
             return await self._execute_resilient(
                 operation=lambda: self._wrapped.remove_from_queue(work_item_id),
                 operation_name="remove_from_queue",
             )
+        except QueueServiceError:
+            raise
         except Exception as e:
             logger.error(
                 f"Failed to remove work item {work_item_id} from queue: {e}",
@@ -1210,8 +1223,9 @@ class ResilientPipelineQueueServiceDecorator(IPipelineQueueService):
     async def sync_queue_with_board(self, project_id: str, board_id: str, column: str) -> None:
         """Sync queue with board with resilience patterns.
 
-        Write operation. Applies circuit-breaker, retry, and timeout.
-        Failures are logged and routed to DLQ, then re-raised.
+        Write operation. Applies circuit-breaker, retry, and timeout to transient errors.
+        Deterministic business errors (QueueServiceError subclasses) bypass resilience
+        and are re-raised immediately without circuit-breaker counting.
 
         Args:
             project_id: Project identifier
@@ -1219,13 +1233,16 @@ class ResilientPipelineQueueServiceDecorator(IPipelineQueueService):
             column: Board column name
 
         Raises:
-            Exception: If the operation fails after retries
+            QueueServiceError: If a business error occurs (not retried)
+            Exception: If a transient error fails after retries
         """
         try:
             await self._execute_resilient(
                 operation=lambda: self._wrapped.sync_queue_with_board(project_id, board_id, column),
                 operation_name="sync_queue_with_board",
             )
+        except QueueServiceError:
+            raise
         except Exception as e:
             logger.error(
                 f"Failed to sync queue with board "
