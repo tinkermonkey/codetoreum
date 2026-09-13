@@ -1011,7 +1011,7 @@ class ProductionApplicationBootstrap:
             self.adapters.queue_service = resilience_factory.create_best_effort_pipeline_queue_service(
                 self.adapters.queue_service
             )
-            logger.debug("Applied best-effort resilience to pipeline queue service")
+            logger.debug("Applied resilient decorator to pipeline queue service")
 
         logger.info("Resilience decorators applied to critical adapters")
 

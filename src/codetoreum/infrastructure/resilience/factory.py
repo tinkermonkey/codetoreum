@@ -22,7 +22,7 @@ from .config import (
 )
 from .decorators import (
     BestEffortExecutionTrackerDecorator,
-    BestEffortPipelineQueueServiceDecorator,
+    ResilientPipelineQueueServiceDecorator,
     ResilientDiscussionAdapterDecorator,
     ResilientTicketSystemDecorator,
 )
@@ -239,17 +239,41 @@ class ResilienceFactory:
         self, adapter: IPipelineQueueService
     ) -> IPipelineQueueService:
         """
-        Create best-effort pipeline queue service decorator.
+        Create resilient pipeline queue service decorator.
 
-        Wraps the queue service with graceful degradation: failures in queue
-        operations are logged but do not block pipeline progression. Queue
-        tracking is essential for ordering but transient failures should not
-        prevent work-item advancement through the pipeline.
+        Applies resilience patterns (circuit-breaker, retry, timeout) to
+        write-path operations (enqueue, mark active, remove, sync) to maintain
+        ordering guarantees on CRITICAL slot. Read-only operations use
+        best-effort degradation with safe defaults and DLQ routing.
 
         Args:
             adapter: Underlying pipeline queue service adapter
 
         Returns:
-            IPipelineQueueService: Wrapped adapter with best-effort resilience
+            IPipelineQueueService: Wrapped adapter with hybrid resilience
         """
-        return BestEffortPipelineQueueServiceDecorator(wrapped=adapter)
+        if self._mode == OperationMode.PRODUCTION:
+            circuit_breaker = CircuitBreaker(
+                failure_threshold=5,
+                recovery_timeout=60,
+                name="queue_service",
+            )
+            return ResilientPipelineQueueServiceDecorator(
+                wrapped=adapter,
+                circuit_breaker=circuit_breaker,
+                retry_policy=ExponentialBackoffRetry(
+                    max_retries=3,
+                    base_delay=0.5,
+                    max_delay=5.0,
+                ),
+                timeout=AsyncTimeout(),
+                default_timeout_seconds=30.0,
+            )
+        else:
+            return ResilientPipelineQueueServiceDecorator(
+                wrapped=adapter,
+                circuit_breaker=MockCircuitBreaker(),
+                retry_policy=MockRetryPolicy(),
+                timeout=MockTimeout(),
+                default_timeout_seconds=30.0,
+            )
