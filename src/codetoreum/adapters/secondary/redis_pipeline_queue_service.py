@@ -232,7 +232,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
             raise
 
         # Emit event
-        self._emit_event(
+        await self._emit_event(
             QueueItemAddedEvent(
                 type="queue.item_added",
                 timestamp=datetime.now(UTC).isoformat(),
@@ -395,7 +395,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
         if removed:
 
             # Emit event
-            self._emit_event(
+            await self._emit_event(
                 QueueItemRemovedEvent(
                     type="queue.item_removed",
                     timestamp=datetime.now(UTC).isoformat(),
@@ -451,7 +451,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
             raw_meta = await self._redis.hget(meta_key, work_item_id)
             if not raw_meta:
                 # Metadata missing - emit corruption event and skip (don't return)
-                self._emit_event(
+                await self._emit_event(
                     QueueMetadataCorruptionEvent(
                         type="queue.metadata_corruption",
                         timestamp=datetime.now(UTC).isoformat(),
@@ -478,7 +478,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
                 metadata = json.loads(meta_str)
             except Exception as e:
                 # Metadata corrupt - emit event and skip (don't return)
-                self._emit_event(
+                await self._emit_event(
                     QueueMetadataCorruptionEvent(
                         type="queue.metadata_corruption",
                         timestamp=datetime.now(UTC).isoformat(),
@@ -509,7 +509,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
                     )
                 except ValueError as e:
                     # Status is invalid - emit corruption event and skip
-                    self._emit_event(
+                    await self._emit_event(
                         QueueMetadataCorruptionEvent(
                             type="queue.metadata_corruption",
                             timestamp=datetime.now(UTC).isoformat(),
@@ -575,7 +575,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
 
             if not raw_meta:
                 # Metadata missing - emit corruption event and skip (don't include)
-                self._emit_event(
+                await self._emit_event(
                     QueueMetadataCorruptionEvent(
                         type="queue.metadata_corruption",
                         timestamp=datetime.now(UTC).isoformat(),
@@ -601,7 +601,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
                 metadata = json.loads(meta_str)
             except Exception as e:
                 # Metadata corrupt - emit event and skip (don't include)
-                self._emit_event(
+                await self._emit_event(
                     QueueMetadataCorruptionEvent(
                         type="queue.metadata_corruption",
                         timestamp=datetime.now(UTC).isoformat(),
@@ -629,7 +629,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
                 entries.append(entry)
             except ValueError as e:
                 # Status is invalid - emit corruption event and skip
-                self._emit_event(
+                await self._emit_event(
                     QueueMetadataCorruptionEvent(
                         type="queue.metadata_corruption",
                         timestamp=datetime.now(UTC).isoformat(),
@@ -661,6 +661,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
         3. Updates position and timestamp for existing entries
 
         Gracefully handles exceptions without raising, matching InMemoryQueueService.
+        Errors in specific operations are logged but don't prevent other operations.
 
         Args:
             project_id: Project identifier
@@ -680,92 +681,100 @@ class RedisPipelineQueueService(IPipelineQueueService):
             msg = "column cannot be empty"
             raise QueueValidationError(msg)
 
+        # Fetch board state with separate error handling
         try:
-            # Get current board state
             board = await self._board_service.get_board(project_id, board_id)
+        except Exception as e:
+            logger.error(
+                f"Failed to fetch board {project_id}/{board_id} for queue sync.",
+                exc_info=True,
+                extra={
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "column": column,
+                    "error_type": type(e).__name__,
+                    "error_id": ErrorRegistry.ERR_QUEUE_SYNC_ERROR,
+                },
+            )
+            return
 
-            # Find the target column
-            target_column = None
-            for col in board.columns:
-                if col.name == column:
-                    target_column = col
-                    break
+        # Find target column with separate error handling
+        target_column = None
+        for col in board.columns:
+            if col.name == column:
+                target_column = col
+                break
 
-            if not target_column:
-                # Column not found - log but continue gracefully
-                logger.warning(
-                    f"Column {column} not found in board {project_id}/{board_id}",
-                    extra={
-                        "project_id": project_id,
-                        "board_id": board_id,
-                        "column": column,
-                    },
-                )
-                return
+        if not target_column:
+            logger.warning(
+                f"Column {column} not found in board {project_id}/{board_id}",
+                extra={
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "column": column,
+                },
+            )
+            return
 
-            queue_key = self._queue_key(project_id, board_id)
-            meta_key = self._metadata_key(project_id, board_id)
-            reverse_index_key = self._reverse_index_key()
+        queue_key = self._queue_key(project_id, board_id)
+        meta_key = self._metadata_key(project_id, board_id)
+        reverse_index_key = self._reverse_index_key()
 
-            # Get items currently in queue
+        # Fetch current queue state with separate error handling
+        try:
             queue_items = await self._redis.zrange(queue_key, 0, -1)
             queue_item_ids = {
                 item.decode("utf-8") if isinstance(item, bytes) else item for item in queue_items
             }
+        except Exception as e:
+            logger.error(
+                f"Failed to fetch queue items from Redis for {project_id}/{board_id}.",
+                exc_info=True,
+                extra={
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "column": column,
+                    "error_type": type(e).__name__,
+                    "error_id": ErrorRegistry.ERR_QUEUE_SYNC_ERROR,
+                },
+            )
+            return
 
-            # Get items in column
-            items_in_column = set(target_column.work_item_ids)
+        items_in_column = set(target_column.work_item_ids)
+        now = datetime.now(UTC)
 
-            now = datetime.now(UTC)
-
-            # Step 1: Remove items no longer in column (atomic per item)
-            items_to_remove = queue_item_ids - items_in_column
-            if items_to_remove:
+        # Step 1: Remove items no longer in column with separate error handling
+        items_to_remove = queue_item_ids - items_in_column
+        if items_to_remove:
+            try:
                 pipe = self._redis.pipeline(transaction=True)
                 for item_id in items_to_remove:
                     pipe.zrem(queue_key, item_id)
                     pipe.hdel(meta_key, item_id)
                     pipe.hdel(reverse_index_key, item_id)
                 await pipe.execute()
+            except Exception as e:
+                logger.error(
+                    f"Failed to remove items from queue for {project_id}/{board_id}.",
+                    exc_info=True,
+                    extra={
+                        "project_id": project_id,
+                        "board_id": board_id,
+                        "column": column,
+                        "items_to_remove_count": len(items_to_remove),
+                        "error_type": type(e).__name__,
+                        "error_id": ErrorRegistry.ERR_QUEUE_SYNC_ERROR,
+                    },
+                )
 
-            # Step 2 & 3: Add/update items in column
-            for position, work_item_id in enumerate(target_column.work_item_ids):
-                raw_meta = await self._redis.hget(meta_key, work_item_id)
-
-                if work_item_id in queue_item_ids:
-                    # Item exists - update position and timestamp
-                    if raw_meta:
-                        try:
-                            meta_str = raw_meta.decode("utf-8") if isinstance(raw_meta, bytes) else raw_meta
-                            metadata = json.loads(meta_str)
-                            old_position = int(
-                                await self._redis.zscore(queue_key, work_item_id) or 0
-                            )
-                        except Exception as e:
-                            # Metadata corrupt - emit corruption event and skip update
-                            self._emit_event(
-                                QueueMetadataCorruptionEvent(
-                                    type="queue.metadata_corruption",
-                                    timestamp=now.isoformat(),
-                                    source="redis_pipeline_queue_service",
-                                    queue_name=f"{project_id}:{board_id}",
-                                    work_item_id=work_item_id,
-                                    error_details=f"Failed to parse metadata during sync: {type(e).__name__}: {e!s}",
-                                    project_id=project_id,
-                                )
-                            )
-                            logger.warning(
-                                f"Skipping position update for {work_item_id} in queue {project_id}/{board_id}: metadata corrupted ({type(e).__name__})",
-                                extra={
-                                    "work_item_id": work_item_id,
-                                    "project_id": project_id,
-                                    "board_id": board_id,
-                                },
-                            )
-                            continue
-                    else:
-                        # Metadata missing - emit corruption event and skip update
-                        self._emit_event(
+        # Step 2 & 3: Add/update items in column
+        for position, work_item_id in enumerate(target_column.work_item_ids):
+            if work_item_id in queue_item_ids:
+                # Item exists - update position and timestamp
+                try:
+                    raw_meta = await self._redis.hget(meta_key, work_item_id)
+                    if not raw_meta:
+                        await self._emit_event(
                             QueueMetadataCorruptionEvent(
                                 type="queue.metadata_corruption",
                                 timestamp=now.isoformat(),
@@ -786,16 +795,54 @@ class RedisPipelineQueueService(IPipelineQueueService):
                         )
                         continue
 
-                    # Update position and timestamp (atomically)
+                    meta_str = raw_meta.decode("utf-8") if isinstance(raw_meta, bytes) else raw_meta
+                    metadata = json.loads(meta_str)
+                    old_position = int(await self._redis.zscore(queue_key, work_item_id) or 0)
+                except (json.JSONDecodeError, ValueError, UnicodeDecodeError) as e:
+                    await self._emit_event(
+                        QueueMetadataCorruptionEvent(
+                            type="queue.metadata_corruption",
+                            timestamp=now.isoformat(),
+                            source="redis_pipeline_queue_service",
+                            queue_name=f"{project_id}:{board_id}",
+                            work_item_id=work_item_id,
+                            error_details=f"Failed to parse metadata during sync: {type(e).__name__}: {e!s}",
+                            project_id=project_id,
+                        )
+                    )
+                    logger.warning(
+                        f"Skipping position update for {work_item_id} in queue {project_id}/{board_id}: metadata corrupted ({type(e).__name__})",
+                        extra={
+                            "work_item_id": work_item_id,
+                            "project_id": project_id,
+                            "board_id": board_id,
+                        },
+                    )
+                    continue
+                except Exception as e:
+                    logger.error(
+                        f"Unexpected error reading metadata for {work_item_id} in queue {project_id}/{board_id}.",
+                        exc_info=True,
+                        extra={
+                            "work_item_id": work_item_id,
+                            "project_id": project_id,
+                            "board_id": board_id,
+                            "error_type": type(e).__name__,
+                            "error_id": ErrorRegistry.ERR_QUEUE_SYNC_ERROR,
+                        },
+                    )
+                    continue
+
+                # Update position and timestamp (atomically)
+                try:
                     metadata["last_position_check"] = now.isoformat()
                     pipe = self._redis.pipeline(transaction=True)
                     pipe.zadd(queue_key, {work_item_id: float(position)})
                     pipe.hset(meta_key, work_item_id, json.dumps(metadata))
                     await pipe.execute()
 
-                    # Emit position change event if position changed
                     if old_position != position:
-                        self._emit_event(
+                        await self._emit_event(
                             QueuePositionChangedEvent(
                                 type="queue.position_changed",
                                 timestamp=now.isoformat(),
@@ -807,8 +854,22 @@ class RedisPipelineQueueService(IPipelineQueueService):
                                 project_id=project_id,
                             )
                         )
-                else:
-                    # New item - add to queue (atomically)
+                except Exception as e:
+                    logger.error(
+                        f"Failed to update position for {work_item_id} in queue {project_id}/{board_id}.",
+                        exc_info=True,
+                        extra={
+                            "work_item_id": work_item_id,
+                            "project_id": project_id,
+                            "board_id": board_id,
+                            "new_position": position,
+                            "error_type": type(e).__name__,
+                            "error_id": ErrorRegistry.ERR_QUEUE_SYNC_ERROR,
+                        },
+                    )
+            else:
+                # New item - add to queue (atomically)
+                try:
                     metadata = {
                         "status": QueueStatus.WAITING.value,
                         "queued_at": now.isoformat(),
@@ -821,21 +882,19 @@ class RedisPipelineQueueService(IPipelineQueueService):
                     pipe.hset(reverse_index_key, work_item_id, pipeline_coords)
                     pipe.sadd(self._pipeline_registry_key(), pipeline_coords)
                     await pipe.execute()
-
-        except Exception as e:
-            # Graceful degradation: log error but don't fail
-            logger.error(
-                f"Failed to sync queue with board for {project_id}/{board_id}/{column}. "
-                f"Queue will remain in current state until next sync attempt.",
-                exc_info=True,
-                extra={
-                    "project_id": project_id,
-                    "board_id": board_id,
-                    "column": column,
-                    "error_type": type(e).__name__,
-                    "error_id": ErrorRegistry.ERR_PIPELINE_LOCK_ERROR,
-                },
-            )
+                except Exception as e:
+                    logger.error(
+                        f"Failed to add new item {work_item_id} to queue {project_id}/{board_id}.",
+                        exc_info=True,
+                        extra={
+                            "work_item_id": work_item_id,
+                            "project_id": project_id,
+                            "board_id": board_id,
+                            "position": position,
+                            "error_type": type(e).__name__,
+                            "error_id": ErrorRegistry.ERR_QUEUE_SYNC_ERROR,
+                        },
+                    )
 
     def _reconstruct_entry(
         self,
@@ -920,19 +979,77 @@ class RedisPipelineQueueService(IPipelineQueueService):
             last_position_check=last_position_check,
         )
 
-    def _emit_event(self, event) -> None:
+    async def _emit_event(self, event) -> None:
         """Emit an event via IEventEmitter with error handling.
 
         Wraps emission in try/except to prevent event publishing failures
-        from crashing queue operations.
+        from crashing queue operations. Routes failed events to failed_event_store
+        if configured (INV-20 compliance).
 
         Args:
             event: Domain event to emit
         """
         try:
             self._event_emitter.emit(event)
-        except Exception:
+        except Exception as e:
+            # Extract event metadata for logging context
+            event_dict = {
+                "type": getattr(event, "type", None),
+                "queue_name": getattr(event, "queue_name", None),
+                "item_id": getattr(event, "item_id", None),
+                "work_item_id": getattr(event, "work_item_id", None),
+                "project_id": getattr(event, "project_id", None),
+            }
+            queue_context = event_dict.get("queue_name") or f"{event_dict.get('project_id', '?')}"
+            item_context = event_dict.get("item_id") or event_dict.get("work_item_id")
+
             logger.error(
-                f"Failed to emit event {type(event).__name__}",
+                f"Failed to emit {type(event).__name__} for queue {queue_context}" +
+                (f" item {item_context}" if item_context else ""),
                 exc_info=True,
+                extra={
+                    "event_type": type(event).__name__,
+                    "queue_name": event_dict.get("queue_name"),
+                    "item_id": event_dict.get("item_id"),
+                    "work_item_id": event_dict.get("work_item_id"),
+                    "project_id": event_dict.get("project_id"),
+                    "error_type": type(e).__name__,
+                    "error_id": ErrorRegistry.ERR_QUEUE_EVENT_EMISSION_ERROR,
+                },
             )
+
+            # Route failed event to dead letter store if configured (INV-20)
+            if self.failed_event_store:
+                try:
+                    from codetoreum.ports.output.failed_event_store import FailureReason
+
+                    # Create event record for storage
+                    event_data = {}
+                    for attr in dir(event):
+                        if not attr.startswith("_"):
+                            try:
+                                value = getattr(event, attr)
+                                if not callable(value):
+                                    event_data[attr] = value
+                            except Exception:
+                                pass
+
+                    await self.failed_event_store.add_failed_event(
+                        event_type=type(event).__name__,
+                        event_data=event_data,
+                        failure_reason=FailureReason.PROCESSING_ERROR,
+                        error_message=f"{type(e).__name__}: {str(e)}",
+                        metadata={
+                            "queue_name": event_dict.get("queue_name"),
+                            "item_id": item_context,
+                            "project_id": event_dict.get("project_id"),
+                        },
+                    )
+                except Exception as dlq_error:
+                    logger.error(
+                        f"Failed to route failed event to dead letter store: {dlq_error}",
+                        exc_info=True,
+                        extra={
+                            "error_id": ErrorRegistry.ERR_QUEUE_EVENT_EMISSION_ERROR,
+                        },
+                    )
