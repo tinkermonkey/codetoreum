@@ -1028,7 +1028,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
                         event_type=type(event).__name__,
                         event_data=event.to_dict(),
                         failure_reason=FailureReason.PROCESSING_ERROR,
-                        error_message=f"{type(e).__name__}: {str(e)}",
+                        error_message=f"{type(e).__name__}: {e!s}",
                         metadata={
                             "queue_name": event_dict.get("queue_name"),
                             "item_id": item_context,
