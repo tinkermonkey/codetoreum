@@ -502,9 +502,8 @@ class AdapterResolver:
         """Resolve pipeline queue service adapter.
 
         For "redis", constructs an aioredis client from REDIS_URL and injects
-        the board_service, event_emitter, event_bus, and failed_event_store
-        dependencies so queue entries can be synced with board state and failures
-        can be properly handled (INV-20).
+        the board_service and event_emitter dependencies so queue entries can
+        be synced with board state.
         """
         if self._config.queue_service == "redis":
             import os
@@ -526,8 +525,6 @@ class AdapterResolver:
                 redis_client=redis_client,
                 board_service=board_service,
                 event_emitter=self._resolved["event_emitter"],
-                event_bus=self._deps.event_bus,
-                failed_event_store=self._deps.failed_event_store,
             )
         return self._factory.create_pipeline_queue_service(
             adapter_name=self._config.queue_service,
