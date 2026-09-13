@@ -426,7 +426,7 @@ class TestRedisPipelineQueueService(TestPipelineQueueServiceContract):
         await service.enqueue_item("proj-1", "board-1", "item-123", position_in_column=0, timestamp=now)
 
         # Corrupt the metadata by storing invalid JSON
-        meta_key = f"codetoreum:qsvc:meta:proj-1:board-1"
+        meta_key = "codetoreum:qsvc:meta:proj-1:board-1"
         await redis_client.hset(meta_key, "item-123", "not valid json")
 
         with pytest.raises(InvalidQueueStateError) as exc_info:
@@ -450,7 +450,7 @@ class TestRedisPipelineQueueService(TestPipelineQueueServiceContract):
         await service.enqueue_item("proj-1", "board-1", "item-123", position_in_column=0, timestamp=now)
 
         # Corrupt the metadata by removing the status field
-        meta_key = f"codetoreum:qsvc:meta:proj-1:board-1"
+        meta_key = "codetoreum:qsvc:meta:proj-1:board-1"
         await redis_client.hset(meta_key, "item-123", '{"queued_at": "2025-01-01T00:00:00"}')
 
         with pytest.raises(InvalidQueueStateError) as exc_info:
@@ -474,7 +474,7 @@ class TestRedisPipelineQueueService(TestPipelineQueueServiceContract):
         await service.enqueue_item("proj-1", "board-1", "item-123", position_in_column=0, timestamp=now)
 
         # Corrupt the metadata by storing an invalid status value
-        meta_key = f"codetoreum:qsvc:meta:proj-1:board-1"
+        meta_key = "codetoreum:qsvc:meta:proj-1:board-1"
         await redis_client.hset(meta_key, "item-123", '{"status": "INVALID_STATUS", "queued_at": "2025-01-01T00:00:00"}')
 
         with pytest.raises(InvalidQueueStateError) as exc_info:

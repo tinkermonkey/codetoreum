@@ -521,7 +521,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
                         )
                     )
                     logger.warning(
-                        f"Skipping {work_item_id} in queue {project_id}/{board_id}: {str(e)}",
+                        f"Skipping {work_item_id} in queue {project_id}/{board_id}: {e!s}",
                         extra={
                             "work_item_id": work_item_id,
                             "project_id": project_id,
@@ -641,7 +641,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
                     )
                 )
                 logger.warning(
-                    f"Skipping {work_item_id} in queue {project_id}/{board_id}: {str(e)}",
+                    f"Skipping {work_item_id} in queue {project_id}/{board_id}: {e!s}",
                     extra={
                         "work_item_id": work_item_id,
                         "project_id": project_id,
