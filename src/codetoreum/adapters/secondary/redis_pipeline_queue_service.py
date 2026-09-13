@@ -76,8 +76,6 @@ class RedisPipelineQueueService(IPipelineQueueService):
         redis_client: aioredis.Redis,
         board_service: IBoardService,
         event_emitter: IEventEmitter,
-        event_bus: "EventBus | None" = None,
-        failed_event_store: "IFailedEventStore | None" = None,
         key_prefix: str = _KEY_PREFIX,
     ) -> None:
         """Initialize Redis-backed queue service.
@@ -86,15 +84,11 @@ class RedisPipelineQueueService(IPipelineQueueService):
             redis_client: Redis async client
             board_service: Board service for queue synchronization
             event_emitter: Event emitter for domain events
-            event_bus: Optional EventBus for event subscription
-            failed_event_store: Optional failed event store for durability
             key_prefix: Redis key prefix (default: "codetoreum:qsvc")
         """
         self._redis = redis_client
         self._board_service = board_service
         self._event_emitter = event_emitter
-        self._event_bus = event_bus
-        self._failed_event_store = failed_event_store
         self._key_prefix = key_prefix
 
     def _queue_key(self, project_id: str, board_id: str) -> str:
@@ -331,15 +325,15 @@ class RedisPipelineQueueService(IPipelineQueueService):
         queue_key = self._queue_key(project_id, board_id)
         meta_key = self._metadata_key(project_id, board_id)
 
-        # Check if item is in sorted set
-        removed = await self._redis.zrem(queue_key, work_item_id)
+        # Atomically remove from sorted set, metadata, and reverse index
+        pipe = self._redis.pipeline(transaction=True)
+        pipe.zrem(queue_key, work_item_id)
+        pipe.hdel(meta_key, work_item_id)
+        pipe.hdel(reverse_index_key, work_item_id)
+        results = await pipe.execute()
+        removed = results[0]
 
         if removed:
-            # Atomically remove metadata and reverse index
-            pipe = self._redis.pipeline(transaction=True)
-            await pipe.hdel(meta_key, work_item_id)
-            await pipe.hdel(reverse_index_key, work_item_id)
-            await pipe.execute()
 
             # Emit event
             self._emit_event(
@@ -594,11 +588,15 @@ class RedisPipelineQueueService(IPipelineQueueService):
 
             now = datetime.now(UTC)
 
-            # Step 1: Remove items no longer in column
-            for item_id in queue_item_ids - items_in_column:
-                await self._redis.zrem(queue_key, item_id)
-                await self._redis.hdel(meta_key, item_id)
-                await self._redis.hdel(reverse_index_key, item_id)
+            # Step 1: Remove items no longer in column (atomic per item)
+            items_to_remove = queue_item_ids - items_in_column
+            if items_to_remove:
+                pipe = self._redis.pipeline(transaction=True)
+                for item_id in items_to_remove:
+                    pipe.zrem(queue_key, item_id)
+                    pipe.hdel(meta_key, item_id)
+                    pipe.hdel(reverse_index_key, item_id)
+                await pipe.execute()
 
             # Step 2 & 3: Add/update items in column
             for position, work_item_id in enumerate(target_column.work_item_ids):
@@ -627,10 +625,12 @@ class RedisPipelineQueueService(IPipelineQueueService):
                         }
                         old_position = 0
 
-                    # Update position and timestamp
+                    # Update position and timestamp (atomically)
                     metadata["last_position_check"] = now.isoformat()
-                    await self._redis.zadd(queue_key, {work_item_id: float(position)})
-                    await self._redis.hset(meta_key, work_item_id, json.dumps(metadata))
+                    pipe = self._redis.pipeline(transaction=True)
+                    pipe.zadd(queue_key, {work_item_id: float(position)})
+                    pipe.hset(meta_key, work_item_id, json.dumps(metadata))
+                    await pipe.execute()
 
                     # Emit position change event if position changed
                     if old_position != position:
@@ -647,19 +647,19 @@ class RedisPipelineQueueService(IPipelineQueueService):
                             )
                         )
                 else:
-                    # New item - add to queue
+                    # New item - add to queue (atomically)
                     metadata = {
                         "status": QueueStatus.WAITING.value,
                         "queued_at": now.isoformat(),
                         "last_position_check": now.isoformat(),
                     }
-                    await self._redis.zadd(queue_key, {work_item_id: float(position)})
-                    await self._redis.hset(meta_key, work_item_id, json.dumps(metadata))
-
-                    # Update reverse index and pipeline registry
                     pipeline_coords = f"{project_id}\x1f{board_id}"
-                    await self._redis.hset(reverse_index_key, work_item_id, pipeline_coords)
-                    await self._redis.sadd(self._pipeline_registry_key(), pipeline_coords)
+                    pipe = self._redis.pipeline(transaction=True)
+                    pipe.zadd(queue_key, {work_item_id: float(position)})
+                    pipe.hset(meta_key, work_item_id, json.dumps(metadata))
+                    pipe.hset(reverse_index_key, work_item_id, pipeline_coords)
+                    pipe.sadd(self._pipeline_registry_key(), pipeline_coords)
+                    await pipe.execute()
 
         except Exception as e:
             # Graceful degradation: log error but don't fail

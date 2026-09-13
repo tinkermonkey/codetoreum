@@ -42,38 +42,59 @@ class MockPipeline:
         self._redis = redis_client
         self._commands = []
 
-    async def zadd(self, key: str, mapping: dict) -> "MockPipeline":
-        """Buffer ZADD command."""
+    def zadd(self, key: str, mapping: dict) -> "MockPipeline":
+        """Buffer ZADD command (async but returned synchronously for chaining)."""
         self._commands.append(("zadd", (key, mapping)))
-        return self
+        # Return a coroutine-like object that resolves to self
+        return self._async_return(self)
 
-    async def hset(self, key: str, field_or_mapping, value=None) -> "MockPipeline":
-        """Buffer HSET command."""
+    def hset(self, key: str, field_or_mapping, value=None) -> "MockPipeline":
+        """Buffer HSET command (async but returned synchronously for chaining)."""
         self._commands.append(("hset", (key, field_or_mapping, value)))
-        return self
+        return self._async_return(self)
 
-    async def hdel(self, key: str, *fields) -> "MockPipeline":
-        """Buffer HDEL command."""
+    def hdel(self, key: str, *fields) -> "MockPipeline":
+        """Buffer HDEL command (async but returned synchronously for chaining)."""
         self._commands.append(("hdel", (key, fields)))
-        return self
+        return self._async_return(self)
 
-    async def sadd(self, key: str, *members) -> "MockPipeline":
-        """Buffer SADD command."""
+    def sadd(self, key: str, *members) -> "MockPipeline":
+        """Buffer SADD command (async but returned synchronously for chaining)."""
         self._commands.append(("sadd", (key, members)))
-        return self
+        return self._async_return(self)
+
+    def zrem(self, key: str, *members) -> "MockPipeline":
+        """Buffer ZREM command (async but returned synchronously for chaining)."""
+        self._commands.append(("zrem", (key, members)))
+        return self._async_return(self)
+
+    @staticmethod
+    def _async_return(value):
+        """Helper to return a value that can be awaited (returns self)."""
+        async def _awaitable():
+            return value
+        return _awaitable()
 
     async def execute(self):
         """Execute all buffered commands."""
+        results = []
         for cmd, args in self._commands:
             if cmd == "zadd":
-                await self._redis.zadd(args[0], args[1])
+                result = await self._redis.zadd(args[0], args[1])
+                results.append(result)
             elif cmd == "hset":
-                await self._redis.hset(args[0], args[1], args[2])
+                result = await self._redis.hset(args[0], args[1], args[2])
+                results.append(result)
             elif cmd == "hdel":
-                await self._redis.hdel(args[0], *args[1])
+                result = await self._redis.hdel(args[0], *args[1])
+                results.append(result)
             elif cmd == "sadd":
-                await self._redis.sadd(args[0], *args[1])
-        return self._commands
+                result = await self._redis.sadd(args[0], *args[1])
+                results.append(result)
+            elif cmd == "zrem":
+                result = await self._redis.zrem(args[0], *args[1])
+                results.append(result)
+        return results
 
 
 class MockRedis:
