@@ -29,6 +29,7 @@ from codetoreum.domain.events.queue_events import (
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.output.board_service import IBoardService
 from codetoreum.ports.output.event_emitter import IEventEmitter
+from codetoreum.ports.output.failed_event_store import IFailedEventStore
 from codetoreum.ports.output.pipeline_queue_service import (
     DuplicateQueueEntryError,
     InvalidQueueStateError,
@@ -72,7 +73,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
         board_service: IBoardService,
         event_emitter: IEventEmitter,
         key_prefix: str = _KEY_PREFIX,
-        failed_event_store=None,
+        failed_event_store: IFailedEventStore | None = None,
     ) -> None:
         """Initialize Redis-backed queue service.
 

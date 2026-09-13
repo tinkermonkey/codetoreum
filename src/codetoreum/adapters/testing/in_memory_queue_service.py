@@ -35,6 +35,7 @@ from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.ports.output.board_service import IBoardService
 from codetoreum.ports.output.event_emitter import IEventEmitter
+from codetoreum.ports.output.failed_event_store import IFailedEventStore
 from codetoreum.ports.output.pipeline_queue_service import (
     DuplicateQueueEntryError,
     InvalidQueueStateError,
@@ -78,7 +79,7 @@ class InMemoryQueueService(IPipelineQueueService):
         time_source: Callable[[], datetime] | None = None,
         event_emitter: IEventEmitter | None = None,
         event_bus: EventBus | None = None,
-        failed_event_store=None,
+        failed_event_store: IFailedEventStore | None = None,
     ) -> None:
         """Initialize empty queue service.
 
