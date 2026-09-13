@@ -415,9 +415,18 @@ class RedisPipelineQueueService(IPipelineQueueService):
     async def get_next_waiting_item(self, project_id: str, board_id: str) -> PipelineQueueEntry | None:
         """Get next waiting item from queue.
 
-        Returns the waiting item with lowest position_in_column from the queue.
-        Callers are responsible for calling sync_queue_with_board explicitly
-        before this method to ensure the queue matches board state.
+        Before selecting the next item, this method syncs with the board state
+        to ensure queue order matches current board position order. This is
+        essential because:
+
+        1. Users can manually reorder cards in the UI
+        2. Items can be moved out of the trigger column
+        3. New items can be added to the trigger column
+
+        After syncing, queue entries are sorted by position_in_column in
+        ascending order (lowest position = highest priority). This method
+        returns the waiting item with the lowest position_in_column value
+        (topmost in column = highest priority).
 
         Corrupted items are skipped to prevent double-execution of ACTIVE items.
 
@@ -441,6 +450,47 @@ class RedisPipelineQueueService(IPipelineQueueService):
 
         queue_key = self._queue_key(project_id, board_id)
         meta_key = self._metadata_key(project_id, board_id)
+
+        # Sync with board before selecting next item
+        # Get current queue items to determine which column to sync
+        try:
+            queue_items = await self._redis.zrange(queue_key, 0, -1)
+            queue_item_ids = {
+                item.decode("utf-8") if isinstance(item, bytes) else item for item in queue_items
+            }
+
+            if queue_item_ids:
+                # Get board to find which column contains these items
+                try:
+                    board = await self._board_service.get_board(project_id, board_id)
+                    for col in board.columns:
+                        # Check if any queue items are in this column
+                        if any(item_id in col.work_item_ids for item_id in queue_item_ids):
+                            # Sync this column before selecting
+                            await self.sync_queue_with_board(project_id, board_id, col.name)
+                            break
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to sync queue with board before selecting next item for {project_id}/{board_id}",
+                        exc_info=True,
+                        extra={
+                            "project_id": project_id,
+                            "board_id": board_id,
+                            "error_type": type(e).__name__,
+                        },
+                    )
+                    # Continue with current queue state if sync fails
+        except Exception as e:
+            logger.warning(
+                f"Failed to read queue items for pre-selection sync in {project_id}/{board_id}",
+                exc_info=True,
+                extra={
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "error_type": type(e).__name__,
+                },
+            )
+            # Continue with current queue state if we can't read items
 
         # Get all items from sorted set (lowest score first)
         items = await self._redis.zrange(queue_key, 0, -1, withscores=True)
