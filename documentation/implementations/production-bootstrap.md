@@ -142,6 +142,58 @@ Tests validate the metrics recording path:
 - `test_metrics_endpoint_http_scrape()` validates that the `/metrics` HTTP endpoint returns Prometheus-formatted output with metric data.
 - A synthetic execution (e.g., via simulation test or repair-cycle scenario) exercises the metrics calls to confirm the full recording path works end-to-end.
 
+### Phase 2 — Queue service adapter resolution (Issue #1016 Phase 4–5)
+
+The queue_service slot is resolved during Phase 2 adapter resolution, choosing between in-memory (for simulation/testing) or Redis-backed (for production durability). The `queue_service="redis"` configuration in `ProductionApplicationBootstrap.__init__()` ensures the real `RedisPipelineQueueService` is wired end-to-end for crash-resilient pipeline queuing.
+
+**Configuration in ProductionApplicationBootstrap**:
+```python
+adapter_config = AdapterSelectionConfig(
+    queue_service="redis",  # Redis-backed pipeline queue service; survives restart
+    # ... other adapters
+)
+```
+
+**Resolver path** (Phase 2, `AdapterResolver.resolve_queue_service()`):
+- If `queue_service == "in_memory"`: Factory creates in-memory test adapter (for simulation only)
+- If `queue_service == "redis"`: Factory creates production adapter using aioredis client with configured Redis connection
+
+```python
+def resolve_queue_service(self) -> IPipelineQueueService:
+    """Resolve queue service adapter."""
+    return self._factory.create_queue_service(adapter_name=self._config.queue_service)
+```
+
+**Key properties**:
+- **Backend**: Redis persistent list (`pipeline:queue:<project_id>`) for execution ordering and crash recovery
+- **Features**: Board-synced pipeline positions, audit logging, dead-letter capture for failed enqueues, event bus integration for position-change notifications
+- **Dependencies injected**: `board_service`, `event_emitter`, `event_bus`, `failed_event_store` (INV-20 forward compatibility)
+- **No time_source on Redis**: Unlike in-memory variant (which accepts optional `SimulationClock` for testing), Redis branch skips time_source injection
+
+**Queue ordering and recovery**:
+The Redis implementation persists pipeline stage positions across container restarts:
+- Each queued execution maintains its current pipeline stage (from `board_service` position)
+- On restart, `ContainerRecoveryService` dequeues stalled executions (via `active_run_registry` + `board_service` reconciliation)
+- Dead-letter queue captures enqueue failures with full event provenance for diagnostics
+
+**Slot classification** (Phase 3 decision from issue #1016):
+`queue_service` is in `NON_CRITICAL_SLOTS` (not CRITICAL_ADAPTER_SLOTS). Pipeline queuing is a backend concern; execution proceeds identically whether queued in memory or Redis. Execution path does not fail if queuing degrades — incomplete enqueues are caught by `ContainerRecoveryService` during startup, which reconciles queued work against the board. (Controlled precedent: `execution_tracker` is also NON_CRITICAL_SLOTS per INV-20.)
+
+**Validation outcome** (Issue #1016 Phase 4–5):
+Tests in `test_queue_service_bootstrap_resolution.py` verify:
+- `test_queue_service_is_non_critical_slot()`: Confirms queue_service is in NON_CRITICAL_SLOTS (pipeline queuing, not critical execution path).
+- `test_bootstrap_default_config_sets_redis_queue_service()`: Confirms ProductionApplicationBootstrap defaults queue_service to `"redis"`.
+- `test_adapter_resolver_resolves_redis_queue_service()`: Confirms AdapterResolver can resolve the Redis adapter with aioredis client and all dependencies injected.
+- `test_redis_queue_service_persistence_across_restart()`: Confirms queued executions survive container restart via Redis list persistence.
+- `test_queue_service_dead_letter_capture()`: Confirms failed enqueues are captured in dead-letter queue with full event context.
+- `test_resolver_validates_redis_connection()`: Confirms `AdapterResolver.validate_credentials()` verifies Redis connectivity before bootstrap proceeds (REDIS_URL env var required and tested).
+
+**End-to-end verification**:
+Contract tests validate the queue persistence path:
+- `test_redis_pipeline_queue_service_contracts()` verifies CRUD operations, ordering preservation, and restart durability against Redis list primitives.
+- `test_pipeline_queue_integrated_with_board_sync()` confirms that pipeline positions stay synchronized with board service during enqueue/dequeue cycles.
+- `test_container_recovery_requeues_stalled_executions()` validates that `ContainerRecoveryService` correctly dequeues and re-enqueues stalled work on bootstrap (using phase 3 slot classification).
+
 ### Phase 4c — `ICodingAgent` resolution (DEF-015 D3/D4)
 
 The `coding_agent` slot replaces the retired `llm_provider` slot (the `ILLMProvider` port deleted in D5). The slot is resolved *after* Phase 4 resilience decoration so the resilient `IContainer` is passed into the containerized strategy.
