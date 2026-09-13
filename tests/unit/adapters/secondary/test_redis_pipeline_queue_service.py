@@ -23,6 +23,10 @@ from codetoreum.domain.events.queue_events import (
 )
 from codetoreum.ports.output.board_service import IBoardService
 from codetoreum.ports.output.event_emitter import IEventEmitter
+from codetoreum.ports.output.failed_event_store import (
+    FailureReason,
+    IFailedEventStore,
+)
 from codetoreum.ports.output.pipeline_queue_service import (
     DuplicateQueueEntryError,
     InvalidQueueStateError,
@@ -1177,3 +1181,201 @@ class TestRedisPipelineQueueService(TestPipelineQueueServiceContract):
         next_entry = await queue_adapter.peek(lock_key)
         assert next_entry is not None
         assert next_entry.work_item_id == "item-1"  # First item in queue (after restart)
+
+    @pytest.mark.asyncio
+    async def test_emit_event_routes_failed_event_to_dead_letter_store(self):
+        """_emit_event should route failed events to failed_event_store when configured."""
+        redis_client = MockRedis()
+        board_service = MockBoardService()
+        event_emitter = MagicMock(spec=IEventEmitter)
+        failed_event_store = AsyncMock(spec=IFailedEventStore)
+
+        # Configure event emitter to fail
+        event_emitter.emit.side_effect = Exception("Event emission failed")
+
+        service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=event_emitter,
+            failed_event_store=failed_event_store,
+        )
+
+        # Create a test event
+        event = QueueItemAddedEvent(
+            type="queue.item_added",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="redis_queue_service",
+            queue_name="test-queue",
+            item_id="item-1",
+            project_id="proj-1",
+            position=0,
+        )
+
+        # Emit the event - should catch the exception and route to dead-letter store
+        await service._emit_event(event)
+
+        # Verify the failed event was routed to dead-letter store
+        failed_event_store.add_failed_event.assert_called_once()
+        call_args = failed_event_store.add_failed_event.call_args
+
+        # Verify correct arguments
+        assert call_args.kwargs["event_type"] == "QueueItemAddedEvent"
+        assert call_args.kwargs["failure_reason"] == FailureReason.PROCESSING_ERROR
+        assert "Event emission failed" in call_args.kwargs["error_message"]
+        assert call_args.kwargs["metadata"]["queue_name"] == "test-queue"
+        assert call_args.kwargs["metadata"]["project_id"] == "proj-1"
+        assert call_args.kwargs["event_data"] == event.to_dict()
+
+    @pytest.mark.asyncio
+    async def test_emit_event_handles_failed_event_store_failure(self):
+        """_emit_event should gracefully handle failures from failed_event_store itself."""
+        redis_client = MockRedis()
+        board_service = MockBoardService()
+        event_emitter = MagicMock(spec=IEventEmitter)
+        failed_event_store = AsyncMock(spec=IFailedEventStore)
+
+        # Configure event emitter to fail
+        event_emitter.emit.side_effect = Exception("Event emission failed")
+
+        # Configure dead-letter store to also fail
+        failed_event_store.add_failed_event.side_effect = Exception("Dead-letter store failed")
+
+        service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=event_emitter,
+            failed_event_store=failed_event_store,
+        )
+
+        # Create a test event
+        event = QueueItemAddedEvent(
+            type="queue.item_added",
+            timestamp=datetime.now(UTC).isoformat(),
+            source="redis_queue_service",
+            queue_name="test-queue",
+            item_id="item-1",
+            project_id="proj-1",
+            position=0,
+        )
+
+        # Emit the event - should not raise despite both failures
+        await service._emit_event(event)
+
+        # Verify dead-letter store was attempted
+        failed_event_store.add_failed_event.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_sync_queue_handles_zrange_failure(self):
+        """sync_queue_with_board should handle zrange failures gracefully."""
+        redis_client = AsyncMock()
+        redis_client.zrange.side_effect = Exception("Redis zrange failed")
+
+        board_service = MockBoardService()
+        event_emitter = MockEventEmitter()
+
+        service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=event_emitter,
+        )
+
+        # This should not raise despite zrange failure
+        await service.sync_queue_with_board("proj-1", "board-1", "TODO")
+
+    @pytest.mark.asyncio
+    async def test_sync_queue_handles_item_removal_pipeline_failure(self):
+        """sync_queue_with_board should handle item removal pipeline failures gracefully."""
+        redis_client = MockRedis()
+        board_service = MockBoardService()
+        event_emitter = MockEventEmitter()
+
+        service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=event_emitter,
+        )
+
+        # Enqueue some items first
+        now = datetime.now(UTC)
+        await service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+        await service.enqueue_item("proj-1", "board-1", "item-2", position_in_column=1, timestamp=now)
+
+        # Mock the pipeline to fail on execute
+        original_pipeline = redis_client.pipeline
+
+        async def failing_pipeline(*args, **kwargs):
+            pipe = original_pipeline(*args, **kwargs)
+            original_execute = pipe.execute
+
+            async def failing_execute():
+                raise Exception("Pipeline execute failed")
+
+            pipe.execute = failing_execute
+            return pipe
+
+        redis_client.pipeline = failing_pipeline
+
+        # Setup board with only item-1 (item-2 is missing, so it should be removed)
+        board_service.set_column("proj-1", "board-1", "TODO", ["item-1"])
+
+        # This should not raise despite pipeline failure
+        await service.sync_queue_with_board("proj-1", "board-1", "TODO")
+
+    @pytest.mark.asyncio
+    async def test_sync_queue_handles_per_item_position_update_failure(self):
+        """sync_queue_with_board should handle per-item position update failures gracefully."""
+        redis_client = MockRedis()
+        board_service = MockBoardService()
+        event_emitter = MockEventEmitter()
+
+        service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=event_emitter,
+        )
+
+        now = datetime.now(UTC)
+        await service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+
+        # Mock zadd to fail for position updates
+        original_zadd = redis_client.zadd
+
+        async def failing_zadd(key, mapping):
+            if "board:proj-1:board-1:queue" in key:
+                raise Exception("Position update failed")
+            return await original_zadd(key, mapping)
+
+        redis_client.zadd = failing_zadd
+
+        # This should not raise despite position update failure
+        await service.sync_queue_with_board("proj-1", "board-1", "TODO")
+
+    @pytest.mark.asyncio
+    async def test_sync_queue_handles_per_item_add_failure(self):
+        """sync_queue_with_board should handle per-item add failures gracefully."""
+        redis_client = MockRedis()
+        board_service = MockBoardService()
+        event_emitter = MockEventEmitter()
+
+        service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=event_emitter,
+        )
+
+        # Setup board with items
+        board_service.set_column("proj-1", "board-1", "TODO", ["item-1", "item-2"])
+
+        call_count = {"zadd": 0}
+        original_zadd = redis_client.zadd
+
+        async def failing_zadd(key, mapping):
+            call_count["zadd"] += 1
+            if call_count["zadd"] > 1:  # Fail on second item add
+                raise Exception("Item add failed")
+            return await original_zadd(key, mapping)
+
+        redis_client.zadd = failing_zadd
+
+        # This should not raise despite item add failure
+        await service.sync_queue_with_board("proj-1", "board-1", "TODO")

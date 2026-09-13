@@ -29,7 +29,10 @@ from codetoreum.domain.events.queue_events import (
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.ports.output.board_service import IBoardService
 from codetoreum.ports.output.event_emitter import IEventEmitter
-from codetoreum.ports.output.failed_event_store import IFailedEventStore
+from codetoreum.ports.output.failed_event_store import (
+    FailureReason,
+    IFailedEventStore,
+)
 from codetoreum.ports.output.pipeline_queue_service import (
     DuplicateQueueEntryError,
     InvalidQueueStateError,
@@ -1021,22 +1024,9 @@ class RedisPipelineQueueService(IPipelineQueueService):
             # Route failed event to dead letter store if configured (INV-20)
             if self.failed_event_store:
                 try:
-                    from codetoreum.ports.output.failed_event_store import FailureReason
-
-                    # Create event record for storage
-                    event_data = {}
-                    for attr in dir(event):
-                        if not attr.startswith("_"):
-                            try:
-                                value = getattr(event, attr)
-                                if not callable(value):
-                                    event_data[attr] = value
-                            except Exception:
-                                pass
-
                     await self.failed_event_store.add_failed_event(
                         event_type=type(event).__name__,
-                        event_data=event_data,
+                        event_data=event.to_dict(),
                         failure_reason=FailureReason.PROCESSING_ERROR,
                         error_message=f"{type(e).__name__}: {str(e)}",
                         metadata={
