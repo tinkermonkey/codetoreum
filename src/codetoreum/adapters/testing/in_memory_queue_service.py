@@ -385,24 +385,6 @@ class InMemoryQueueService(IPipelineQueueService):
         # Sync with board before selecting to ensure order matches current board state
         # Only sync if we have a board service
         if self._board_service:
-            try:
-                board = await self._board_service.get_board(project_id, board_id)
-
-                with self._lock:
-                    queue_key = f"{project_id}:{board_id}"
-                    queue = self._queues.get(queue_key, [])
-
-                    # Find which column contains queued items
-                    queue_item_ids = {entry.work_item_id for entry in queue}
-                    if queue_item_ids:
-                        for col in board.columns:
-                            if any(item_id in col.work_item_ids for item_id in queue_item_ids):
-                                # Release lock before calling sync (which also acquires lock)
-                                pass
-            except Exception:
-                # Continue with current queue if sync fails
-                pass
-
             # Sync the column (outside lock to prevent deadlock)
             try:
                 board = await self._board_service.get_board(project_id, board_id)
