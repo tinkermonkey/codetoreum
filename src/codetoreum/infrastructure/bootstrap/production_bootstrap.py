@@ -295,6 +295,7 @@ class ProductionApplicationBootstrap:
                 lock_service="redis",  # Persistent pipeline lock; survives restart, coordinates instances
                 run_registry="redis",  # Persistent active-run records; closes DEF-002 across restart
                 branch_tracker="redis",  # Persistent work_item -> branch mapping; survives restart
+                queue_service="redis",  # Redis-backed pipeline queue service; survives restart
                 agent_repository="elasticsearch",  # Agent catalog survives restart (DEF-008)
                 workflow_config="elasticsearch",  # BoardWorkflowTemplate survives restart (DEF-008)
                 execution_tracker="redis",  # Persistent execution state; container recovery needs this across restart

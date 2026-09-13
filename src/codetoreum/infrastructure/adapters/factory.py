@@ -43,6 +43,9 @@ from codetoreum.adapters.secondary.local_key_encryption_adapter import (
 from codetoreum.adapters.secondary.redis_distributed_lock import (
     RedisDistributedLock,
 )
+from codetoreum.adapters.secondary.redis_pipeline_queue_service import (
+    RedisPipelineQueueService,
+)
 
 # Import testing adapters
 from codetoreum.adapters.testing import (
@@ -818,6 +821,17 @@ class AdapterFactory:
                 description="Simulation-only adapter, no credentials required",
             ),
             set_as_default=True,
+        )
+        self._pipeline_queue_registry.register(
+            name="redis",
+            adapter_type=RedisPipelineQueueService,
+            description="Redis-backed pipeline queue service for production",
+            version="1.0.0",
+            tags=["production", "persistent", "redis"],
+            config_schema=AdapterCredentialRequirement(
+                env_vars=("REDIS_URL",),
+                description="Requires Redis connection for durable queue storage",
+            ),
         )
 
         # Project Manager Service Adapters
