@@ -405,6 +405,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
                     "error_id": ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE,
                 },
             )
+            await self._redis.hdel(reverse_index_key, work_item_id)
             return False
         project_id, board_id = parts
 
