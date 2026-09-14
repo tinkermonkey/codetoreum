@@ -738,8 +738,9 @@ class RedisPipelineQueueService(IPipelineQueueService):
         2. Adds entries for newly discovered items in column
         3. Updates position and timestamp for existing entries
 
-        Raises QueueServiceError on board service communication failures, allowing
-        the resilient decorator to apply retry, circuit-breaker, and DLQ routing.
+        Board service communication failures (e.g., ExternalServiceError) are
+        re-raised as-is and subject to the resilient decorator's standard patterns:
+        retry, circuit-breaker failure counting (non-business errors), and DLQ routing.
 
         Args:
             project_id: Project identifier
@@ -748,7 +749,6 @@ class RedisPipelineQueueService(IPipelineQueueService):
 
         Raises:
             QueueValidationError: Invalid parameters
-            QueueServiceError: Board service communication failure
         """
         if not project_id:
             msg = "project_id cannot be empty"
