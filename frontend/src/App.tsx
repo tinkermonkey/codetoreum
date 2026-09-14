@@ -1,8 +1,9 @@
-import { BrowserRouter, Routes, Route, Link, Navigate } from 'react-router-dom'
-import { Settings, GitBranch, Users, Activity, History, Loader2 } from 'lucide-react'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { Loader2 } from 'lucide-react'
 import { useAuth } from './hooks/useAuth'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { SystemStatusHeader } from './components/system-status'
+import { AppNav } from './components/layout/AppNav'
 import DashboardPage from './pages/DashboardPage'
 import ProjectConfigPage from './pages/ProjectConfigPage'
 import WorkflowConfigPage from './pages/WorkflowConfigPage'
@@ -15,16 +16,17 @@ import { PipelineFlowPage } from './pages/PipelineFlowPage'
 function App() {
   const { isAuthenticated, isLoading } = useAuth()
 
-  // Show loading state while checking authentication
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="flex min-h-screen items-center justify-center bg-background" role="status" aria-live="polite">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-7 w-7 animate-spin text-primary" aria-hidden />
+          <p className="text-sm text-muted-foreground">Checking authentication…</p>
+        </div>
       </div>
     )
   }
 
-  // Show auth required page if not authenticated
   if (!isAuthenticated) {
     return <AuthRequiredPage />
   }
@@ -32,7 +34,6 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Full-screen pipeline run details (no nav/container) */}
         <Route
           path="/workflows/runs/:id?"
           element={
@@ -41,8 +42,6 @@ function App() {
             </ErrorBoundary>
           }
         />
-
-        {/* Full-screen pipeline flow visualization (no nav/container) */}
         <Route
           path="/workflows/flow/:id?"
           element={
@@ -52,103 +51,21 @@ function App() {
           }
         />
 
-        {/* Main app layout with navigation */}
         <Route
           path="*"
           element={
             <div className="min-h-screen bg-background">
-              <nav className="border-b">
-                <div className="container mx-auto px-4 py-4">
-                  <div className="flex items-center justify-between">
-                    <h1 className="text-2xl font-bold">Codetoreum</h1>
-                    <div className="flex space-x-4">
-                      <Link
-                        to="/"
-                        className="flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-accent"
-                      >
-                        <Activity className="h-4 w-4" />
-                        <span>Dashboard</span>
-                      </Link>
-                      <Link
-                        to="/config"
-                        className="flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-accent"
-                      >
-                        <Settings className="h-4 w-4" />
-                        <span>Project</span>
-                      </Link>
-                      <Link
-                        to="/workflows"
-                        className="flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-accent"
-                      >
-                        <GitBranch className="h-4 w-4" />
-                        <span>Workflows</span>
-                      </Link>
-                      <Link
-                        to="/agents"
-                        className="flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-accent"
-                      >
-                        <Users className="h-4 w-4" />
-                        <span>Agents</span>
-                      </Link>
-                      <Link
-                        to="/history"
-                        className="flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-accent"
-                      >
-                        <History className="h-4 w-4" />
-                        <span>History</span>
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              </nav>
-
-              <main className="container mx-auto px-4 py-8">
-                {/* System Status Header */}
-                <div className="mb-6">
+              <AppNav />
+              <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+                <div className="mb-8">
                   <SystemStatusHeader />
                 </div>
-
                 <Routes>
-                  <Route
-                    path="/"
-                    element={
-                      <ErrorBoundary>
-                        <DashboardPage />
-                      </ErrorBoundary>
-                    }
-                  />
-                  <Route
-                    path="/config"
-                    element={
-                      <ErrorBoundary>
-                        <ProjectConfigPage />
-                      </ErrorBoundary>
-                    }
-                  />
-                  <Route
-                    path="/workflows"
-                    element={
-                      <ErrorBoundary>
-                        <WorkflowConfigPage />
-                      </ErrorBoundary>
-                    }
-                  />
-                  <Route
-                    path="/agents"
-                    element={
-                      <ErrorBoundary>
-                        <AgentConfigPage />
-                      </ErrorBoundary>
-                    }
-                  />
-                  <Route
-                    path="/history"
-                    element={
-                      <ErrorBoundary>
-                        <ConfigHistoryPage />
-                      </ErrorBoundary>
-                    }
-                  />
+                  <Route path="/" element={<ErrorBoundary><DashboardPage /></ErrorBoundary>} />
+                  <Route path="/config" element={<ErrorBoundary><ProjectConfigPage /></ErrorBoundary>} />
+                  <Route path="/workflows" element={<ErrorBoundary><WorkflowConfigPage /></ErrorBoundary>} />
+                  <Route path="/agents" element={<ErrorBoundary><AgentConfigPage /></ErrorBoundary>} />
+                  <Route path="/history" element={<ErrorBoundary><ConfigHistoryPage /></ErrorBoundary>} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </main>

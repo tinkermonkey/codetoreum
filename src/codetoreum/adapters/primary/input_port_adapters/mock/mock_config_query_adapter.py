@@ -3,7 +3,7 @@ Mock Configuration Query Adapter
 
 In-memory implementation of IConfigurationQueryPort for development and testing.
 
-Supports optional backing store injection: when an InMemoryConfigStore is provided,
+Supports optional backing store injection: when an IConfigStore is provided,
 reads delegate to it (converting ProjectConfig -> ProjectConfigInfo on the fly).
 When no backing store is provided (unit tests), the adapter uses its own internal
 dictionaries.
@@ -31,7 +31,7 @@ from codetoreum.ports.input.config_query import (
 )
 
 if TYPE_CHECKING:
-    from codetoreum.adapters.testing.in_memory_config_store import InMemoryConfigStore
+    from codetoreum.ports.output.config_store import IConfigStore
 
 
 class MockConfigQueryAdapter(IConfigurationQueryPort):
@@ -44,7 +44,7 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
     This eliminates the need for dual-writes in simulation seeding.
     """
 
-    def __init__(self, config_store: Optional["InMemoryConfigStore"] = None):
+    def __init__(self, config_store: Optional["IConfigStore"] = None):
         self._config_store = config_store
         self._projects: dict[str, ProjectConfigInfo] = {}
         self._projects_by_name: dict[str, str] = {}  # name -> project_id
@@ -52,6 +52,12 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
         self._pipelines: dict[str, dict[str, PipelineConfigInfo]] = {}  # project_id -> {pipeline_name -> config}
         self._version_history: dict[str, list[ConfigVersionInfo]] = {}  # config_id -> versions
         self._lock = RLock()
+
+    async def _project_ids_from_store(self) -> list[str]:
+        """Resolve project IDs via the IConfigStore port (works for ES and in-memory)."""
+        assert self._config_store is not None
+        projects = await self._config_store.list_projects()
+        return [p.id for p in projects]
 
     # =========================================================================
     # Conversion helpers (storage-layer → port DTO)
@@ -205,9 +211,9 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
             if project_id is not None:
                 agent_cfgs = await self._config_store.list_agents(project_id)
             else:
-                # Gather agents across all projects
+                # Gather agents across all projects via port methods (not in-memory attrs)
                 agent_cfgs = []
-                for pid in list(self._config_store.agents.keys()):
+                for pid in await self._project_ids_from_store():
                     agent_cfgs.extend(await self._config_store.list_agents(pid))
             agents = [self._agent_config_to_info(c) for c in agent_cfgs]
             if pagination:
@@ -237,7 +243,7 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
                 pipe_cfgs = await self._config_store.list_pipelines(project_id)
             else:
                 pipe_cfgs = []
-                for pid in list(self._config_store.pipelines.keys()):
+                for pid in await self._project_ids_from_store():
                     pipe_cfgs.extend(await self._config_store.list_pipelines(pid))
             pipelines = [self._pipeline_config_to_info(c) for c in pipe_cfgs]
             if pagination:
@@ -335,17 +341,19 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
         if self._config_store:
             count = 0
             if not config_type or config_type == "project":
-                count += len(self._config_store.projects)
+                count += len(await self._config_store.list_projects())
             if not config_type or config_type == "agent":
                 if project_id:
-                    count += len(self._config_store.agents.get(project_id, {}))
+                    count += len(await self._config_store.list_agents(project_id))
                 else:
-                    count += sum(len(agents) for agents in self._config_store.agents.values())
+                    for pid in await self._project_ids_from_store():
+                        count += len(await self._config_store.list_agents(pid))
             if not config_type or config_type == "pipeline":
                 if project_id:
-                    count += len(self._config_store.pipelines.get(project_id, {}))
+                    count += len(await self._config_store.list_pipelines(project_id))
                 else:
-                    count += sum(len(pipes) for pipes in self._config_store.pipelines.values())
+                    for pid in await self._project_ids_from_store():
+                        count += len(await self._config_store.list_pipelines(pid))
             return count
         with self._lock:
             count = 0

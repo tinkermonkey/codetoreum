@@ -1,68 +1,47 @@
-import { AlertCircle, Terminal } from 'lucide-react'
-import { Card } from '../components/ui/card'
+import { KeyRound } from 'lucide-react'
 
 export default function AuthRequiredPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="max-w-2xl w-full p-8 space-y-6">
-        <div className="flex items-center space-x-3">
-          <AlertCircle className="h-8 w-8 text-yellow-500" />
-          <h1 className="text-2xl font-bold">Authentication Required</h1>
+    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
+      <div className="w-full max-w-lg space-y-8">
+        <div className="space-y-3 text-center sm:text-left">
+          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+            Codetoreum
+          </p>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            Sign in with your server token
+          </h1>
+          <p className="text-sm text-muted-foreground text-balance">
+            Open the dashboard using the access URL printed when the API starts. The token is
+            exchanged for a secure cookie automatically.
+          </p>
         </div>
 
-        <div className="space-y-4 text-muted-foreground">
-          <p>
-            To access the Codetoreum dashboard, you need an authentication token.
-          </p>
-
-          <div className="bg-muted p-4 rounded-md space-y-3">
-            <div className="flex items-start space-x-2">
-              <Terminal className="h-5 w-5 mt-0.5 text-primary" />
-              <div>
-                <p className="font-semibold text-foreground mb-2">
-                  How to get your authentication token:
-                </p>
-                <ol className="list-decimal list-inside space-y-2 text-sm">
-                  <li>Start the Codetoreum API server</li>
-                  <li>Look for the authentication URL in the server logs</li>
-                  <li>Click the URL or copy it to your browser</li>
-                  <li>You'll be automatically authenticated and redirected to the dashboard</li>
-                </ol>
-              </div>
+        <div className="surface-panel space-y-5 p-6 shadow-soft">
+          <div className="flex gap-3">
+            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+              <KeyRound className="h-4 w-4" aria-hidden />
             </div>
+            <ol className="list-decimal space-y-2 pl-4 text-sm text-muted-foreground marker:text-foreground">
+              <li>Start the API with <span className="font-mono text-foreground">codetoreum-server</span></li>
+              <li>Copy the <span className="font-medium text-foreground">Access URL</span> from the logs</li>
+              <li>Open it in this browser (port 3010 for the UI)</li>
+            </ol>
           </div>
 
-          <div className="bg-muted p-4 rounded-md space-y-2">
-            <p className="font-semibold text-foreground">Example server output:</p>
-            <pre className="text-xs bg-background p-3 rounded overflow-x-auto">
-{`============================================================
-Codetoreum API Server
-============================================================
-
-Server URL: http://localhost:8000
-
-Authentication token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-
-Access URL: http://localhost:8000/?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-
-For API access, use one of:
-  - Query parameter: ?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-  - Header: Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-
-============================================================`}
+          <div className="rounded-lg bg-secondary/80 p-3">
+            <p className="mb-2 text-xs font-medium text-foreground">Example</p>
+            <pre className="overflow-x-auto font-mono text-[11px] leading-relaxed text-muted-foreground">
+{`Authentication token: eyJhbG…
+Access URL: http://127.0.0.1:3010/?token=eyJhbG…`}
             </pre>
           </div>
-
-          <div className="border-l-4 border-yellow-500 bg-yellow-50 dark:bg-yellow-900/10 p-4 rounded">
-            <p className="text-sm text-foreground">
-              <span className="font-semibold">Note:</span> This is a simplified authentication
-              system similar to JupyterLab. The server generates a single token on startup that
-              grants full access. This is designed for single-tenant deployments and development
-              environments.
-            </p>
-          </div>
         </div>
-      </Card>
+
+        <p className="text-center text-xs text-muted-foreground sm:text-left">
+          Single-tenant development auth — anyone with the token has full API access.
+        </p>
+      </div>
     </div>
   )
 }

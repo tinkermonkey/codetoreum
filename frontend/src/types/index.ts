@@ -10,7 +10,15 @@ export type { ApiError } from './errors'
 // Work Item Types
 // ============================================================================
 
-export type WorkItemStatus = 'open' | 'in_progress' | 'completed' | 'failed' | 'cancelled'
+export type WorkItemStatus =
+  | 'open'
+  | 'new'
+  | 'assigned'
+  | 'queued'
+  | 'in_progress'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
 
 export interface WorkItem {
   id: string
@@ -24,6 +32,7 @@ export interface WorkItem {
   updated_at: string
   current_stage?: string
   current_execution_id?: string
+  project_id?: string
   metadata: Record<string, any>
 }
 
@@ -48,7 +57,15 @@ export interface UpdateWorkItemRequest {
 // Execution Types
 // ============================================================================
 
-export type ExecutionStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'timeout'
+export type ExecutionStatus =
+  | 'queued'
+  | 'pending'
+  | 'initialized'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+  | 'timeout'
 
 export interface Execution {
   id: string

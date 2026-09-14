@@ -151,6 +151,25 @@ def register_list_endpoints(router: APIRouter, query_port: IAgentQueryPort) -> N
             )
 
     @router.get(
+        "/active",
+        summary="Active agent executions (alias)",
+        response_description="Reserved path — use metrics active-agents",
+    )
+    async def list_active_agents_alias():
+        """
+        Reserved so `/agents/active` is not captured by `/{agent_id}`.
+
+        Canonical: `GET /api/v2/metrics/active-agents`
+        Fallback: `GET /api/v2/executions?status=running`
+        """
+        return {
+            "agents": [],
+            "count": 0,
+            "canonical_endpoint": "/api/v2/metrics/active-agents",
+            "fallback_endpoint": "/api/v2/executions?status=running",
+        }
+
+    @router.get(
         "/{agent_id}",
         response_model=AgentMapper.to_response.__annotations__["return"],
         summary="Get agent details",

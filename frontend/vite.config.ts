@@ -11,10 +11,12 @@ export default defineConfig({
     },
   },
   server: {
+    host: '127.0.0.1', // IPv4 — avoids ::1-only bind that breaks 127.0.0.1 clients/proxies
     port: 3010,
+    strictPort: true, // fail instead of silently jumping to 3011
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true,
         ws: true, // Enable WebSocket proxying
       },

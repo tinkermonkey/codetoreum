@@ -1,12 +1,8 @@
 /**
- * StatusCard Component
- *
- * Shared card component for displaying system status information.
- * Provides consistent styling and layout for header cards.
+ * StatusCard — compact system metric tile
  */
 
 import * as React from 'react'
-import { Card } from '../ui/card'
 import { cn } from '../../lib/utils'
 
 export interface StatusCardProps {
@@ -28,22 +24,45 @@ export function StatusCard({
   isExpandable = false,
   isExpanded = false,
 }: StatusCardProps) {
+  const interactive = Boolean(onClick || isExpandable)
+
+  if (interactive) {
+    return (
+      <button
+        type="button"
+        className={cn(
+          'min-w-[160px] flex-1 rounded-xl border border-border/80 bg-card px-3.5 py-3 text-left shadow-soft transition-colors',
+          'cursor-pointer hover:bg-secondary/40',
+          className
+        )}
+        onClick={onClick}
+        aria-expanded={isExpandable ? isExpanded : undefined}
+      >
+        <div className="mb-1.5 flex items-center justify-between gap-2">
+          <h3 className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+            {title}
+          </h3>
+          {headerAction ? <div>{headerAction}</div> : null}
+        </div>
+        <div>{children}</div>
+      </button>
+    )
+  }
+
   return (
-    <Card
+    <div
       className={cn(
-        'min-w-[180px] transition-all',
-        isExpandable && 'cursor-pointer hover:shadow-md',
+        'min-w-[160px] flex-1 rounded-xl border border-border/80 bg-card px-3.5 py-3 text-left shadow-soft',
         className
       )}
-      onClick={onClick}
     >
-      <div className="p-3">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-semibold text-muted-foreground">{title}</h3>
-          {headerAction && <div className="ml-2">{headerAction}</div>}
-        </div>
-        <div className={cn('transition-all', isExpanded && 'mt-3')}>{children}</div>
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <h3 className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+          {title}
+        </h3>
+        {headerAction ? <div>{headerAction}</div> : null}
       </div>
-    </Card>
+      <div>{children}</div>
+    </div>
   )
 }

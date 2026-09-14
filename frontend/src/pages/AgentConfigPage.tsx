@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from '../components/ui/card'
 import { agentConfigApi } from '../api/client'
+import { PageHeader } from '../components/layout/PageHeader'
 import type { AgentConfig } from '../types'
 
 export default function AgentConfigPage() {
@@ -25,24 +26,37 @@ export default function AgentConfigPage() {
   const selectedAgentData = agents?.find((a) => a.agent_name === selectedAgent)
 
   if (isLoading) {
-    return <div className="flex justify-center p-8">Loading agents...</div>
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Agents"
+          description="Prompts, capabilities, and constraints for each coding agent."
+        />
+        <p className="text-sm text-muted-foreground" role="status">
+          Loading agents…
+        </p>
+      </div>
+    )
   }
 
   if (error) {
-    return <div className="text-destructive p-8">Error loading agents: {error.message}</div>
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Agents" />
+        <p className="text-sm text-destructive" role="alert">
+          Could not load agents: {error.message}
+        </p>
+      </div>
+    )
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-3xl font-bold">Agent Configuration</h2>
-          <p className="text-muted-foreground mt-1">
-            Edit agent prompts, capabilities, and constraints
-          </p>
-        </div>
-        <CreateAgentButton queryClient={queryClient} />
-      </div>
+      <PageHeader
+        title="Agents"
+        description="Prompts, capabilities, and constraints for each coding agent."
+        actions={<CreateAgentButton queryClient={queryClient} />}
+      />
 
       <div className="grid grid-cols-3 gap-6">
         {/* Agent List */}
@@ -52,35 +66,38 @@ export default function AgentConfigPage() {
             <CardDescription>Select an agent to configure</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
+            <div className="space-y-2" role="listbox" aria-label="Agents">
               {agents?.map((agent) => (
-                <div
+                <button
+                  type="button"
                   key={agent.agent_name}
-                  className={`p-3 border rounded-md cursor-pointer transition-colors ${
+                  role="option"
+                  aria-selected={selectedAgent === agent.agent_name}
+                  className={`w-full rounded-lg border p-3 text-left transition-colors ${
                     selectedAgent === agent.agent_name
-                      ? 'bg-primary/10 border-primary'
+                      ? 'border-primary bg-primary/10'
                       : 'hover:bg-muted'
                   }`}
                   onClick={() => setSelectedAgent(agent.agent_name)}
                 >
                   <div className="font-medium">{agent.agent_name}</div>
                   {agent.metadata.description && (
-                    <p className="text-sm text-muted-foreground mt-1">
+                    <p className="mt-1 text-sm text-muted-foreground">
                       {agent.metadata.description}
                     </p>
                   )}
-                  <div className="flex items-center justify-between mt-2">
+                  <div className="mt-2 flex items-center justify-between">
                     <span className="text-xs text-muted-foreground">{agent.model}</span>
                     {agent.makes_code_changes && (
-                      <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded">
+                      <span className="rounded bg-primary/20 px-2 py-0.5 text-xs text-primary">
                         Maker
                       </span>
                     )}
                   </div>
-                </div>
+                </button>
               ))}
               {agents?.length === 0 && (
-                <p className="text-muted-foreground text-sm text-center py-4">
+                <p className="py-4 text-center text-sm text-muted-foreground">
                   No agents configured
                 </p>
               )}
