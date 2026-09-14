@@ -397,6 +397,14 @@ class RedisPipelineQueueService(IPipelineQueueService):
         # Parse project_id\x1fboard_id
         parts = pipeline_coords.split("\x1f", maxsplit=1)
         if len(parts) != 2:
+            logger.error(
+                f"Corrupt reverse index entry for {work_item_id}: malformed coordinates '{pipeline_coords}' (missing \\x1f separator)",
+                extra={
+                    "work_item_id": work_item_id,
+                    "pipeline_coords": pipeline_coords,
+                    "error_id": ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE,
+                },
+            )
             return False
         project_id, board_id = parts
 
@@ -1019,7 +1027,18 @@ class RedisPipelineQueueService(IPipelineQueueService):
                 if isinstance(queued_at_str, str)
                 else queued_at_str
             )
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                f"Failed to parse queued_at timestamp for {work_item_id} in queue {project_id}/{board_id}, using current time",
+                exc_info=True,
+                extra={
+                    "work_item_id": work_item_id,
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "queued_at_value": metadata.get("queued_at"),
+                    "error_type": type(e).__name__,
+                },
+            )
             queued_at = datetime.now(UTC)
 
         try:
@@ -1029,7 +1048,18 @@ class RedisPipelineQueueService(IPipelineQueueService):
                 if isinstance(last_check_str, str)
                 else last_check_str
             )
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                f"Failed to parse last_position_check timestamp for {work_item_id} in queue {project_id}/{board_id}, using current time",
+                exc_info=True,
+                extra={
+                    "work_item_id": work_item_id,
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "last_position_check_value": metadata.get("last_position_check"),
+                    "error_type": type(e).__name__,
+                },
+            )
             last_position_check = datetime.now(UTC)
 
         # Status is required and must be valid - don't silently default to WAITING
