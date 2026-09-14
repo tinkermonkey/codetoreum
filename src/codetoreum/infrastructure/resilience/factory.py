@@ -246,6 +246,9 @@ class ResilienceFactory:
         ordering guarantees. Read-only operations use best-effort degradation
         with safe defaults and DLQ routing.
 
+        The pipeline queue service is a CRITICAL_ADAPTER_SLOT (per production-bootstrap.md)
+        responsible for work-item ordering. Write-path failures have no safe fallback
+        (permanent queue blockage is possible), so resilience patterns are essential.
         Deterministic business errors (DuplicateQueueEntryError, InvalidQueueStateError,
         QueueItemNotFoundError) are NOT retried, allowing callers to distinguish
         them from transient failures and handle them appropriately.

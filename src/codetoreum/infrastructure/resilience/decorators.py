@@ -869,6 +869,334 @@ class BestEffortExecutionTrackerDecorator(IWorkExecutionStateTracker):
 
 
 # ============================================================================
+# Best Effort Pipeline Queue Service Decorator
+# ============================================================================
+
+
+class BestEffortPipelineQueueServiceDecorator(IPipelineQueueService):
+    """Wraps IPipelineQueueService with graceful degradation.
+
+    This is a lightweight decorator for internal Redis-backed pipeline queue coordination.
+    Unlike ResilientPipelineQueueServiceDecorator, it does NOT apply circuit breakers,
+    retries, or timeouts. Instead, it catches exceptions and logs them, allowing
+    execution to proceed with safe defaults for read operations.
+
+    All operations (read and write) catch exceptions and either:
+    - Return safe defaults for read operations (allowing degraded functionality)
+    - Re-raise exceptions for write operations (preserving caller intent)
+
+    This follows the BestEffortExecutionTrackerDecorator pattern: failures are logged
+    with full context but do not block pipeline execution.
+
+    Exposes failed_event_store attribute for INV-20 failure routing compliance.
+    """
+
+    def __init__(self, wrapped: IPipelineQueueService) -> None:
+        """
+        Initialize the decorator.
+
+        Args:
+            wrapped: The underlying pipeline queue service adapter
+        """
+        self._wrapped = wrapped
+        # Expose failed_event_store from wrapped adapter for INV-20 failure routing
+        self.failed_event_store = getattr(wrapped, "failed_event_store", None)
+
+    async def _route_to_dlq(
+        self,
+        operation_name: str,
+        error: Exception,
+        error_id: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        """Route a failed queue operation to the dead letter queue.
+
+        Args:
+            operation_name: Name of the failed operation
+            error: The exception that was raised
+            error_id: Error registry ID for this failure
+            metadata: Additional metadata about the failure
+        """
+        if not self.failed_event_store:
+            return
+
+        try:
+            await self.failed_event_store.add_failed_event(
+                event_type=f"queue_service.{operation_name}",
+                event_data={"operation": operation_name},
+                failure_reason=FailureReason.PROCESSING_ERROR,
+                error_message=f"{type(error).__name__}: {error!s}",
+                metadata=metadata or {},
+            )
+        except Exception as dlq_error:
+            logger.error(
+                f"Failed to record queue operation failure in DLQ "
+                f"(operation={operation_name}): {dlq_error}",
+                exc_info=True,
+                extra={"error_id": "ERR_QUEUE_DLQ_WRITE_FAILED"},
+            )
+
+    # Read-only operations with best-effort degradation
+
+    async def is_item_in_queue(self, work_item_id: str) -> bool:
+        """Check if item is in queue with graceful degradation on failure.
+
+        Read-only operation. Deterministic business errors (QueueServiceError subclasses)
+        are re-raised. Transient failures are logged but a safe default (False) is returned.
+
+        Args:
+            work_item_id: Work item identifier
+
+        Returns:
+            bool: True if item is in queue, False otherwise or on transient failure
+
+        Raises:
+            QueueValidationError: If invalid work_item_id is provided
+        """
+        try:
+            return await self._wrapped.is_item_in_queue(work_item_id)
+        except QueueServiceError:
+            raise
+        except Exception as e:
+            logger.error(
+                f"Failed to check if work item {work_item_id} is in queue: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE},
+            )
+            await self._route_to_dlq(
+                "is_item_in_queue",
+                e,
+                ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE,
+                {"work_item_id": work_item_id},
+            )
+            return False
+
+    async def get_next_waiting_item(self, project_id: str, board_id: str) -> PipelineQueueEntry | None:
+        """Get next waiting item with graceful degradation on failure.
+
+        Read-only operation. Deterministic business errors (QueueServiceError subclasses)
+        are re-raised. Transient failures are logged but a safe default (None) is returned.
+
+        Args:
+            project_id: Project identifier
+            board_id: Board identifier
+
+        Returns:
+            PipelineQueueEntry or None if not available or on transient failure
+
+        Raises:
+            QueueValidationError: If invalid parameters are provided
+        """
+        try:
+            return await self._wrapped.get_next_waiting_item(project_id, board_id)
+        except QueueServiceError:
+            raise
+        except Exception as e:
+            logger.error(
+                f"Failed to get next waiting item from queue "
+                f"(project={project_id}, board={board_id}): {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE},
+            )
+            await self._route_to_dlq(
+                "get_next_waiting_item",
+                e,
+                ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE,
+                {"project_id": project_id, "board_id": board_id},
+            )
+            return None
+
+    async def get_queue_entries(self, project_id: str, board_id: str) -> list[PipelineQueueEntry]:
+        """Get queue entries with graceful degradation on failure.
+
+        Read-only operation. Deterministic business errors (QueueServiceError subclasses)
+        are re-raised. Transient failures are logged but a safe default (empty list) is returned.
+
+        Args:
+            project_id: Project identifier
+            board_id: Board identifier
+
+        Returns:
+            List of PipelineQueueEntry or empty list on transient failure
+
+        Raises:
+            QueueValidationError: If invalid parameters are provided
+        """
+        try:
+            return await self._wrapped.get_queue_entries(project_id, board_id)
+        except QueueServiceError:
+            raise
+        except Exception as e:
+            logger.error(
+                f"Failed to get queue entries (project={project_id}, board={board_id}): {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE},
+            )
+            await self._route_to_dlq(
+                "get_queue_entries",
+                e,
+                ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE,
+                {"project_id": project_id, "board_id": board_id},
+            )
+            return []
+
+    # Write-path operations with graceful error handling
+
+    async def enqueue_item(
+        self,
+        project_id: str,
+        board_id: str,
+        work_item_id: str,
+        position_in_column: int,
+        timestamp: datetime,
+    ) -> None:
+        """Enqueue item with graceful error handling.
+
+        Write operation. Deterministic business errors (QueueServiceError subclasses)
+        are re-raised immediately. Transient errors are logged and routed to DLQ.
+
+        Args:
+            project_id: Project identifier
+            board_id: Board identifier
+            work_item_id: Work item identifier
+            position_in_column: Position in column
+            timestamp: Queue timestamp
+
+        Raises:
+            QueueServiceError: If a business error occurs
+            Exception: If a transient error occurs
+        """
+        try:
+            await self._wrapped.enqueue_item(
+                project_id, board_id, work_item_id, position_in_column, timestamp
+            )
+        except QueueServiceError:
+            raise
+        except Exception as e:
+            logger.error(
+                f"Failed to enqueue work item {work_item_id} "
+                f"(project={project_id}, board={board_id}): {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE},
+            )
+            await self._route_to_dlq(
+                "enqueue_item",
+                e,
+                ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE,
+                {
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "work_item_id": work_item_id,
+                    "position_in_column": position_in_column,
+                },
+            )
+            raise
+
+    async def mark_item_active(self, work_item_id: str) -> None:
+        """Mark item as active with graceful error handling.
+
+        Write operation. Deterministic business errors (QueueServiceError subclasses)
+        are re-raised immediately. Transient errors are logged and routed to DLQ.
+
+        Args:
+            work_item_id: Work item identifier
+
+        Raises:
+            QueueServiceError: If a business error occurs
+            Exception: If a transient error occurs
+        """
+        try:
+            await self._wrapped.mark_item_active(work_item_id)
+        except QueueServiceError:
+            raise
+        except Exception as e:
+            logger.error(
+                f"Failed to mark work item {work_item_id} as active: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE},
+            )
+            await self._route_to_dlq(
+                "mark_item_active",
+                e,
+                ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE,
+                {"work_item_id": work_item_id},
+            )
+            raise
+
+    async def remove_from_queue(self, work_item_id: str) -> bool:
+        """Remove item from queue with graceful error handling.
+
+        Write operation. Deterministic business errors (QueueServiceError subclasses)
+        are re-raised immediately. Transient errors are logged and routed to DLQ.
+
+        Args:
+            work_item_id: Work item identifier
+
+        Returns:
+            bool: True if removed, False if not in queue
+
+        Raises:
+            QueueServiceError: If a business error occurs
+            Exception: If a transient error occurs
+        """
+        try:
+            return await self._wrapped.remove_from_queue(work_item_id)
+        except QueueServiceError:
+            raise
+        except Exception as e:
+            logger.error(
+                f"Failed to remove work item {work_item_id} from queue: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE},
+            )
+            await self._route_to_dlq(
+                "remove_from_queue",
+                e,
+                ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE,
+                {"work_item_id": work_item_id},
+            )
+            raise
+
+    async def sync_queue_with_board(self, project_id: str, board_id: str, column: str) -> None:
+        """Sync queue with board with graceful error handling.
+
+        Write operation. Deterministic business errors (QueueServiceError subclasses)
+        are re-raised immediately. Transient errors are logged and routed to DLQ.
+
+        Args:
+            project_id: Project identifier
+            board_id: Board identifier
+            column: Board column name
+
+        Raises:
+            QueueServiceError: If a business error occurs
+            Exception: If a transient error occurs
+        """
+        try:
+            await self._wrapped.sync_queue_with_board(project_id, board_id, column)
+        except QueueServiceError:
+            raise
+        except Exception as e:
+            logger.error(
+                f"Failed to sync queue with board "
+                f"(project={project_id}, board={board_id}, column={column}): {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_QUEUE_SYNC_ERROR},
+            )
+            await self._route_to_dlq(
+                "sync_queue_with_board",
+                e,
+                ErrorRegistry.ERR_QUEUE_SYNC_ERROR,
+                {
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "column": column,
+                },
+            )
+            raise
+
+
+# ============================================================================
 # Resilient Pipeline Queue Service Decorator
 # ============================================================================
 
@@ -1040,17 +1368,23 @@ class ResilientPipelineQueueServiceDecorator(IPipelineQueueService):
     async def is_item_in_queue(self, work_item_id: str) -> bool:
         """Check if item is in queue with graceful degradation on failure.
 
-        Read-only operation. Failures are logged and routed to DLQ,
-        but a safe default (False) is returned.
+        Read-only operation. Deterministic business errors (QueueServiceError subclasses)
+        bypass resilience and are re-raised immediately. Transient failures are logged
+        and routed to DLQ, but a safe default (False) is returned.
 
         Args:
             work_item_id: Work item identifier
 
         Returns:
-            bool: True if item is in queue, False otherwise or on failure
+            bool: True if item is in queue, False otherwise or on transient failure
+
+        Raises:
+            QueueValidationError: If invalid work_item_id is provided
         """
         try:
             return await self._wrapped.is_item_in_queue(work_item_id)
+        except QueueServiceError:
+            raise
         except Exception as e:
             logger.error(
                 f"Failed to check if work item {work_item_id} is in queue: {e}",
@@ -1068,18 +1402,24 @@ class ResilientPipelineQueueServiceDecorator(IPipelineQueueService):
     async def get_next_waiting_item(self, project_id: str, board_id: str) -> PipelineQueueEntry | None:
         """Get next waiting item with graceful degradation on failure.
 
-        Read-only operation. Failures are logged and routed to DLQ,
-        but a safe default (None) is returned.
+        Read-only operation. Deterministic business errors (QueueServiceError subclasses)
+        bypass resilience and are re-raised immediately. Transient failures are logged
+        and routed to DLQ, but a safe default (None) is returned.
 
         Args:
             project_id: Project identifier
             board_id: Board identifier
 
         Returns:
-            PipelineQueueEntry or None if not available or on failure
+            PipelineQueueEntry or None if not available or on transient failure
+
+        Raises:
+            QueueValidationError: If invalid parameters are provided
         """
         try:
             return await self._wrapped.get_next_waiting_item(project_id, board_id)
+        except QueueServiceError:
+            raise
         except Exception as e:
             logger.error(
                 f"Failed to get next waiting item from queue "
@@ -1098,18 +1438,24 @@ class ResilientPipelineQueueServiceDecorator(IPipelineQueueService):
     async def get_queue_entries(self, project_id: str, board_id: str) -> list[PipelineQueueEntry]:
         """Get queue entries with graceful degradation on failure.
 
-        Read-only operation. Failures are logged and routed to DLQ,
-        but a safe default (empty list) is returned.
+        Read-only operation. Deterministic business errors (QueueServiceError subclasses)
+        bypass resilience and are re-raised immediately. Transient failures are logged
+        and routed to DLQ, but a safe default (empty list) is returned.
 
         Args:
             project_id: Project identifier
             board_id: Board identifier
 
         Returns:
-            List of PipelineQueueEntry or empty list on failure
+            List of PipelineQueueEntry or empty list on transient failure
+
+        Raises:
+            QueueValidationError: If invalid parameters are provided
         """
         try:
             return await self._wrapped.get_queue_entries(project_id, board_id)
+        except QueueServiceError:
+            raise
         except Exception as e:
             logger.error(
                 f"Failed to get queue entries (project={project_id}, board={board_id}): {e}",

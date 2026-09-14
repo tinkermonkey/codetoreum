@@ -8,7 +8,11 @@ import pytest
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.resilience.decorators import ResilientPipelineQueueServiceDecorator
 from codetoreum.ports.output.failed_event_store import FailureReason
-from codetoreum.ports.output.pipeline_queue_service import IPipelineQueueService, PipelineQueueEntry
+from codetoreum.ports.output.pipeline_queue_service import (
+    IPipelineQueueService,
+    PipelineQueueEntry,
+    QueueValidationError,
+)
 
 
 class MockQueueService:
@@ -276,3 +280,39 @@ class TestResilientPipelineQueueServiceDecorator:
             mock_logger.error.assert_called_once()
             call_args = mock_logger.error.call_args
             assert call_args.kwargs["extra"]["error_id"] == ErrorRegistry.ERR_QUEUE_SYNC_ERROR
+
+    async def test_read_operation_raises_queue_validation_error_on_is_item_in_queue(self):
+        """Test is_item_in_queue raises QueueValidationError when adapter does."""
+        mock_adapter = MockQueueService()
+        error = QueueValidationError("Invalid work_item_id")
+        mock_adapter.is_item_in_queue.side_effect = error
+        mock_adapter.failed_event_store = AsyncMock()
+
+        decorator = ResilientPipelineQueueServiceDecorator(wrapped=mock_adapter)
+
+        with pytest.raises(QueueValidationError, match="Invalid work_item_id"):
+            await decorator.is_item_in_queue("work-item-1")
+
+    async def test_read_operation_raises_queue_validation_error_on_get_next_waiting_item(self):
+        """Test get_next_waiting_item raises QueueValidationError when adapter does."""
+        mock_adapter = MockQueueService()
+        error = QueueValidationError("Invalid parameters")
+        mock_adapter.get_next_waiting_item.side_effect = error
+        mock_adapter.failed_event_store = AsyncMock()
+
+        decorator = ResilientPipelineQueueServiceDecorator(wrapped=mock_adapter)
+
+        with pytest.raises(QueueValidationError, match="Invalid parameters"):
+            await decorator.get_next_waiting_item("proj-1", "board-1")
+
+    async def test_read_operation_raises_queue_validation_error_on_get_queue_entries(self):
+        """Test get_queue_entries raises QueueValidationError when adapter does."""
+        mock_adapter = MockQueueService()
+        error = QueueValidationError("Invalid parameters")
+        mock_adapter.get_queue_entries.side_effect = error
+        mock_adapter.failed_event_store = AsyncMock()
+
+        decorator = ResilientPipelineQueueServiceDecorator(wrapped=mock_adapter)
+
+        with pytest.raises(QueueValidationError, match="Invalid parameters"):
+            await decorator.get_queue_entries("proj-1", "board-1")
