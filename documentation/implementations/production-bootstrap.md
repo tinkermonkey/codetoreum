@@ -142,6 +142,65 @@ Tests validate the metrics recording path:
 - `test_metrics_endpoint_http_scrape()` validates that the `/metrics` HTTP endpoint returns Prometheus-formatted output with metric data.
 - A synthetic execution (e.g., via simulation test or repair-cycle scenario) exercises the metrics calls to confirm the full recording path works end-to-end.
 
+### Phase 2 — Queue service adapter resolution (Issue #1016 Phase 4–5)
+
+The queue_service slot is resolved during Phase 2 adapter resolution, choosing between in-memory (for simulation/testing) or Redis-backed (for production durability). The `queue_service="redis"` configuration in `ProductionApplicationBootstrap.__init__()` ensures the real `RedisPipelineQueueService` is wired end-to-end for crash-resilient pipeline queuing.
+
+**Configuration in ProductionApplicationBootstrap**:
+```python
+adapter_config = AdapterSelectionConfig(
+    queue_service="redis",  # Redis-backed pipeline queue service; survives restart
+    # ... other adapters
+)
+```
+
+**Resolver path** (Phase 2, `AdapterResolver.resolve_queue_service()`):
+- If `queue_service == "in_memory"`: Factory creates in-memory test adapter (for simulation only)
+- If `queue_service == "redis"`: Factory creates production adapter using aioredis client with configured Redis connection
+
+```python
+def resolve_queue_service(self) -> IPipelineQueueService:
+    """Resolve pipeline queue service adapter."""
+    if self._config.queue_service == "redis":
+        redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+        redis_client = aioredis.from_url(redis_url)
+        board_service = self._resolved.get("board")
+        if board_service is None:
+            raise AdapterConfigurationError([...])
+        return self._factory.create_pipeline_queue_service(
+            adapter_name=self._config.queue_service,
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=self._resolved["event_emitter"],
+            failed_event_store=self._deps.failed_event_store,
+        )
+```
+
+**Key properties**:
+- **Backend**: Redis sorted set with companion metadata structures (key pattern `codetoreum:qsvc:<project_id>:<board_id>`) for position-based ordering and crash recovery. Includes metadata hash, global reverse-index hash for O(1) work-item lookup, and pipeline registry set.
+- **Features**: Board-synced pipeline positions, audit logging, dead-letter capture for failed enqueues, event emission via IEventEmitter for position-change notifications
+- **Dependencies injected**: `redis_client`, `board_service`, `event_emitter`, `failed_event_store` (INV-20 forward compatibility). Note: does **not** use `event_bus` (event emission goes through `IEventEmitter` instead, per architecture)
+- **Data structures**: Sorted set per pipeline for work-item ordering by board position; metadata hash for status/timestamps; global reverse index (`codetoreum:qsvc:item-lookup`) for cross-pipeline membership lookup; pipeline registry set (`codetoreum:qsvc:pipelines`) for sync operations
+
+**Queue ordering and recovery**:
+The Redis implementation persists pipeline stage positions across container restarts:
+- Each queued execution maintains its current pipeline stage (from `board_service` position)
+- On restart, `ContainerRecoveryService` dequeues stalled executions (via `active_run_registry` + `board_service` reconciliation)
+- Dead-letter queue captures enqueue failures with full event provenance for diagnostics
+
+**Slot classification** (Phase 3 decision from issue #1016):
+`queue_service` is in `CRITICAL_ADAPTER_SLOTS` — pipeline queue service is critical for work-item ordering (BA FR7/US6). Phase 3 critical-path enforcement validates that no mock queue service is deployed to production. In-memory queuing is acceptable for simulation only; production uses Redis-backed `RedisPipelineQueueService` for crash-resilient pipeline ordering. The critical classification ensures that production bootstrap refuses to start if a mock queue adapter is detected, preventing silent work-item ordering failures.
+
+**Validation outcome** (Issue #1016 Phase 4–5):
+Tests in `test_redis_pipeline_queue_service.py` verify:
+- **Data structure correctness**: Sorted sets for position-based ordering (verified in `test_restart_durability_queued_item_survives`, `test_restart_durability_multiple_items_preserve_order`).
+- **Reverse-index lookup**: O(1) cross-pipeline membership checks via `test_is_item_in_queue_uses_reverse_index`.
+- **Event emission**: Queue state changes emit domain events via `IEventEmitter` (verified in `test_enqueue_emits_queue_item_added_event`, `test_remove_emits_queue_item_removed_event`).
+- **Metadata durability**: Corrupted metadata is detected and logged (verified in `test_get_queue_entries_emits_corruption_event_on_missing_metadata`, `test_get_queue_entries_emits_corruption_event_on_malformed_metadata`).
+- **Board synchronization**: Queue positions stay consistent with board service state (verified in `test_sync_queue_adds_new_items`, `test_sync_queue_removes_old_items`, `test_sync_queue_updates_positions`).
+- **Graceful degradation**: Failed board service calls do not crash the queue (verified in `test_sync_queue_gracefully_handles_board_service_failure`, `test_sync_queue_gracefully_handles_missing_column`).
+- **Duplicate prevention**: Re-enqueuing an item raises an error (verified in `test_duplicate_enqueue_raises_error`).
+
 ### Phase 4c — `ICodingAgent` resolution (DEF-015 D3/D4)
 
 The `coding_agent` slot replaces the retired `llm_provider` slot (the `ILLMProvider` port deleted in D5). The slot is resolved *after* Phase 4 resilience decoration so the resilient `IContainer` is passed into the containerized strategy.

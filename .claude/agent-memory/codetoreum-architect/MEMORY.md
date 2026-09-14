@@ -4,3 +4,4 @@
 - [MPO/container/auth bootstrap fixes](project_mpo_container_auth_fixes.md) — DEF-004 MPO not started, DEF-DOC-002 requires_docker was false, DEF-DOC-003 auth undocumented+missing from curl calls
 - [ExecutionState typed port review](review_execution_state_tracker_typed_port.md) — approved typed ExecutionState dataclass; found live broken import in InMemoryWorkExecutionStateTracker anticipating the fix
 - [resolve_discussion_adapter validation review](review_resolver_discussion_adapter_validation.md) — GITHUB_ORG empty-string bug premise was stale (already double-guarded); identity_service None-guard confirmed valid; establishes precedent for where each validation class belongs
+- [Pipeline queue resilience decorator review](review_pipeline_queue_resilience_decorator.md) — QueueValidationError re-raise premise stale (fixed); CRITICAL: factory.create_resilient_pipeline_queue_service() actually wires BestEffort, not Resilient, decorator

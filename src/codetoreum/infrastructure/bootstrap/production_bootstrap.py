@@ -146,7 +146,7 @@ from codetoreum.ports.output.prompt_builder import IPromptBuilder
 
 logger = logging.getLogger(__name__)
 
-# Critical execution path slots (7 total)
+# Critical execution path slots (8 total)
 # event_store excluded: InMemoryEventStore is acceptable for MVP
 CRITICAL_ADAPTER_SLOTS = {
     "board",
@@ -158,6 +158,7 @@ CRITICAL_ADAPTER_SLOTS = {
     "container",
     "code_review",
     "container_recovery",  # Required for fail-fast safety if mock is detected in production (Story 5)
+    "queue_service",  # Pipeline queue service is critical for work-item ordering (BA FR7/US6)
 }
 
 # Slots where mock implementations are acceptable (non-critical to correctness)
@@ -295,6 +296,7 @@ class ProductionApplicationBootstrap:
                 lock_service="redis",  # Persistent pipeline lock; survives restart, coordinates instances
                 run_registry="redis",  # Persistent active-run records; closes DEF-002 across restart
                 branch_tracker="redis",  # Persistent work_item -> branch mapping; survives restart
+                queue_service="redis",  # Redis-backed pipeline queue service; survives restart
                 agent_repository="elasticsearch",  # Agent catalog survives restart (DEF-008)
                 workflow_config="elasticsearch",  # BoardWorkflowTemplate survives restart (DEF-008)
                 execution_tracker="redis",  # Persistent execution state; container recovery needs this across restart
@@ -1003,6 +1005,13 @@ class ProductionApplicationBootstrap:
                 self.adapters.discussion_adapter
             )
             logger.debug("Applied resilience to discussion adapter")
+
+        # Pipeline queue service (critical for work-item ordering and progression)
+        if self.adapters.queue_service:
+            self.adapters.queue_service = resilience_factory.create_resilient_pipeline_queue_service(
+                self.adapters.queue_service
+            )
+            logger.debug("Applied resilient decorator to pipeline queue service")
 
         logger.info("Resilience decorators applied to critical adapters")
 

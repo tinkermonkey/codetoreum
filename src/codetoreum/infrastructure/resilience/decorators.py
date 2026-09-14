@@ -25,7 +25,13 @@ from codetoreum.ports.output.board_service import (
     WorkItemPosition,
 )
 from codetoreum.ports.output.discussion_adapter import IDiscussionAdapter
+from codetoreum.ports.output.failed_event_store import FailureReason
 from codetoreum.ports.output.monitoring import MonitoringConfig, MonitoringStatus
+from codetoreum.ports.output.pipeline_queue_service import (
+    IPipelineQueueService,
+    PipelineQueueEntry,
+    QueueServiceError,
+)
 from codetoreum.ports.output.ticket_system import ITicketSystem
 from codetoreum.ports.output.work_execution_state_tracker import (
     ExecutionState,
@@ -632,11 +638,13 @@ class ResilientDiscussionAdapterDecorator(IDiscussionAdapter):
         """Close underlying adapter (pass through)."""
         return await self._wrapped.close()
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "ResilientDiscussionAdapterDecorator":
         """Async context manager entry."""
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(
+        self, exc_type: Any, exc_val: Any, exc_tb: Any
+    ) -> bool:
         """Async context manager exit."""
         await self.close()
         return False
@@ -858,3 +866,446 @@ class BestEffortExecutionTrackerDecorator(IWorkExecutionStateTracker):
     ) -> None:
         """Pass through to wrapped adapter."""
         return await self._wrapped.mark_execution_failed(project, work_item_id, agent, reason)
+
+
+# ============================================================================
+# Resilient Pipeline Queue Service Decorator
+# ============================================================================
+
+
+class ResilientPipelineQueueServiceDecorator(IPipelineQueueService):
+    """Wraps IPipelineQueueService with hybrid resilience patterns.
+
+    Applies resilient patterns (circuit-breaker, retry, timeout) to write-path
+    operations to maintain ordering guarantees on CRITICAL slot. Read-only
+    operations use best-effort degradation with safe defaults.
+
+    Write operations (enqueue_item, mark_item_active, remove_from_queue,
+    sync_queue_with_board) apply resilience patterns and route failures to
+    the dead letter queue for operator visibility and replay.
+
+    Read operations (is_item_in_queue, get_next_waiting_item, get_queue_entries)
+    use best-effort degradation: failures are logged and routed to DLQ, but
+    safe defaults are returned to allow pipeline continuity.
+
+    Exposes failed_event_store attribute for INV-20 failure routing compliance.
+    """
+
+    def __init__(
+        self,
+        wrapped: IPipelineQueueService,
+        circuit_breaker: ICircuitBreaker | None = None,
+        retry_policy: IRetryPolicy | None = None,
+        timeout: ITimeout | None = None,
+        default_timeout_seconds: float = 30.0,
+    ) -> None:
+        """
+        Initialize the decorator.
+
+        Args:
+            wrapped: The underlying pipeline queue service adapter
+            circuit_breaker: Optional circuit breaker
+            retry_policy: Optional retry policy
+            timeout: Optional timeout handler
+            default_timeout_seconds: Default operation timeout
+        """
+        self._wrapped = wrapped
+        self._circuit_breaker = circuit_breaker
+        self._retry_policy = retry_policy
+        self._timeout = timeout
+        self._default_timeout = default_timeout_seconds
+        # Expose failed_event_store from wrapped adapter for INV-20 failure routing
+        self.failed_event_store = getattr(wrapped, "failed_event_store", None)
+
+    async def _route_to_dlq(
+        self,
+        operation_name: str,
+        error: Exception,
+        error_id: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        """Route a failed queue operation to the dead letter queue.
+
+        Args:
+            operation_name: Name of the failed operation
+            error: The exception that was raised
+            error_id: Error registry ID for this failure
+            metadata: Additional metadata about the failure
+        """
+        if not self.failed_event_store:
+            return
+
+        try:
+            await self.failed_event_store.add_failed_event(
+                event_type=f"queue_service.{operation_name}",
+                event_data={"operation": operation_name},
+                failure_reason=FailureReason.PROCESSING_ERROR,
+                error_message=f"{type(error).__name__}: {error!s}",
+                metadata=metadata or {},
+            )
+        except Exception as dlq_error:
+            logger.error(
+                f"Failed to record queue operation failure in DLQ "
+                f"(operation={operation_name}): {dlq_error}",
+                exc_info=True,
+                extra={"error_id": "ERR_QUEUE_DLQ_WRITE_FAILED"},
+            )
+
+    async def _execute_resilient(
+        self,
+        operation: Callable[[], T],
+        operation_name: str,
+        timeout_seconds: float | None = None,
+    ) -> T:
+        """Execute operation with resilience patterns.
+
+        Applies circuit breaker, timeout, and retry. Business errors
+        (QueueServiceError subclasses) bypass circuit breaker failure
+        counting and propagate directly to the caller.
+
+        Args:
+            operation: The async operation to execute
+            operation_name: Name of the operation for logging
+            timeout_seconds: Optional timeout override
+
+        Returns:
+            Result of the operation
+
+        Raises:
+            QueueServiceError: Business errors bypass resilience patterns
+            Exception: Transient errors after retries
+        """
+        # Sentinel object to detect business errors without raising
+        # This prevents QueueServiceError from propagating through the
+        # circuit breaker's exception handler, which would incorrectly
+        # count it as a transient failure
+        _business_error_marker = object()
+        business_error_holder: dict[str, Exception | object] = {"error": _business_error_marker}
+
+        async def wrapped_operation():
+            try:
+                return await operation()
+            except QueueServiceError as e:
+                business_error_holder["error"] = e
+                # Return the marker instead of raising, so exception
+                # doesn't reach circuit breaker
+                return _business_error_marker  # type: ignore
+
+        # Apply circuit breaker wraps the rest
+        if self._circuit_breaker:
+            result = await self._circuit_breaker.call(
+                self._execute_with_timeout_and_retry,
+                operation_name,
+                wrapped_operation,
+                operation_name,
+                timeout_seconds or self._default_timeout,
+            )
+            # Check if a business error was captured
+            if result is _business_error_marker:
+                raise business_error_holder["error"]
+            return result
+
+        result = await self._execute_with_timeout_and_retry(
+            wrapped_operation, operation_name, timeout_seconds or self._default_timeout
+        )
+        # Check if a business error was captured
+        if result is _business_error_marker:
+            raise business_error_holder["error"]
+        return result
+
+    async def _execute_with_timeout_and_retry(
+        self, operation: Callable[[], T], operation_name: str, timeout_seconds: float
+    ) -> T:
+        """Apply timeout and retry to operation.
+
+        Args:
+            operation: The async operation to execute
+            operation_name: Name of the operation for logging
+            timeout_seconds: Operation timeout in seconds
+
+        Returns:
+            Result of the operation
+        """
+        async def timed_operation():
+            if self._timeout:
+                return await self._timeout.execute(operation, timeout_seconds, operation_name)
+            return await operation()
+
+        if self._retry_policy:
+            return await self._retry_policy.execute(timed_operation, operation_name)
+        return await timed_operation()
+
+    # Read-only operations with best-effort degradation
+
+    async def is_item_in_queue(self, work_item_id: str) -> bool:
+        """Check if item is in queue with graceful degradation on failure.
+
+        Read-only operation. Deterministic business errors (QueueServiceError subclasses)
+        bypass resilience and are re-raised immediately. Transient failures are logged
+        and routed to DLQ, but a safe default (False) is returned.
+
+        Args:
+            work_item_id: Work item identifier
+
+        Returns:
+            bool: True if item is in queue, False otherwise or on transient failure
+
+        Raises:
+            QueueValidationError: If invalid work_item_id is provided
+        """
+        try:
+            return await self._wrapped.is_item_in_queue(work_item_id)
+        except QueueServiceError:
+            raise
+        except Exception as e:
+            logger.error(
+                f"Failed to check if work item {work_item_id} is in queue: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE},
+            )
+            await self._route_to_dlq(
+                "is_item_in_queue",
+                e,
+                ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE,
+                {"work_item_id": work_item_id},
+            )
+            return False
+
+    async def get_next_waiting_item(self, project_id: str, board_id: str) -> PipelineQueueEntry | None:
+        """Get next waiting item with graceful degradation on failure.
+
+        Read-only operation. Deterministic business errors (QueueServiceError subclasses)
+        bypass resilience and are re-raised immediately. Transient failures are logged
+        and routed to DLQ, but a safe default (None) is returned.
+
+        Args:
+            project_id: Project identifier
+            board_id: Board identifier
+
+        Returns:
+            PipelineQueueEntry or None if not available or on transient failure
+
+        Raises:
+            QueueValidationError: If invalid parameters are provided
+        """
+        try:
+            return await self._wrapped.get_next_waiting_item(project_id, board_id)
+        except QueueServiceError:
+            raise
+        except Exception as e:
+            logger.error(
+                f"Failed to get next waiting item from queue "
+                f"(project={project_id}, board={board_id}): {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE},
+            )
+            await self._route_to_dlq(
+                "get_next_waiting_item",
+                e,
+                ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE,
+                {"project_id": project_id, "board_id": board_id},
+            )
+            return None
+
+    async def get_queue_entries(self, project_id: str, board_id: str) -> list[PipelineQueueEntry]:
+        """Get queue entries with graceful degradation on failure.
+
+        Read-only operation. Deterministic business errors (QueueServiceError subclasses)
+        bypass resilience and are re-raised immediately. Transient failures are logged
+        and routed to DLQ, but a safe default (empty list) is returned.
+
+        Args:
+            project_id: Project identifier
+            board_id: Board identifier
+
+        Returns:
+            List of PipelineQueueEntry or empty list on transient failure
+
+        Raises:
+            QueueValidationError: If invalid parameters are provided
+        """
+        try:
+            return await self._wrapped.get_queue_entries(project_id, board_id)
+        except QueueServiceError:
+            raise
+        except Exception as e:
+            logger.error(
+                f"Failed to get queue entries (project={project_id}, board={board_id}): {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE},
+            )
+            await self._route_to_dlq(
+                "get_queue_entries",
+                e,
+                ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE,
+                {"project_id": project_id, "board_id": board_id},
+            )
+            return []
+
+    # Write-path operations with resilience patterns
+
+    async def enqueue_item(
+        self,
+        project_id: str,
+        board_id: str,
+        work_item_id: str,
+        position_in_column: int,
+        timestamp: datetime,
+    ) -> None:
+        """Enqueue item with resilience patterns.
+
+        Write operation. Applies circuit-breaker, retry, and timeout to transient errors.
+        Deterministic business errors (QueueServiceError subclasses) bypass resilience
+        and are re-raised immediately without circuit-breaker counting.
+
+        Args:
+            project_id: Project identifier
+            board_id: Board identifier
+            work_item_id: Work item identifier
+            position_in_column: Position in column
+            timestamp: Queue timestamp
+
+        Raises:
+            QueueServiceError: If a business error occurs (not retried)
+            Exception: If a transient error fails after retries
+        """
+        try:
+            await self._execute_resilient(
+                operation=lambda: self._wrapped.enqueue_item(
+                    project_id, board_id, work_item_id, position_in_column, timestamp
+                ),
+                operation_name="enqueue_item",
+            )
+        except QueueServiceError:
+            raise
+        except Exception as e:
+            logger.error(
+                f"Failed to enqueue work item {work_item_id} "
+                f"(project={project_id}, board={board_id}): {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE},
+            )
+            await self._route_to_dlq(
+                "enqueue_item",
+                e,
+                ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE,
+                {
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "work_item_id": work_item_id,
+                    "position_in_column": position_in_column,
+                },
+            )
+            raise
+
+    async def mark_item_active(self, work_item_id: str) -> None:
+        """Mark item as active with resilience patterns.
+
+        Write operation. Applies circuit-breaker, retry, and timeout to transient errors.
+        Deterministic business errors (QueueServiceError subclasses) bypass resilience
+        and are re-raised immediately without circuit-breaker counting.
+
+        Args:
+            work_item_id: Work item identifier
+
+        Raises:
+            QueueServiceError: If a business error occurs (not retried)
+            Exception: If a transient error fails after retries
+        """
+        try:
+            await self._execute_resilient(
+                operation=lambda: self._wrapped.mark_item_active(work_item_id),
+                operation_name="mark_item_active",
+            )
+        except QueueServiceError:
+            raise
+        except Exception as e:
+            logger.error(
+                f"Failed to mark work item {work_item_id} as active: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE},
+            )
+            await self._route_to_dlq(
+                "mark_item_active",
+                e,
+                ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE,
+                {"work_item_id": work_item_id},
+            )
+            raise
+
+    async def remove_from_queue(self, work_item_id: str) -> bool:
+        """Remove item from queue with resilience patterns.
+
+        Write operation. Applies circuit-breaker, retry, and timeout to transient errors.
+        Deterministic business errors (QueueServiceError subclasses) bypass resilience
+        and are re-raised immediately without circuit-breaker counting.
+
+        Args:
+            work_item_id: Work item identifier
+
+        Returns:
+            bool: True if removed, False if not in queue
+
+        Raises:
+            QueueServiceError: If a business error occurs (not retried)
+            Exception: If a transient error fails after retries
+        """
+        try:
+            return await self._execute_resilient(
+                operation=lambda: self._wrapped.remove_from_queue(work_item_id),
+                operation_name="remove_from_queue",
+            )
+        except QueueServiceError:
+            raise
+        except Exception as e:
+            logger.error(
+                f"Failed to remove work item {work_item_id} from queue: {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE},
+            )
+            await self._route_to_dlq(
+                "remove_from_queue",
+                e,
+                ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE,
+                {"work_item_id": work_item_id},
+            )
+            raise
+
+    async def sync_queue_with_board(self, project_id: str, board_id: str, column: str) -> None:
+        """Sync queue with board with resilience patterns.
+
+        Write operation. Applies circuit-breaker, retry, and timeout to transient errors.
+        Deterministic business errors (QueueServiceError subclasses) bypass resilience
+        and are re-raised immediately without circuit-breaker counting.
+
+        Args:
+            project_id: Project identifier
+            board_id: Board identifier
+            column: Board column name
+
+        Raises:
+            QueueServiceError: If a business error occurs (not retried)
+            Exception: If a transient error fails after retries
+        """
+        try:
+            await self._execute_resilient(
+                operation=lambda: self._wrapped.sync_queue_with_board(project_id, board_id, column),
+                operation_name="sync_queue_with_board",
+            )
+        except QueueServiceError:
+            raise
+        except Exception as e:
+            logger.error(
+                f"Failed to sync queue with board "
+                f"(project={project_id}, board={board_id}, column={column}): {e}",
+                exc_info=True,
+                extra={"error_id": ErrorRegistry.ERR_QUEUE_SYNC_ERROR},
+            )
+            await self._route_to_dlq(
+                "sync_queue_with_board",
+                e,
+                ErrorRegistry.ERR_QUEUE_SYNC_ERROR,
+                {"project_id": project_id, "board_id": board_id, "column": column},
+            )
+            raise
+

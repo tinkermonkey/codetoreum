@@ -11,7 +11,7 @@ to discussion updates.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 from codetoreum.domain.events import Comment
 
@@ -227,4 +227,62 @@ class IDiscussionAdapter(IEventEmitter, ABC):
         Raises:
             ValidationError: If work_item_id is invalid
             ResourceNotFoundError: If not currently monitoring this item
+        """
+
+    # Webhook Handler
+
+    @abstractmethod
+    async def handle_webhook(self, payload: dict) -> None:
+        """Process webhook event from external service.
+
+        Handles webhook payloads from the external service (GitHub, JIRA, etc.)
+        for discussion/comment events. Filters and validates the payload,
+        emitting appropriate events for processing.
+
+        Args:
+            payload: Webhook payload from external service
+
+        Raises:
+            ValidationError: Invalid payload structure
+        """
+
+    # Resource Management
+
+    @abstractmethod
+    async def close(self) -> None:
+        """Close and clean up adapter resources.
+
+        Closes any open connections (HTTP clients, database connections, etc.)
+        and cancels any background tasks. Should be idempotent.
+
+        Raises:
+            Exception: If resource cleanup fails
+        """
+
+    @abstractmethod
+    async def __aenter__(self) -> "IDiscussionAdapter":
+        """Enter async context manager.
+
+        Allows the adapter to be used with async with statements.
+
+        Returns:
+            The adapter instance (self)
+        """
+
+    @abstractmethod
+    async def __aexit__(
+        self, exc_type: Any, exc_val: Any, exc_tb: Any
+    ) -> bool:
+        """Exit async context manager.
+
+        Ensures clean resource cleanup when exiting async context.
+        Calls close() to release resources.
+
+        Args:
+            exc_type: Exception type if an exception occurred
+            exc_val: Exception value if an exception occurred
+            exc_tb: Exception traceback if an exception occurred
+
+        Returns:
+            bool: False to propagate exceptions
         """

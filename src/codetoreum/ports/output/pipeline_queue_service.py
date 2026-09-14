@@ -310,6 +310,11 @@ class IPipelineQueueService(ABC):
         returns the waiting item with the lowest position_in_column value
         (topmost in column = highest priority).
 
+        **Note on board service failures**: If the board service fails during
+        sync, the implementation logs a warning but continues with the current
+        queue state (graceful degradation). This ensures queue selection is not
+        blocked by transient board service issues.
+
         Args:
             project_id: Project identifier
             board_id: Board identifier
@@ -322,7 +327,6 @@ class IPipelineQueueService(ABC):
 
         Raises:
             QueueValidationError: Invalid parameters
-            QueueServiceError: Board service communication failure
         """
 
     @abstractmethod
@@ -375,5 +379,4 @@ class IPipelineQueueService(ABC):
 
         Raises:
             QueueValidationError: Invalid parameters
-            QueueServiceError: Board service communication failure
         """

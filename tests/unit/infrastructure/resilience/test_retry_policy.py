@@ -192,6 +192,35 @@ class TestExponentialBackoffRetry:
             # not wrapped in MaxRetriesExceededError after 3 attempts.
             assert call_count == 1, f"{exc_type.__name__} was retried"
 
+    @pytest.mark.asyncio
+    async def test_does_not_retry_queue_service_errors(self):
+        """Queue service business errors (DuplicateQueueEntryError,
+        InvalidQueueStateError, QueueItemNotFoundError) are deterministic
+        and must not be retried. Retrying would waste the retry budget,
+        add latency, and increment circuit-breaker failure counts incorrectly."""
+        from codetoreum.ports.output.pipeline_queue_service import (
+            DuplicateQueueEntryError,
+            InvalidQueueStateError,
+            QueueItemNotFoundError,
+        )
+
+        policy = ExponentialBackoffRetry(max_retries=3)
+
+        for exc_type in (DuplicateQueueEntryError, InvalidQueueStateError, QueueItemNotFoundError):
+            call_count = 0
+
+            async def operation(exc_type=exc_type):
+                nonlocal call_count
+                call_count += 1
+                raise exc_type("queue business error")
+
+            with pytest.raises(exc_type):
+                await policy.execute(operation, "test_op")
+
+            # Called exactly once — the original exception propagates immediately,
+            # not retried and not wrapped in MaxRetriesExceededError
+            assert call_count == 1, f"{exc_type.__name__} was retried when it should not be"
+
     def test_get_stats(self):
         """Test that statistics are tracked correctly."""
         policy = ExponentialBackoffRetry()

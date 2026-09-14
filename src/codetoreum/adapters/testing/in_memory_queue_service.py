@@ -35,6 +35,7 @@ from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.ports.output.board_service import IBoardService
 from codetoreum.ports.output.event_emitter import IEventEmitter
+from codetoreum.ports.output.failed_event_store import IFailedEventStore
 from codetoreum.ports.output.pipeline_queue_service import (
     DuplicateQueueEntryError,
     InvalidQueueStateError,
@@ -78,6 +79,7 @@ class InMemoryQueueService(IPipelineQueueService):
         time_source: Callable[[], datetime] | None = None,
         event_emitter: IEventEmitter | None = None,
         event_bus: EventBus | None = None,
+        failed_event_store: IFailedEventStore | None = None,
     ) -> None:
         """Initialize empty queue service.
 
@@ -87,6 +89,7 @@ class InMemoryQueueService(IPipelineQueueService):
                         manipulation in simulation testing. Defaults to datetime.now(timezone.utc)
             event_emitter: Optional IEventEmitter for emitting domain events. Defaults to MockEventEmitter
             event_bus: Optional EventBus for subscribing to domain events (e.g., WorkItemColumnChangedEvent)
+            failed_event_store: Optional failure route for INV-20 compliance (forward compatibility)
         """
         self._queues: dict[str, list[PipelineQueueEntry]] = {}
         self._board_positions: dict[str, list[str]] = {}  # For set_board_order test helper
@@ -96,6 +99,7 @@ class InMemoryQueueService(IPipelineQueueService):
         self._time_source = time_source or (lambda: datetime.now(UTC))
         self._event_emitter = event_emitter or MockEventEmitter()
         self._event_bus = event_bus
+        self.failed_event_store = failed_event_store
 
         # Subscribe to board position changes if event bus provided. The
         # EventBus dispatches by event-type string, so the handler only
@@ -377,6 +381,28 @@ class InMemoryQueueService(IPipelineQueueService):
         if not board_id:
             msg = "board_id cannot be empty"
             raise QueueValidationError(msg)
+
+        # Sync with board before selecting to ensure order matches current board state
+        # Only sync if we have a board service
+        if self._board_service:
+            # Sync the column (outside lock to prevent deadlock)
+            try:
+                board = await self._board_service.get_board(project_id, board_id)
+                queue_item_ids = set()
+                with self._lock:
+                    queue_key = f"{project_id}:{board_id}"
+                    queue = self._queues.get(queue_key, [])
+                    queue_item_ids = {entry.work_item_id for entry in queue}
+
+                if queue_item_ids:
+                    # Find which column contains these items and sync
+                    for col in board.columns:
+                        if any(item_id in col.work_item_ids for item_id in queue_item_ids):
+                            await self.sync_queue_with_board(project_id, board_id, col.name)
+                            break
+            except Exception:
+                # Continue with current queue if sync fails
+                pass
 
         with self._lock:
             queue_key = f"{project_id}:{board_id}"

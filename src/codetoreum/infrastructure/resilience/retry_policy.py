@@ -15,6 +15,7 @@ from codetoreum.ports.exceptions import (
 from codetoreum.ports.exceptions import (
     PermissionError as PortPermissionError,
 )
+from codetoreum.ports.output.pipeline_queue_service import QueueServiceError
 
 from .exceptions import MaxRetriesExceededError
 from .exceptions import TimeoutError as ResilienceTimeoutError
@@ -121,6 +122,7 @@ class ExponentialBackoffRetry(IRetryPolicy):
             ConfigurationError,
             ValidationError,
             PortPermissionError,
+            QueueServiceError,  # Queue business errors (duplicate, not found, invalid state)
         )
 
         if isinstance(exception, non_retryable):
