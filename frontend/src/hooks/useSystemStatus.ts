@@ -10,6 +10,7 @@ import { useEffect } from 'react'
 import { apiClient } from '../api/client'
 import { useSystemStatusStore } from '../store/systemStatusStore'
 import type { HealthCheck, SystemHealth, SystemHealthChecks } from '../types/system-status'
+import type { ApiError } from '../types/errors'
 import { POLLING_CONFIG, RETRY_CONFIG } from '../config/polling'
 
 export const systemHealthQueryKey = ['system-health']
@@ -60,13 +61,24 @@ function toHealthCheck(component: MetricsHealthComponent): HealthCheck {
   }
 }
 
+async function fetchApiUsage(): Promise<{ usage: ApiUsageResponse | null; error?: string }> {
+  try {
+    const usage = await apiClient.get<ApiUsageResponse>('/metrics/api-usage')
+    return { usage }
+  } catch (err) {
+    const apiError = err as ApiError
+    console.error('[useSystemStatus] /metrics/api-usage request failed', apiError)
+    return { usage: null, error: apiError.message || 'Failed to load API usage' }
+  }
+}
+
 /**
  * Normalize backend metrics payloads into the SystemHealth shape the UI expects.
  */
 async function fetchSystemHealth(): Promise<SystemHealth> {
-  const [health, usage] = await Promise.all([
+  const [health, { usage, error: usageError }] = await Promise.all([
     apiClient.get<MetricsHealthResponse>('/metrics/health'),
-    apiClient.get<ApiUsageResponse>('/metrics/api-usage').catch(() => null),
+    fetchApiUsage(),
   ])
 
   const checks: SystemHealthChecks = {}
@@ -77,7 +89,13 @@ async function fetchSystemHealth(): Promise<SystemHealth> {
     ;(checks as Record<string, HealthCheck>)[key] = toHealthCheck(component)
   }
 
-  if (usage?.claude) {
+  if (usageError) {
+    checks.claude_usage = {
+      available: false,
+      healthy: false,
+      error: usageError,
+    }
+  } else if (usage?.claude) {
     const c = usage.claude
     checks.claude_usage = {
       available: Boolean(c.available),

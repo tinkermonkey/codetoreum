@@ -25,6 +25,7 @@ export function StatusCard({
   isExpanded = false,
 }: StatusCardProps) {
   const interactive = Boolean(onClick || isExpandable)
+  const contentId = React.useId()
 
   if (interactive) {
     return (
@@ -37,6 +38,7 @@ export function StatusCard({
         )}
         onClick={onClick}
         aria-expanded={isExpandable ? isExpanded : undefined}
+        aria-controls={isExpandable ? contentId : undefined}
       >
         <div className="mb-1.5 flex items-center justify-between gap-2">
           <h3 className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
@@ -44,7 +46,7 @@ export function StatusCard({
           </h3>
           {headerAction ? <div>{headerAction}</div> : null}
         </div>
-        <div>{children}</div>
+        <div id={isExpandable ? contentId : undefined}>{children}</div>
       </button>
     )
   }

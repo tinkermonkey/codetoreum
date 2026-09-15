@@ -5,6 +5,7 @@ Provides endpoints for listing and filtering agents.
 """
 
 from fastapi import APIRouter, HTTPException, Query, status
+from fastapi.responses import RedirectResponse
 
 from codetoreum.adapters.primary.agent_dtos import AgentListResponse
 from codetoreum.adapters.primary.agent_mappers import AgentMapper
@@ -152,22 +153,26 @@ def register_list_endpoints(router: APIRouter, query_port: IAgentQueryPort) -> N
 
     @router.get(
         "/active",
-        summary="Active agent executions (alias)",
-        response_description="Reserved path — use metrics active-agents",
+        summary="Active agent executions (deprecated alias)",
+        response_description="Redirects to the canonical active-agents endpoint",
+        deprecated=True,
+        responses={
+            307: {"description": "Redirects to GET /api/v2/metrics/active-agents"},
+        },
     )
-    async def list_active_agents_alias():
+    async def list_active_agents_alias() -> RedirectResponse:
         """
-        Reserved so `/agents/active` is not captured by `/{agent_id}`.
+        Registered ahead of `/{agent_id}` so `/agents/active` is not swallowed
+        by the agent-id path parameter. Redirects to the canonical endpoint
+        rather than returning fabricated data, so callers never mistake a
+        stub response for a real "zero active agents" answer.
 
         Canonical: `GET /api/v2/metrics/active-agents`
-        Fallback: `GET /api/v2/executions?status=running`
         """
-        return {
-            "agents": [],
-            "count": 0,
-            "canonical_endpoint": "/api/v2/metrics/active-agents",
-            "fallback_endpoint": "/api/v2/executions?status=running",
-        }
+        return RedirectResponse(
+            url="/api/v2/metrics/active-agents",
+            status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+        )
 
     @router.get(
         "/{agent_id}",

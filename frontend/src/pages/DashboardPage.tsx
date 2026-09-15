@@ -10,6 +10,7 @@ import {
   CircleDot,
   ArrowRight,
   Radio,
+  AlertCircle,
 } from 'lucide-react'
 import { format, formatDistanceToNow } from 'date-fns'
 import { workItemsApi, executionsApi } from '../api/client'
@@ -113,16 +114,33 @@ function ListSkeleton() {
   )
 }
 
+function ErrorState({ message }: { message: string }) {
+  return (
+    <div className="flex items-start gap-2 px-1 py-6 text-sm text-destructive">
+      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+      <p>{message}</p>
+    </div>
+  )
+}
+
 export default function DashboardPage() {
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth()
   const queryClient = useQueryClient()
 
-  const { data: workItems = [], isLoading: loadingWorkItems } = useQuery({
+  const {
+    data: workItems = [],
+    isLoading: loadingWorkItems,
+    error: workItemsError,
+  } = useQuery({
     queryKey: ['workItems'],
     queryFn: () => workItemsApi.getAll(),
   })
 
-  const { data: executions = [], isLoading: loadingExecutions } = useQuery({
+  const {
+    data: executions = [],
+    isLoading: loadingExecutions,
+    error: executionsError,
+  } = useQuery({
     queryKey: ['executions'],
     queryFn: () => executionsApi.getAll(),
   })
@@ -140,15 +158,8 @@ export default function DashboardPage() {
 
   const activeWorkItems = React.useMemo(() => {
     const terminal = new Set(['completed', 'failed', 'cancelled'])
-    return workItems.filter((item: WorkItem) => {
-      if (terminal.has(item.status)) return false
-      if (runningWorkItemIds.has(item.id)) return true
-      if (item.project_id === 'codetoreum' && ['new', 'assigned', 'queued'].includes(item.status)) {
-        return true
-      }
-      return false
-    })
-  }, [workItems, runningWorkItemIds])
+    return workItems.filter((item: WorkItem) => !terminal.has(item.status))
+  }, [workItems])
 
   const recentExecutions = React.useMemo(
     () => executions.slice(0, 8),
@@ -226,6 +237,8 @@ export default function DashboardPage() {
           <div className="px-4 py-3">
             {loadingWorkItems ? (
               <ListSkeleton />
+            ) : workItemsError ? (
+              <ErrorState message="Couldn't load the work queue. Try refreshing the page." />
             ) : activeWorkItems.length === 0 ? (
               <EmptyState
                 title="Nothing in the queue"
@@ -296,6 +309,8 @@ export default function DashboardPage() {
           <div className="px-4 py-3">
             {loadingExecutions ? (
               <ListSkeleton />
+            ) : executionsError ? (
+              <ErrorState message="Couldn't load recent runs. Try refreshing the page." />
             ) : recentExecutions.length === 0 ? (
               <EmptyState
                 title="No runs yet"

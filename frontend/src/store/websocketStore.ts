@@ -172,10 +172,6 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
         ? `${state.config.url}?token=${encodeURIComponent(token)}`
         : state.config.url
 
-      console.log(
-        '[WebSocket] Connecting',
-        token ? 'with query token' : 'with cookie auth (no query token)'
-      )
       const ws = new WebSocket(wsUrl)
 
       ws.onopen = () => {

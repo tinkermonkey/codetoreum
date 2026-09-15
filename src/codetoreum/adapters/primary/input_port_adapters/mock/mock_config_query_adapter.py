@@ -9,6 +9,7 @@ When no backing store is provided (unit tests), the adapter uses its own interna
 dictionaries.
 """
 
+import asyncio
 from datetime import UTC, datetime
 from threading import RLock
 from typing import TYPE_CHECKING, Any, Optional
@@ -55,7 +56,8 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
 
     async def _project_ids_from_store(self) -> list[str]:
         """Resolve project IDs via the IConfigStore port (works for ES and in-memory)."""
-        assert self._config_store is not None
+        if self._config_store is None:
+            raise ValueError("_project_ids_from_store requires a configured config_store")
         projects = await self._config_store.list_projects()
         return [p.id for p in projects]
 
@@ -212,9 +214,9 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
                 agent_cfgs = await self._config_store.list_agents(project_id)
             else:
                 # Gather agents across all projects via port methods (not in-memory attrs)
-                agent_cfgs = []
-                for pid in await self._project_ids_from_store():
-                    agent_cfgs.extend(await self._config_store.list_agents(pid))
+                project_ids = await self._project_ids_from_store()
+                per_project = await asyncio.gather(*(self._config_store.list_agents(pid) for pid in project_ids))
+                agent_cfgs = [cfg for cfgs in per_project for cfg in cfgs]
             agents = [self._agent_config_to_info(c) for c in agent_cfgs]
             if pagination:
                 agents = agents[pagination.offset : pagination.offset + pagination.limit]
@@ -242,9 +244,9 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
             if project_id is not None:
                 pipe_cfgs = await self._config_store.list_pipelines(project_id)
             else:
-                pipe_cfgs = []
-                for pid in await self._project_ids_from_store():
-                    pipe_cfgs.extend(await self._config_store.list_pipelines(pid))
+                project_ids = await self._project_ids_from_store()
+                per_project = await asyncio.gather(*(self._config_store.list_pipelines(pid) for pid in project_ids))
+                pipe_cfgs = [cfg for cfgs in per_project for cfg in cfgs]
             pipelines = [self._pipeline_config_to_info(c) for c in pipe_cfgs]
             if pagination:
                 pipelines = pipelines[pagination.offset : pagination.offset + pagination.limit]
@@ -339,21 +341,32 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
     async def count_configs(self, config_type: str | None = None, project_id: str | None = None) -> int:
         """Count configurations."""
         if self._config_store:
+            project_ids = None
+            if not project_id and config_type in (None, "agent", "pipeline"):
+                project_ids = await self._project_ids_from_store()
+
             count = 0
             if not config_type or config_type == "project":
-                count += len(await self._config_store.list_projects())
+                if project_ids is not None:
+                    count += len(project_ids)
+                else:
+                    count += len(await self._config_store.list_projects())
             if not config_type or config_type == "agent":
                 if project_id:
                     count += len(await self._config_store.list_agents(project_id))
                 else:
-                    for pid in await self._project_ids_from_store():
-                        count += len(await self._config_store.list_agents(pid))
+                    per_project = await asyncio.gather(
+                        *(self._config_store.list_agents(pid) for pid in project_ids)
+                    )
+                    count += sum(len(cfgs) for cfgs in per_project)
             if not config_type or config_type == "pipeline":
                 if project_id:
                     count += len(await self._config_store.list_pipelines(project_id))
                 else:
-                    for pid in await self._project_ids_from_store():
-                        count += len(await self._config_store.list_pipelines(pid))
+                    per_project = await asyncio.gather(
+                        *(self._config_store.list_pipelines(pid) for pid in project_ids)
+                    )
+                    count += sum(len(cfgs) for cfgs in per_project)
             return count
         with self._lock:
             count = 0

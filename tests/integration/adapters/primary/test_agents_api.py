@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, status
 from fastapi.testclient import TestClient
 
 from codetoreum.adapters.primary.routers.agents import create_agents_router
@@ -422,6 +422,25 @@ class TestListAgents:
         data = response.json()
         assert data["total_count"] == 0
         assert len(data["agents"]) == 0
+
+
+class TestActiveAgentsAlias:
+    """Tests for GET /api/v2/agents/active — regression coverage for the
+    route-collision fix (this path must not be captured by /{agent_id})."""
+
+    def test_active_not_captured_by_agent_id_route(self, client, mock_query_port):
+        """`/agents/active` must never be routed into the {agent_id} handler."""
+        response = client.get("/api/v2/agents/active", follow_redirects=False)
+
+        assert response.status_code == status.HTTP_307_TEMPORARY_REDIRECT
+        mock_query_port._get_agent.assert_not_called()
+
+    def test_active_redirects_to_canonical_endpoint(self, client):
+        """The alias must redirect rather than return fabricated agent data."""
+        response = client.get("/api/v2/agents/active", follow_redirects=False)
+
+        assert response.status_code == status.HTTP_307_TEMPORARY_REDIRECT
+        assert response.headers["location"] == "/api/v2/metrics/active-agents"
 
 
 class TestGetAgent:

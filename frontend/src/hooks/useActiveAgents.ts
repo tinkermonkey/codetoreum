@@ -13,6 +13,7 @@ import { apiClient } from '../api/client'
 import { useSystemStatusStore } from '../store/systemStatusStore'
 import type { AgentExecution } from '../types/system-status'
 import type { Execution } from '../types'
+import type { ApiError } from '../types/errors'
 import { POLLING_CONFIG, RETRY_CONFIG } from '../config/polling'
 
 /**
@@ -66,7 +67,18 @@ async function fetchActiveAgents(): Promise<AgentExecution[]> {
       project: agent.project || 'unknown',
       issueNumber: agent.issueNumber,
     }))
-  } catch {
+  } catch (err) {
+    const apiError = err as ApiError
+    console.error('[useActiveAgents] /metrics/active-agents request failed', apiError)
+
+    // Only fall back to the /executions endpoint when the canonical route is
+    // genuinely unavailable (404). Any other failure (auth, server error,
+    // network) is a real problem and must surface to the caller, not be
+    // masked by silently substituting a narrower data source.
+    if (apiError.statusCode !== 404) {
+      throw err
+    }
+
     const response = await apiClient.get<{ executions: Execution[]; total_count: number }>('/executions', {
       params: {
         status: 'running',
