@@ -40,13 +40,41 @@ function convertExecution(execution: Execution): AgentExecution {
  * Fetch active agent executions from API
  */
 async function fetchActiveAgents(): Promise<AgentExecution[]> {
-  const response = await apiClient.get<{ executions: Execution[]; total_count: number }>('/executions', {
-    params: {
-      status: 'running',
-      limit: 50,
-    },
-  })
-  return response.executions.map(convertExecution)
+  // Prefer dedicated metrics endpoint; fall back to executions list.
+  try {
+    const response = await apiClient.get<{
+      agents: Array<{
+        executionId: string
+        agentName: string
+        workItemId: string
+        project: string
+        issueNumber?: number
+        status: string
+        startedAt: string
+        containerName?: string
+      }>
+      count: number
+    }>('/metrics/active-agents')
+
+    return (response.agents || []).map((agent) => ({
+      id: agent.executionId,
+      agentName: agent.agentName,
+      workItemId: agent.workItemId,
+      status: agent.status === 'failed' ? 'failed' : agent.status === 'completed' ? 'completed' : 'running',
+      startedAt: agent.startedAt,
+      containerName: agent.containerName,
+      project: agent.project || 'unknown',
+      issueNumber: agent.issueNumber,
+    }))
+  } catch {
+    const response = await apiClient.get<{ executions: Execution[]; total_count: number }>('/executions', {
+      params: {
+        status: 'running',
+        limit: 50,
+      },
+    })
+    return response.executions.map(convertExecution)
+  }
 }
 
 /**

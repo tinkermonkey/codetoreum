@@ -1084,9 +1084,21 @@ class WebSocketAdapter:
             websocket: WebSocket connection
             token: Authentication token from query parameter
         """
+        # Prefer query-param token (API clients / explicit handshake), then
+        # fall back to the httpOnly cookie set by the dashboard auth flow.
+        # Same-origin Vite-proxied connections send cookies automatically.
+        cookie_token = websocket.cookies.get("codetoreum_token")
+        effective_token = token or cookie_token
+
         # Authenticate before accepting connection
-        if self.auth_manager and not self.auth_manager.validate_token(token or ""):
-            logger.warning("WebSocket connection rejected: invalid token")
+        if self.auth_manager and not self.auth_manager.validate_token(effective_token or ""):
+            logger.warning(
+                "WebSocket connection rejected: invalid token",
+                extra={
+                    "query_token_present": bool(token),
+                    "cookie_token_present": bool(cookie_token),
+                },
+            )
             await websocket.close(code=4001, reason="Unauthorized")
             return
 
@@ -1096,7 +1108,7 @@ class WebSocketAdapter:
         session_span = self._session_tracer.start_session(
             connection_id=connection_id,
             client_ip=websocket.client.host if websocket.client else None,
-            token_present=bool(token),
+            token_present=bool(effective_token),
         )
         self._session_spans[connection_id] = session_span
         self._message_tracers[connection_id] = WebSocketMessageTracer(session_span)

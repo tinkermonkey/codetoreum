@@ -6,14 +6,15 @@
  *
  * Features:
  * - Single WebSocket connection shared across all components (singleton pattern)
- * - Automatic connection with cookie-based authentication
+ * - Automatic connection with query-token or same-origin httpOnly cookie auth
  * - Exponential backoff reconnection (up to 10 attempts)
  * - Close code 4001 (Unauthorized) prevents reconnection
  * - Event filtering and subscription management
  * - Connection status tracking
  *
  * Security improvements:
- * - Uses httpOnly cookies for authentication (no token in URL)
+ * - Prefers query token from sessionStorage when available
+ * - Falls back to httpOnly cookie on same-origin / Vite-proxied connections
  * - No localStorage usage (prevents XSS token theft)
  *
  * State Management:

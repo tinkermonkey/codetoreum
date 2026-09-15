@@ -40,11 +40,13 @@ export function ActiveAgentsCard() {
   if (error) {
     return (
       <StatusCard title="Active Agents">
-        <div className="flex items-start gap-2 text-sm text-red-600 dark:text-red-400">
-          <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+        <div className="flex items-start gap-2 text-sm text-destructive">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <div>
-            <p className="font-medium">Failed to load active agents</p>
-            <p className="text-xs mt-1">{error instanceof Error ? error.message : 'Unknown error'}</p>
+            <p className="font-medium">Could not load active agents</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {error instanceof Error ? error.message : 'Unknown error'}
+            </p>
           </div>
         </div>
       </StatusCard>
@@ -56,14 +58,14 @@ export function ActiveAgentsCard() {
       title="Active Agents"
       isExpandable={agentCount > 0}
       isExpanded={isExpanded}
-      onClick={handleToggle}
+      onClick={agentCount > 0 ? handleToggle : undefined}
       headerAction={
         <div className="flex items-center gap-2">
           <Badge variant={agentCount > 0 ? 'success' : 'secondary'}>
             {agentCount}
           </Badge>
           {agentCount > 0 && (
-            isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
+            isExpanded ? <ChevronUp className="h-3 w-3" aria-hidden /> : <ChevronDown className="h-3 w-3" aria-hidden />
           )}
         </div>
       }
@@ -74,7 +76,7 @@ export function ActiveAgentsCard() {
         <>
           {!isExpanded ? (
             <div className="flex items-center gap-2">
-              <Activity className="h-4 w-4 text-green-500 animate-pulse" />
+              <Activity className="h-4 w-4 animate-pulse text-live" aria-hidden />
               <span className="text-sm font-medium">
                 {agentCount} agent{agentCount > 1 ? 's' : ''} running
               </span>

@@ -1,34 +1,162 @@
 import React from 'react'
+import { Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Activity, Clock, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
+import {
+  Activity,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  CircleDot,
+  ArrowRight,
+  Radio,
+} from 'lucide-react'
 import { format, formatDistanceToNow } from 'date-fns'
 import { workItemsApi, executionsApi } from '../api/client'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useAuth } from '../hooks/useAuth'
-import { Card } from '../components/ui/card'
+import { Skeleton } from '../components/ui/skeleton'
+import { PageHeader } from '../components/layout/PageHeader'
+import { cn } from '../lib/utils'
 import type { WorkItemStatus, ExecutionStatus, WorkItem, ExecutionSummary } from '../types'
+
+function statusTone(status: WorkItemStatus | ExecutionStatus) {
+  switch (status) {
+    case 'completed':
+      return 'bg-success/10 text-success'
+    case 'in_progress':
+    case 'running':
+      return 'bg-primary/10 text-primary'
+    case 'failed':
+      return 'bg-destructive/10 text-destructive'
+    case 'queued':
+    case 'pending':
+      return 'bg-warning/10 text-warning'
+    default:
+      return 'bg-muted text-muted-foreground'
+  }
+}
+
+function statusIcon(status: WorkItemStatus | ExecutionStatus, live?: boolean) {
+  switch (status) {
+    case 'completed':
+      return <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+    case 'in_progress':
+    case 'running':
+      return live ? (
+        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+      ) : (
+        <CircleDot className="h-3.5 w-3.5" aria-hidden />
+      )
+    case 'failed':
+      return <XCircle className="h-3.5 w-3.5" aria-hidden />
+    case 'queued':
+    case 'pending':
+      return <Clock className="h-3.5 w-3.5" aria-hidden />
+    default:
+      return <Activity className="h-3.5 w-3.5" aria-hidden />
+  }
+}
+
+function StatusPill({
+  status,
+  live,
+}: {
+  status: WorkItemStatus | ExecutionStatus
+  live?: boolean
+}) {
+  const label = status.replace(/_/g, ' ')
+  return (
+    <span
+      className={cn(
+        'inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium capitalize',
+        statusTone(status)
+      )}
+      title={live ? 'Agent is running' : undefined}
+    >
+      {statusIcon(status, live)}
+      <span>{label}</span>
+      <span className="sr-only">{live ? ', live execution' : ''}</span>
+    </span>
+  )
+}
+
+function EmptyState({
+  title,
+  body,
+  action,
+}: {
+  title: string
+  body: string
+  action?: React.ReactNode
+}) {
+  return (
+    <div className="flex flex-col items-start gap-3 px-1 py-10">
+      <p className="text-[15px] font-medium text-foreground">{title}</p>
+      <p className="max-w-sm text-sm text-muted-foreground text-balance">{body}</p>
+      {action}
+    </div>
+  )
+}
+
+function ListSkeleton() {
+  return (
+    <div className="space-y-3 p-1" aria-hidden>
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="space-y-2 rounded-lg border border-border/60 p-4">
+          <Skeleton className="h-4 w-2/3" />
+          <Skeleton className="h-3 w-full" />
+          <Skeleton className="h-3 w-1/3" />
+        </div>
+      ))}
+    </div>
+  )
+}
 
 export default function DashboardPage() {
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth()
   const queryClient = useQueryClient()
 
-  // Fetch work items
   const { data: workItems = [], isLoading: loadingWorkItems } = useQuery({
     queryKey: ['workItems'],
     queryFn: () => workItemsApi.getAll(),
   })
 
-  // Fetch recent executions
   const { data: executions = [], isLoading: loadingExecutions } = useQuery({
     queryKey: ['executions'],
     queryFn: () => executionsApi.getAll(),
   })
 
-  // WebSocket for real-time events (uses httpOnly cookies for auth)
-  // Wait for auth to finish loading before connecting to prevent race condition
+  const runningWorkItemIds = React.useMemo(() => {
+    return new Set(
+      executions
+        .filter((e: ExecutionSummary) =>
+          ['running', 'queued', 'pending', 'initialized'].includes(e.status)
+        )
+        .map((e: ExecutionSummary) => e.work_item_id)
+        .filter(Boolean)
+    )
+  }, [executions])
+
+  const activeWorkItems = React.useMemo(() => {
+    const terminal = new Set(['completed', 'failed', 'cancelled'])
+    return workItems.filter((item: WorkItem) => {
+      if (terminal.has(item.status)) return false
+      if (runningWorkItemIds.has(item.id)) return true
+      if (item.project_id === 'codetoreum' && ['new', 'assigned', 'queued'].includes(item.status)) {
+        return true
+      }
+      return false
+    })
+  }, [workItems, runningWorkItemIds])
+
+  const recentExecutions = React.useMemo(
+    () => executions.slice(0, 8),
+    [executions]
+  )
+
   const { events, isConnected, subscribe } = useWebSocket(isAuthenticated, isAuthLoading)
 
-  // Subscribe to execution events on mount
   React.useEffect(() => {
     if (isConnected) {
       subscribe('ExecutionStarted')
@@ -37,229 +165,239 @@ export default function DashboardPage() {
     }
   }, [isConnected, subscribe])
 
-  // Process incoming events and invalidate queries to trigger UI updates
   React.useEffect(() => {
-    if (events.length === 0) {
-      return
-    }
-
-    // Get the latest event
+    if (events.length === 0) return
     const latestEvent = events[0]
-
-    // Type guard to check if data has event_type property
     const eventData = latestEvent.data as Record<string, unknown> | undefined
     const eventType = eventData?.event_type as string | undefined
 
-    // Invalidate workItems query when work item column changes
     if (latestEvent.type === 'event' && eventType === 'WorkItemColumnChanged') {
-      console.log('[Dashboard] WorkItemColumnChanged event received, invalidating workItems query')
       queryClient.invalidateQueries({ queryKey: ['workItems'] })
     }
-
-    // Invalidate executions query when execution status changes
     if (
       latestEvent.type === 'event' &&
       (eventType === 'ExecutionStarted' ||
         eventType === 'ExecutionCompleted' ||
         eventType === 'ExecutionFailed')
     ) {
-      console.log(`[Dashboard] ${eventType} event received, invalidating executions query`)
       queryClient.invalidateQueries({ queryKey: ['executions'] })
     }
   }, [events, queryClient])
 
-  const getStatusColor = (status: WorkItemStatus | ExecutionStatus) => {
-    switch (status) {
-      case 'completed':
-        return 'text-green-600 bg-green-50 dark:bg-green-900/20'
-      case 'in_progress':
-      case 'running':
-        return 'text-blue-600 bg-blue-50 dark:bg-blue-900/20'
-      case 'failed':
-        return 'text-red-600 bg-red-50 dark:bg-red-900/20'
-      case 'queued':
-        return 'text-yellow-600 bg-yellow-50 dark:bg-yellow-900/20'
-      case 'cancelled':
-        return 'text-gray-600 bg-gray-50 dark:bg-gray-900/20'
-      default:
-        return 'text-gray-600 bg-gray-50 dark:bg-gray-900/20'
-    }
-  }
-
-  const getStatusIcon = (status: WorkItemStatus | ExecutionStatus) => {
-    switch (status) {
-      case 'completed':
-        return <CheckCircle2 className="h-4 w-4" />
-      case 'in_progress':
-      case 'running':
-        return <Loader2 className="h-4 w-4 animate-spin" />
-      case 'failed':
-        return <XCircle className="h-4 w-4" />
-      case 'queued':
-        return <Clock className="h-4 w-4" />
-      default:
-        return <Activity className="h-4 w-4" />
-    }
-  }
-
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold">Dashboard</h2>
-        <div className="flex items-center space-x-2">
+    <div className="space-y-8">
+      <PageHeader
+        title="Overview"
+        description="What agents are doing now, and what is waiting in the queue."
+        actions={
           <div
-            className={`h-2 w-2 rounded-full ${
-              isConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
-            }`}
-          />
-          <span className="text-sm text-muted-foreground">
-            {isConnected ? 'Live' : 'Disconnected'}
-          </span>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Active Work Items */}
-        <Card className="p-6">
-          <h3 className="text-xl font-semibold mb-4">Active Work Items</h3>
-          {loadingWorkItems ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : workItems.length === 0 ? (
-            <p className="text-center py-8 text-muted-foreground">No work items found</p>
-          ) : (
-            <div className="space-y-3">
-              {workItems.map((item: WorkItem) => (
-                <div
-                  key={item.id}
-                  className="border rounded-md p-4 hover:bg-accent/50 transition-colors"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <h4 className="font-medium">{item.title}</h4>
-                      <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
-                        {item.description}
-                      </p>
-                      {item.current_stage && (
-                        <p className="text-xs text-muted-foreground mt-2">
-                          Stage: {item.current_stage}
-                        </p>
-                      )}
-                    </div>
-                    <span
-                      className={`flex items-center space-x-1 px-2 py-1 rounded-md text-xs font-medium ${getStatusColor(
-                        item.status
-                      )}`}
-                    >
-                      {getStatusIcon(item.status)}
-                      <span>{item.status}</span>
-                    </span>
-                  </div>
-                  <div className="flex items-center space-x-4 mt-3 text-xs text-muted-foreground">
-                    <span>Updated {formatDistanceToNow(new Date(item.updated_at), { addSuffix: true })}</span>
-                    {item.labels.length > 0 && (
-                      <div className="flex items-center space-x-1">
-                        {item.labels.slice(0, 3).map((label: string) => (
-                          <span key={label} className="px-2 py-0.5 rounded-full bg-muted">
-                            {label}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-
-        {/* Recent Executions */}
-        <Card className="p-6">
-          <h3 className="text-xl font-semibold mb-4">Recent Executions</h3>
-          {loadingExecutions ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : executions.length === 0 ? (
-            <p className="text-center py-8 text-muted-foreground">No executions found</p>
-          ) : (
-            <div className="space-y-3">
-              {executions.map((execution: ExecutionSummary) => (
-                <div
-                  key={execution.id}
-                  className="border rounded-md p-4 hover:bg-accent/50 transition-colors"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <h4 className="font-medium">{execution.work_item_title}</h4>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Agent: {execution.agent_name}
-                      </p>
-                    </div>
-                    <span
-                      className={`flex items-center space-x-1 px-2 py-1 rounded-md text-xs font-medium ${getStatusColor(
-                        execution.status
-                      )}`}
-                    >
-                      {getStatusIcon(execution.status)}
-                      <span>{execution.status}</span>
-                    </span>
-                  </div>
-                  <div className="flex items-center space-x-4 mt-3 text-xs text-muted-foreground">
-                    {execution.started_at && (
-                      <span>
-                        Started {formatDistanceToNow(new Date(execution.started_at), { addSuffix: true })}
-                      </span>
-                    )}
-                    {execution.duration_seconds && (
-                      <span>{execution.duration_seconds}s</span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-      </div>
-
-      {/* Real-time Events */}
-      <Card className="p-6">
-        <h3 className="text-xl font-semibold mb-4">
-          Real-time Events
-          <span className="ml-2 text-sm font-normal text-muted-foreground">
-            (Last 10 events)
-          </span>
-        </h3>
-        {events.length === 0 ? (
-          <p className="text-center py-8 text-muted-foreground">
-            No recent events. Events will appear here in real-time.
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {events.slice(0, 10).map((event, index) => (
-              <div
-                key={`${event.timestamp}-${index}`}
-                className="border-l-4 border-primary/50 pl-4 py-2 bg-accent/30 rounded-r"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <span className="font-medium">{event.type}</span>
-                    {event.data != null && (
-                      <pre className="text-xs text-muted-foreground mt-1 overflow-x-auto">
-                        {typeof event.data === 'string' ? event.data : JSON.stringify(event.data, null, 2)}
-                      </pre>
-                    )}
-                  </div>
-                  <span className="text-xs text-muted-foreground whitespace-nowrap ml-4">
-                    {format(new Date(event.timestamp), 'HH:mm:ss')}
-                  </span>
-                </div>
-              </div>
-            ))}
+            className={cn(
+              'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm',
+              isConnected
+                ? 'border-live/30 bg-live/10 text-live'
+                : 'border-border bg-muted text-muted-foreground'
+            )}
+            role="status"
+            aria-live="polite"
+          >
+            <Radio className={cn('h-3.5 w-3.5', isConnected && 'animate-pulse')} aria-hidden />
+            <span className="font-medium">
+              {isConnected ? 'Live updates on' : 'Live updates off'}
+            </span>
           </div>
-        )}
-      </Card>
+        }
+      />
+
+      {/* Primary work surfaces */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <section className="surface-panel shadow-soft" aria-labelledby="queue-heading">
+          <div className="flex items-center justify-between border-b border-border/70 px-5 py-4">
+            <div>
+              <h2 id="queue-heading" className="text-[15px] font-semibold text-foreground">
+                Work queue
+              </h2>
+              <p className="text-xs text-muted-foreground">Open items ready for an agent</p>
+            </div>
+            <span className="font-mono text-xs text-muted-foreground tabular-nums">
+              {activeWorkItems.length}
+            </span>
+          </div>
+
+          <div className="px-4 py-3">
+            {loadingWorkItems ? (
+              <ListSkeleton />
+            ) : activeWorkItems.length === 0 ? (
+              <EmptyState
+                title="Nothing in the queue"
+                body="Create a work item or move a card into an automated column to start an agent."
+                action={
+                  <Link
+                    to="/config"
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+                  >
+                    Open project settings
+                    <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+                  </Link>
+                }
+              />
+            ) : (
+              <ul className="divide-y divide-border/60">
+                {activeWorkItems.map((item: WorkItem) => {
+                  const live = runningWorkItemIds.has(item.id)
+                  return (
+                    <li key={item.id} className="py-3.5 first:pt-1 last:pb-1">
+                      <div className="flex items-start justify-between gap-3 px-1">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[15px] font-medium text-foreground">
+                            {item.title}
+                          </p>
+                          {item.description ? (
+                            <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                              {item.description}
+                            </p>
+                          ) : null}
+                          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                            {item.current_stage ? (
+                              <span>Stage {item.current_stage}</span>
+                            ) : null}
+                            <span>
+                              Updated{' '}
+                              {formatDistanceToNow(new Date(item.updated_at), { addSuffix: true })}
+                            </span>
+                          </div>
+                        </div>
+                        <StatusPill status={item.status} live={live} />
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
+        </section>
+
+        <section className="surface-panel shadow-soft" aria-labelledby="runs-heading">
+          <div className="flex items-center justify-between border-b border-border/70 px-5 py-4">
+            <div>
+              <h2 id="runs-heading" className="text-[15px] font-semibold text-foreground">
+                Agent runs
+              </h2>
+              <p className="text-xs text-muted-foreground">Recent executions</p>
+            </div>
+            <Link
+              to="/workflows/runs"
+              className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+            >
+              View runs
+              <ArrowRight className="h-3 w-3" aria-hidden />
+            </Link>
+          </div>
+
+          <div className="px-4 py-3">
+            {loadingExecutions ? (
+              <ListSkeleton />
+            ) : recentExecutions.length === 0 ? (
+              <EmptyState
+                title="No runs yet"
+                body="When an agent starts, its execution shows up here with status and timing."
+              />
+            ) : (
+              <ul className="divide-y divide-border/60">
+                {recentExecutions.map((execution: ExecutionSummary) => (
+                  <li key={execution.id} className="py-3.5 first:pt-1 last:pb-1">
+                    <div className="flex items-start justify-between gap-3 px-1">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[15px] font-medium text-foreground">
+                          {execution.work_item_title || 'Untitled work item'}
+                        </p>
+                        <p className="mt-1 font-mono text-xs text-muted-foreground">
+                          {execution.agent_name}
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+                          {execution.started_at ? (
+                            <span>
+                              Started{' '}
+                              {formatDistanceToNow(new Date(execution.started_at), {
+                                addSuffix: true,
+                              })}
+                            </span>
+                          ) : null}
+                          {execution.duration_seconds != null ? (
+                            <span className="tabular-nums">{execution.duration_seconds}s</span>
+                          ) : null}
+                        </div>
+                      </div>
+                      <StatusPill
+                        status={execution.status}
+                        live={['running', 'queued', 'pending'].includes(execution.status)}
+                      />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
+      </div>
+
+      {/* Secondary: event stream — compact, not raw JSON dump */}
+      <section className="surface-panel shadow-soft" aria-labelledby="events-heading">
+        <div className="flex items-center justify-between border-b border-border/70 px-5 py-4">
+          <div>
+            <h2 id="events-heading" className="text-[15px] font-semibold text-foreground">
+              Event stream
+            </h2>
+            <p className="text-xs text-muted-foreground">Last 10 live events from the orchestrator</p>
+          </div>
+        </div>
+
+        <div className="px-5 py-4">
+          {events.length === 0 ? (
+            <EmptyState
+              title={isConnected ? 'Waiting for events' : 'Connect for live events'}
+              body={
+                isConnected
+                  ? 'Agent starts, completions, and board moves will appear here as they happen.'
+                  : 'Live updates are off. Re-open the dashboard with your auth token to reconnect.'
+              }
+            />
+          ) : (
+            <ol className="space-y-0">
+              {events.slice(0, 10).map((event, index) => {
+                const eventData = event.data as Record<string, unknown> | undefined
+                const eventType =
+                  (eventData?.event_type as string | undefined) || event.type || 'Event'
+                const summary =
+                  typeof eventData?.message === 'string'
+                    ? eventData.message
+                    : typeof eventData?.title === 'string'
+                      ? eventData.title
+                      : null
+
+                return (
+                  <li
+                    key={`${event.timestamp}-${index}`}
+                    className="flex gap-4 border-b border-border/50 py-3 last:border-0"
+                  >
+                    <time
+                      className="w-16 shrink-0 font-mono text-xs tabular-nums text-muted-foreground"
+                      dateTime={event.timestamp}
+                    >
+                      {format(new Date(event.timestamp), 'HH:mm:ss')}
+                    </time>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-mono text-sm font-medium text-foreground">{eventType}</p>
+                      {summary ? (
+                        <p className="mt-0.5 truncate text-sm text-muted-foreground">{summary}</p>
+                      ) : null}
+                    </div>
+                  </li>
+                )
+              })}
+            </ol>
+          )}
+        </div>
+      </section>
     </div>
   )
 }

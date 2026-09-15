@@ -1,50 +1,107 @@
 /**
  * System Status Hook
  *
- * React Query hook for fetching system health and status data.
- * Automatically updates the Zustand store with real-time data.
+ * Fetches component health + Claude API usage and normalizes into SystemHealth
+ * for the dashboard status header.
  */
 
 import { useQuery } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { apiClient } from '../api/client'
 import { useSystemStatusStore } from '../store/systemStatusStore'
-import type { SystemHealth } from '../types/system-status'
+import type { HealthCheck, SystemHealth, SystemHealthChecks } from '../types/system-status'
 import { POLLING_CONFIG, RETRY_CONFIG } from '../config/polling'
 
-/**
- * System health query key
- */
 export const systemHealthQueryKey = ['system-health']
 
+interface MetricsHealthComponent {
+  component_name: string
+  status: string
+  message?: string | null
+}
+
+interface MetricsHealthResponse {
+  status: string
+  components?: MetricsHealthComponent[]
+  uptime_seconds?: number
+  version?: string
+}
+
+interface ApiUsageResponse {
+  claude?: {
+    available?: boolean
+    weeklyUsage?: number
+    weeklyQuota?: number
+    weeklyUsagePercent?: number
+    sessionUsage?: number
+    sessionQuota?: number
+    sessionUsagePercent?: number
+    sessionRemainingMinutes?: number
+  }
+}
+
+function mapComponentName(name: string): keyof SystemHealthChecks | string {
+  switch (name) {
+    case 'github_api':
+      return 'github'
+    case 'docker_runtime':
+      return 'docker'
+    default:
+      return name
+  }
+}
+
+function toHealthCheck(component: MetricsHealthComponent): HealthCheck {
+  const healthy = component.status === 'healthy'
+  return {
+    available: healthy,
+    healthy,
+    message: component.message ?? undefined,
+  }
+}
+
 /**
- * Fetch system health from API
+ * Normalize backend metrics payloads into the SystemHealth shape the UI expects.
  */
 async function fetchSystemHealth(): Promise<SystemHealth> {
-  return await apiClient.get<SystemHealth>('/metrics/health')
+  const [health, usage] = await Promise.all([
+    apiClient.get<MetricsHealthResponse>('/metrics/health'),
+    apiClient.get<ApiUsageResponse>('/metrics/api-usage').catch(() => null),
+  ])
+
+  const checks: SystemHealthChecks = {}
+
+  for (const component of health.components || []) {
+    const key = mapComponentName(component.component_name)
+    // Store known keys on checks; unknown components still useful via unhealthy list casting
+    ;(checks as Record<string, HealthCheck>)[key] = toHealthCheck(component)
+  }
+
+  if (usage?.claude) {
+    const c = usage.claude
+    checks.claude_usage = {
+      available: Boolean(c.available),
+      healthy: Boolean(c.available),
+      weeklyUsage: c.weeklyUsage,
+      weeklyQuota: c.weeklyQuota,
+      weeklyUsagePercent: c.weeklyUsagePercent,
+      sessionUsage: c.sessionUsage,
+      sessionQuota: c.sessionQuota,
+      sessionUsagePercent: c.sessionUsagePercent,
+      sessionRemainingMinutes: c.sessionRemainingMinutes,
+    }
+  }
+
+  return {
+    status: (health.status as SystemHealth['status']) || 'error',
+    checks,
+  }
 }
 
-/**
- * Calculate retry delay with exponential backoff
- */
 function calculateRetryDelay(attemptIndex: number): number {
-  return Math.min(
-    RETRY_CONFIG.BASE_DELAY * Math.pow(2, attemptIndex),
-    30000 // Max 30 seconds
-  )
+  return Math.min(RETRY_CONFIG.BASE_DELAY * Math.pow(2, attemptIndex), 30000)
 }
 
-/**
- * Hook for fetching and managing system status
- *
- * Features:
- * - Configurable polling interval (default: 5 seconds)
- * - Automatic retry with exponential backoff
- * - Automatically updates Zustand store
- * - Provides loading and error states
- *
- * @returns Query result with system health data
- */
 export function useSystemStatus() {
   const updateSystemHealth = useSystemStatusStore((state) => state.updateSystemHealth)
 
@@ -57,7 +114,6 @@ export function useSystemStatus() {
     retryDelay: calculateRetryDelay,
   })
 
-  // Update Zustand store when data changes
   useEffect(() => {
     if (query.data) {
       updateSystemHealth(query.data)
