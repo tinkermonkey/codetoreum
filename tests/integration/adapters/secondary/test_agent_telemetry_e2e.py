@@ -14,13 +14,11 @@ See documentation/architecture/infrastructure/otel-routing.md for design.
 import asyncio
 import json
 import logging
+import re
 import shutil
 import subprocess
 import tempfile
-from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Any
-from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import docker
@@ -28,24 +26,10 @@ import pytest
 from elasticsearch import AsyncElasticsearch
 
 from codetoreum.adapters.secondary.claude_code.otel_span_parser import parse_spans_file
-from codetoreum.adapters.secondary.claude_code.stream_parser import (
-    ClaudeStreamJsonParser,
-)
-from codetoreum.adapters.secondary.docker_container_adapter import (
-    DockerConfig,
-    DockerContainerAdapter,
-)
 from codetoreum.adapters.secondary.elasticsearch_event_store import (
     ElasticsearchEventStore,
 )
 from codetoreum.domain.events.coding_agent_events import CodingAgentOtlpSpanEvent
-from codetoreum.domain.workspace_context import WorkspaceContext
-from codetoreum.infrastructure.event_bus import EventBus
-from codetoreum.infrastructure.event_serialization import EventSerializer
-from codetoreum.ports.output.coding_agent import (
-    CodingAgentInvocationOptions,
-    InvocationMode,
-)
 from tests.conftest import ModernElasticsearchContainer, docker_available, wait_for_elasticsearch_indexing
 
 logger = logging.getLogger(__name__)
@@ -76,8 +60,8 @@ def _get_or_build_real_agent_image() -> str:
         pass
 
     # Build the real agent image from Dockerfile.agent
-    dockerfile_path = Path(__file__).parent.parent.parent.parent / "Dockerfile.agent"
-    context_path = Path(__file__).parent.parent.parent.parent  # /workspace
+    dockerfile_path = Path(__file__).parent.parent.parent.parent.parent / "Dockerfile.agent"
+    context_path = Path(__file__).parent.parent.parent.parent.parent  # /workspace
 
     logger.info(f"Building real agent image from {dockerfile_path}")
     try:
@@ -327,9 +311,8 @@ class TestAgentTelemetryE2E:
         1. Real Dockerfile.agent with production entrypoint (scripts/agent-entrypoint.sh)
         2. Production OpenTelemetry Collector sidecar with health checks and traps
         3. Parses spans.jsonl into CodingAgentOtlpSpanEvent
-        4. Publishes through EventBus
-        5. Persists via ElasticsearchEventStore with correct stream naming (coding-agent-<execution_id>)
-        6. Uses production index naming (events-YYYY.MM based on timestamp)
+        4. Persists via ElasticsearchEventStore with correct stream naming (coding-agent-<execution_id>)
+        5. Uses production index naming (events-YYYY.MM based on timestamp)
 
         Validates requirements from done-means item 4, FR5/US6.
         """
@@ -389,7 +372,6 @@ class TestAgentTelemetryE2E:
             index_name = hit["_index"]
             assert index_name.startswith("events-"), f"Index {index_name} doesn't match pattern events-YYYY.MM"
             # Pattern should be events-2025.09 or similar
-            import re
             assert re.match(r"events-\d{4}\.\d{2}", index_name), f"Index {index_name} doesn't match events-YYYY.MM"
 
         # Verify stream naming convention in documents
