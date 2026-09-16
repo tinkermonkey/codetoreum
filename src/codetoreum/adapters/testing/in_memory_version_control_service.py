@@ -7,7 +7,6 @@ git operations. Useful for testing orchestration logic without external dependen
 
 import asyncio
 import hashlib
-import os
 import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
