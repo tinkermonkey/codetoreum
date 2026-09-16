@@ -1,0 +1,71 @@
+# Test agent image with OTel collector for integration testing
+# Minimal reproduction of agent telemetry setup for Phase 4 testing
+FROM python:3.11-slim
+
+ARG OTELCOL_VERSION=0.105.0
+ARG OTELCOL_CHECKSUM=1ce3a50f86f2ea1ea091c9e4f6ddbd34b4dcb6ed828365edb1ae31765f0ef7d3
+
+# Install curl for downloading otelcol
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Download and verify OpenTelemetry Collector static binary
+RUN cd /tmp && \
+    curl -fsSL "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v${OTELCOL_VERSION}/otelcol_${OTELCOL_VERSION}_linux_amd64.tar.gz" -o otelcol.tar.gz && \
+    echo "${OTELCOL_CHECKSUM} otelcol.tar.gz" | sha256sum -c - && \
+    tar -xzf otelcol.tar.gz && \
+    mv otelcol /usr/local/bin/ && \
+    chmod +x /usr/local/bin/otelcol && \
+    rm -f otelcol.tar.gz
+
+# Copy OTel collector configuration
+COPY etc/otelcol/config.yaml /etc/otelcol/config.yaml
+
+# Create /var/otel directory for spans
+RUN mkdir -p /var/otel && chmod 755 /var/otel
+
+# Create entrypoint script that launches otelcol before the main command
+RUN cat > /entrypoint.sh << 'EOF'
+#!/bin/bash
+
+# Start otelcol in the background
+echo "Starting OpenTelemetry Collector..."
+/usr/local/bin/otelcol --config /etc/otelcol/config.yaml &
+OTELCOL_PID=$!
+
+# Set up trap to gracefully shutdown otelcol when script exits
+trap "kill $OTELCOL_PID 2>/dev/null; wait $OTELCOL_PID 2>/dev/null" EXIT
+
+# Wait for otelcol to be ready (health check on receiver port)
+echo "Waiting for otelcol receiver to be ready..."
+MAX_ATTEMPTS=50
+ATTEMPT=0
+while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+    if curl -s http://127.0.0.1:4318/v1/traces -X POST -H "Content-Type: application/json" -d '{"resourceSpans":[]}' >/dev/null 2>&1; then
+        echo "otelcol receiver is ready"
+        break
+    fi
+    ATTEMPT=$((ATTEMPT + 1))
+    sleep 0.1
+done
+
+if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
+    echo "WARNING: otelcol receiver did not become ready in time"
+    exit 1
+fi
+
+# Run the main command and wait for it
+"$@"
+MAIN_EXIT=$?
+
+# Give otelcol a moment to flush any in-flight spans
+sleep 0.5
+
+exit $MAIN_EXIT
+EOF
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["/bin/bash"]
