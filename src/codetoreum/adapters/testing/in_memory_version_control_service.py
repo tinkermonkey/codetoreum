@@ -11,6 +11,7 @@ import os
 import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from codetoreum.domain.events.repository_events import BranchCreatedEvent
@@ -117,7 +118,7 @@ class InMemoryVersionControlService(IVersionControlService):
         # Best-effort: unit tests often pass non-writable paths (e.g. /workspace) that
         # don't need to exist on disk; only simulation/integration paths under /tmp do.
         try:
-            await asyncio.to_thread(os.makedirs, target_path, exist_ok=True)
+            await asyncio.to_thread(lambda: Path(target_path).mkdir(parents=True, exist_ok=True))
         except (PermissionError, OSError):
             pass
 

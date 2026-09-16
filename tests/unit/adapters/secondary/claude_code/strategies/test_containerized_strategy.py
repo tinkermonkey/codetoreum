@@ -507,11 +507,9 @@ async def test_containerized_strategy_parses_and_emits_otel_spans(tmp_path: Path
 
     def _write_valid_span(otel_temp_dir: str) -> None:
         """Write a valid span envelope to spans.jsonl."""
-        import os
-
-        spans_file = os.path.join(otel_temp_dir, "spans.jsonl")
-        os.makedirs(otel_temp_dir, exist_ok=True)
-        with open(spans_file, "w") as f:
+        spans_file = Path(otel_temp_dir) / "spans.jsonl"
+        Path(otel_temp_dir).mkdir(parents=True, exist_ok=True)
+        with spans_file.open("w") as f:
             f.write(json.dumps(test_span_envelope) + "\n")
 
     container = _SpanWritingContainer(
@@ -604,11 +602,9 @@ async def test_containerized_strategy_emits_spans_on_abnormal_exit(tmp_path: Pat
 
     def _write_valid_span(otel_temp_dir: str) -> None:
         """Write a valid span envelope to spans.jsonl."""
-        import os
-
-        spans_file = os.path.join(otel_temp_dir, "spans.jsonl")
-        os.makedirs(otel_temp_dir, exist_ok=True)
-        with open(spans_file, "w") as f:
+        spans_file = Path(otel_temp_dir) / "spans.jsonl"
+        Path(otel_temp_dir).mkdir(parents=True, exist_ok=True)
+        with spans_file.open("w") as f:
             f.write(json.dumps(test_span_envelope) + "\n")
 
     # Exit with non-zero code (abnormal exit).
@@ -697,11 +693,9 @@ async def test_containerized_strategy_handles_span_emit_failure(tmp_path: Path):
 
     def _write_valid_span(otel_temp_dir: str) -> None:
         """Write a valid span envelope to spans.jsonl."""
-        import os
-
-        spans_file = os.path.join(otel_temp_dir, "spans.jsonl")
-        os.makedirs(otel_temp_dir, exist_ok=True)
-        with open(spans_file, "w") as f:
+        spans_file = Path(otel_temp_dir) / "spans.jsonl"
+        Path(otel_temp_dir).mkdir(parents=True, exist_ok=True)
+        with spans_file.open("w") as f:
             f.write(json.dumps(test_span_envelope) + "\n")
 
     container = _SpanWritingContainer(
