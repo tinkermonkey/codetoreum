@@ -353,6 +353,9 @@ ignore = [
 "tests/integration/adapters/secondary/test_webhook_validation.py" = [
     "S324",    # Insecure hash function SHA1 (intentionally tests SHA-1 rejection)
 ]
+"tests/integration/adapters/secondary/test_agent_telemetry_e2e.py" = [
+    "S607",    # Partial executable path for docker (standard invocation in tests)
+]
 "src/codetoreum/adapters/secondary/docker_container_recovery_adapter.py" = [
     "F821",    # String annotations with lazy imports: valid pattern, resolved by mypy
 ]

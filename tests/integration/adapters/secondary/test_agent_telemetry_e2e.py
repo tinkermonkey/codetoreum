@@ -11,7 +11,6 @@ See documentation/architecture/infrastructure/otel-routing.md for design.
 """
 
 import asyncio
-import docker
 import json
 import logging
 import shutil
@@ -20,6 +19,7 @@ import tempfile
 from pathlib import Path
 from uuid import uuid4
 
+import docker
 import pytest
 from elasticsearch import AsyncElasticsearch
 
@@ -229,6 +229,7 @@ def agent_container_with_spans():
             ["docker", "cp", f"{container_name}:/var/otel/spans.jsonl", str(spans_file)],
             capture_output=True,
             timeout=10,
+            check=False,
         )
 
         if result.returncode != 0:
