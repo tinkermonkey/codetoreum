@@ -180,8 +180,8 @@ fi
 
 # --- Start OpenTelemetry Collector sidecar (if present) ----------------------
 # The collector runs as a background sidecar to capture and forward telemetry
-# from the agent process. It is optional (not fatal if missing or fails to start),
-# but if it starts, it MUST become healthy before we proceed to the agent.
+# from the agent process. It is optional (best-effort) — if it fails to start or
+# becomes unhealthy, a warning is logged but agent execution proceeds anyway.
 # Spans will be silently lost if the collector is unavailable, but the agent
 # execution is more important than observability.
 
@@ -190,7 +190,7 @@ OTELCOL_PID=""
 if [ -f /usr/local/bin/otelcol ]; then
     # Collector binary exists — attempt to start it
     echo "[agent-entrypoint] Starting OpenTelemetry Collector..." >&2
-    /usr/local/bin/otelcol --config /etc/otelcol/config.yaml >/dev/null 2>&2 &
+    /usr/local/bin/otelcol --config /etc/otelcol/config.yaml >/dev/null 2>&1 &
     OTELCOL_PID=$!
 
     # Register a cleanup handler so the collector flushes its buffer on exit
@@ -240,6 +240,9 @@ if [ -f /usr/local/bin/otelcol ]; then
     if [ "$COLLECTOR_HEALTHY" = false ]; then
         echo "[agent-entrypoint] WARNING: OpenTelemetry Collector did not become healthy within the bounded wait." >&2
         echo "[agent-entrypoint] WARNING: Telemetry spans will be lost, but proceeding with agent execution." >&2
+        if [ -n "$OTELCOL_PID" ]; then
+            kill "$OTELCOL_PID" 2>/dev/null || true
+        fi
         OTELCOL_PID=""
     fi
 else
