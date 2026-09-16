@@ -19,6 +19,12 @@ exporters:
       max_backups: 3
 
 service:
+  telemetry:
+    # Explicitly disable metrics telemetry endpoint to reduce exposed surface area
+    # otelcol's default basic telemetry starts Prometheus on 0.0.0.0:8888 which is
+    # not needed for this traces-only sidecar and would be reachable from other containers
+    metrics:
+      level: none
   pipelines:
     traces:
       receivers: [otlp]

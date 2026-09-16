@@ -97,9 +97,10 @@ RUN cd /tmp && \
 # Copy OpenTelemetry Collector configuration for agent containers
 COPY etc/otelcol/config.yaml /etc/otelcol/config.yaml
 
-# Create /var/otel directory (will be writable by orchestrator user at runtime)
+# Create /var/otel directory owned by orchestrator with restricted permissions
 RUN mkdir -p /var/otel && \
-    chmod 1777 /var/otel
+    chown orchestrator:orchestrator /var/otel && \
+    chmod 755 /var/otel
 
 # ============================================================================
 # Stage 4: Ownership and Permissions
