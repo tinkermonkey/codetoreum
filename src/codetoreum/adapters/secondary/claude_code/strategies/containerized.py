@@ -215,7 +215,7 @@ class ContainerizedClaudeStrategy(ClaudeInvocationStrategy):
             if container_id is not None:
                 try:
                     await self._container.remove(container_id, force=True)
-                except Exception:
+                except BaseException:
                     logger.exception(
                         "ContainerizedClaudeStrategy: failed to remove container_id=%s",
                         container_id,

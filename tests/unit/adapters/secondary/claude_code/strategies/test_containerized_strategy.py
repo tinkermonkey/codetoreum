@@ -7,6 +7,7 @@ without spinning up Docker.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import AsyncIterator
 from datetime import datetime
@@ -892,6 +893,111 @@ async def test_containerized_strategy_continues_on_single_span_publish_failure(t
     # Verify that we attempted to publish all three spans
     # span_1 succeeds, span_2 fails with exception, span_3 should be attempted after failure
     assert span_publish_count[0] >= 3, f"Expected to attempt publishing at least 3 spans, got {span_publish_count[0]}"
+
+
+@pytest.mark.asyncio
+async def test_containerized_strategy_handles_cancelled_error_during_span_emission(tmp_path: Path):
+    """CancelledError during span emission does not bypass container and temp directory cleanup."""
+
+    test_span_envelope = {
+        "resourceSpans": [
+            {
+                "resource": {
+                    "attributes": [
+                        {"key": "service.name", "value": {"stringValue": "claude-code"}}
+                    ]
+                },
+                "scopeSpans": [
+                    {
+                        "scope": {"name": "claude-code"},
+                        "spans": [
+                            {
+                                "traceId": "abcd1234abcd1234abcd1234abcd1234",
+                                "spanId": "1234abcd1234abcd",
+                                "parentSpanId": "",
+                                "name": "test_span",
+                                "kind": "SPAN_KIND_INTERNAL",
+                                "startTimeUnixNano": "1748400000000000000",
+                                "endTimeUnixNano": "1748400001000000000",
+                                "attributes": [],
+                                "events": [],
+                                "status": {"code": "STATUS_CODE_OK"},
+                            }
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+    lines = [
+        (json.dumps(RESULT) + "\n").encode(),
+    ]
+
+    def _write_valid_span(otel_temp_dir: str) -> None:
+        """Write a valid span envelope to spans.jsonl."""
+        spans_file = Path(otel_temp_dir) / "spans.jsonl"
+        Path(otel_temp_dir).mkdir(parents=True, exist_ok=True)
+        with spans_file.open("w") as f:
+            f.write(json.dumps(test_span_envelope) + "\n")
+
+    container = _SpanWritingContainer(
+        lines,
+        exit_code=0,
+        write_callable=_write_valid_span,
+    )
+
+    strategy = ContainerizedClaudeStrategy(
+        container=container,
+        credential_provider=_FakeCredentialProvider(),
+    )
+    event_bus = EventBus()
+    captured: list[Any] = []
+    event_bus.subscribe(None, lambda e: captured.append(e))
+    options = CodingAgentInvocationOptions(
+        invocation_mode=InvocationMode.CONTAINERIZED,
+        model="m",
+        timeout_seconds=30,
+        cost_limit_usd=None,
+        mode_config={"image": "codetoreum-agent:latest"},
+    )
+
+    host_workspace = tmp_path / "ws"
+    host_workspace.mkdir()
+
+    # Patch event_bus.publish to raise CancelledError during span emission
+    async def _mock_publish_with_cancellation(event: Any) -> None:
+        """Mock publish that raises CancelledError on OTel span events."""
+        if type(event).__name__ == "CodingAgentOtlpSpanEvent":
+            raise asyncio.CancelledError("Task was cancelled during span emission")
+
+    with patch.object(event_bus, "publish", side_effect=_mock_publish_with_cancellation):
+        with patch(
+            "codetoreum.adapters.secondary.claude_code.strategies.containerized.logger"
+        ) as mock_logger:
+            result = await strategy.execute(
+                prompt_text="hi",
+                execution_id="exec-cancelled-span",
+                workspace_context=_ws(workspace_path=host_workspace),
+                options=options,
+                event_bus=event_bus,
+                parser=ClaudeStreamJsonParser(),
+                coding_agent_id="claude-code",
+            )
+
+            # Verify that logger.exception was called for the CancelledError
+            exception_calls = [
+                call for call in mock_logger.exception.call_args_list
+                if "exception during span emission" in str(call)
+            ]
+            assert len(exception_calls) >= 1, "Should log the CancelledError during span emission"
+
+    # Despite the CancelledError, container cleanup must have occurred.
+    assert container.removed is True, "Container must be removed even if span emission is cancelled"
+    # Temp directory should have been cleaned up.
+    assert host_workspace.exists(), "Workspace directory should still exist"
+    # The execution should succeed (the result is unaffected by span emission issues).
+    assert result.success is True
 
 
 # Avoid unused-import lint warnings.
