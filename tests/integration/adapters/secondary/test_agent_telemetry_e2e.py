@@ -11,13 +11,13 @@ See documentation/architecture/infrastructure/otel-routing.md for design.
 """
 
 import asyncio
+import docker
 import json
 import logging
 import shutil
+import subprocess
 import tempfile
-from datetime import datetime
 from pathlib import Path
-from typing import Any
 from uuid import uuid4
 
 import pytest
@@ -25,9 +25,7 @@ from elasticsearch import AsyncElasticsearch
 
 from codetoreum.adapters.secondary.claude_code.otel_span_parser import parse_spans_file
 from codetoreum.domain.events.coding_agent_events import CodingAgentOtlpSpanEvent
-from codetoreum.infrastructure.event_bus import EventBus
 from codetoreum.infrastructure.event_serialization import EventSerializer
-from codetoreum.ports.output.event_store import IEventStore
 from tests.conftest import ModernElasticsearchContainer, docker_available, wait_for_elasticsearch_indexing
 
 logger = logging.getLogger(__name__)
@@ -43,9 +41,6 @@ def _get_or_build_test_agent_image() -> str:
     configuration, and /var/otel mount point. This reproduces what the
     real agent image provides without requiring Claude CLI.
     """
-    import docker
-    import os
-
     client = docker.from_env()
     image_name = "test-agent-telemetry:phase4"
 
@@ -189,19 +184,81 @@ async def es_client(es_container):
         await client.close()
 
 
-@pytest.fixture
-async def event_bus(es_client):
-    """Event bus connected to Elasticsearch."""
-    bus = EventBus()
-    yield bus
-    # Teardown handled by client fixture
+@pytest.fixture(scope="function")
+def agent_container_with_spans():
+    """Run agent container once and extract spans.jsonl for test reuse.
+
+    This fixture eliminates ~50 lines of duplicate container setup/teardown
+    across multiple tests, providing a single source of spans data.
+    """
+    agent_image = _get_or_build_test_agent_image()
+    client = docker.from_env()
+    temp_otel = tempfile.mkdtemp(prefix="test-otel-")
+    otel_path = Path(temp_otel)
+    spans_file = otel_path / "spans.jsonl"
+    container_name = f"test-agent-{uuid4().hex[:12]}"
+
+    try:
+        # Start container with synthetic spans
+        container = client.containers.run(
+            agent_image,
+            command=[
+                "python3",
+                "-c",
+                _generate_synthetic_otlp_spans(),
+            ],
+            volumes={temp_otel: {"bind": "/var/otel", "mode": "rw"}},
+            name=container_name,
+            detach=True,
+            remove=False,
+            stdout=True,
+            stderr=True,
+        )
+
+        # Wait for completion
+        exit_code = container.wait(timeout=30)
+        logs = container.logs().decode("utf-8")
+        logger.info(f"Container logs:\n{logs}")
+
+        # Verify exit code
+        if exit_code["StatusCode"] != 0:
+            raise RuntimeError(f"Container failed with code {exit_code['StatusCode']}, logs: {logs}")
+
+        # Extract spans.jsonl from container using docker cp
+        result = subprocess.run(
+            ["docker", "cp", f"{container_name}:/var/otel/spans.jsonl", str(spans_file)],
+            capture_output=True,
+            timeout=10,
+        )
+
+        if result.returncode != 0:
+            pytest.fail(
+                f"docker cp failed: {result.stderr.decode('utf-8')}\n"
+                f"Container logs:\n{logs}"
+            )
+
+        # Verify file exists with clear error message
+        if not spans_file.is_file():
+            pytest.fail(f"spans.jsonl not found at {spans_file} after docker cp")
+
+        # Clean up container
+        container.remove(force=True)
+        yield spans_file
+
+    finally:
+        try:
+            client.containers.get(container_name).remove(force=True)
+        except Exception:
+            pass
+        shutil.rmtree(temp_otel, ignore_errors=True)
+        client.close()
 
 
 @pytest.mark.asyncio
 class TestAgentTelemetryE2E:
     """End-to-end tests for agent telemetry pipeline."""
 
-    async def test_real_agent_image_produces_otel_spans(self):
+    async def test_real_agent_image_produces_otel_spans(self, agent_container_with_spans):
         """Test that real agent image produces spans.jsonl with OTLP/JSON content.
 
         This is a smoke test that the agent image was built correctly with:
@@ -209,408 +266,187 @@ class TestAgentTelemetryE2E:
         - otelcol configuration
         - /var/otel directory with write permissions
         """
-        import docker
-        import subprocess
+        spans_file = agent_container_with_spans
 
-        agent_image = _get_or_build_test_agent_image()
-        client = docker.from_env()
+        # Verify file has content
+        content = spans_file.read_text()
+        assert len(content) > 0, "spans.jsonl is empty"
 
-        # Create temp telemetry directory
-        temp_otel = tempfile.mkdtemp(prefix="test-otel-")
-        otel_path = Path(temp_otel)
-        spans_file = otel_path / "spans.jsonl"
+        # Parse as OTLP/JSON lines
+        lines = content.strip().split("\n")
+        assert len(lines) > 0, "spans.jsonl has no lines"
 
-        try:
-            container_name = f"test-agent-{uuid4().hex[:12]}"
+        # Each line should be valid JSON
+        for line in lines:
+            parsed = json.loads(line)
+            assert "resourceSpans" in parsed, f"Missing resourceSpans in: {line[:100]}"
 
-            # Start the agent container with telemetry mount
-            # We'll run a simple Python script that sends synthetic OTLP spans
-            container = client.containers.run(
-                agent_image,
-                command=[
-                    "python3",
-                    "-c",
-                    _generate_synthetic_otlp_spans(),
-                ],
-                volumes={temp_otel: {"bind": "/var/otel", "mode": "rw"}},
-                name=container_name,
-                detach=True,
-                remove=False,
-                stdout=True,
-                stderr=True,
-            )
+        logger.info(f"Successfully verified {len(lines)} OTLP/JSON lines in spans.jsonl")
 
-            # Wait for container to complete (with timeout)
-            exit_code = container.wait(timeout=30)
-
-            # Get logs for debugging
-            logs = container.logs().decode("utf-8")
-            logger.info(f"Container logs:\n{logs}")
-
-            # Verify container exited successfully
-            assert exit_code["StatusCode"] == 0, f"Container failed with code {exit_code['StatusCode']}"
-
-            # Extract spans.jsonl from container using docker cp
-            # (Volume mounts with root-owned files may not sync back to host)
-            try:
-                subprocess.run(
-                    ["docker", "cp", f"{container_name}:/var/otel/spans.jsonl", str(spans_file)],
-                    check=True,
-                    capture_output=True,
-                    timeout=10,
-                )
-            except subprocess.CalledProcessError:
-                # File might not exist or copy failed - we'll check below
-                pass
-
-            # Clean up container
-            container.remove(force=True)
-
-            # Verify spans.jsonl was created and extracted
-            assert spans_file.is_file(), f"spans.jsonl not found at {spans_file}"
-
-            # Verify file has content
-            content = spans_file.read_text()
-            assert len(content) > 0, "spans.jsonl is empty"
-
-            # Parse as OTLP/JSON lines
-            lines = content.strip().split("\n")
-            assert len(lines) > 0, "spans.jsonl has no lines"
-
-            # Each line should be valid JSON
-            for line in lines:
-                parsed = json.loads(line)
-                assert "resourceSpans" in parsed, f"Missing resourceSpans in: {line[:100]}"
-
-            logger.info(f"Successfully verified {len(lines)} OTLP/JSON lines in spans.jsonl")
-
-        finally:
-            try:
-                client.containers.get(container_name).remove(force=True)
-            except Exception:
-                pass
-            shutil.rmtree(temp_otel, ignore_errors=True)
-            client.close()
-
-    async def test_parse_and_create_otel_span_events(self):
+    async def test_parse_and_create_otel_span_events(self, agent_container_with_spans):
         """Test parsing spans.jsonl into CodingAgentOtlpSpanEvent instances."""
-        import docker
-        import subprocess
+        spans_file = agent_container_with_spans
+        execution_id = f"exec-{uuid4().hex[:12]}"
+        work_item_id = f"wi-{uuid4().hex[:12]}"
 
-        agent_image = _get_or_build_test_agent_image()
-        client = docker.from_env()
+        # Parse the spans file into events
+        events = list(parse_spans_file(
+            spans_file,
+            execution_id=execution_id,
+            correlation_id=work_item_id,
+        ))
 
-        temp_otel = tempfile.mkdtemp(prefix="test-otel-parse-")
-        otel_path = Path(temp_otel)
-        spans_file = otel_path / "spans.jsonl"
+        # Verify we got the three synthetic spans
+        assert len(events) >= 3, f"Expected at least 3 spans, got {len(events)}"
 
-        try:
-            container_name = f"test-parser-{uuid4().hex[:12]}"
-            execution_id = f"exec-{uuid4().hex[:12]}"
-            work_item_id = f"wi-{uuid4().hex[:12]}"
+        # Verify event structure for each
+        for i, event in enumerate(events[:3]):
+            assert isinstance(event, CodingAgentOtlpSpanEvent)
+            assert event.execution_id == execution_id
+            assert event.correlation_id == work_item_id
+            assert len(event.trace_id) > 0, f"Event {i}: missing trace_id"
+            assert len(event.span_id) > 0, f"Event {i}: missing span_id"
+            assert len(event.name) > 0, f"Event {i}: missing name"
+            assert event.status == "OK"
 
-            # Run container with synthetic spans
-            container = client.containers.run(
-                agent_image,
-                command=[
-                    "python3",
-                    "-c",
-                    _generate_synthetic_otlp_spans(),
-                ],
-                volumes={temp_otel: {"bind": "/var/otel", "mode": "rw"}},
-                name=container_name,
-                detach=True,
-                remove=False,
-                stdout=True,
-                stderr=True,
+            # Verify attributes were flattened
+            assert "test.phase" in event.attributes
+            assert event.attributes["test.phase"] == "phase4"
+            assert "test.synthetic" in event.attributes
+            assert event.attributes["test.synthetic"] is True
+
+            logger.info(
+                f"Event {i}: trace_id={event.trace_id[:16]}... "
+                f"span_id={event.span_id} name={event.name}"
             )
 
-            exit_code = container.wait(timeout=30)
-            assert exit_code["StatusCode"] == 0
-
-            # Extract spans.jsonl from container
-            try:
-                subprocess.run(
-                    ["docker", "cp", f"{container_name}:/var/otel/spans.jsonl", str(spans_file)],
-                    check=True,
-                    capture_output=True,
-                    timeout=10,
-                )
-            except subprocess.CalledProcessError:
-                pass
-
-            container.remove(force=True)
-
-            # Parse the spans file into events
-            events = list(parse_spans_file(
-                spans_file,
-                execution_id=execution_id,
-                correlation_id=work_item_id,
-            ))
-
-            # Verify we got the three synthetic spans
-            assert len(events) >= 3, f"Expected at least 3 spans, got {len(events)}"
-
-            # Verify event structure for each
-            for i, event in enumerate(events[:3]):
-                assert isinstance(event, CodingAgentOtlpSpanEvent)
-                assert event.execution_id == execution_id
-                assert event.correlation_id == work_item_id
-                assert len(event.trace_id) > 0, f"Event {i}: missing trace_id"
-                assert len(event.span_id) > 0, f"Event {i}: missing span_id"
-                assert len(event.name) > 0, f"Event {i}: missing name"
-                assert event.status == "OK"
-
-                # Verify attributes were flattened
-                assert "test.phase" in event.attributes
-                assert event.attributes["test.phase"] == "phase4"
-                assert "test.synthetic" in event.attributes
-                assert event.attributes["test.synthetic"] is True
-
-                logger.info(
-                    f"Event {i}: trace_id={event.trace_id[:16]}... "
-                    f"span_id={event.span_id} name={event.name}"
-                )
-
-        finally:
-            try:
-                client.containers.get(container_name).remove(force=True)
-            except Exception:
-                pass
-            shutil.rmtree(temp_otel, ignore_errors=True)
-            client.close()
-
-    async def test_publish_events_to_elasticsearch(self, es_client):
+    async def test_publish_events_to_elasticsearch(self, agent_container_with_spans, es_client):
         """Test publishing parsed events to Elasticsearch and querying them.
 
         This completes the full pipeline: generate -> parse -> publish -> query.
         """
-        import docker
-        import subprocess
+        spans_file = agent_container_with_spans
+        execution_id = f"exec-{uuid4().hex[:12]}"
+        work_item_id = f"wi-{uuid4().hex[:12]}"
 
-        agent_image = _get_or_build_test_agent_image()
-        docker_client = docker.from_env()
+        # Parse spans
+        events = list(parse_spans_file(
+            spans_file,
+            execution_id=execution_id,
+            correlation_id=work_item_id,
+        ))
+        assert len(events) >= 3
 
-        temp_otel = tempfile.mkdtemp(prefix="test-otel-es-")
-        otel_path = Path(temp_otel)
-        spans_file = otel_path / "spans.jsonl"
+        # Publish to Elasticsearch using the same format as production
+        serializer = EventSerializer()
 
-        try:
-            container_name = f"test-es-{uuid4().hex[:12]}"
-            execution_id = f"exec-{uuid4().hex[:12]}"
-            work_item_id = f"wi-{uuid4().hex[:12]}"
+        for event in events:
+            # Create the document for Elasticsearch
+            doc_body = {
+                "event_id": event.event_id,
+                "aggregate_id": execution_id,  # Stream by execution_id
+                "aggregate_type": "CodingAgentExecution",
+                "event_type": event.type,
+                "timestamp": event.timestamp,
+                "correlation_id": work_item_id,
+                "source": event.source,
+                "stream_version": 1,
+                "data": serializer.serialize(event),
+            }
 
-            # Run container with synthetic spans
-            container = docker_client.containers.run(
-                agent_image,
-                command=[
-                    "python3",
-                    "-c",
-                    _generate_synthetic_otlp_spans(),
-                ],
-                volumes={temp_otel: {"bind": "/var/otel", "mode": "rw"}},
-                name=container_name,
-                detach=True,
-                remove=False,
-                stdout=True,
-                stderr=True,
+            # Index the document
+            await es_client.index(
+                index="events-test",
+                id=event.event_id,
+                body=doc_body,
+                refresh=True,
             )
 
-            exit_code = container.wait(timeout=30)
-            assert exit_code["StatusCode"] == 0
+        # Wait for Elasticsearch to index the documents
+        await asyncio.sleep(1)
 
-            # Extract spans.jsonl from container
-            try:
-                subprocess.run(
-                    ["docker", "cp", f"{container_name}:/var/otel/spans.jsonl", str(spans_file)],
-                    check=True,
-                    capture_output=True,
-                    timeout=10,
-                )
-            except subprocess.CalledProcessError:
-                pass
-
-            container.remove(force=True)
-
-            # Parse spans
-            events = list(parse_spans_file(
-                spans_file,
-                execution_id=execution_id,
-                correlation_id=work_item_id,
-            ))
-            assert len(events) >= 3
-
-            # Publish to Elasticsearch using the same format as production
-            serializer = EventSerializer()
-            stream_name = f"coding-agent-{execution_id}"
-
-            for event in events:
-                # Create the document for Elasticsearch
-                doc_body = {
-                    "event_id": event.event_id,
-                    "aggregate_id": execution_id,  # Stream by execution_id
-                    "aggregate_type": "CodingAgentExecution",
-                    "event_type": event.type,
-                    "timestamp": event.timestamp,
-                    "correlation_id": work_item_id,
-                    "source": event.source,
-                    "stream_version": 1,
-                    "data": serializer.serialize(event),
+        # Using the wildcard subscriber pattern: coding-agent-<execution_id>
+        # Use match queries since fields are stored as text without keyword mapping
+        response = await es_client.search(
+            index="events-test",
+            query={
+                "bool": {
+                    "must": [
+                        {"match": {"aggregate_id": execution_id}},
+                        {"match": {"event_type": "coding_agent.otlp_span"}},
+                    ]
                 }
+            },
+            size=100,
+        )
 
-                # Index the document
-                await es_client.index(
-                    index=f"events-2024.12",  # Example month
-                    id=event.event_id,
-                    body=doc_body,
-                    refresh=True,
-                )
+        # Verify query results
+        hits = response["hits"]["hits"]
+        logger.info(f"Found {len(hits)} events with aggregate_id={execution_id}")
+        assert len(hits) >= 3, f"Expected at least 3 events in ES, got {len(hits)}"
 
-            # Wait for Elasticsearch to index the documents
-            await asyncio.sleep(1)
+        # Verify event structure in Elasticsearch
+        for i, hit in enumerate(hits[:3]):
+            doc = hit["_source"]
+            assert doc["aggregate_id"] == execution_id
+            assert doc["correlation_id"] == work_item_id
+            assert doc["event_type"] == "coding_agent.otlp_span"
+            assert "data" in doc
 
+            # Data should be serialized event JSON (may be string or dict)
+            data = doc["data"]
+            if isinstance(data, str):
+                data = json.loads(data)
 
-            # Using the wildcard subscriber pattern: coding-agent-<execution_id>
-            # Use match queries since fields are stored as text without keyword mapping
-            response = await es_client.search(
-                index="events-2024.12",
-                query={
-                    "bool": {
-                        "must": [
-                            {"match": {"aggregate_id": execution_id}},
-                            {"match": {"event_type": "coding_agent.otlp_span"}},
-                        ]
-                    }
-                },
-                size=100,
+            assert "trace_id" in data
+            assert "span_id" in data
+            assert "name" in data
+
+            logger.info(
+                f"ES hit {i}: aggregate_id={doc['aggregate_id']} "
+                f"trace_id={data['trace_id'][:16]}..."
             )
 
-            # Verify query results
-            hits = response["hits"]["hits"]
-            logger.info(f"Found {len(hits)} events with aggregate_id={execution_id}")
-            assert len(hits) >= 3, f"Expected at least 3 events in ES, got {len(hits)}"
+        logger.info(f"Successfully published and queried {len(hits)} events in Elasticsearch")
 
-            # Verify event structure in Elasticsearch
-            for i, hit in enumerate(hits[:3]):
-                doc = hit["_source"]
-                assert doc["aggregate_id"] == execution_id
-                assert doc["correlation_id"] == work_item_id
-                assert doc["event_type"] == "coding_agent.otlp_span"
-                assert "data" in doc
-
-                # Data should be serialized event JSON (may be string or dict)
-                data = doc["data"]
-                if isinstance(data, str):
-                    data = json.loads(data)
-
-                assert "trace_id" in data
-                assert "span_id" in data
-                assert "name" in data
-
-                logger.info(
-                    f"ES hit {i}: aggregate_id={doc['aggregate_id']} "
-                    f"trace_id={data['trace_id'][:16]}..."
-                )
-
-            logger.info(f"Successfully published and queried {len(hits)} events in Elasticsearch")
-
-        finally:
-            try:
-                docker_client.containers.get(container_name).remove(force=True)
-            except Exception:
-                pass
-            shutil.rmtree(temp_otel, ignore_errors=True)
-            docker_client.close()
-
-    async def test_expected_span_values_match(self):
+    async def test_expected_span_values_match(self, agent_container_with_spans):
         """Test that synthetic spans match expected trace_id, span_id, and name values."""
-        import docker
-        import subprocess
+        spans_file = agent_container_with_spans
+        execution_id = "exec-test-values"
 
-        agent_image = _get_or_build_test_agent_image()
-        client = docker.from_env()
+        # Parse spans
+        events = list(parse_spans_file(
+            spans_file,
+            execution_id=execution_id,
+        ))
 
-        temp_otel = tempfile.mkdtemp(prefix="test-otel-values-")
-        otel_path = Path(temp_otel)
-        spans_file = otel_path / "spans.jsonl"
+        # Expected values from _generate_synthetic_otlp_spans()
+        expected_trace_ids = {
+            "aabbccddeeff00112233445566778899",
+            "1122334455667788aabbccddeeee0000",
+        }
+        expected_span_ids = {
+            "0000000000000001",
+            "0000000000000002",
+            "0000000000000003",
+        }
+        expected_names = {
+            "test.span.root",
+            "test.span.child_1",
+            "test.span.separate",
+        }
 
-        try:
-            container_name = f"test-values-{uuid4().hex[:12]}"
-            execution_id = "exec-test-values"
+        # Collect actual values
+        actual_trace_ids = {e.trace_id for e in events}
+        actual_span_ids = {e.span_id for e in events}
+        actual_names = {e.name for e in events}
 
-            # Run container
-            container = client.containers.run(
-                agent_image,
-                command=[
-                    "python3",
-                    "-c",
-                    _generate_synthetic_otlp_spans(),
-                ],
-                volumes={temp_otel: {"bind": "/var/otel", "mode": "rw"}},
-                name=container_name,
-                detach=True,
-                remove=False,
-                stdout=True,
-                stderr=True,
-            )
+        # Verify
+        assert expected_trace_ids == actual_trace_ids, \
+            f"Trace ID mismatch: expected {expected_trace_ids}, got {actual_trace_ids}"
+        assert expected_span_ids == actual_span_ids, \
+            f"Span ID mismatch: expected {expected_span_ids}, got {actual_span_ids}"
+        assert expected_names == actual_names, \
+            f"Name mismatch: expected {expected_names}, got {actual_names}"
 
-            exit_code = container.wait(timeout=30)
-            assert exit_code["StatusCode"] == 0
-
-            # Extract spans.jsonl from container
-            try:
-                subprocess.run(
-                    ["docker", "cp", f"{container_name}:/var/otel/spans.jsonl", str(spans_file)],
-                    check=True,
-                    capture_output=True,
-                    timeout=10,
-                )
-            except subprocess.CalledProcessError:
-                pass
-
-            container.remove(force=True)
-
-            # Parse spans
-            events = list(parse_spans_file(
-                spans_file,
-                execution_id=execution_id,
-            ))
-
-            # Expected values from _generate_synthetic_otlp_spans()
-            expected_trace_ids = {
-                "aabbccddeeff00112233445566778899",
-                "1122334455667788aabbccddeeee0000",
-            }
-            expected_span_ids = {
-                "0000000000000001",
-                "0000000000000002",
-                "0000000000000003",
-            }
-            expected_names = {
-                "test.span.root",
-                "test.span.child_1",
-                "test.span.separate",
-            }
-
-            # Collect actual values
-            actual_trace_ids = {e.trace_id for e in events}
-            actual_span_ids = {e.span_id for e in events}
-            actual_names = {e.name for e in events}
-
-            # Verify
-            assert expected_trace_ids == actual_trace_ids, \
-                f"Trace ID mismatch: expected {expected_trace_ids}, got {actual_trace_ids}"
-            assert expected_span_ids == actual_span_ids, \
-                f"Span ID mismatch: expected {expected_span_ids}, got {actual_span_ids}"
-            assert expected_names == actual_names, \
-                f"Name mismatch: expected {expected_names}, got {actual_names}"
-
-            logger.info("All expected span values matched successfully")
-
-        finally:
-            try:
-                client.containers.get(container_name).remove(force=True)
-            except Exception:
-                pass
-            shutil.rmtree(temp_otel, ignore_errors=True)
-            client.close()
+        logger.info("All expected span values matched successfully")
