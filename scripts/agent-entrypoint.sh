@@ -178,5 +178,67 @@ if [ -S /var/run/docker.sock ] && command -v docker >/dev/null 2>&1; then
     fi
 fi
 
+# --- Start OpenTelemetry Collector sidecar (if present) ----------------------
+# The collector runs as a background sidecar to capture and forward telemetry
+# from the agent process. It is optional (not fatal if missing or fails to start),
+# but if it starts, it MUST become healthy before we proceed to the agent.
+# Spans will be silently lost if the collector is unavailable, but the agent
+# execution is more important than observability.
+
+OTELCOL_PID=""
+
+if [ -f /usr/local/bin/otelcol ]; then
+    # Collector binary exists — attempt to start it
+    echo "[agent-entrypoint] Starting OpenTelemetry Collector..." >&2
+    /usr/local/bin/otelcol --config /etc/otelcol/config.yaml >/dev/null 2>&1 &
+    OTELCOL_PID=$!
+
+    # Register a cleanup handler so the collector flushes its buffer on exit
+    # before the container terminates.
+    cleanup_collector() {
+        if [ -n "$OTELCOL_PID" ] && kill -0 "$OTELCOL_PID" 2>/dev/null; then
+            echo "[agent-entrypoint] Shutting down OpenTelemetry Collector (PID: $OTELCOL_PID)..." >&2
+            kill -TERM "$OTELCOL_PID" 2>/dev/null || true
+
+            # Give it time to flush before we exit
+            sleep 2
+
+            # Force kill if still running
+            kill -9 "$OTELCOL_PID" 2>/dev/null || true
+        fi
+    }
+    trap cleanup_collector EXIT
+
+    # Health-check the OTLP HTTP receiver (port 4318) with a bounded wait.
+    # Try up to 5 times with 1-second intervals (~5 second total timeout).
+    echo "[agent-entrypoint] Health-checking OpenTelemetry Collector at 127.0.0.1:4318..." >&2
+
+    RETRY=5
+    COLLECTOR_HEALTHY=false
+
+    while [ $RETRY -gt 0 ]; do
+        # Use bash TCP redirection to test if the port is open
+        # (exec 3>/dev/tcp/host/port opens a socket, closes if successful)
+        if (exec 3>/dev/tcp/127.0.0.1/4318) >/dev/null 2>&1; then
+            COLLECTOR_HEALTHY=true
+            echo "[agent-entrypoint] OpenTelemetry Collector is healthy (PID: $OTELCOL_PID)" >&2
+            break
+        fi
+
+        RETRY=$((RETRY - 1))
+        if [ $RETRY -gt 0 ]; then
+            sleep 1
+        fi
+    done
+
+    if [ "$COLLECTOR_HEALTHY" = false ]; then
+        echo "[agent-entrypoint] WARNING: OpenTelemetry Collector did not become healthy within the bounded wait." >&2
+        echo "[agent-entrypoint] WARNING: Telemetry spans will be lost, but proceeding with agent execution." >&2
+        OTELCOL_PID=""
+    fi
+else
+    echo "[agent-entrypoint] INFO: /usr/local/bin/otelcol not found. Skipping OpenTelemetry Collector." >&2
+fi
+
 # --- Hand off to the requested command --------------------------------------
 exec "$@"
