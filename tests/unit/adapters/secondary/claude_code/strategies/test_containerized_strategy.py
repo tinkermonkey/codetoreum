@@ -219,6 +219,7 @@ async def test_containerized_strategy_full_pipeline():
     assert env["OTEL_TRACES_EXPORTER"] == "otlp"
     assert env["OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"] == "http/protobuf"
     assert env["OTEL_EXPORTER_OTLP_ENDPOINT"] == "http://127.0.0.1:4318"
+    assert env["OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"] == "http://127.0.0.1:4318/v1/traces"
     assert env["OTEL_METRICS_EXPORTER"] == "none"
     assert env["OTEL_LOGS_EXPORTER"] == "none"
     cmd = container.created["command"]

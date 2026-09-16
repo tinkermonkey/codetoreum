@@ -116,38 +116,44 @@ class ContainerizedClaudeStrategy(ClaudeInvocationStrategy):
             msg = "ContainerizedClaudeStrategy requires mode_config['image']"
             raise ValueError(msg)
 
-        # Create a per-execution temp directory for OTel telemetry.
-        otel_temp_dir = tempfile.mkdtemp(prefix=f"otel-{execution_id[:12]}-")
-        otel_temp_path = Path(otel_temp_dir)
+        # Create a per-execution temp directory for OTel telemetry inside try block
+        # to ensure cleanup on pre-try exceptions.
+        otel_temp_dir: str | None = None
+        otel_temp_path: Path | None = None
+        container_id: str | None = None
 
-        command = self._build_command(prompt_text=prompt_text, options=options)
-        env = await self._build_environment()
-        volumes = self._build_volumes(workspace_context, otel_temp_dir=otel_temp_dir)
-        labels = {
-            "codetoreum.execution_id": execution_id,
-            "codetoreum.work_item_id": workspace_context.work_item_id,
-            "codetoreum.adapter": "claude-code",
-        }
-
-        container_id = await self._container.create(
-            image=image,
-            name=f"claude-{execution_id[:12]}",
-            command=command,
-            environment=env,
-            volumes=volumes,
-            working_dir=_DEFAULT_WORKDIR,
-            network=mode_config.get("network"),
-            labels=labels,
-        )
-        logger.info(
-            "ContainerizedClaudeStrategy: created container_id=%s image=%s execution_id=%s",
-            container_id,
-            image,
-            execution_id,
-        )
-
-        start = datetime.now(UTC)
         try:
+            otel_temp_dir = tempfile.mkdtemp(prefix=f"otel-{execution_id[:12]}-")
+            otel_temp_path = Path(otel_temp_dir)
+
+            command = self._build_command(prompt_text=prompt_text, options=options)
+            env = await self._build_environment()
+            volumes = self._build_volumes(workspace_context, otel_temp_dir=otel_temp_dir)
+            labels = {
+                "codetoreum.execution_id": execution_id,
+                "codetoreum.work_item_id": workspace_context.work_item_id,
+                "codetoreum.adapter": "claude-code",
+            }
+
+            container_id = await self._container.create(
+                image=image,
+                name=f"claude-{execution_id[:12]}",
+                command=command,
+                environment=env,
+                volumes=volumes,
+                working_dir=_DEFAULT_WORKDIR,
+                network=mode_config.get("network"),
+                labels=labels,
+            )
+            logger.info(
+                "ContainerizedClaudeStrategy: created container_id=%s image=%s execution_id=%s",
+                container_id,
+                image,
+                execution_id,
+            )
+
+            start = datetime.now(UTC)
+
             await self._container.start(container_id)
             stdout = await self._open_log_stream(container_id)
             stderr_reader = _drain_nothing()
@@ -182,33 +188,36 @@ class ContainerizedClaudeStrategy(ClaudeInvocationStrategy):
                 kill=_kill_container,
             )
 
-            # Parse and emit OTel spans from the temp directory.
-            # This is advisory telemetry capture; failures are logged but
-            # never alter the execution result.
-            await self._parse_and_emit_spans(
-                otel_temp_path,
-                execution_id,
-                workspace_context.work_item_id,
-                event_bus,
-            )
-
             return result
         finally:
+            # Parse and emit OTel spans before cleanup, even if streaming raised.
+            # This is advisory telemetry capture; failures are logged but
+            # never alter the execution result.
+            if otel_temp_path is not None:
+                await self._parse_and_emit_spans(
+                    otel_temp_path,
+                    execution_id,
+                    workspace_context.work_item_id,
+                    event_bus,
+                )
+
             # Always remove the container and clean up the temp directory.
-            try:
-                await self._container.remove(container_id, force=True)
-            except Exception:
-                logger.exception(
-                    "ContainerizedClaudeStrategy: failed to remove container_id=%s",
-                    container_id,
-                )
-            try:
-                shutil.rmtree(otel_temp_dir, ignore_errors=False)
-            except Exception:
-                logger.exception(
-                    "ContainerizedClaudeStrategy: failed to clean up otel_temp_dir=%s",
-                    otel_temp_dir,
-                )
+            if container_id is not None:
+                try:
+                    await self._container.remove(container_id, force=True)
+                except Exception:
+                    logger.exception(
+                        "ContainerizedClaudeStrategy: failed to remove container_id=%s",
+                        container_id,
+                    )
+            if otel_temp_dir is not None:
+                try:
+                    shutil.rmtree(otel_temp_dir, ignore_errors=False)
+                except Exception:
+                    logger.exception(
+                        "ContainerizedClaudeStrategy: failed to clean up otel_temp_dir=%s",
+                        otel_temp_dir,
+                    )
 
     # ------------------------------------------------------------------
     # Construction helpers
@@ -253,6 +262,8 @@ class ContainerizedClaudeStrategy(ClaudeInvocationStrategy):
         env["OTEL_TRACES_EXPORTER"] = "otlp"
         env["OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"] = "http/protobuf"
         env["OTEL_EXPORTER_OTLP_ENDPOINT"] = "http://127.0.0.1:4318"
+        # Signal-specific trace endpoint for defense-in-depth per design DD-3
+        env["OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"] = "http://127.0.0.1:4318/v1/traces"
         env["OTEL_METRICS_EXPORTER"] = "none"
         env["OTEL_LOGS_EXPORTER"] = "none"
         return env
