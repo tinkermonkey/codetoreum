@@ -193,13 +193,23 @@ class ContainerizedClaudeStrategy(ClaudeInvocationStrategy):
             # Parse and emit OTel spans before cleanup, even if streaming raised.
             # This is advisory telemetry capture; failures are logged but
             # never alter the execution result.
+            # Wrap in try/except BaseException to catch asyncio.CancelledError,
+            # which inherits from BaseException (not Exception) on Python 3.9+
+            # and must not bypass container/temp directory cleanup.
             if otel_temp_path is not None:
-                await self._parse_and_emit_spans(
-                    otel_temp_path,
-                    execution_id,
-                    workspace_context.work_item_id,
-                    event_bus,
-                )
+                try:
+                    await self._parse_and_emit_spans(
+                        otel_temp_path,
+                        execution_id,
+                        workspace_context.work_item_id,
+                        event_bus,
+                    )
+                except BaseException:
+                    logger.exception(
+                        "ContainerizedClaudeStrategy: exception during span emission "
+                        "for execution_id=%s (will not block cleanup)",
+                        execution_id,
+                    )
 
             # Always remove the container and clean up the temp directory.
             if container_id is not None:
