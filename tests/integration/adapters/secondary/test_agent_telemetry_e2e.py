@@ -16,7 +16,10 @@ import logging
 import shutil
 import subprocess
 import tempfile
+from collections.abc import AsyncIterator
 from pathlib import Path
+from typing import Any
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import docker
@@ -24,8 +27,16 @@ import pytest
 from elasticsearch import AsyncElasticsearch
 
 from codetoreum.adapters.secondary.claude_code.otel_span_parser import parse_spans_file
+from codetoreum.adapters.secondary.claude_code.stream_parser import (
+    ClaudeStreamJsonParser,
+)
 from codetoreum.domain.events.coding_agent_events import CodingAgentOtlpSpanEvent
+from codetoreum.domain.workspace_context import WorkspaceContext
 from codetoreum.infrastructure.event_serialization import EventSerializer
+from codetoreum.ports.output.coding_agent import (
+    CodingAgentInvocationOptions,
+    InvocationMode,
+)
 from tests.conftest import ModernElasticsearchContainer, docker_available, wait_for_elasticsearch_indexing
 
 logger = logging.getLogger(__name__)
@@ -255,9 +266,269 @@ def agent_container_with_spans():
         client.close()
 
 
+async def _create_mock_container_with_span_output(otel_temp_dir: str) -> Any:
+    """Create a mock container that outputs valid JSON stream and writes spans.jsonl.
+
+    This simulates what the real agent image does: outputs JSON lines to stdout
+    and writes OTLP/JSON spans to /var/otel/spans.jsonl. Used to test the full
+    production path through ContainerizedClaudeStrategy.execute().
+    """
+    # A complete OTLP/JSON span envelope (single span)
+    test_span_envelope = {
+        "resourceSpans": [
+            {
+                "resource": {
+                    "attributes": [
+                        {"key": "service.name", "value": {"stringValue": "claude-code"}}
+                    ]
+                },
+                "scopeSpans": [
+                    {
+                        "scope": {"name": "claude-code"},
+                        "spans": [
+                            {
+                                "traceId": "e2e0000000000000000000000000001a",
+                                "spanId": "e2e0000000000001a",
+                                "parentSpanId": "",
+                                "name": "e2e.test.span",
+                                "kind": "SPAN_KIND_INTERNAL",
+                                "startTimeUnixNano": "1748400000000000000",
+                                "endTimeUnixNano": "1748400001000000000",
+                                "attributes": [
+                                    {"key": "test.e2e", "value": {"stringValue": "full_pipeline"}}
+                                ],
+                                "events": [],
+                                "status": {"code": "STATUS_CODE_OK"},
+                            }
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+    # Simulate what claude --print --output-format stream-json produces
+    agent_output_lines = [
+        json.dumps({
+            "type": "system",
+            "subtype": "init",
+            "session_id": "s-e2e-test",
+            "model": "claude-haiku-4-5",
+        }).encode() + b"\n",
+        json.dumps({
+            "type": "result",
+            "subtype": "success",
+            "is_error": False,
+            "duration_ms": 100,
+            "result": "e2e test completed",
+            "stop_reason": "end_turn",
+            "total_cost_usd": 0.001,
+            "usage": {"input_tokens": 10, "output_tokens": 5},
+        }).encode() + b"\n",
+    ]
+
+    class _E2EMockContainer:
+        """Mock container that outputs agent JSON and writes spans.jsonl."""
+
+        def __init__(self) -> None:
+            self._volumes: dict[str, str] | None = None
+
+        async def create(self, **kwargs: Any) -> str:
+            # Capture volumes to know where spans.jsonl should go
+            self._volumes = kwargs.get("volumes", {})
+            logger.info(f"Mock container create called with volumes: {self._volumes}")
+            return "e2e-container-1"
+
+        async def start(self, container_id: str) -> None:
+            # Write spans.jsonl to the otel temp directory
+            # The volumes dict has format {host_path: "container_path:mode"}
+            # We need to find /var/otel:rw and write to that host path
+            if self._volumes:
+                for host_path, container_binding in self._volumes.items():
+                    if "/var/otel:rw" in container_binding or "/var/otel:ro" in container_binding:
+                        spans_file = Path(host_path) / "spans.jsonl"
+                        logger.info(f"Writing spans to {spans_file}")
+                        Path(host_path).mkdir(parents=True, exist_ok=True)
+                        with spans_file.open("w") as f:
+                            f.write(json.dumps(test_span_envelope) + "\n")
+                        logger.info("Spans written successfully")
+                        break
+
+        async def logs(
+            self,
+            container_id: str,
+            *,
+            stream: bool = False,
+            follow: bool = False,
+            **_: Any,
+        ) -> Any:
+            async def _gen() -> AsyncIterator[str]:
+                for line in agent_output_lines:
+                    yield line.decode("utf-8")
+
+            return _gen()
+
+        async def wait(self, container_id: str, timeout: int | None = None) -> int:
+            return 0
+
+        async def remove(self, container_id: str, force: bool = False) -> None:
+            pass
+
+        async def kill(self, container_id: str, signal: str = "SIGKILL") -> None:
+            pass
+
+    return _E2EMockContainer()
+
+
 @pytest.mark.asyncio
 class TestAgentTelemetryE2E:
     """End-to-end tests for agent telemetry pipeline."""
+
+    async def test_full_pipeline_through_containerized_strategy(self, es_client: AsyncElasticsearch) -> None:
+        """Test complete pipeline: strategy → parser → event bus → Elasticsearch.
+
+        This exercises the production code path:
+        1. ContainerizedClaudeStrategy.execute() creates and starts container
+        2. Parses agent JSON output through ClaudeStreamJsonParser
+        3. Emits events through EventBus
+        4. Parsing and emitting spans.jsonl after container exit
+        5. Events are persisted in Elasticsearch
+
+        This is the "real" production path that the integration test should exercise.
+        """
+        from codetoreum.adapters.secondary.claude_code.strategies.containerized import (
+            ContainerizedClaudeStrategy,
+        )
+        from codetoreum.infrastructure.event_bus import EventBus
+        from codetoreum.infrastructure.event_serialization import EventSerializer
+
+        # Create temp dirs
+        otel_temp = tempfile.mkdtemp(prefix="e2e-otel-")
+        e2e_ws_path = Path(tempfile.mkdtemp(prefix="e2e-ws-"))
+
+        try:
+            mock_container = await _create_mock_container_with_span_output(otel_temp)
+
+            # Build the strategy with the mock container
+            strategy = ContainerizedClaudeStrategy(
+                container=mock_container,
+                credential_provider=type("MockCreds", (), {
+                    "get_credential": AsyncMock(return_value=None),
+                })(),
+            )
+
+            # Create event bus connected to Elasticsearch
+            event_bus = EventBus()
+            serializer = EventSerializer()
+            execution_id = f"e2e-exec-{uuid4().hex[:12]}"
+            work_item_id = f"e2e-wi-{uuid4().hex[:12]}"
+            es_events = []
+
+            async def _publish_to_es(event: Any) -> None:
+                """Publish events to Elasticsearch using the production format."""
+                es_events.append(event)
+                logger.info(f"Publishing event to ES: {type(event).__name__}")
+                doc_body = {
+                    "event_id": event.event_id,
+                    "aggregate_id": execution_id,
+                    "aggregate_type": "CodingAgentExecution",
+                    "event_type": event.type,
+                    "timestamp": event.timestamp,
+                    "correlation_id": work_item_id,
+                    "source": event.source,
+                    "stream_version": 1,
+                    "data": serializer.serialize(event),
+                }
+                try:
+                    await es_client.index(
+                        index="events-e2e-test",
+                        id=event.event_id,
+                        body=doc_body,
+                        refresh=True,
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to index event in ES: {e}", exc_info=True)
+                    raise
+
+            event_bus.subscribe(None, _publish_to_es)
+
+            # Execute the strategy
+            workspace = WorkspaceContext.for_issue(
+                project_id="e2e-proj",
+                work_item_id=work_item_id,
+                branch_name="e2e-test",
+                workspace_path=e2e_ws_path,
+            )
+            options = CodingAgentInvocationOptions(
+                invocation_mode=InvocationMode.CONTAINERIZED,
+                model="claude-haiku-4-5",
+                timeout_seconds=30,
+                cost_limit_usd=None,
+                mode_config={"image": "codetoreum-agent:latest", "network": "bridge"},
+            )
+
+            result = await strategy.execute(
+                prompt_text="e2e test prompt",
+                execution_id=execution_id,
+                workspace_context=workspace,
+                options=options,
+                event_bus=event_bus,
+                parser=ClaudeStreamJsonParser(),
+                coding_agent_id="claude-code",
+            )
+
+            # Verify execution succeeded
+            assert result.success is True
+            assert "e2e test completed" in result.summary_text
+
+            # Verify we got OTel span events
+            span_events = [e for e in es_events if type(e).__name__ == "CodingAgentOtlpSpanEvent"]
+            logger.info(f"Collected {len(span_events)} OTel span events from event bus")
+            assert len(span_events) >= 1, f"Expected at least 1 OTel span event, got {len(span_events)}"
+
+            # Give Elasticsearch time to index
+            await asyncio.sleep(1)
+
+            # Query for the OTel span event
+            response = await es_client.search(
+                index="events-e2e-test",
+                query={
+                    "bool": {
+                        "must": [
+                            {"match": {"aggregate_id": execution_id}},
+                            {"match": {"event_type": "coding_agent.otlp_span"}},
+                        ]
+                    }
+                },
+                size=100,
+            )
+
+            hits = response["hits"]["hits"]
+            assert len(hits) >= 1, f"Expected at least 1 span event in ES, got {len(hits)}"
+
+            # Verify the span event structure
+            span_doc = hits[0]["_source"]
+            assert span_doc["aggregate_id"] == execution_id
+            assert span_doc["correlation_id"] == work_item_id
+            assert span_doc["event_type"] == "coding_agent.otlp_span"
+            assert "data" in span_doc
+
+            # Verify span data
+            span_data = span_doc["data"]
+            if isinstance(span_data, str):
+                span_data = json.loads(span_data)
+            assert span_data["trace_id"] == "e2e0000000000000000000000000001a"
+            assert span_data["span_id"] == "e2e0000000000001a"
+            assert span_data["name"] == "e2e.test.span"
+
+            logger.info(
+                "Full pipeline test passed: span verified in Elasticsearch "
+                f"with aggregate_id={execution_id}"
+            )
+
+        finally:
+            shutil.rmtree(otel_temp, ignore_errors=True)
+            shutil.rmtree(str(e2e_ws_path), ignore_errors=True)
 
     async def test_real_agent_image_produces_otel_spans(self, agent_container_with_spans):
         """Test that real agent image produces spans.jsonl with OTLP/JSON content.

@@ -756,5 +756,143 @@ async def test_containerized_strategy_handles_span_emit_failure(tmp_path: Path):
     assert len(span_events) == 0
 
 
+@pytest.mark.asyncio
+async def test_containerized_strategy_continues_on_single_span_publish_failure(tmp_path: Path):
+    """When one span's publish fails, remaining spans are still published."""
+
+    # Create three spans with distinct identifiers
+    test_spans_envelope = {
+        "resourceSpans": [
+            {
+                "resource": {
+                    "attributes": [
+                        {"key": "service.name", "value": {"stringValue": "claude-code"}}
+                    ]
+                },
+                "scopeSpans": [
+                    {
+                        "scope": {"name": "claude-code"},
+                        "spans": [
+                            {
+                                "traceId": "trace0000000000000000000000000001",
+                                "spanId": "span0000000000000001",
+                                "parentSpanId": "",
+                                "name": "span_1",
+                                "kind": "SPAN_KIND_INTERNAL",
+                                "startTimeUnixNano": "1748400000000000000",
+                                "endTimeUnixNano": "1748400001000000000",
+                                "attributes": [{"key": "span_num", "value": {"stringValue": "1"}}],
+                                "events": [],
+                                "status": {"code": "STATUS_CODE_OK"},
+                            },
+                            {
+                                "traceId": "trace0000000000000000000000000002",
+                                "spanId": "span0000000000000002",
+                                "parentSpanId": "",
+                                "name": "span_2",
+                                "kind": "SPAN_KIND_INTERNAL",
+                                "startTimeUnixNano": "1748400000000000000",
+                                "endTimeUnixNano": "1748400001000000000",
+                                "attributes": [{"key": "span_num", "value": {"stringValue": "2"}}],
+                                "events": [],
+                                "status": {"code": "STATUS_CODE_OK"},
+                            },
+                            {
+                                "traceId": "trace0000000000000000000000000003",
+                                "spanId": "span0000000000000003",
+                                "parentSpanId": "",
+                                "name": "span_3",
+                                "kind": "SPAN_KIND_INTERNAL",
+                                "startTimeUnixNano": "1748400000000000000",
+                                "endTimeUnixNano": "1748400001000000000",
+                                "attributes": [{"key": "span_num", "value": {"stringValue": "3"}}],
+                                "events": [],
+                                "status": {"code": "STATUS_CODE_OK"},
+                            },
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+    lines = [
+        (json.dumps(RESULT) + "\n").encode(),
+    ]
+
+    def _write_multiple_spans(otel_temp_dir: str) -> None:
+        """Write three spans to spans.jsonl."""
+        spans_file = Path(otel_temp_dir) / "spans.jsonl"
+        Path(otel_temp_dir).mkdir(parents=True, exist_ok=True)
+        with spans_file.open("w") as f:
+            f.write(json.dumps(test_spans_envelope) + "\n")
+
+    container = _SpanWritingContainer(
+        lines,
+        exit_code=0,
+        write_callable=_write_multiple_spans,
+    )
+
+    strategy = ContainerizedClaudeStrategy(
+        container=container,
+        credential_provider=_FakeCredentialProvider(),
+    )
+    event_bus = EventBus()
+    captured: list[Any] = []
+    event_bus.subscribe(None, lambda e: captured.append(e))
+    options = CodingAgentInvocationOptions(
+        invocation_mode=InvocationMode.CONTAINERIZED,
+        model="m",
+        timeout_seconds=30,
+        cost_limit_usd=None,
+        mode_config={"image": "codetoreum-agent:latest"},
+    )
+
+    host_workspace = tmp_path / "ws"
+    host_workspace.mkdir()
+
+    # Track OTel span publish attempts to fail on the second one
+    span_publish_count = [0]
+
+    async def _mock_publish_with_failure(event: Any) -> None:
+        """Mock publish that fails on the second OTel span event."""
+        # Only track and fail on OTel span events
+        if type(event).__name__ == "CodingAgentOtlpSpanEvent":
+            span_publish_count[0] += 1
+            # Fail on the second span (span_2)
+            if span_publish_count[0] == 2:
+                raise RuntimeError("Simulated publish failure for span_2")
+
+    # Patch event_bus.publish to inject failure on second span
+    with patch.object(event_bus, "publish", side_effect=_mock_publish_with_failure):
+        with patch(
+            "codetoreum.adapters.secondary.claude_code.strategies.containerized.logger"
+        ) as mock_logger:
+            result = await strategy.execute(
+                prompt_text="hi",
+                execution_id="exec-partial-fail",
+                workspace_context=_ws(workspace_path=host_workspace),
+                options=options,
+                event_bus=event_bus,
+                parser=ClaudeStreamJsonParser(),
+                coding_agent_id="claude-code",
+            )
+
+            # Verify that logger.exception was called for the span publish failure
+            exception_calls = [
+                call for call in mock_logger.exception.call_args_list
+                if "failed to publish OTel span event" in str(call)
+            ]
+            assert len(exception_calls) == 1, "Should log exactly one span publish failure"
+
+    # Despite the span_2 publish failure, execution result is unaffected.
+    assert result.success is True
+    assert container.removed is True
+
+    # Verify that we attempted to publish all three spans
+    # span_1 succeeds, span_2 fails with exception, span_3 should be attempted after failure
+    assert span_publish_count[0] >= 3, f"Expected to attempt publishing at least 3 spans, got {span_publish_count[0]}"
+
+
 # Avoid unused-import lint warnings.
 _unused_datetime = datetime
