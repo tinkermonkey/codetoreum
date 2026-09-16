@@ -169,6 +169,10 @@ async def test_containerized_strategy_full_pipeline():
     assert container.created["working_dir"] == "/workspace"
     env = container.created["environment"]
     assert env["CLAUDE_CODE_OAUTH_TOKEN"] == "OAUTH"
+    assert env["CLAUDE_CODE_ENABLE_TELEMETRY"] == "1"
+    assert env["CLAUDE_CODE_ENHANCED_TELEMETRY_BETA"] == "1"
+    assert env["OTEL_TRACES_EXPORTER"] == "otlp"
+    assert env["OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"] == "http/protobuf"
     assert env["OTEL_EXPORTER_OTLP_ENDPOINT"] == "http://127.0.0.1:4318"
     assert env["OTEL_METRICS_EXPORTER"] == "none"
     assert env["OTEL_LOGS_EXPORTER"] == "none"
@@ -418,13 +422,6 @@ async def test_containerized_strategy_handles_missing_otel_spans_gracefully():
 async def test_containerized_strategy_parses_and_emits_otel_spans(tmp_path: Path):
     """OTel spans from spans.jsonl are parsed and emitted as domain events."""
 
-    # Create a custom container that populates spans.jsonl.
-    class _ContainerWithSpans(_FakeContainer):
-        async def remove(self, container_id: str, force: bool = False) -> None:
-            # Before removal, populate spans file in the temp directory.
-            # This simulates what the in-container OTel sidecar would do.
-            self.removed = True
-
     # Create a test span in OTLP/JSON format.
     test_span_envelope = {
         "resourceSpans": [
@@ -532,6 +529,214 @@ async def test_containerized_strategy_parses_and_emits_otel_spans(tmp_path: Path
     assert span_event.span_id == "1234abcd1234abcd"  # type: ignore
     assert span_event.name == "test_span"  # type: ignore
     assert span_event.attributes == {"test_key": "test_value"}  # type: ignore
+
+
+@pytest.mark.asyncio
+async def test_containerized_strategy_emits_spans_on_abnormal_exit(tmp_path: Path):
+    """OTel spans are emitted even when the agent process exits abnormally."""
+
+    test_span_envelope = {
+        "resourceSpans": [
+            {
+                "resource": {
+                    "attributes": [
+                        {"key": "service.name", "value": {"stringValue": "claude-code"}}
+                    ]
+                },
+                "scopeSpans": [
+                    {
+                        "scope": {"name": "claude-code"},
+                        "spans": [
+                            {
+                                "traceId": "abcd1234abcd1234abcd1234abcd1234",
+                                "spanId": "1234abcd1234abcd",
+                                "parentSpanId": "",
+                                "name": "partial_span",
+                                "kind": "SPAN_KIND_INTERNAL",
+                                "startTimeUnixNano": "1748400000000000000",
+                                "endTimeUnixNano": "1748400001000000000",
+                                "attributes": [
+                                    {"key": "partial", "value": {"stringValue": "yes"}}
+                                ],
+                                "events": [],
+                                "status": {"code": "STATUS_CODE_OK"},
+                            }
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+    lines = [
+        (json.dumps(RESULT) + "\n").encode(),
+    ]
+
+    class _SpanWritingContainer(_FakeContainer):
+        def __init__(self, log_lines: list[bytes], exit_code: int = 0, span_envelope: Any = None):
+            super().__init__(log_lines, exit_code)
+            self._span_envelope = span_envelope
+            self._otel_temp_dir: str | None = None
+
+        async def create(self, **kwargs: Any) -> str:
+            container_id = await super().create(**kwargs)
+            volumes = kwargs.get("volumes", {})
+            for host_path, container_path in volumes.items():
+                if "/var/otel:rw" in container_path:
+                    self._otel_temp_dir = host_path
+            return container_id
+
+        async def wait(self, container_id: str, timeout: int | None = None) -> int:
+            if self._otel_temp_dir:
+                import os
+
+                spans_file = os.path.join(self._otel_temp_dir, "spans.jsonl")
+                os.makedirs(self._otel_temp_dir, exist_ok=True)
+                with open(spans_file, "w") as f:
+                    f.write(json.dumps(self._span_envelope) + "\n")
+            return await super().wait(container_id, timeout)
+
+    # Exit with non-zero code (abnormal exit).
+    container = _SpanWritingContainer(lines, exit_code=1, span_envelope=test_span_envelope)
+
+    strategy = ContainerizedClaudeStrategy(
+        container=container,
+        credential_provider=_FakeCredentialProvider(),
+    )
+    event_bus = EventBus()
+    captured: list[Any] = []
+    event_bus.subscribe(None, lambda e: captured.append(e))
+    options = CodingAgentInvocationOptions(
+        invocation_mode=InvocationMode.CONTAINERIZED,
+        model="m",
+        timeout_seconds=30,
+        cost_limit_usd=None,
+        mode_config={"image": "codetoreum-agent:latest"},
+    )
+
+    host_workspace = tmp_path / "ws"
+    host_workspace.mkdir()
+
+    result = await strategy.execute(
+        prompt_text="hi",
+        execution_id="exec-abnormal-exit",
+        workspace_context=_ws(workspace_path=host_workspace),
+        options=options,
+        event_bus=event_bus,
+        parser=ClaudeStreamJsonParser(),
+        coding_agent_id="claude-code",
+    )
+
+    # Even with non-zero exit, the execution result is returned.
+    assert result.success is False  # Exit code 1 means failure.
+    # Spans that were flushed should still be emitted.
+    span_events = [e for e in captured if type(e).__name__ == "CodingAgentOtlpSpanEvent"]
+    assert len(span_events) == 1
+    span_event = span_events[0]
+    assert span_event.execution_id == "exec-abnormal-exit"  # type: ignore
+    assert span_event.name == "partial_span"  # type: ignore
+
+
+@pytest.mark.asyncio
+async def test_containerized_strategy_handles_span_emit_failure(tmp_path: Path):
+    """Failures during span parsing/emission are logged but don't affect the result."""
+
+    test_span_envelope = {
+        "resourceSpans": [
+            {
+                "resource": {
+                    "attributes": [
+                        {"key": "service.name", "value": {"stringValue": "claude-code"}}
+                    ]
+                },
+                "scopeSpans": [
+                    {
+                        "scope": {"name": "claude-code"},
+                        "spans": [
+                            {
+                                "traceId": "abcd1234abcd1234abcd1234abcd1234",
+                                "spanId": "1234abcd1234abcd",
+                                "parentSpanId": "",
+                                "name": "test_span",
+                                "kind": "SPAN_KIND_INTERNAL",
+                                "startTimeUnixNano": "1748400000000000000",
+                                "endTimeUnixNano": "1748400001000000000",
+                                "attributes": [],
+                                "events": [],
+                                "status": {"code": "STATUS_CODE_OK"},
+                            }
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+    lines = [
+        (json.dumps(RESULT) + "\n").encode(),
+    ]
+
+    class _SpanWritingContainer(_FakeContainer):
+        def __init__(self, log_lines: list[bytes], exit_code: int = 0, span_envelope: Any = None):
+            super().__init__(log_lines, exit_code)
+            self._span_envelope = span_envelope
+            self._otel_temp_dir: str | None = None
+
+        async def create(self, **kwargs: Any) -> str:
+            container_id = await super().create(**kwargs)
+            volumes = kwargs.get("volumes", {})
+            for host_path, container_path in volumes.items():
+                if "/var/otel:rw" in container_path:
+                    self._otel_temp_dir = host_path
+            return container_id
+
+        async def wait(self, container_id: str, timeout: int | None = None) -> int:
+            if self._otel_temp_dir:
+                import os
+
+                spans_file = os.path.join(self._otel_temp_dir, "spans.jsonl")
+                os.makedirs(self._otel_temp_dir, exist_ok=True)
+                # Write malformed JSON that will fail to parse.
+                with open(spans_file, "w") as f:
+                    f.write("{ invalid json\n")
+            return await super().wait(container_id, timeout)
+
+    container = _SpanWritingContainer(lines, exit_code=0, span_envelope=test_span_envelope)
+
+    strategy = ContainerizedClaudeStrategy(
+        container=container,
+        credential_provider=_FakeCredentialProvider(),
+    )
+    event_bus = EventBus()
+    captured: list[Any] = []
+    event_bus.subscribe(None, lambda e: captured.append(e))
+    options = CodingAgentInvocationOptions(
+        invocation_mode=InvocationMode.CONTAINERIZED,
+        model="m",
+        timeout_seconds=30,
+        cost_limit_usd=None,
+        mode_config={"image": "codetoreum-agent:latest"},
+    )
+
+    host_workspace = tmp_path / "ws"
+    host_workspace.mkdir()
+
+    result = await strategy.execute(
+        prompt_text="hi",
+        execution_id="exec-fail-emit",
+        workspace_context=_ws(workspace_path=host_workspace),
+        options=options,
+        event_bus=event_bus,
+        parser=ClaudeStreamJsonParser(),
+        coding_agent_id="claude-code",
+    )
+
+    # Despite the parse failure, execution result is unaffected.
+    assert result.success is True
+    assert container.removed is True
+    # No span events should be emitted (parse failed).
+    span_events = [e for e in captured if type(e).__name__ == "CodingAgentOtlpSpanEvent"]
+    assert len(span_events) == 0
 
 
 # Avoid unused-import lint warnings.

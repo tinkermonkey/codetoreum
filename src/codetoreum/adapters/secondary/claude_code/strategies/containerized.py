@@ -245,9 +245,13 @@ class ContainerizedClaudeStrategy(ClaudeInvocationStrategy):
             env["CLAUDE_CODE_OAUTH_TOKEN"] = oauth_token
         elif api_key:
             env["ANTHROPIC_API_KEY"] = api_key
-        # Configure OTel trace exporter to route to the local sidecar
-        # instead of the unreachable shared collector. Metrics and logs
-        # exporters remain disabled for this iteration.
+        # Enable OTel telemetry and configure trace exporter to route to
+        # the local sidecar instead of the unreachable shared collector.
+        # Metrics and logs exporters remain disabled for this iteration.
+        env["CLAUDE_CODE_ENABLE_TELEMETRY"] = "1"
+        env["CLAUDE_CODE_ENHANCED_TELEMETRY_BETA"] = "1"
+        env["OTEL_TRACES_EXPORTER"] = "otlp"
+        env["OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"] = "http/protobuf"
         env["OTEL_EXPORTER_OTLP_ENDPOINT"] = "http://127.0.0.1:4318"
         env["OTEL_METRICS_EXPORTER"] = "none"
         env["OTEL_LOGS_EXPORTER"] = "none"
@@ -317,10 +321,10 @@ class ContainerizedClaudeStrategy(ClaudeInvocationStrategy):
     ) -> None:
         """Parse and emit OTel spans from the telemetry mount.
 
-        Parses ``spans.jsonl`` from the per-execution temp directory,
-        publishes each span as a :class:`CodingAgentOtlpSpanEvent`, and
-        cleans up. Failures during parsing or emission are logged but
-        never raise — telemetry capture is advisory.
+        Parses ``spans.jsonl`` from the per-execution temp directory
+        and publishes each span as a :class:`CodingAgentOtlpSpanEvent`.
+        Failures during parsing or emission are logged but never raise —
+        telemetry capture is advisory.
 
         Args:
             otel_temp_path: Path to the per-execution temp directory
