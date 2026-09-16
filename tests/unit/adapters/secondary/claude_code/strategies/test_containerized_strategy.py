@@ -13,6 +13,7 @@ from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -125,6 +126,50 @@ class _FakeContainer:
 
     async def kill(self, container_id: str, signal: str = "SIGKILL") -> None:
         self.killed = True
+
+
+class _SpanWritingContainer(_FakeContainer):
+    """Container fake that writes OTel spans to the mounted temp directory.
+
+    Used by tests that need to verify span parsing and emission. The
+    ``write_callable`` parameter allows customization of what gets written
+    to spans.jsonl (valid envelope, malformed JSON, etc.).
+    """
+
+    def __init__(
+        self,
+        log_lines: list[bytes],
+        exit_code: int = 0,
+        write_callable: Any | None = None,
+    ):
+        """Construct the span-writing container.
+
+        Args:
+            log_lines: Log output to be returned by logs().
+            exit_code: Exit code to be returned by wait().
+            write_callable: Optional callable(otel_temp_dir) that writes to
+                spans.jsonl. If None, no spans file is written. If provided,
+                it will be called during wait() before the container exits.
+        """
+        super().__init__(log_lines, exit_code)
+        self._write_callable = write_callable
+        self._otel_temp_dir: str | None = None
+
+    async def create(self, **kwargs: Any) -> str:
+        container_id = await super().create(**kwargs)
+        # Extract the otel temp dir from volumes.
+        volumes = kwargs.get("volumes", {})
+        for host_path, container_path in volumes.items():
+            if "/var/otel:rw" in container_path:
+                self._otel_temp_dir = host_path
+        return container_id
+
+    async def wait(self, container_id: str, timeout: int | None = None) -> int:
+        # Before the container "exits", call the write callable if provided.
+        if self._otel_temp_dir and self._write_callable:
+            self._write_callable(self._otel_temp_dir)
+        # Then return the exit code.
+        return await super().wait(container_id, timeout)
 
 
 @pytest.mark.asyncio
@@ -460,35 +505,20 @@ async def test_containerized_strategy_parses_and_emits_otel_spans(tmp_path: Path
         (json.dumps(RESULT) + "\n").encode(),
     ]
 
-    # Create a custom container adapter that populates the spans file.
-    class _SpanWritingContainer(_FakeContainer):
-        def __init__(self, log_lines: list[bytes], exit_code: int = 0, span_envelope: Any = None):
-            super().__init__(log_lines, exit_code)
-            self._span_envelope = span_envelope
-            self._otel_temp_dir: str | None = None
+    def _write_valid_span(otel_temp_dir: str) -> None:
+        """Write a valid span envelope to spans.jsonl."""
+        import os
 
-        async def create(self, **kwargs: Any) -> str:
-            container_id = await super().create(**kwargs)
-            # Extract the otel temp dir from volumes.
-            volumes = kwargs.get("volumes", {})
-            for host_path, container_path in volumes.items():
-                if "/var/otel:rw" in container_path:
-                    self._otel_temp_dir = host_path
-            return container_id
+        spans_file = os.path.join(otel_temp_dir, "spans.jsonl")
+        os.makedirs(otel_temp_dir, exist_ok=True)
+        with open(spans_file, "w") as f:
+            f.write(json.dumps(test_span_envelope) + "\n")
 
-        async def wait(self, container_id: str, timeout: int | None = None) -> int:
-            # Before the container "exits", write the spans file (simulating OTel sidecar flush).
-            if self._otel_temp_dir:
-                import os
-
-                spans_file = os.path.join(self._otel_temp_dir, "spans.jsonl")
-                os.makedirs(self._otel_temp_dir, exist_ok=True)
-                with open(spans_file, "w") as f:
-                    f.write(json.dumps(self._span_envelope) + "\n")
-            # Then return the exit code.
-            return await super().wait(container_id, timeout)
-
-    container = _SpanWritingContainer(lines, exit_code=0, span_envelope=test_span_envelope)
+    container = _SpanWritingContainer(
+        lines,
+        exit_code=0,
+        write_callable=_write_valid_span,
+    )
 
     strategy = ContainerizedClaudeStrategy(
         container=container,
@@ -572,32 +602,21 @@ async def test_containerized_strategy_emits_spans_on_abnormal_exit(tmp_path: Pat
         (json.dumps(RESULT) + "\n").encode(),
     ]
 
-    class _SpanWritingContainer(_FakeContainer):
-        def __init__(self, log_lines: list[bytes], exit_code: int = 0, span_envelope: Any = None):
-            super().__init__(log_lines, exit_code)
-            self._span_envelope = span_envelope
-            self._otel_temp_dir: str | None = None
+    def _write_valid_span(otel_temp_dir: str) -> None:
+        """Write a valid span envelope to spans.jsonl."""
+        import os
 
-        async def create(self, **kwargs: Any) -> str:
-            container_id = await super().create(**kwargs)
-            volumes = kwargs.get("volumes", {})
-            for host_path, container_path in volumes.items():
-                if "/var/otel:rw" in container_path:
-                    self._otel_temp_dir = host_path
-            return container_id
-
-        async def wait(self, container_id: str, timeout: int | None = None) -> int:
-            if self._otel_temp_dir:
-                import os
-
-                spans_file = os.path.join(self._otel_temp_dir, "spans.jsonl")
-                os.makedirs(self._otel_temp_dir, exist_ok=True)
-                with open(spans_file, "w") as f:
-                    f.write(json.dumps(self._span_envelope) + "\n")
-            return await super().wait(container_id, timeout)
+        spans_file = os.path.join(otel_temp_dir, "spans.jsonl")
+        os.makedirs(otel_temp_dir, exist_ok=True)
+        with open(spans_file, "w") as f:
+            f.write(json.dumps(test_span_envelope) + "\n")
 
     # Exit with non-zero code (abnormal exit).
-    container = _SpanWritingContainer(lines, exit_code=1, span_envelope=test_span_envelope)
+    container = _SpanWritingContainer(
+        lines,
+        exit_code=1,
+        write_callable=_write_valid_span,
+    )
 
     strategy = ContainerizedClaudeStrategy(
         container=container,
@@ -639,7 +658,7 @@ async def test_containerized_strategy_emits_spans_on_abnormal_exit(tmp_path: Pat
 
 @pytest.mark.asyncio
 async def test_containerized_strategy_handles_span_emit_failure(tmp_path: Path):
-    """Failures during span parsing/emission are logged but don't affect the result."""
+    """Failures during span emission are logged but don't affect the result."""
 
     test_span_envelope = {
         "resourceSpans": [
@@ -676,32 +695,20 @@ async def test_containerized_strategy_handles_span_emit_failure(tmp_path: Path):
         (json.dumps(RESULT) + "\n").encode(),
     ]
 
-    class _SpanWritingContainer(_FakeContainer):
-        def __init__(self, log_lines: list[bytes], exit_code: int = 0, span_envelope: Any = None):
-            super().__init__(log_lines, exit_code)
-            self._span_envelope = span_envelope
-            self._otel_temp_dir: str | None = None
+    def _write_valid_span(otel_temp_dir: str) -> None:
+        """Write a valid span envelope to spans.jsonl."""
+        import os
 
-        async def create(self, **kwargs: Any) -> str:
-            container_id = await super().create(**kwargs)
-            volumes = kwargs.get("volumes", {})
-            for host_path, container_path in volumes.items():
-                if "/var/otel:rw" in container_path:
-                    self._otel_temp_dir = host_path
-            return container_id
+        spans_file = os.path.join(otel_temp_dir, "spans.jsonl")
+        os.makedirs(otel_temp_dir, exist_ok=True)
+        with open(spans_file, "w") as f:
+            f.write(json.dumps(test_span_envelope) + "\n")
 
-        async def wait(self, container_id: str, timeout: int | None = None) -> int:
-            if self._otel_temp_dir:
-                import os
-
-                spans_file = os.path.join(self._otel_temp_dir, "spans.jsonl")
-                os.makedirs(self._otel_temp_dir, exist_ok=True)
-                # Write malformed JSON that will fail to parse.
-                with open(spans_file, "w") as f:
-                    f.write("{ invalid json\n")
-            return await super().wait(container_id, timeout)
-
-    container = _SpanWritingContainer(lines, exit_code=0, span_envelope=test_span_envelope)
+    container = _SpanWritingContainer(
+        lines,
+        exit_code=0,
+        write_callable=_write_valid_span,
+    )
 
     strategy = ContainerizedClaudeStrategy(
         container=container,
@@ -721,15 +728,30 @@ async def test_containerized_strategy_handles_span_emit_failure(tmp_path: Path):
     host_workspace = tmp_path / "ws"
     host_workspace.mkdir()
 
-    result = await strategy.execute(
-        prompt_text="hi",
-        execution_id="exec-fail-emit",
-        workspace_context=_ws(workspace_path=host_workspace),
-        options=options,
-        event_bus=event_bus,
-        parser=ClaudeStreamJsonParser(),
-        coding_agent_id="claude-code",
-    )
+    # Patch parse_spans_file to raise, triggering the exception handler
+    # in _parse_and_emit_spans. This exercises the error logging path.
+    with patch(
+        "codetoreum.adapters.secondary.claude_code.strategies.containerized.parse_spans_file",
+        side_effect=RuntimeError("parse failure"),
+    ):
+        with patch(
+            "codetoreum.adapters.secondary.claude_code.strategies.containerized.logger"
+        ) as mock_logger:
+            result = await strategy.execute(
+                prompt_text="hi",
+                execution_id="exec-fail-emit",
+                workspace_context=_ws(workspace_path=host_workspace),
+                options=options,
+                event_bus=event_bus,
+                parser=ClaudeStreamJsonParser(),
+                coding_agent_id="claude-code",
+            )
+
+            # Verify that logger.exception was called with exc_info=True.
+            mock_logger.exception.assert_called_once()
+            call_args = mock_logger.exception.call_args
+            # The message should mention the parse failure.
+            assert "failed to parse OTel spans file" in str(call_args[0][0])
 
     # Despite the parse failure, execution result is unaffected.
     assert result.success is True
