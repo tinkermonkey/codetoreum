@@ -190,7 +190,7 @@ OTELCOL_PID=""
 if [ -f /usr/local/bin/otelcol ]; then
     # Collector binary exists — attempt to start it
     echo "[agent-entrypoint] Starting OpenTelemetry Collector..." >&2
-    /usr/local/bin/otelcol --config /etc/otelcol/config.yaml >/dev/null 2>&1 &
+    /usr/local/bin/otelcol --config /etc/otelcol/config.yaml >/dev/null 2>&2 &
     OTELCOL_PID=$!
 
     # Register a cleanup handler so the collector flushes its buffer on exit
@@ -217,6 +217,12 @@ if [ -f /usr/local/bin/otelcol ]; then
     COLLECTOR_HEALTHY=false
 
     while [ $RETRY -gt 0 ]; do
+        # Check if the collector process is still alive
+        if ! kill -0 "$OTELCOL_PID" 2>/dev/null; then
+            echo "[agent-entrypoint] WARNING: OpenTelemetry Collector process exited prematurely." >&2
+            break
+        fi
+
         # Use bash TCP redirection to test if the port is open
         # (exec 3>/dev/tcp/host/port opens a socket, closes if successful)
         if (exec 3>/dev/tcp/127.0.0.1/4318) >/dev/null 2>&1; then
@@ -241,4 +247,17 @@ else
 fi
 
 # --- Hand off to the requested command --------------------------------------
-exec "$@"
+# Instead of `exec "$@"` (which replaces the shell and prevents the EXIT trap
+# from firing), run the command in the background and wait for it.
+# This keeps the shell as PID 1 so it can catch signals and fire the EXIT trap.
+
+# Setup signal forwarding: when the container receives TERM/INT, forward it to the child
+trap 'kill -TERM "$CHILD_PID" 2>/dev/null; wait "$CHILD_PID" 2>/dev/null' TERM INT
+
+# Run the requested command in the background
+"$@" &
+CHILD_PID=$!
+
+# Wait for the child process and capture its exit code
+wait "$CHILD_PID"
+exit $?
