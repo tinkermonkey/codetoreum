@@ -358,7 +358,7 @@ class ProductionApplicationBootstrap:
         - Phase 3: Critical path enforcement (validate no mocks on critical slots)
         - Phase 4: Resilience decoration (wrap adapters with resilience patterns)
         - Phase 5: Application service instantiation (create 11 services)
-        - Phase 5e: Initialize all projects via ProjectLifecycleService (one-time setup)
+        - Phase 5e: Start MultiProjectOrchestrator poll loop (sole orchestration entry point)
         - Phase 6: Input port creation (create 17 port implementations)
         - Phase 7: FastAPI app creation (wire all ports to API endpoints)
 
