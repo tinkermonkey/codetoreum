@@ -178,5 +178,89 @@ if [ -S /var/run/docker.sock ] && command -v docker >/dev/null 2>&1; then
     fi
 fi
 
+# --- Start OpenTelemetry Collector sidecar (if present) ----------------------
+# The collector runs as a background sidecar to capture and forward telemetry
+# from the agent process. It is optional (best-effort) — if it fails to start or
+# becomes unhealthy, a warning is logged but agent execution proceeds anyway.
+# Spans will be silently lost if the collector is unavailable, but the agent
+# execution is more important than observability.
+
+OTELCOL_PID=""
+
+if [ -f /usr/local/bin/otelcol ]; then
+    # Collector binary exists — attempt to start it
+    echo "[agent-entrypoint] Starting OpenTelemetry Collector..." >&2
+    /usr/local/bin/otelcol --config /etc/otelcol/config.yaml >/dev/null 2>&1 &
+    OTELCOL_PID=$!
+
+    # Register a cleanup handler so the collector flushes its buffer on exit
+    # before the container terminates.
+    cleanup_collector() {
+        if [ -n "$OTELCOL_PID" ] && kill -0 "$OTELCOL_PID" 2>/dev/null; then
+            echo "[agent-entrypoint] Shutting down OpenTelemetry Collector (PID: $OTELCOL_PID)..." >&2
+            kill -TERM "$OTELCOL_PID" 2>/dev/null || true
+
+            # Give it time to flush before we exit
+            sleep 2
+
+            # Force kill if still running
+            kill -9 "$OTELCOL_PID" 2>/dev/null || true
+        fi
+    }
+    trap cleanup_collector EXIT
+
+    # Health-check the OTLP HTTP receiver (port 4318) with a bounded wait.
+    # Try up to 5 times with 1-second intervals (~5 second total timeout).
+    echo "[agent-entrypoint] Health-checking OpenTelemetry Collector at 127.0.0.1:4318..." >&2
+
+    RETRY=5
+    COLLECTOR_HEALTHY=false
+
+    while [ $RETRY -gt 0 ]; do
+        # Check if the collector process is still alive
+        if ! kill -0 "$OTELCOL_PID" 2>/dev/null; then
+            echo "[agent-entrypoint] WARNING: OpenTelemetry Collector process exited prematurely." >&2
+            break
+        fi
+
+        # Use bash TCP redirection to test if the port is open
+        # (exec 3>/dev/tcp/host/port opens a socket, closes if successful)
+        if (exec 3>/dev/tcp/127.0.0.1/4318) >/dev/null 2>&1; then
+            COLLECTOR_HEALTHY=true
+            echo "[agent-entrypoint] OpenTelemetry Collector is healthy (PID: $OTELCOL_PID)" >&2
+            break
+        fi
+
+        RETRY=$((RETRY - 1))
+        if [ $RETRY -gt 0 ]; then
+            sleep 1
+        fi
+    done
+
+    if [ "$COLLECTOR_HEALTHY" = false ]; then
+        echo "[agent-entrypoint] WARNING: OpenTelemetry Collector did not become healthy within the bounded wait." >&2
+        echo "[agent-entrypoint] WARNING: Telemetry spans will be lost, but proceeding with agent execution." >&2
+        if [ -n "$OTELCOL_PID" ]; then
+            kill "$OTELCOL_PID" 2>/dev/null || true
+        fi
+        OTELCOL_PID=""
+    fi
+else
+    echo "[agent-entrypoint] INFO: /usr/local/bin/otelcol not found. Skipping OpenTelemetry Collector." >&2
+fi
+
 # --- Hand off to the requested command --------------------------------------
-exec "$@"
+# Instead of `exec "$@"` (which replaces the shell and prevents the EXIT trap
+# from firing), run the command in the background and wait for it.
+# This keeps the shell as PID 1 so it can catch signals and fire the EXIT trap.
+
+# Setup signal forwarding: when the container receives TERM/INT, forward it to the child
+trap 'kill -TERM "$CHILD_PID" 2>/dev/null; wait "$CHILD_PID" 2>/dev/null' TERM INT
+
+# Run the requested command in the background
+"$@" &
+CHILD_PID=$!
+
+# Wait for the child process and capture its exit code
+wait "$CHILD_PID"
+exit $?

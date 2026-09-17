@@ -683,8 +683,8 @@ class DockerContainerAdapter(IContainer):
         if volumes:
             translated_volumes = self._parse_volume_spec(volumes)
 
-        # Merge environment with OTEL vars
-        merged_env = dict(environment or {})
+        # Build OTEL env from labels (adapter defaults)
+        otel_env = {}
         if labels:
             otel_env = self._build_agent_otel_env(
                 execution_id=labels.get("org.codetoreum.execution_id", "unknown"),
@@ -692,7 +692,10 @@ class DockerContainerAdapter(IContainer):
                 project_id=labels.get("org.codetoreum.project", "unknown"),
                 work_item_id=labels.get("org.codetoreum.work_item_id", "unknown"),
             )
-            merged_env.update(otel_env)
+
+        # Merge environment with OTEL vars (caller-supplied values take precedence)
+        merged_env = dict(otel_env)
+        merged_env.update(environment or {})
 
         # Verify workspace write access before creating container (async, outside executor)
         if self.config.verify_workspace_writable and translated_volumes:

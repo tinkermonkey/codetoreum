@@ -78,6 +78,31 @@ RUN mkdir -p src/codetoreum && \
 RUN pip install --no-cache-dir pre-commit
 
 # ============================================================================
+# Stage 3b: Install OpenTelemetry Collector Core
+# ============================================================================
+# Install the static otelcol core binary (traces-only sidecar for agent containers).
+# Using core binary (~70 MB) instead of contrib (~250 MB) to keep image size minimal.
+
+ARG OTELCOL_VERSION=0.105.0
+ARG OTELCOL_CHECKSUM=1ce3a50f86f2ea1ea091c9e4f6ddbd34b4dcb6ed828365edb1ae31765f0ef7d3
+
+RUN cd /tmp && \
+    curl -fsSL "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v${OTELCOL_VERSION}/otelcol_${OTELCOL_VERSION}_linux_amd64.tar.gz" -o otelcol.tar.gz && \
+    echo "${OTELCOL_CHECKSUM} otelcol.tar.gz" | sha256sum -c - && \
+    tar -xzf otelcol.tar.gz && \
+    mv otelcol /usr/local/bin/ && \
+    chmod +x /usr/local/bin/otelcol && \
+    rm -f otelcol.tar.gz
+
+# Copy OpenTelemetry Collector configuration for agent containers
+COPY etc/otelcol/config.yaml /etc/otelcol/config.yaml
+
+# Create /var/otel directory owned by orchestrator with restricted permissions
+RUN mkdir -p /var/otel && \
+    chown orchestrator:orchestrator /var/otel && \
+    chmod 755 /var/otel
+
+# ============================================================================
 # Stage 4: Ownership and Permissions
 # ============================================================================
 # Change ownership ONLY of what was installed, NOT source code
@@ -174,6 +199,12 @@ RUN claude --version && \
 # hooks which use 'language: system' and expect these binaries in PATH)
 RUN ruff --version && \
     pre-commit --version
+
+# Verify OpenTelemetry Collector installation and configuration
+RUN otelcol --version && \
+    test -f /etc/otelcol/config.yaml && \
+    test -d /var/otel && \
+    test -w /var/otel
 
 # ============================================================================
 # Default command

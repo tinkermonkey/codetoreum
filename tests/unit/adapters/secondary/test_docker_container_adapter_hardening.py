@@ -434,6 +434,49 @@ class TestCreateMethodIntegration:
         assert env["CLAUDE_CODE_ENABLE_TELEMETRY"] == "1"
 
     @pytest.mark.asyncio
+    async def test_create_caller_env_takes_precedence_over_otel_defaults(self):
+        """Caller-supplied env values should override adapter-injected OTEL defaults."""
+        config = DockerConfig(verify_workspace_writable=False)
+        adapter = DockerContainerAdapter(config)
+
+        mock_client = MagicMock()
+        adapter._docker_client = mock_client
+        mock_client.images.get.return_value = MagicMock()
+        mock_client.containers.create.return_value = MagicMock(id="container-123")
+
+        labels = {
+            "org.codetoreum.execution_id": "exec-123",
+            "org.codetoreum.agent": "test-agent",
+            "org.codetoreum.project": "test-project",
+            "org.codetoreum.work_item_id": "item-123",
+        }
+
+        caller_env = {
+            "OTEL_METRICS_EXPORTER": "none",
+            "OTEL_LOGS_EXPORTER": "none",
+            "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318/v1/traces",
+            "CUSTOM_VAR": "custom_value",
+        }
+
+        await adapter.create(image="test:latest", labels=labels, environment=caller_env)
+
+        call_args = mock_client.containers.create.call_args
+        env = call_args.kwargs["environment"]
+
+        # Caller-supplied values should override adapter defaults
+        assert env["OTEL_METRICS_EXPORTER"] == "none"
+        assert env["OTEL_LOGS_EXPORTER"] == "none"
+        assert env["OTEL_EXPORTER_OTLP_ENDPOINT"] == "http://localhost:4318/v1/traces"
+
+        # Custom variables from caller should be preserved
+        assert env["CUSTOM_VAR"] == "custom_value"
+
+        # Adapter-injected values not overridden by caller should still be present
+        assert env["CLAUDE_CODE_ENABLE_TELEMETRY"] == "1"
+        assert "OTEL_METRIC_EXPORT_INTERVAL" in env
+        assert "OTEL_LOGS_EXPORT_INTERVAL" in env
+
+    @pytest.mark.asyncio
     async def test_create_verifies_workspace_writable_when_enabled(self):
         """Should verify workspace write access when enabled."""
         config = DockerConfig(verify_workspace_writable=True)

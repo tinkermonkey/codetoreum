@@ -1,0 +1,32 @@
+# OpenTelemetry Collector Configuration for Agent Containers
+# Traces-only pipeline: OTLP HTTP receiver -> File exporter
+# This sidecar runs locally (127.0.0.1:4318) and writes to /var/otel/spans.jsonl
+
+receivers:
+  otlp:
+    protocols:
+      http:
+        # Localhost-only HTTP receiver for agent span ingestion
+        endpoint: 127.0.0.1:4318
+
+exporters:
+  file:
+    # Write newline-delimited OTLP/JSON to a local file
+    path: /var/otel/spans.jsonl
+    rotation:
+      max_megabytes: 100
+      max_days: 7
+      max_backups: 3
+
+service:
+  telemetry:
+    # Explicitly disable metrics telemetry endpoint to reduce exposed surface area
+    # otelcol's default basic telemetry starts Prometheus on 0.0.0.0:8888 which is
+    # not needed for this traces-only sidecar and would be reachable from other containers
+    metrics:
+      level: none
+  pipelines:
+    traces:
+      receivers: [otlp]
+      # No processors: pass through as-is for minimal latency
+      exporters: [file]

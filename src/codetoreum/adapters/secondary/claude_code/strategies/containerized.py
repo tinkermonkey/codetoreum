@@ -7,25 +7,40 @@ The strategy:
    network) and the credentials provider.
 2. Mounts the workspace from the host into the container at
    ``/workspace`` (read-write so the agent can edit files).
-3. Creates and starts the container running ``claude --print ...
-   --output-format stream-json`` as the entrypoint.
-4. Follows the container's log stream and pumps it through the shared
+3. Creates a per-execution temporary directory and mounts it at
+   ``/var/otel:rw`` for collecting OpenTelemetry span telemetry.
+4. Creates and starts the container running ``claude --print ...
+   --output-format stream-json`` as the entrypoint, with OTel trace
+   exporter environment configured to route to the local sidecar.
+5. Follows the container's log stream and pumps it through the shared
    :class:`ClaudeStreamJsonParser` → events → ``EventBus``.
-5. Waits for the container to exit, captures the exit code, and removes
-   the container.
+6. After the container exits, parses ``/var/otel/spans.jsonl`` and
+   publishes each span as a :class:`CodingAgentOtlpSpanEvent` to the
+   event bus.
+7. Removes the container and cleans up the temporary telemetry directory.
 
-Per Q7 (no ``/output`` extraction) the strategy never reads files from
-the container post-exit. All telemetry lives in events.
+Per Q7 and INV-16: the strategy does not extract general output files
+from the container post-exit (all work product is in events). The
+transient ``/var/otel/spans.jsonl`` file is an exception — it is
+infrastructure telemetry (describing agent behaviour) captured by the
+in-container OTel sidecar for analysis, read before container removal,
+and discarded.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import shutil
+import tempfile
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
+from codetoreum.adapters.secondary.claude_code.otel_span_parser import (
+    parse_spans_file,
+)
 from codetoreum.adapters.secondary.claude_code.strategies.base import (
     ClaudeInvocationStrategy,
 )
@@ -101,34 +116,44 @@ class ContainerizedClaudeStrategy(ClaudeInvocationStrategy):
             msg = "ContainerizedClaudeStrategy requires mode_config['image']"
             raise ValueError(msg)
 
-        command = self._build_command(prompt_text=prompt_text, options=options)
-        env = await self._build_environment()
-        volumes = self._build_volumes(workspace_context)
-        labels = {
-            "codetoreum.execution_id": execution_id,
-            "codetoreum.work_item_id": workspace_context.work_item_id,
-            "codetoreum.adapter": "claude-code",
-        }
+        # Create a per-execution temp directory for OTel telemetry inside try block
+        # to ensure cleanup on pre-try exceptions.
+        otel_temp_dir: str | None = None
+        otel_temp_path: Path | None = None
+        container_id: str | None = None
 
-        container_id = await self._container.create(
-            image=image,
-            name=f"claude-{execution_id[:12]}",
-            command=command,
-            environment=env,
-            volumes=volumes,
-            working_dir=_DEFAULT_WORKDIR,
-            network=mode_config.get("network"),
-            labels=labels,
-        )
-        logger.info(
-            "ContainerizedClaudeStrategy: created container_id=%s image=%s execution_id=%s",
-            container_id,
-            image,
-            execution_id,
-        )
-
-        start = datetime.now(UTC)
         try:
+            otel_temp_dir = tempfile.mkdtemp(prefix=f"otel-{execution_id[:12]}-")
+            otel_temp_path = Path(otel_temp_dir)
+
+            command = self._build_command(prompt_text=prompt_text, options=options)
+            env = await self._build_environment()
+            volumes = self._build_volumes(workspace_context, otel_temp_dir=otel_temp_dir)
+            labels = {
+                "codetoreum.execution_id": execution_id,
+                "codetoreum.work_item_id": workspace_context.work_item_id,
+                "codetoreum.adapter": "claude-code",
+            }
+
+            container_id = await self._container.create(
+                image=image,
+                name=f"claude-{execution_id[:12]}",
+                command=command,
+                environment=env,
+                volumes=volumes,
+                working_dir=_DEFAULT_WORKDIR,
+                network=mode_config.get("network"),
+                labels=labels,
+            )
+            logger.info(
+                "ContainerizedClaudeStrategy: created container_id=%s image=%s execution_id=%s",
+                container_id,
+                image,
+                execution_id,
+            )
+
+            start = datetime.now(UTC)
+
             await self._container.start(container_id)
             stdout = await self._open_log_stream(container_id)
             stderr_reader = _drain_nothing()
@@ -148,7 +173,7 @@ class ContainerizedClaudeStrategy(ClaudeInvocationStrategy):
                         container_id,
                     )
 
-            return await _stream_and_collect(
+            result = await _stream_and_collect(
                 process_stdout=stdout,
                 process_stderr_reader=stderr_reader,
                 wait_process=_wait_exit,
@@ -162,15 +187,47 @@ class ContainerizedClaudeStrategy(ClaudeInvocationStrategy):
                 timeout_seconds=options.timeout_seconds,
                 kill=_kill_container,
             )
+
+            return result
         finally:
-            # Always remove the container.
-            try:
-                await self._container.remove(container_id, force=True)
-            except Exception:
-                logger.exception(
-                    "ContainerizedClaudeStrategy: failed to remove container_id=%s",
-                    container_id,
-                )
+            # Parse and emit OTel spans before cleanup, even if streaming raised.
+            # This is advisory telemetry capture; failures are logged but
+            # never alter the execution result.
+            # Wrap in try/except BaseException to catch asyncio.CancelledError,
+            # which inherits from BaseException (not Exception) on Python 3.9+
+            # and must not bypass container/temp directory cleanup.
+            if otel_temp_path is not None:
+                try:
+                    await self._parse_and_emit_spans(
+                        otel_temp_path,
+                        execution_id,
+                        workspace_context.work_item_id,
+                        event_bus,
+                    )
+                except BaseException:
+                    logger.exception(
+                        "ContainerizedClaudeStrategy: exception during span emission "
+                        "for execution_id=%s (will not block cleanup)",
+                        execution_id,
+                    )
+
+            # Always remove the container and clean up the temp directory.
+            if container_id is not None:
+                try:
+                    await self._container.remove(container_id, force=True)
+                except BaseException:
+                    logger.exception(
+                        "ContainerizedClaudeStrategy: failed to remove container_id=%s",
+                        container_id,
+                    )
+            if otel_temp_dir is not None:
+                try:
+                    shutil.rmtree(otel_temp_dir, ignore_errors=False)
+                except Exception:
+                    logger.exception(
+                        "ContainerizedClaudeStrategy: failed to clean up otel_temp_dir=%s",
+                        otel_temp_dir,
+                    )
 
     # ------------------------------------------------------------------
     # Construction helpers
@@ -207,11 +264,24 @@ class ContainerizedClaudeStrategy(ClaudeInvocationStrategy):
             env["CLAUDE_CODE_OAUTH_TOKEN"] = oauth_token
         elif api_key:
             env["ANTHROPIC_API_KEY"] = api_key
+        # Enable OTel telemetry and configure trace exporter to route to
+        # the local sidecar instead of the unreachable shared collector.
+        # Metrics and logs exporters remain disabled for this iteration.
+        env["CLAUDE_CODE_ENABLE_TELEMETRY"] = "1"
+        env["CLAUDE_CODE_ENHANCED_TELEMETRY_BETA"] = "1"
+        env["OTEL_TRACES_EXPORTER"] = "otlp"
+        env["OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"] = "http/protobuf"
+        env["OTEL_EXPORTER_OTLP_ENDPOINT"] = "http://127.0.0.1:4318"
+        # Signal-specific trace endpoint for defense-in-depth per design DD-3
+        env["OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"] = "http://127.0.0.1:4318/v1/traces"
+        env["OTEL_METRICS_EXPORTER"] = "none"
+        env["OTEL_LOGS_EXPORTER"] = "none"
         return env
 
     def _build_volumes(
         self,
         workspace_context: WorkspaceContext,
+        otel_temp_dir: str | Path | None = None,
     ) -> dict[str, str]:
         """Build the volume mount mapping for the container.
 
@@ -222,6 +292,12 @@ class ContainerizedClaudeStrategy(ClaudeInvocationStrategy):
         translates the simple form into the SDK shape itself, and
         receiving the SDK shape directly trips ``AttributeError:
         \'dict\' object has no attribute \'split\'`` (D7 / DEF-017).
+
+        Args:
+            workspace_context: The workspace context (must have workspace_path).
+            otel_temp_dir: Optional path to a per-execution temp directory
+                for OTel telemetry. If provided, will be mounted at
+                ``/var/otel:rw``.
 
         Raises:
             ValueError: If ``workspace_context.workspace_path`` is unset.
@@ -236,9 +312,12 @@ class ContainerizedClaudeStrategy(ClaudeInvocationStrategy):
                 "must call WorkspaceContext.with_workspace_path() before dispatch."
             )
             raise ValueError(msg)
-        return {
+        volumes = {
             str(workspace_context.workspace_path): f"{_DEFAULT_WORKDIR}:rw",
         }
+        if otel_temp_dir:
+            volumes[str(otel_temp_dir)] = "/var/otel:rw"
+        return volumes
 
     async def _open_log_stream(self, container_id: str) -> AsyncIterator[bytes]:
         """Open the container's follow-mode log stream as a byte iterator.
@@ -253,6 +332,50 @@ class ContainerizedClaudeStrategy(ClaudeInvocationStrategy):
             follow=True,
         )
         return _normalise_log_stream(raw_stream)
+
+    async def _parse_and_emit_spans(
+        self,
+        otel_temp_path: Path,
+        execution_id: str,
+        work_item_id: str,
+        event_bus: EventBus,
+    ) -> None:
+        """Parse and emit OTel spans from the telemetry mount.
+
+        Parses ``spans.jsonl`` from the per-execution temp directory
+        and publishes each span as a :class:`CodingAgentOtlpSpanEvent`.
+        Failures during parsing or emission are logged but never raise —
+        telemetry capture is advisory.
+
+        Args:
+            otel_temp_path: Path to the per-execution temp directory
+                mounted at ``/var/otel`` in the container.
+            execution_id: Execution aggregate id for the event stream.
+            work_item_id: Work item id for correlation.
+            event_bus: Event bus to publish spans to.
+        """
+        spans_file = otel_temp_path / "spans.jsonl"
+        try:
+            for span_event in parse_spans_file(
+                spans_file,
+                execution_id=execution_id,
+                correlation_id=work_item_id,
+            ):
+                try:
+                    await event_bus.publish(span_event)
+                except Exception:
+                    logger.exception(
+                        "ContainerizedClaudeStrategy: failed to publish OTel span event "
+                        "for execution_id=%s",
+                        execution_id,
+                    )
+        except Exception:
+            logger.exception(
+                "ContainerizedClaudeStrategy: failed to parse OTel spans file "
+                "for execution_id=%s at path=%s",
+                execution_id,
+                spans_file,
+            )
 
 
 async def _normalise_log_stream(stream: Any) -> AsyncIterator[bytes]:
