@@ -135,10 +135,12 @@ Phase 2b initializes the event store: `_initialize_event_store()` calls `initial
 `_validate_no_mocks_on_critical_path()` inspects the concrete class name of each adapter in `CRITICAL_ADAPTER_SLOTS`:
 
 ```python
-CRITICAL_ADAPTER_SLOTS = {"board", "ticket", "coding_agent", "version_control", "container", "code_review"}
+CRITICAL_ADAPTER_SLOTS = {"board", "ticket", "version_control", "container", "code_review", "container_recovery", "queue_service"}
 ```
 
 Any adapter whose class name contains `Mock`, `InMemory`, `Fake`, or `Null` causes a `RuntimeError`. This guard ensures bootstrap always exercises real adapters on the execution-critical path.
+
+**Note**: The `coding_agent` slot is validated separately in Phase 4c because it is constructed after Phase 2's `resolve_all()` completes, so it is not covered by the generic critical-path scan. Explicit validation of the coding-agent adapter happens immediately after construction.
 
 Phase 3b: `_validate_event_emitter_is_production()` ensures the resolved event emitter is not `CapturingMockEventEmitter`.
 
@@ -403,7 +405,7 @@ The following constraints MUST hold for bootstrap to work correctly. Violating a
 **INV-07**: Simulation-only routes MUST NEVER appear in `ProductionApplicationBootstrap._create_fastapi_app()`. They mount exclusively in `SimulationApplicationBootstrap._create_fastapi_app()`.
 - The two bootstrap classes produce fundamentally different `FastAPI` instances. Merging routes is a production security boundary violation.
 
-**INV-08**: `CRITICAL_ADAPTER_SLOTS = {"board", "ticket", "coding_agent", "version_control", "container", "code_review"}` — no adapter in these slots may be `Mock`, `InMemory`, `Fake`, or `Null`. Phase 3 enforces this with `RuntimeError`.
+**INV-08**: `CRITICAL_ADAPTER_SLOTS = {"board", "ticket", "version_control", "container", "code_review", "container_recovery", "queue_service"}` — no adapter in these slots may be `Mock`, `InMemory`, `Fake`, or `Null`. Phase 3 enforces this with `RuntimeError`. (The `coding_agent` slot is validated separately in Phase 4c.)
 
 ### Port discipline constraints
 
@@ -501,13 +503,13 @@ Use these log patterns to confirm correct operation at each stage. All patterns 
 | Infra exclusivity verified | `Phase 1c: Verifying infrastructure exclusivity...` + `Phase 1c: Infrastructure exclusivity verified.` | All four exclusivity checks passed (ES, Redis, Docker, GitHub) |
 | Adapters resolved | `Phase 2: Creating 33 adapters (credential validation + resolution)...` | All 33 adapter slots populated |
 | Event store initialized | `Event store initialized successfully` with `event_store_type: ElasticsearchEventStore` | ES indices created/verified |
-| No mocks on critical path | `Critical path validation passed (6 adapters)` | Phase 3 guard passed |
+| No mocks on critical path | `Critical path validation passed (7 adapters)` | Phase 3 guard passed |
 | Resilience applied | `Resilience decorators applied to critical adapters` | Decorators wrapping ticket, LLM, VCS, container, repository |
 | Raw ticket adapter captured | `DEBUG: Applied resilience to ticket system adapter` | `_raw_ticket_adapter` captured before wrapping |
 | Services created | `Created all 11 application services with production adapters` | Full service graph ready |
 | Bootstrap config loaded | `Loaded 1 project bootstrap configuration(s) from .../bootstrap` | `rounds.json` parsed, agents and template registered |
 | Repo registered | `Registered project repo 'rounds' for project 'rounds' with ticket adapter` | `register_project_repo()` called successfully |
-| WorkItemService wired | `Phase 5d: Wiring WorkItemService to executor...` | Executor can now load ES-backed work items |
+| Board reconciliation | `Phase 5d: Reconciling board structures for all projects...` | Board columns synced with external ticket system |
 | Project initialization | `Phase 5e: Initializing all projects...` + `Phase 5e: Project initialization completed` | One-time project initialization (board reconciliation, repo registration) complete |
 | Auth token printed | `Authentication token: <jwt>` | Token available for REST API calls |
 | Server ready | `Production bootstrap completed successfully` | All 7 phases complete, FastAPI app live |
