@@ -173,7 +173,7 @@ ExecutionServiceAgentExecutor(execution_service, workspace_router, config_store,
 AgentScheduler(..., agent_executor=execution_service_executor)
 WorkflowOrchestrator(..., dispatch_via_task_queue=False)
 WorkItemService(event_store)
-MultiProjectOrchestrator(project_manager, workflow_orchestrator, board_service, poll_interval_seconds=30)
+MultiProjectOrchestrator(project_manager)
 ```
 
 Note: `ExecutionService` and `WorkspaceRouter` no longer depend on `IContainer` or `IStorage` directly. The container is consumed by `ClaudeCodeAdapter`'s containerized strategy; storage is retired.
@@ -188,7 +188,7 @@ Note: `ExecutionServiceAgentExecutor` receives `WorkItemService` as a constructo
 
 **Phase 5d**: `WorkItemService` is constructor-injected into `ExecutionServiceAgentExecutor` during `_create_services`. The phase label is retained for parity with log-grep checkpoints but the architectural seam (private attribute swap on the executor) is gone.
 
-**Phase 5e**: `asyncio.ensure_future(self.services.multi_project_orchestrator.start())` launches the MPO poll loop as a background task. MPO is the sole orchestration entry point — it polls all enabled projects every 30 seconds, reconciles boards, and delegates per-project work to `WorkflowOrchestrator`. Starting after Phase 5d ensures `WorkItemService` is fully wired before the first poll cycle.
+**Phase 5e**: `ProjectLifecycleService.initialize_all_projects()` performs one-time initialization of all enabled projects: board reconciliation with the external ticket system and repository registration with the version-control adapter. Initialization happens once during bootstrap and is not repeated on subsequent runs or restarts.
 
 ### Phase 6 — Input port creation
 
@@ -434,7 +434,7 @@ The following constraints MUST hold for bootstrap to work correctly. Violating a
 
 ### Authority and projection constraints
 
-**INV-19 — Board adapter is authoritative for current column state**: `IBoardService` (and via it, GitHub Projects v2 / Jira / etc.) is the single source of truth for which column a given work item is currently in. Reads of current column state go through `IBoardService.get_item_position()`. Writes go through `IBoardService.move_item_to_column()`, which projects the change to the external system and emits `WorkItemColumnChangedEvent`. Project config remains authoritative for workflow *structure* (which columns exist). `WorkItem.current_column` is being deleted (GitHub issue #904 Work item 3).
+**INV-19 — Board adapter is authoritative for current column state**: `IBoardService` (and via it, GitHub Projects v2 / Jira / etc.) is the single source of truth for which column a given work item is currently in. Reads of current column state go through `IBoardService.get_item_position()`. Writes go through `IBoardService.move_item_to_column()`, which projects the change to the external system and emits `WorkItemColumnChangedEvent`. Project config remains authoritative for workflow *structure* (which columns exist). `WorkItem.current_column` has been deleted from the domain model (GitHub issue #904 Work item 3); the REST DTO retains `current_column` as a backwards-compatible projection of `current_stage`.
 - Violation: silent column drift between internal state and the external board (D-S from the 2026-05-31 bootstrap retrospective).
 - Full discussion: [`documentation/architecture/invariants.md`](../documentation/architecture/invariants.md#inv-19--board-adapter-is-authoritative-for-current-column-state).
 
@@ -508,7 +508,7 @@ Use these log patterns to confirm correct operation at each stage. All patterns 
 | Bootstrap config loaded | `Loaded 1 project bootstrap configuration(s) from .../bootstrap` | `rounds.json` parsed, agents and template registered |
 | Repo registered | `Registered project repo 'rounds' for project 'rounds' with ticket adapter` | `register_project_repo()` called successfully |
 | WorkItemService wired | `Phase 5d: Wiring WorkItemService to executor...` | Executor can now load ES-backed work items |
-| MPO started | `Phase 5e: Multi-project orchestrator poll loop started (background task)` | MPO poll loop running, will reconcile boards every 30s |
+| Project initialization | `Phase 5e: Initializing all projects...` + `Phase 5e: Project initialization completed` | One-time project initialization (board reconciliation, repo registration) complete |
 | Auth token printed | `Authentication token: <jwt>` | Token available for REST API calls |
 | Server ready | `Production bootstrap completed successfully` | All 7 phases complete, FastAPI app live |
 | Work item created | `Created execution ... for agent claude-code-agent on work item ...` | REST trigger accepted, execution created in ES |
@@ -538,17 +538,6 @@ These are intentional omissions, not bugs.
 **No webhook registration.** `GitHubTicketAdapter.register_webhook()` is never called by bootstrap. The system does not subscribe to real-time GitHub events during a bootstrap run.
 
 **Partial board sync.** The board columns defined in `rounds.json` are loaded into `IWorkflowConfigService` but NOT synced bidirectionally with the GitHub Projects v2 board. The board must be manually configured in GitHub to match the column names in `rounds.json`.
-
-**Unregistered event handlers.** Four `application/event_handlers/` classes are constructed nowhere in `production_bootstrap.py` Phase 7 and therefore receive no events at runtime:
-
-| Handler | Consumes | Bootstrap impact | Wiring decision |
-|---|---|---|---|
-| `ExecutionEventHandler` | `ExecutionInitializedEvent`, `ExecutionStartedEvent`, `ExecutionCompletedEvent`, `ExecutionFailedEvent`, `ExecutionTimedOutEvent` | Drives execution metrics, success/failure rate, and log streaming. No effect on the auto-progression path (which goes through `BoardColumnEventHandler`). | Subscribe — pure observability, low risk. Defer to a follow-up commit to keep this batch survey-only. |
-| `BranchResolutionEventHandler` | `BranchResolutionCreatedEvent`, `BranchResolvedEvent`, `BranchReusedEvent` | Updates `IWorkItemBranchTracker` from branch-resolution outcomes. Today the tracker is mutated directly by `ExecutionServiceAgentExecutor`. Subscribing this handler would create a second writer. | Hold — needs reconciliation with the executor's direct write path before subscribing. |
-| `RepairCycleEventHandler` | Repair cycle events (start/iteration/complete/fail) | Routes repair-cycle outcomes back into the workflow. Repair cycle is not exercised by bootstrap (`rounds.json` has no repair-cycle column). | Hold — wire when repair cycle joins the bootstrap critical path. |
-| `WorkflowEventHandler` | Workflow state transitions | Currently a stub-like handler (`logger.warning` on any unknown event). Real workflow-state mutation goes through `WorkflowOrchestrator`. | Hold — duplicate concern with `WorkflowOrchestrator`; needs design review before subscribing. |
-
-Bootstrap does not require any of these handlers for the happy path. The survey is informational. Subscribing `ExecutionEventHandler` is the only safe candidate today; the other three need design decisions before wiring.
 
 ---
 
