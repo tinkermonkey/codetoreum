@@ -5,6 +5,7 @@ Provides endpoints for listing and filtering agents.
 """
 
 from fastapi import APIRouter, HTTPException, Query, status
+from fastapi.responses import RedirectResponse
 
 from codetoreum.adapters.primary.agent_dtos import AgentListResponse
 from codetoreum.adapters.primary.agent_mappers import AgentMapper
@@ -149,6 +150,29 @@ def register_list_endpoints(router: APIRouter, query_port: IAgentQueryPort) -> N
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Failed to list agents: {e!s}",
             )
+
+    @router.get(
+        "/active",
+        summary="Active agent executions (deprecated alias)",
+        response_description="Redirects to the canonical active-agents endpoint",
+        deprecated=True,
+        responses={
+            307: {"description": "Redirects to GET /api/v2/metrics/active-agents"},
+        },
+    )
+    async def list_active_agents_alias() -> RedirectResponse:
+        """
+        Registered ahead of `/{agent_id}` so `/agents/active` is not swallowed
+        by the agent-id path parameter. Redirects to the canonical endpoint
+        rather than returning fabricated data, so callers never mistake a
+        stub response for a real "zero active agents" answer.
+
+        Canonical: `GET /api/v2/metrics/active-agents`
+        """
+        return RedirectResponse(
+            url="/api/v2/metrics/active-agents",
+            status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+        )
 
     @router.get(
         "/{agent_id}",

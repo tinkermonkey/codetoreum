@@ -53,16 +53,15 @@ function SystemStatusHeaderContent() {
 
   return (
     <div className="space-y-3">
-      {/* Alert Banners */}
       <ErrorBoundary fallback={StatusCardErrorFallback}>
         <SystemHealthAlert />
       </ErrorBoundary>
 
-      {/* Status Cards */}
-      <div className="flex gap-4 flex-wrap">
-        {/* Show loading state only on initial load */}
+      <div className="flex flex-wrap gap-3">
         {isHealthLoading && isAgentsLoading ? (
-          <div className="text-sm text-muted-foreground">Loading system status...</div>
+          <p className="text-sm text-muted-foreground" role="status">
+            Loading system status…
+          </p>
         ) : (
           <>
             <ErrorBoundary fallback={StatusCardErrorFallback}>

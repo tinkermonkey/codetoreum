@@ -495,6 +495,7 @@ def create_app(
     websocket_adapter = WebSocketAdapter(
         config=websocket_config,
         auth_manager=auth_manager if not disable_auth else None,
+        allowed_origins=cors_origins,
     )
     app.state.websocket_adapter = websocket_adapter
 

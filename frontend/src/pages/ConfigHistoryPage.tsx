@@ -16,6 +16,7 @@ import {
   pipelineConfigApi,
   configurationCommandsApi,
 } from '../api/client'
+import { PageHeader } from '../components/layout/PageHeader'
 import type { ConfigurationHistory, ConfigChange } from '../types'
 
 export default function ConfigHistoryPage() {
@@ -81,12 +82,10 @@ export default function ConfigHistoryPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold">Configuration History</h2>
-        <p className="text-muted-foreground mt-1">
-          View configuration changes, compare versions, and rollback changes
-        </p>
-      </div>
+      <PageHeader
+        title="History"
+        description="Configuration changes, version compare, and rollback."
+      />
 
       {/* Filters */}
       <Card>

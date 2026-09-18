@@ -164,8 +164,9 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
     set({ isConnecting: true, error: null })
 
     try {
-      // Get token from auth store for WebSocket authentication
-      // (WebSocket connections cannot use httpOnly cookies)
+      // Prefer query-param token when we have one (sessionStorage from URL handshake).
+      // Otherwise connect same-origin and rely on the httpOnly codetoreum_token cookie
+      // (backend accepts either). Cookies are sent automatically on same-origin WS.
       const token = useAuthStore.getState().token
       const wsUrl = token
         ? `${state.config.url}?token=${encodeURIComponent(token)}`

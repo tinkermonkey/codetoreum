@@ -4,82 +4,60 @@
 
 @layer base {
   :root {
-    /* Semantic color tokens (shadcn/ui style) */
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Orchestration studio — cool slate + teal signal (not cream / purple AI defaults) */
+    --background: 210 16% 97%;
+    --foreground: 222 22% 12%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 222 22% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    --radius: 0.5rem;
+    --popover-foreground: 222 22% 12%;
+    --primary: 173 80% 28%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 14% 93%;
+    --secondary-foreground: 222 16% 22%;
+    --muted: 210 12% 94%;
+    --muted-foreground: 215 10% 38%;
+    --accent: 173 30% 94%;
+    --accent-foreground: 173 80% 22%;
+    --destructive: 0 72% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 210 12% 88%;
+    --input: 210 12% 88%;
+    --ring: 173 80% 28%;
+    --radius: 0.75rem;
+    --success: 152 60% 32%;
+    --warning: 38 90% 40%;
+    --live: 152 70% 36%;
+    --nav-blur: 210 16% 97% / 0.82;
 
-    /* GitHub-style color tokens (for compatibility with legacy UX) */
-    --gh-canvas: #ffffff;
-    --gh-canvas-subtle: #f6f8fa;
-    --gh-border: #d0d7de;
-    --gh-border-muted: #eaeef2;
-    --gh-fg: #1f2328;
-    --gh-fg-default: #1f2328;
-    --gh-fg-muted: #656d76;
-    --gh-fg-subtle: #8c959f;
-    --gh-accent-primary: #0969da;
-    --gh-accent-emphasis: #0550ae;
-    --gh-success: #1a7f37;
-    --gh-danger: #d1242f;
-    --gh-warning: #9a6700;
-    --gh-warning-subtle: #fff8c5;
+    --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
   }
 
   .dark {
-    /* Semantic color tokens (shadcn/ui style) */
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
-
-    /* GitHub-style color tokens (for compatibility with legacy UX) */
-    --gh-canvas: #0d1117;
-    --gh-canvas-subtle: #161b22;
-    --gh-border: #30363d;
-    --gh-border-muted: #21262d;
-    --gh-fg: #c9d1d9;
-    --gh-fg-default: #c9d1d9;
-    --gh-fg-muted: #8b949e;
-    --gh-fg-subtle: #6e7681;
-    --gh-accent-primary: #58a6ff;
-    --gh-accent-emphasis: #1f6feb;
-    --gh-success: #238636;
-    --gh-danger: #da3633;
-    --gh-warning: #9e6a03;
-    --gh-warning-subtle: rgba(187, 128, 9, 0.15);
+    --background: 220 18% 7%;
+    --foreground: 40 10% 94%;
+    --card: 220 16% 10%;
+    --card-foreground: 40 10% 94%;
+    --popover: 220 16% 10%;
+    --popover-foreground: 40 10% 94%;
+    --primary: 173 65% 42%;
+    --primary-foreground: 220 18% 7%;
+    --secondary: 220 14% 14%;
+    --secondary-foreground: 40 10% 90%;
+    --muted: 220 12% 14%;
+    --muted-foreground: 220 8% 62%;
+    --accent: 173 20% 16%;
+    --accent-foreground: 173 55% 65%;
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 12% 18%;
+    --input: 220 12% 18%;
+    --ring: 173 65% 42%;
+    --success: 152 50% 45%;
+    --warning: 38 80% 50%;
+    --live: 152 60% 48%;
+    --nav-blur: 220 18% 7% / 0.82;
   }
 }
 
@@ -87,7 +65,50 @@
   * {
     @apply border-border;
   }
+
+  html {
+    @apply antialiased;
+  }
+
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans text-[15px] leading-relaxed;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .surface-panel {
+    @apply rounded-xl border border-border/80 bg-card;
+  }
+
+  .nav-glass {
+    background: hsl(var(--nav-blur));
+    backdrop-filter: saturate(1.2) blur(16px);
+    -webkit-backdrop-filter: saturate(1.2) blur(16px);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .nav-glass {
+    background: hsl(var(--background));
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
