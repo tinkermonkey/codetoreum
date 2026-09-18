@@ -612,27 +612,28 @@ The user's call ("it will never be easier to fix this than it is now") drove a c
 
 ### DEF-019 — Agent-side OTel spans not surfaced to event bus (O3 follow-up)
 
-**Status**: **Fixed** (landed in commit `e3eb365b`, Phase 4 integration test for agent telemetry pipeline).
+**Status**: **Fixed** (landed in commit `4639de96`, in-container OTel sidecar wiring for agent-side spans; design rationale in `2e1162ed`).
 
 **Deficiency**: `CodingAgentOtlpSpanEvent` is defined (D1) but no adapter emits it. The post-DEF-014 architecture forbids agent containers from reaching `otel-collector` directly — agents run on Docker's default `bridge` network for outbound internet only, with no path to `codetoreum_default`-attached services like the collector. Claude Code's internal OTel SDK exports to whatever `OTEL_EXPORTER_OTLP_ENDPOINT` it can reach, which by construction is now nothing useful. Distributed-tracing-based behavioural analysis of agent runs is therefore unavailable across all `ICodingAgent` adapters (Gap 5 of D9 validation).
 
 **Fix (complete)**:
 
-The deficiency is resolved through a phased implementation:
+The deficiency is resolved through an in-container `otelcol` sidecar approach:
 
-1. **Phase 0** (873d420d) — Fixed OTel env var merge-order bug in `DockerContainerAdapter` so agent container receives correctly-ordered telemetry environment variables.
+1. **Design & rationale** — Documented in `documentation/architecture/infrastructure/otel-routing.md` (commit `2e1162ed`) explaining why Approach A (in-container sidecar with file export) was selected over direct-to-collector options, and why agent containers cannot reach external collectors.
 
-2. **Phase 1** (9b8a6cb7) — Bundled static `otelcol` binary into `Dockerfile.agent` at `/usr/local/bin/otelcol` with configuration at `/etc/otelcol/config.yaml`. Configured OTLP receiver on `127.0.0.1:4318` and file exporter writing OTLP/JSON to `/var/otel/spans.jsonl`.
+2. **Deficiency tracking** — Recorded in commit `46d5832d` with placeholder implementation status pending sidecar integration.
 
-3. **Phase 2** (7f46b4f6) — Updated `scripts/agent-entrypoint.sh` to launch `otelcol` sidecar in the background with health checks, wait for receiver readiness, then `exec` the agent command.
-
-4. **Phase 3** — Updated `ContainerizedClaudeStrategy` to carve per-execution telemetry mount at `/var/otel`, call `parse_spans_file(...)` after agent process exits (before container removal), and publish each `CodingAgentOtlpSpanEvent` to the event bus.
-
-5. **Phase 4** (e3eb365b) — Comprehensive end-to-end integration tests that verify the complete sidecar-to-Elasticsearch telemetry pipeline:
-   - `test_real_agent_image_produces_otel_spans` validates agent container with otelcol sidecar correctly produces `spans.jsonl` with OTLP/JSON content
-   - `test_parse_and_create_otel_span_events` verifies parsing of `spans.jsonl` into `CodingAgentOtlpSpanEvent` instances with proper trace_id, span_id, name, and attributes
-   - `test_publish_events_to_elasticsearch` tests complete pipeline: generate synthetic OTLP spans inside container, parse `spans.jsonl` after container exits, publish events to Elasticsearch, query and verify events land under `coding-agent-<execution_id>` stream
-   - `test_expected_span_values_match` validates trace_id, span_id, and name values match expected synthetic span data
+3. **Implementation** (commit `4639de96`) — Complete end-to-end integration:
+   - Fixed OTel env var merge-order bug in `DockerContainerAdapter` so agent container receives correctly-ordered telemetry environment variables
+   - Bundled static `otelcol` binary into `Dockerfile.agent` at `/usr/local/bin/otelcol` with configuration at `/etc/otelcol/config.yaml`. Configured OTLP receiver on `127.0.0.1:4318` and file exporter writing OTLP/JSON to `/var/otel/spans.jsonl`.
+   - Updated `scripts/agent-entrypoint.sh` to launch `otelcol` sidecar in the background with health checks, wait for receiver readiness, then `exec` the agent command.
+   - Updated `ContainerizedClaudeStrategy` to carve per-execution telemetry mount at `/var/otel`, call `parse_spans_file(...)` after agent process exits (before container removal), and publish each `CodingAgentOtlpSpanEvent` to the event bus.
+   - Comprehensive end-to-end integration tests that verify the complete sidecar-to-Elasticsearch telemetry pipeline:
+     - `test_real_agent_image_produces_otel_spans` validates agent container with otelcol sidecar correctly produces `spans.jsonl` with OTLP/JSON content
+     - `test_parse_and_create_otel_span_events` verifies parsing of `spans.jsonl` into `CodingAgentOtlpSpanEvent` instances with proper trace_id, span_id, name, and attributes
+     - `test_publish_events_to_elasticsearch` tests complete pipeline: generate synthetic OTLP spans inside container, parse `spans.jsonl` after container exits, publish events to Elasticsearch, query and verify events land under `coding-agent-<execution_id>` stream
+     - `test_expected_span_values_match` validates trace_id, span_id, and name values match expected synthetic span data
 
 **Implementation components**:
 
