@@ -188,7 +188,10 @@ Note: `ExecutionServiceAgentExecutor` receives `WorkItemService` as a constructo
 
 **Phase 5c**: `_load_bootstrap_projects()` loads `bootstrap/rounds.json` into `IAgentRepository`, `IWorkflowConfigService`, and `IConfigStore`. Then calls `register_project_repo()` on the raw ticket adapter for each project.
 
-**Phase 5d**: `WorkItemService` is constructor-injected into `ExecutionServiceAgentExecutor` during `_create_services`. The phase label is retained for parity with log-grep checkpoints but the architectural seam (private attribute swap on the executor) is gone.
+**Phase 5d**: `_reconcile_board_structures()` syncs each enabled project's board columns with the external ticket system. Two sub-steps follow under the same label:
+
+- **Phase 5d-1**: a no-op checkpoint. `WorkItemService` is constructor-injected into `ExecutionServiceAgentExecutor` during `_create_services`, so nothing is wired here; the label is retained for parity with log-grep checkpoints, but the architectural seam (private attribute swap on the executor) is gone. See INV-03.
+- **Phase 5d-2**: starts the DLQ retry processor.
 
 **Phase 5e**: `ProjectLifecycleService.initialize_all_projects()` performs one-time initialization of all enabled projects: board reconciliation with the external ticket system and repository registration with the version-control adapter. Initialization happens once during bootstrap and is not repeated on subsequent runs or restarts.
 
@@ -510,6 +513,8 @@ Use these log patterns to confirm correct operation at each stage. All patterns 
 | Bootstrap config loaded | `Loaded 1 project bootstrap configuration(s) from .../bootstrap` | `rounds.json` parsed, agents and template registered |
 | Repo registered | `Registered project repo 'rounds' for project 'rounds' with ticket adapter` | `register_project_repo()` called successfully |
 | Board reconciliation | `Phase 5d: Reconciling board structures for all projects...` | Board columns synced with external ticket system |
+| WorkItemService checkpoint | `Phase 5d-1: WorkItemService is constructor-injected into executor (no swap needed)` | Confirms the executor was built with the ES-backed service; no wiring happens here |
+| DLQ retry processor | `Phase 5d-2: Starting DLQ retry processor...` + `Phase 5d-2: DLQ retry processor started` | Dead-letter retry loop running |
 | Project initialization | `Phase 5e: Initializing all projects...` + `Phase 5e: Project initialization completed` | One-time project initialization (board reconciliation, repo registration) complete |
 | Auth token printed | `Authentication token: <jwt>` | Token available for REST API calls |
 | Server ready | `Production bootstrap completed successfully` | All 7 phases complete, FastAPI app live |
