@@ -266,7 +266,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
             # Always run cleanup regardless of exception type
             try:
                 await self._redis.hdel(reverse_index_key, work_item_id)
-            except RedisError as cleanup_error:
+            except Exception as cleanup_error:
                 logger.error(
                     f"Failed to clean up reverse index entry for {work_item_id} after pipeline failure. "
                     f"Original error: {pipeline_error.__class__.__name__}: {pipeline_error}",
