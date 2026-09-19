@@ -180,7 +180,7 @@ MultiProjectOrchestrator(project_manager)
 
 Note: `ExecutionService` and `WorkspaceRouter` no longer depend on `IContainer` or `IStorage` directly. The container is consumed by `ClaudeCodeAdapter`'s containerized strategy; storage is retired.
 
-`MultiProjectOrchestrator` is a pure admin-query service (`get_project_status`, `list_enabled_projects`) — not an orchestration loop. It provides read-only access to project status. One-time project lifecycle initialization (board reconciliation, repository registration) is performed by `ProjectLifecycleService` in Phase 5e.
+`MultiProjectOrchestrator` is a pure admin-query service (`get_project_status`, `list_enabled_projects`) — not an orchestration loop. It provides read-only access to project status. One-time project lifecycle initialization (board reconciliation) is performed by `ProjectLifecycleService` in Phase 5e.
 
 Note: `ExecutionServiceAgentExecutor` receives `WorkItemService` as a constructor argument. The service is instantiated earlier in `_create_services` (immediately after `WorkspaceRouter`) so it is available when the executor is built. The post-hoc `_work_item_service` swap that previously existed in Phase 5d is gone.
 
@@ -914,9 +914,9 @@ The misleading docstring on `WorkspaceRouter.prepare_container_environment` ("CL
 
 **Deficiency**: `_create_services()` instantiated `MultiProjectOrchestrator` but `setup()` never called `start()` on it. The MPO poll loop was dormant — it existed as an object but its `while True` loop never ran. The `teardown()` method already called `stop()` correctly (it was wired for cleanup), but the start was missing. This meant MPO's board reconciliation and project polling never fired in production.
 
-**Fix**: Added Phase 5e to `setup()` in `production_bootstrap.py`: `asyncio.ensure_future(self.services.multi_project_orchestrator.start())` launches the poll loop as a background task after Phase 5d (so `WorkItemService` is fully wired before the first cycle). The `teardown()` call to `stop()` was already correct and needed no change.
+**Fix**: Added Phase 5e to `setup()` in `production_bootstrap.py`: `asyncio.ensure_future(self.services.multi_project_orchestrator.start())` launches the poll loop as a background task after Phase 5d (so `WorkItemService` is fully wired before the first cycle). The `teardown()` call to `stop()` was already correct and needed no change. **Note**: This fix has since been superseded. MPO's role was re-characterized as a pure admin-query service (`get_project_status`, `list_enabled_projects`) — not an orchestration loop. The `start()` call was removed, and project lifecycle initialization (board reconciliation) is now performed by `ProjectLifecycleService` in Phase 5e instead.
 
-**Relationship clarification**: `BoardColumnEventHandler` remains the event-driven dispatch path for real-time column change reactions. `MultiProjectOrchestrator` is a pure admin-query service (`get_project_status`, `list_enabled_projects`) — not an orchestration loop. Project lifecycle initialization (board reconciliation, repository registration) is performed once at bootstrap by `ProjectLifecycleService` in Phase 5e, not by MPO. `WorkflowOrchestrator` owns per-project workflow dispatch (`dispatch_via_task_queue=False` ensures event-driven dispatch). No changes to `BoardColumnEventHandler` were needed.
+**Relationship clarification**: `BoardColumnEventHandler` remains the event-driven dispatch path for real-time column change reactions. `MultiProjectOrchestrator` is a pure admin-query service (`get_project_status`, `list_enabled_projects`) — not an orchestration loop. Project lifecycle initialization (board reconciliation) is performed once at bootstrap by `ProjectLifecycleService` in Phase 5e, not by MPO. `WorkflowOrchestrator` owns per-project workflow dispatch (`dispatch_via_task_queue=False` ensures event-driven dispatch). No changes to `BoardColumnEventHandler` were needed.
 
 **Files changed**: `src/codetoreum/infrastructure/bootstrap/production_bootstrap.py` (Phase 5e in `setup()`, docstring update)
 
