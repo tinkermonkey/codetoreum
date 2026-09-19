@@ -538,40 +538,71 @@ Use these log patterns to confirm correct operation at each stage. All patterns 
 
 All event handlers required for bootstrap operation are registered in Phase 7 of `ProductionApplicationBootstrap.setup()`. The following table documents each handler, its event subscriptions, and its role in the bootstrap execution flow.
 
-| Handler | Events subscribed | Phase registered | Role | Dependency |
+| Handler | Events subscribed | Phase registered | Role | Dependencies |
 |---------|-------------------|------------------|------|------------|
-| `BoardColumnEventHandler` | `WorkItemColumnChangedEvent`, `AgentExecutionCompletedEvent` | Phase 7 | Drives pipeline auto-progression: reacts to column changes, acquires the board lock, dispatches work items to the executor, and advances stages on completion. | `WorkflowOrchestrator`, `IPipelineLockService`, `IBoardService` |
-| `WorkflowEventHandler` | `WorkflowCreatedEvent`, `WorkflowStartedEvent`, `WorkflowCompletedEvent`, `WorkflowFailedEvent`, `WorkflowStageAdvancedEvent` | Phase 7 | Orchestrates multi-stage workflow lifecycle: tracks workflow state, advances stages based on completion, and emits domain events for each transition. | `WorkflowOrchestrator` |
-| `ExecutionEventHandler` | `ExecutionCreatedEvent`, `ExecutionStartedEvent`, `ExecutionCompletedEvent`, `ExecutionFailedEvent` | Phase 7 | Tracks execution lifecycle: captures execution state changes and bridges them to the execution service for post-completion processing. | `ExecutionService` |
-| `BranchResolutionEventHandler` | `WorkflowCreatedEvent`, `BranchResolvedEvent` | Phase 7 | Maintains branch audit trail: tracks branch names assigned to work items and logs branch-resolution decisions for traceability. | `EventBus` (for emission) |
-| `RepairCycleEventHandler` | `RepairCycleStartedEvent`, `RepairCycleProgressedEvent`, `RepairCycleCompletedEvent` | Phase 7 | Automates test-fix-validate cycles: reacts to repair cycle state changes and dispatches sub-tasks (systemic analysis, environment repair, verification). | `RepairCycleAdapter`, `IWorkflowConfigService`, `ICIPipelineService` |
+| `BoardColumnEventHandler` | `WorkItemColumnChangedEvent`, `AgentExecutionCompletedEvent` | Phase 7 | Drives pipeline auto-progression: reacts to column changes, acquires the board lock, dispatches work items to the executor, and advances stages on completion. | `IBoardService`, `IWorkflowConfigService`, `IAgentExecutor`, `EventBus`, `IWorkItemCommandPort`, `IDistributedLock`, `IPipelineQueueService` |
+| `WorkflowEventHandler` | `WorkItemCreatedEvent`, `ExecutionCompletedEvent`, `ExecutionFailedEvent`, `ReviewCycleApprovedEvent`, `ReviewCycleRejectedEvent`, `ReviewCycleEscalatedToHumanEvent` | Phase 7 | Bridges work-item, execution, and review events to the workflow orchestrator: initiates workflows on work item creation and progresses stages based on execution and review outcomes. | `WorkflowOrchestrator` |
+| `ExecutionEventHandler` | `ExecutionInitializedEvent`, `ExecutionStartedEvent`, `ExecutionCompletedEvent`, `ExecutionFailedEvent`, `ExecutionTimedOutEvent` | Phase 7 | Tracks execution lifecycle: captures execution state changes and updates metrics, logging, and triggers post-completion processing. | `ExecutionService` |
+| `BranchResolutionEventHandler` | `BranchResolvedEvent`, `BranchReusedEvent`, `BranchResolutionCreatedEvent` | Phase 7 | Maintains branch audit trail: logs branch resolution events with structured fields for traceability and metrics tracking. | `EventBus` (for logging/instrumentation) |
+| `RepairCycleEventHandler` | `WorkItemColumnChangedEvent` | Phase 7 | Automates test-fix-validate cycles: detects work items entering the configured repair cycle stage and invokes the repair cycle adapter to coordinate test execution, analysis, and environment repair. | `IWorkflowConfigService`, `ICIPipelineService`, `IRepairCycle` (repair cycle adapter) |
 
 **Wiring in Phase 7**:
+
+All event handlers are registered via dedicated private methods called from `_create_fastapi_app()`:
 
 ```python
 def _create_fastapi_app(self) -> FastAPI:
     # ... create app ...
     
-    # Register all event handlers
-    handler = BoardColumnEventHandler(...)
-    self.infrastructure.event_bus.register_handler(handler)
-    
-    handler = WorkflowEventHandler(...)
-    self.infrastructure.event_bus.register_handler(handler)
-    
-    handler = ExecutionEventHandler(...)
-    self.infrastructure.event_bus.register_handler(handler)
-    
-    handler = BranchResolutionEventHandler(...)
-    self.infrastructure.event_bus.register_handler(handler)
-    
-    handler = RepairCycleEventHandler(...)
-    self.infrastructure.event_bus.register_handler(handler)
+    # Register all event handlers via dedicated private methods
+    self._register_board_column_handler(app)
+    self._register_workflow_event_handler()
+    self._register_execution_event_handler()
+    self._register_branch_resolution_event_handler()
+    self._register_repair_cycle_event_handler()
     
     return app
+
+def _register_board_column_handler(self, app: FastAPI) -> None:
+    handler = BoardColumnEventHandler(
+        board_service=self.adapters.board,
+        workflow_config=self.services.workflow_config,
+        agent_executor=self.services.agent_executor,
+        event_bus=self.infrastructure.event_bus,
+        work_item_service=self.adapters.work_item_command_port,
+        distributed_lock=self.adapters.distributed_lock,
+        pipeline_queue=self.adapters.pipeline_queue,
+    )
+    self.infrastructure.event_bus.register_handler(handler)
+
+def _register_workflow_event_handler(self) -> None:
+    handler = WorkflowEventHandler(
+        orchestrator=self.services.workflow_orchestrator,
+    )
+    self.infrastructure.event_bus.register_handler(handler)
+
+def _register_execution_event_handler(self) -> None:
+    handler = ExecutionEventHandler(
+        execution_service=self.services.execution_service,
+    )
+    self.infrastructure.event_bus.register_handler(handler)
+
+def _register_branch_resolution_event_handler(self) -> None:
+    handler = BranchResolutionEventHandler()
+    self.infrastructure.event_bus.register_handler(handler)
+
+def _register_repair_cycle_event_handler(self) -> None:
+    handler = RepairCycleEventHandler(
+        workflow_config=self.services.workflow_config,
+        ci_pipeline_service=self.adapters.ci_pipeline,
+        repair_cycle_service=self.adapters.repair_cycle,
+        event_bus=self.infrastructure.event_bus,
+        clock=self.infrastructure.clock,
+    )
+    self.infrastructure.event_bus.register_handler(handler)
 ```
 
-**Observability**: Each handler registration emits a log line matching the pattern `Registered <HandlerName> with event bus`. Search for these patterns in bootstrap logs to confirm all handlers loaded successfully before the first work item is created.
+**Observability**: Each handler is registered via a dedicated private method. Successful registrations log messages matching the pattern `Registered <HandlerName> with event bus`. Search for these patterns in bootstrap logs to confirm all handlers loaded successfully before the first work item is created.
 
 ---
 
