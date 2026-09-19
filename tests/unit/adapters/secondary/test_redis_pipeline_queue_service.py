@@ -1644,6 +1644,72 @@ class TestRedisPipelineQueueService(TestPipelineQueueServiceContract):
             await service.mark_item_active("item-1")
 
     @pytest.mark.asyncio
+    async def test_mark_item_active_redis_error_metadata_fetch_wrapped_in_queue_service_error(self):
+        """mark_item_active should wrap RedisError from metadata fetch in QueueServiceError."""
+        from redis.exceptions import ConnectionError
+
+        redis_client = MockRedis()
+        board_service = MockBoardService()
+        event_emitter = MockEventEmitter()
+
+        service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=event_emitter,
+        )
+
+        now = datetime.now(UTC)
+        # Setup: enqueue an item (this populates reverse index and metadata)
+        await service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+
+        # Make hget fail only on metadata fetch (second call)
+        call_count = {"count": 0}
+        original_hget = redis_client.hget
+
+        async def failing_hget_on_second_call(key, field):
+            call_count["count"] += 1
+            if call_count["count"] == 2:  # Second call is metadata fetch
+                raise ConnectionError("Metadata fetch failed")
+            return await original_hget(key, field)
+
+        redis_client.hget = failing_hget_on_second_call
+
+        # Should raise QueueServiceError when metadata fetch fails
+        with pytest.raises(QueueServiceError, match="Failed to fetch metadata"):
+            await service.mark_item_active("item-1")
+
+    @pytest.mark.asyncio
+    async def test_mark_item_active_redis_error_status_update_wrapped_in_queue_service_error(self):
+        """mark_item_active should wrap RedisError from status hset in QueueServiceError."""
+        from redis.exceptions import ConnectionError
+
+        redis_client = MockRedis()
+        board_service = MockBoardService()
+        event_emitter = MockEventEmitter()
+
+        service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=event_emitter,
+        )
+
+        now = datetime.now(UTC)
+        # Setup: enqueue an item (this populates reverse index and metadata)
+        await service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+
+        # Make hset fail on the mark_item_active status update call
+        # We replace hset AFTER enqueue, so this only affects mark_item_active
+        async def failing_hset(key, field_or_mapping, value=None):
+            # Fail immediately on any hset call (which will be the status update in mark_item_active)
+            raise ConnectionError("Status update failed")
+
+        redis_client.hset = failing_hset
+
+        # Should raise QueueServiceError when status update fails
+        with pytest.raises(QueueServiceError, match="Failed to update status"):
+            await service.mark_item_active("item-1")
+
+    @pytest.mark.asyncio
     async def test_remove_from_queue_redis_error_wrapped_in_queue_service_error(self):
         """remove_from_queue should wrap RedisError in QueueServiceError with proper chaining."""
         from redis.exceptions import ConnectionError
