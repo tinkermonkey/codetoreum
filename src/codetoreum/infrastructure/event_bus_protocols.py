@@ -44,6 +44,22 @@ class IDiscussionAdapter(EventEmitter, Protocol):
         """Stop monitoring discussions for a work item."""
         ...
 
+    async def handle_webhook(self, payload: dict) -> None:
+        """Process webhook event from external service."""
+        ...
+
+    async def close(self) -> None:
+        """Close and clean up adapter resources."""
+        ...
+
+    async def __aenter__(self) -> "IDiscussionAdapter":
+        """Enter async context manager."""
+        ...
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> bool:
+        """Exit async context manager."""
+        ...
+
 
 class IDistributedLockEventEmitter(EventEmitter, Protocol):
     """Protocol for distributed lock service implementations.
