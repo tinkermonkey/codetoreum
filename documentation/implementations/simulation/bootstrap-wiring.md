@@ -723,7 +723,7 @@ WorkItemService (event_store)
 ContainerRecoveryService (container_recovery, event_emitter, container_timeout_hours)
   ↓
 MultiProjectOrchestrator (project_manager, workflow_orchestrator, board_service,
-                           event_emitter, poll_interval_seconds)
+                           event_emitter)
 ```
 
 ---
