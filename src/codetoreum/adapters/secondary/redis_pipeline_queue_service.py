@@ -296,9 +296,8 @@ class RedisPipelineQueueService(IPipelineQueueService):
                     },
                 )
                 raise QueueServiceError(msg) from pipeline_error
-            else:
-                # Non-Redis exception: propagate unwrapped
-                raise
+            # Non-Redis exception: propagate unwrapped
+            raise
 
         # Emit event
         await self._emit_event(
