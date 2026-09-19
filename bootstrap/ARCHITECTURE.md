@@ -180,6 +180,8 @@ MultiProjectOrchestrator(project_manager)
 
 Note: `ExecutionService` and `WorkspaceRouter` no longer depend on `IContainer` or `IStorage` directly. The container is consumed by `ClaudeCodeAdapter`'s containerized strategy; storage is retired.
 
+`MultiProjectOrchestrator` is a pure admin-query service (`get_project_status`, `list_enabled_projects`) — not an orchestration loop. It provides read-only access to project status. One-time project lifecycle initialization (board reconciliation, repository registration) is performed by `ProjectLifecycleService` in Phase 5e.
+
 Note: `ExecutionServiceAgentExecutor` receives `WorkItemService` as a constructor argument. The service is instantiated earlier in `_create_services` (immediately after `WorkspaceRouter`) so it is available when the executor is built. The post-hoc `_work_item_service` swap that previously existed in Phase 5d is gone.
 
 **Phase 5a**: `agent_scheduler.start()` starts the consumer loop.
@@ -193,7 +195,7 @@ Note: `ExecutionServiceAgentExecutor` receives `WorkItemService` as a constructo
 - **Phase 5d-1**: a no-op checkpoint. `WorkItemService` is constructor-injected into `ExecutionServiceAgentExecutor` during `_create_services`, so nothing is wired here; the label is retained for parity with log-grep checkpoints, but the architectural seam (private attribute swap on the executor) is gone. See INV-03.
 - **Phase 5d-2**: starts the DLQ retry processor.
 
-**Phase 5e**: `ProjectLifecycleService.initialize_all_projects()` performs one-time initialization of all enabled projects: board reconciliation with the external ticket system and repository registration with the version-control adapter. Initialization happens once during bootstrap and is not repeated on subsequent runs or restarts.
+**Phase 5e**: `ProjectLifecycleService.initialize_all_projects()` performs one-time initialization of all enabled projects: board reconciliation with the external ticket system. Initialization happens once during bootstrap and is not repeated on subsequent runs or restarts.
 
 ### Phase 6 — Input port creation
 
@@ -515,7 +517,7 @@ Use these log patterns to confirm correct operation at each stage. All patterns 
 | Board reconciliation | `Phase 5d: Reconciling board structures for all projects...` | Board columns synced with external ticket system |
 | WorkItemService checkpoint | `Phase 5d-1: WorkItemService is constructor-injected into executor (no swap needed)` | Confirms the executor was built with the ES-backed service; no wiring happens here |
 | DLQ retry processor | `Phase 5d-2: Starting DLQ retry processor...` + `Phase 5d-2: DLQ retry processor started` | Dead-letter retry loop running |
-| Project initialization | `Phase 5e: Initializing all projects...` + `Phase 5e: Project initialization completed` | One-time project initialization (board reconciliation, repo registration) complete |
+| Project initialization | `Phase 5e: Initializing all projects...` + `Phase 5e: Project initialization completed` | One-time project initialization (board reconciliation) complete |
 | Auth token printed | `Authentication token: <jwt>` | Token available for REST API calls |
 | Server ready | `Production bootstrap completed successfully` | All 7 phases complete, FastAPI app live |
 | Work item created | `Created execution ... for agent claude-code-agent on work item ...` | REST trigger accepted, execution created in ES |
@@ -914,7 +916,7 @@ The misleading docstring on `WorkspaceRouter.prepare_container_environment` ("CL
 
 **Fix**: Added Phase 5e to `setup()` in `production_bootstrap.py`: `asyncio.ensure_future(self.services.multi_project_orchestrator.start())` launches the poll loop as a background task after Phase 5d (so `WorkItemService` is fully wired before the first cycle). The `teardown()` call to `stop()` was already correct and needed no change.
 
-**Relationship clarification**: `BoardColumnEventHandler` remains the event-driven dispatch path for real-time column change reactions. MPO is the polling-based orchestration entry point for initial pickup and board reconciliation. These are complementary, not competing. `WorkflowOrchestrator` is MPO's per-project delegate (`dispatch_via_task_queue=False` ensures BEH owns event-driven dispatch). No changes to `BoardColumnEventHandler` were needed.
+**Relationship clarification**: `BoardColumnEventHandler` remains the event-driven dispatch path for real-time column change reactions. `MultiProjectOrchestrator` is a pure admin-query service (`get_project_status`, `list_enabled_projects`) — not an orchestration loop. Project lifecycle initialization (board reconciliation, repository registration) is performed once at bootstrap by `ProjectLifecycleService` in Phase 5e, not by MPO. `WorkflowOrchestrator` owns per-project workflow dispatch (`dispatch_via_task_queue=False` ensures event-driven dispatch). No changes to `BoardColumnEventHandler` were needed.
 
 **Files changed**: `src/codetoreum/infrastructure/bootstrap/production_bootstrap.py` (Phase 5e in `setup()`, docstring update)
 

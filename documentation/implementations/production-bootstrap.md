@@ -346,9 +346,10 @@ The bootstrap loader validates `coding_agent` resolves to a registered adapter, 
 `ProductionApplicationBootstrap.setup()` performs one-time initialization of all enabled projects in Phase 5e via `ProjectLifecycleService.initialize_all_projects()`. This initialization happens synchronously as part of bootstrap and is not repeated on subsequent runs or restarts. It encompasses:
 
 - **Board reconciliation**: Syncs each enabled project's board columns with the external ticket system via the configured board adapter.
-- **Repository registration**: Registers each project with the version-control adapter so that the adapter can resolve project-specific repository URLs.
 
 Phase 5e runs after Phases 5a-5d (scheduler start, board init, project loading, executor wiring) so that all dependencies are available before initialization begins.
+
+**MultiProjectOrchestrator role**: `MultiProjectOrchestrator` is a pure admin-query service (`get_project_status`, `list_enabled_projects`) — not an orchestration loop. It provides read-only access to project status and enabled projects. The `ProjectLifecycleService` (instantiated in Phase 5) performs the actual project initialization work in Phase 5e.
 
 See `bootstrap/ARCHITECTURE.md` §3 and §6 (INV-13) for the full orchestration model. See DEF-015 in §9 for the coding-agent redesign history.
 
