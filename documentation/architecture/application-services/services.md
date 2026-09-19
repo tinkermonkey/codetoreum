@@ -233,33 +233,20 @@ async def recover(
 **Purpose**: Manages orchestration of multiple projects concurrently, isolating failures to prevent cascading issues.
 
 **Port Dependencies**:
-- `IProjectRegistry` — List enabled projects
-- `IProjectConfiguration` — Per-project configuration
-
-**Service Dependencies**:
-- `WorkflowOrchestrator` — Per-project orchestration
+- `IProjectManagerService` — Manage project configurations and retrieve enabled projects
 
 **Key Methods**:
 
 ```python
-async def start(self) -> None:
-    """Begin orchestration of all projects."""
-
-async def stop(self) -> None:
-    """Gracefully terminate orchestration."""
-
-async def run_orchestration_cycle(self) -> None:
-    """Execute single cycle across all projects."""
-
-async def get_project_status(self, project_id: str) -> ProjectStatus:
-    """Retrieve project state."""
+async def get_project_status(self, project_name: str) -> ProjectStatus:
+    """Retrieve project state and configuration."""
 
 async def list_enabled_projects(self) -> list[str]:
-    """List active projects."""
+    """List all enabled project names."""
 ```
 
 **Events Emitted**:
-- `OrchestrationCycleCompletedEvent` — One cycle completed
+- None — Query service only, does not emit domain events
 
 **Bootstrap Lifecycle** (Admin Query Only):
 - Instantiated during bootstrap for query-service access
