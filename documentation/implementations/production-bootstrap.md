@@ -23,7 +23,7 @@ This document covers production bootstrap configuration including:
 | **4c** | **`ICodingAgent` resolution** — production `ClaudeCodeAdapter` wired via `resolver.resolve_coding_agent(...)`. Constructs the production event-sourced `WorkItemService` first so the adapter, executor, and REST API share one instance (DEF-016 fix). |
 | **4d** | **`CodingAgent*` event persistence bridge** — wildcard event bus subscriber appends each `CodingAgent*` event to `coding-agent-<execution_id>` in the event store. Without this, agent telemetry never reached the audit trail (DEF-018 fix). |
 | 5 | Application service instantiation (11 services with production adapters) |
-| 5a-5e | Agent scheduler startup, codetoreum board init, project bootstrap loading, MultiProjectOrchestrator startup |
+| 5a-5e | Agent scheduler startup, codetoreum board init, project bootstrap loading, ProjectLifecycleService initialization |
 | 6 | Input port creation (17 input port implementations) |
 | 7 | FastAPI app creation |
 
@@ -201,6 +201,63 @@ Tests in `test_redis_pipeline_queue_service.py` verify:
 - **Graceful degradation**: Failed board service calls do not crash the queue (verified in `test_sync_queue_gracefully_handles_board_service_failure`, `test_sync_queue_gracefully_handles_missing_column`).
 - **Duplicate prevention**: Re-enqueuing an item raises an error (verified in `test_duplicate_enqueue_raises_error`).
 
+### Phase 2 — Discussion adapter resolution (PR #1010 Phase 1)
+
+The discussion_adapter slot is resolved during Phase 2 adapter resolution, choosing between mock (for simulation/testing) or GitHubDiscussionAdapter (for production conversational loop support). The `discussion_adapter="github"` configuration in `ProductionApplicationBootstrap.__init__()` ensures the real `GitHubDiscussionAdapter` is wired end-to-end for posting bot responses to GitHub discussions and issue threads.
+
+**Configuration in ProductionApplicationBootstrap**:
+```python
+adapter_config = AdapterSelectionConfig(
+    discussion_adapter="github",  # Production GitHub discussion adapter for conversational loop
+    # ... other adapters
+)
+```
+
+**Resolver path** (Phase 2, `AdapterResolver.resolve_discussion_adapter()`):
+- If `discussion_adapter == "mock"`: Factory creates in-memory test adapter (for simulation only)
+- If `discussion_adapter == "github"`: Factory creates production adapter using GitHub GraphQL API via `ITicketSystem` port for multi-project repository resolution
+
+```python
+def resolve_discussion_adapter(self) -> IDiscussionAdapter:
+    """Resolve discussion adapter."""
+    if self._config.discussion_adapter == "github":
+        return self._factory.create_discussion_adapter(
+            adapter_name=self._config.discussion_adapter,
+            config=github_config,
+            ticket_adapter=self._resolved["ticket_system"],
+            identity_service=self._resolved["identity_service"],
+        )
+```
+
+**Key properties**:
+- **Backend**: GitHub GraphQL API for posting comments to issues and pull request discussions
+- **Multi-project support**: Uses `ticket_adapter.get_project_repository()` to resolve project-specific repository URLs at runtime. Enables a single adapter instance to serve multiple projects without per-project configuration.
+- **Dependencies injected**: `ticket_adapter` (ITicketSystem port, for repository resolution), `identity_service` (for bot identity verification)
+- **Features**: Posts bot responses to GitHub discussions with verification markers, session state tracking, event emission for audit trail
+- **No credentials required per project**: GitHub credentials (GITHUB_ORG, GITHUB_TOKEN) are configured once for the adapter; multi-project routing is transparent.
+
+**Conversational loop integration**:
+The discussion adapter is consumed by `ConversationalLoopOrchestrator` to close the feedback loop:
+- `CommentNeedsResponseEvent` (emitted by `GitHubBoardAdapter` when it detects new comments) triggers orchestrator handler
+- Orchestrator invokes coding agent via `ICodingAgent` to generate response
+- Orchestrator calls `discussion_adapter.add_comment()` to post response to GitHub thread
+
+**Slot classification**:
+`discussion_adapter` is in `NON_CRITICAL_SLOTS` (not CRITICAL_ADAPTER_SLOTS). Discussion handling is non-critical; does not block work-item progression. Conversational loop is an optional feature; system functions with mock adapter for MVP, production deployments use GitHub adapter.
+
+**Validation outcome** (PR #1010 Phase 1):
+Tests in `test_github_discussion_adapter.py` and `test_adapter_resolver.py` verify:
+- `test_adapter_resolver_resolves_github_discussion_adapter()`: Confirms AdapterResolver.resolve_discussion_adapter() with `discussion_adapter="github"` returns GitHubDiscussionAdapter (not mock)
+- `test_discussion_adapter_uses_ticket_adapter_for_repository_resolution()`: Confirms adapter calls `ticket_adapter.get_project_repository()` for multi-project routing
+- `test_discussion_adapter_publishes_comment_to_github()`: Verifies add_comment() successfully posts to GitHub and returns comment ID
+- `test_discussion_adapter_inherits_resilience_decoration()`: Confirms production adapter is wrapped by `ResilientDiscussionAdapterDecorator` in Phase 4
+
+**End-to-end verification**:
+E2E test suite (`tests/e2e/test_conversational_loop_production_e2e.py`) validates the complete conversational loop with production wiring:
+- Full orchestrator → coding agent → discussion adapter path exercised against real GitHub infrastructure
+- Bot comment visible and verified on actual GitHub discussion thread
+- Session state and event trail persisted correctly
+
 ### Phase 4c — `ICodingAgent` resolution (DEF-015 D3/D4)
 
 The `coding_agent` slot replaces the retired `llm_provider` slot (the `ILLMProvider` port deleted in D5). The slot is resolved *after* Phase 4 resilience decoration so the resilient `IContainer` is passed into the containerized strategy.
@@ -286,11 +343,14 @@ Production agent configs (in `bootstrap/rounds.json` and the ES round-trip used 
 
 The bootstrap loader validates `coding_agent` resolves to a registered adapter, then validates `invocation.mode` is in that adapter's `supported_invocation_modes()`. Errors at load, not at first execution. `ExecutionServiceAgentExecutor._build_invocation_options` reads `agent.invocation` directly — the `requires_docker` bridge retired in D6.
 
-## Phase 5e — MultiProjectOrchestrator Startup
+## Phase 5e — ProjectLifecycleService Initialization
 
-`ProductionApplicationBootstrap.setup()` starts the `MultiProjectOrchestrator` poll loop in Phase 5e using `asyncio.ensure_future` rather than `await` — this keeps `setup()` non-blocking while the poll loop runs as a background task. The loop continues until `teardown()` stops it via `await multi_project_orchestrator.stop()`.
+`ProductionApplicationBootstrap.setup()` performs one-time initialization of all enabled projects in Phase 5e via `ProjectLifecycleService.initialize_all_projects()`. This initialization happens synchronously as part of bootstrap and is not repeated on subsequent runs or restarts. It encompasses:
 
-Phase 5e runs after Phases 5a-5d (scheduler start, board init, project loading, executor wiring) so that all services are fully constructed before the first 30-second poll cycle fires.
+- **Board reconciliation**: Syncs each enabled project's board columns with the external ticket system via the configured board adapter.
+- **Repository registration**: Registers each project with the version-control adapter so that the adapter can resolve project-specific repository URLs.
+
+Phase 5e runs after Phases 5a-5d (scheduler start, board init, project loading, executor wiring) so that all dependencies are available before initialization begins.
 
 See `bootstrap/ARCHITECTURE.md` §3 and §6 (INV-13) for the full orchestration model. See DEF-015 in §9 for the coding-agent redesign history.
 
