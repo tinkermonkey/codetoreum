@@ -203,7 +203,7 @@ async def event_store_with_es(es_client):
     Registers the domain event types first. Deserialisation resolves an event's
     class through EventSerializer's registry, which production populates via
     auto_register_event_types() during bootstrap (production_bootstrap.py Phase
-    1). A test that builds the store directly has to do the same, or reading the
+    0). A test that builds the store directly has to do the same, or reading the
     events back fails with "Unknown event class: 'CodingAgentOtlpSpanEvent'" --
     appends succeed, so the gap only surfaces on read. Same pattern as
     tests/integration/test_dlq_recovery.py.
