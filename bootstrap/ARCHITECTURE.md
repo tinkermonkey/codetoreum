@@ -126,7 +126,7 @@ Also in Phase 1b: `AdapterFactory` is instantiated (defaults to `PRODUCTION` mod
 | `run_registry` | `InMemoryActiveWorkflowRunRegistry` | none |
 | `branch_tracker` | in-memory impl | none |
 
-> Both the `llm_provider` and `storage` adapter slots retired with the coding-agent port redesign (Phase D5). The coding-agent adapter owns subprocess invocation directly; agent output flows through the event stream rather than a blob store. See DEF-015 in §9.
+> Both the `llm_provider` and `storage` adapter slots retired with the coding-agent port redesign (Phase D5). The coding-agent adapter owns subprocess invocation directly; agent output flows through the event stream rather than a blob store. See DEF-015 in §10.
 
 Phase 2b initializes the event store: `_initialize_event_store()` calls `initialize_event_store()` which ensures Elasticsearch indices exist. If this fails, the server will not start.
 
@@ -534,7 +534,48 @@ Use these log patterns to confirm correct operation at each stage. All patterns 
 
 ---
 
-## 8. Known Scope Limitations
+## 8. Event Handler Registration
+
+All event handlers required for bootstrap operation are registered in Phase 7 of `ProductionApplicationBootstrap.setup()`. The following table documents each handler, its event subscriptions, and its role in the bootstrap execution flow.
+
+| Handler | Events subscribed | Phase registered | Role | Dependency |
+|---------|-------------------|------------------|------|------------|
+| `BoardColumnEventHandler` | `WorkItemColumnChangedEvent`, `AgentExecutionCompletedEvent` | Phase 7 | Drives pipeline auto-progression: reacts to column changes, acquires the board lock, dispatches work items to the executor, and advances stages on completion. | `WorkflowOrchestrator`, `IPipelineLockService`, `IBoardService` |
+| `WorkflowEventHandler` | `WorkflowCreatedEvent`, `WorkflowStartedEvent`, `WorkflowCompletedEvent`, `WorkflowFailedEvent`, `WorkflowStageAdvancedEvent` | Phase 7 | Orchestrates multi-stage workflow lifecycle: tracks workflow state, advances stages based on completion, and emits domain events for each transition. | `WorkflowOrchestrator` |
+| `ExecutionEventHandler` | `ExecutionCreatedEvent`, `ExecutionStartedEvent`, `ExecutionCompletedEvent`, `ExecutionFailedEvent` | Phase 7 | Tracks execution lifecycle: captures execution state changes and bridges them to the execution service for post-completion processing. | `ExecutionService` |
+| `BranchResolutionEventHandler` | `WorkflowCreatedEvent`, `BranchResolvedEvent` | Phase 7 | Maintains branch audit trail: tracks branch names assigned to work items and logs branch-resolution decisions for traceability. | `EventBus` (for emission) |
+| `RepairCycleEventHandler` | `RepairCycleStartedEvent`, `RepairCycleProgressedEvent`, `RepairCycleCompletedEvent` | Phase 7 | Automates test-fix-validate cycles: reacts to repair cycle state changes and dispatches sub-tasks (systemic analysis, environment repair, verification). | `RepairCycleAdapter`, `IWorkflowConfigService`, `ICIPipelineService` |
+
+**Wiring in Phase 7**:
+
+```python
+def _create_fastapi_app(self) -> FastAPI:
+    # ... create app ...
+    
+    # Register all event handlers
+    handler = BoardColumnEventHandler(...)
+    self.infrastructure.event_bus.register_handler(handler)
+    
+    handler = WorkflowEventHandler(...)
+    self.infrastructure.event_bus.register_handler(handler)
+    
+    handler = ExecutionEventHandler(...)
+    self.infrastructure.event_bus.register_handler(handler)
+    
+    handler = BranchResolutionEventHandler(...)
+    self.infrastructure.event_bus.register_handler(handler)
+    
+    handler = RepairCycleEventHandler(...)
+    self.infrastructure.event_bus.register_handler(handler)
+    
+    return app
+```
+
+**Observability**: Each handler registration emits a log line matching the pattern `Registered <HandlerName> with event bus`. Search for these patterns in bootstrap logs to confirm all handlers loaded successfully before the first work item is created.
+
+---
+
+## 9. Known Scope Limitations
 
 These are intentional omissions, not bugs.
 
@@ -550,7 +591,7 @@ These are intentional omissions, not bugs.
 
 ---
 
-## 9. Deficiency Log
+## 10. Deficiency Log
 
 Running record of architectural gaps found and fixed during bootstrap cycles. Most recent first.
 
