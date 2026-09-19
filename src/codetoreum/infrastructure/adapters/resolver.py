@@ -505,6 +505,15 @@ class AdapterResolver:
         the board_service and event_emitter dependencies so queue entries can
         be synced with board state. Passes failed_event_store for forward compatibility.
         """
+        event_emitter = self._resolved.get("event_emitter")
+        if event_emitter is None:
+            raise AdapterConfigurationError(
+                [
+                    "queue_service requires event_emitter to be resolved first; "
+                    "ensure resolve_all() runs event_emitter before queue_service.",
+                ]
+            )
+
         if self._config.queue_service == "redis":
             import os
 
@@ -524,12 +533,12 @@ class AdapterResolver:
                 adapter_name=self._config.queue_service,
                 redis_client=redis_client,
                 board_service=board_service,
-                event_emitter=self._resolved["event_emitter"],
+                event_emitter=event_emitter,
                 failed_event_store=self._deps.failed_event_store,
             )
         return self._factory.create_pipeline_queue_service(
             adapter_name=self._config.queue_service,
-            event_emitter=self._resolved["event_emitter"],
+            event_emitter=event_emitter,
             event_bus=self._deps.event_bus,
             time_source=lambda: self._deps.engine.get_clock_for_testing().now(),
             failed_event_store=self._deps.failed_event_store,

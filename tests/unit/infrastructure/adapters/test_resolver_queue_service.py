@@ -507,8 +507,11 @@ class TestResolveQueueServiceErrorCases:
 
         # Note: NOT setting event_emitter
 
-        with pytest.raises(KeyError):
+        with pytest.raises(AdapterConfigurationError) as exc_info:
             resolver.resolve_queue_service()
+
+        assert "event_emitter" in str(exc_info.value)
+        assert "queue_service" in str(exc_info.value)
 
 
 class TestResolveQueueServiceProductionWiring:
