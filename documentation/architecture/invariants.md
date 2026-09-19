@@ -72,7 +72,7 @@ The board adapter (`IBoardService`, and via it GitHub Projects v2 / Jira / etc.)
 
 Project config remains authoritative for workflow *structure* (which columns exist and how they're configured). The board adapter reconciles the external board to project config on startup and on demand.
 
-`WorkItem.current_column` is being deleted from the domain (breaking REST change per GitHub issue #904 Work item 3). Reads always go to the board adapter; subscribers update derived projections via `WorkItemColumnChangedEvent`.
+`WorkItem.current_column` has been deleted from the domain model (breaking REST change per GitHub issue #904 Work item 3). The REST DTO retains `current_column` as a backwards-compatible projection of `current_stage`. Reads always go to the board adapter; subscribers update derived projections via `WorkItemColumnChangedEvent`.
 
 **Violation cost**: silent column drift between internal state and the external board (D-S from the 2026-05-31 bootstrap retrospective).
 
