@@ -215,18 +215,15 @@ adapter_config = AdapterSelectionConfig(
 
 **Resolver path** (Phase 2, `AdapterResolver.resolve_discussion_adapter()`):
 - If `discussion_adapter == "mock"`: Factory creates in-memory test adapter (for simulation only)
-- If `discussion_adapter == "github"`: Factory creates production adapter using GitHub GraphQL API via `ITicketSystem` port for multi-project repository resolution
+- If `discussion_adapter == "github"`: Directly instantiates production adapter using GitHub GraphQL API via `ITicketSystem` port for multi-project repository resolution
 
 ```python
-def resolve_discussion_adapter(self) -> IDiscussionAdapter:
-    """Resolve discussion adapter."""
-    if self._config.discussion_adapter == "github":
-        return self._factory.create_discussion_adapter(
-            adapter_name=self._config.discussion_adapter,
-            config=github_config,
-            ticket_adapter=self._resolved["ticket_system"],
-            identity_service=self._resolved["identity_service"],
-        )
+adapter = GitHubDiscussionAdapter(
+    config=config,
+    identity_service=self._resolved["identity_service"],
+    ticket_adapter=self._resolved.get("ticket"),
+)
+return adapter
 ```
 
 **Key properties**:
@@ -238,7 +235,7 @@ def resolve_discussion_adapter(self) -> IDiscussionAdapter:
 
 **Conversational loop integration**:
 The discussion adapter is consumed by `ConversationalLoopOrchestrator` to close the feedback loop:
-- `CommentNeedsResponseEvent` (emitted by `GitHubBoardAdapter` when it detects new comments) triggers orchestrator handler
+- `CommentNeedsResponseEvent` (emitted by `GitHubWebhookAdapter` when it receives a comment webhook, or by `GitHubDiscussionAdapter` when detecting new comments during polling) triggers orchestrator handler
 - Orchestrator invokes coding agent via `ICodingAgent` to generate response
 - Orchestrator calls `discussion_adapter.add_comment()` to post response to GitHub thread
 
@@ -246,17 +243,18 @@ The discussion adapter is consumed by `ConversationalLoopOrchestrator` to close 
 `discussion_adapter` is in `NON_CRITICAL_SLOTS` (not CRITICAL_ADAPTER_SLOTS). Discussion handling is non-critical; does not block work-item progression. Conversational loop is an optional feature; system functions with mock adapter for MVP, production deployments use GitHub adapter.
 
 **Validation outcome** (PR #1010 Phase 1):
-Tests in `test_github_discussion_adapter.py` and `test_adapter_resolver.py` verify:
-- `test_adapter_resolver_resolves_github_discussion_adapter()`: Confirms AdapterResolver.resolve_discussion_adapter() with `discussion_adapter="github"` returns GitHubDiscussionAdapter (not mock)
-- `test_discussion_adapter_uses_ticket_adapter_for_repository_resolution()`: Confirms adapter calls `ticket_adapter.get_project_repository()` for multi-project routing
-- `test_discussion_adapter_publishes_comment_to_github()`: Verifies add_comment() successfully posts to GitHub and returns comment ID
-- `test_discussion_adapter_inherits_resilience_decoration()`: Confirms production adapter is wrapped by `ResilientDiscussionAdapterDecorator` in Phase 4
+Tests in `tests/unit/adapters/test_resolver_discussion_adapter.py` and `tests/integration/adapters/secondary/test_github_discussion_adapter.py` verify:
+- Resolver tests (unit): `test_github_variant_passes_ticket_adapter_as_collaborator` confirms the resolver passes `ticket_adapter` from `self._resolved.get("ticket")` to `GitHubDiscussionAdapter`. `test_github_variant_constructs_github_discussion_config` validates GitHub config construction.
+- Discussion adapter tests (integration): `test_add_comment_posts_and_emits_event` verifies add_comment() successfully posts to GitHub and emits a CommentPostedEvent. `test_webhook_created_action_emits_event` confirms webhook handling emits CommentNeedsResponseEvent correctly.
+- Resilience decoration is validated during Phase 4 integration (adapters are wrapped after resolution; verification is implicit in end-to-end scenarios).
 
 **End-to-end verification**:
-E2E test suite (`tests/e2e/test_conversational_loop_production_e2e.py`) validates the complete conversational loop with production wiring:
-- Full orchestrator → coding agent → discussion adapter path exercised against real GitHub infrastructure
-- Bot comment visible and verified on actual GitHub discussion thread
-- Session state and event trail persisted correctly
+E2E test (`tests/e2e/test_conversational_loop_production_e2e.py::test_event_bus_wiring_validation`) validates the production event bus wiring and orchestrator subscription:
+- `wire_adapters_to_event_bus` integration (validates bootstrap adapter registration pattern)
+- `CommentNeedsResponseEvent` subscription routing to `ConversationalLoopOrchestrator`
+- Event bus publication triggers coding agent invocation via orchestrator handler (not direct call)
+- `add_comment()` is invoked on the real GitHub discussion adapter (validates response posting)
+- Optional: retrieves live GitHub thread to verify response is visible (requires GITHUB_TOKEN, GITHUB_TEST_REPO, GITHUB_TEST_WORK_ITEM_ID environment variables; skipped if not provided)
 
 ### Phase 4c — `ICodingAgent` resolution (DEF-015 D3/D4)
 
