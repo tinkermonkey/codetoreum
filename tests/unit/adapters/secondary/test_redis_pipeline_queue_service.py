@@ -805,7 +805,9 @@ class TestRedisPipelineQueueService(TestPipelineQueueServiceContract):
 
     @pytest.mark.asyncio
     async def test_enqueue_pipeline_failure_logs_cleanup_failure(self):
-        """When pipeline fails and cleanup also fails, log cleanup failure and re-raise original error."""
+        """When pipeline fails and cleanup also fails, log cleanup failure and re-raise original error wrapped in QueueServiceError."""
+        from redis.exceptions import ConnectionError
+
         redis_client = MockRedis()
         board_service = MockBoardService()
         event_emitter = MockEventEmitter()
@@ -816,7 +818,7 @@ class TestRedisPipelineQueueService(TestPipelineQueueServiceContract):
             event_emitter=event_emitter,
         )
 
-        # Make pipeline raise an error
+        # Make pipeline raise a RedisError
         original_pipeline = redis_client.pipeline
 
         def failing_pipeline(transaction=True):
@@ -826,23 +828,24 @@ class TestRedisPipelineQueueService(TestPipelineQueueServiceContract):
 
             async def failing_execute():
                 await original_execute()
-                raise RuntimeError("Pipeline execution failed")
+                raise ConnectionError("Pipeline execution failed")
 
             pipe.execute = failing_execute
             return pipe
 
         redis_client.pipeline = failing_pipeline
 
-        # Make hdel also fail
+        # Make hdel also fail (Redis error)
         async def failing_hdel(*args, **kwargs):
-            raise RuntimeError("Cleanup hdel failed")
+            raise ConnectionError("Cleanup hdel failed")
 
         redis_client.hdel = failing_hdel
 
         now = datetime.now(UTC)
 
-        # This should raise the original pipeline error, not the cleanup error
-        with pytest.raises(RuntimeError, match="Pipeline execution failed"):
+        # This should raise QueueServiceError (wrapping the original pipeline ConnectionError)
+        # The cleanup hdel failure is logged but doesn't prevent the wrapping
+        with pytest.raises(QueueServiceError, match="Failed to enqueue item"):
             await service.enqueue_item("proj-1", "board-1", "item-123", position_in_column=0, timestamp=now)
 
     @pytest.mark.asyncio
@@ -1585,3 +1588,255 @@ class TestRedisPipelineQueueService(TestPipelineQueueServiceContract):
         assert result is not None
         assert result.work_item_id == "item-2", "Should skip ACTIVE item and return first WAITING"
         assert result.status == QueueStatus.WAITING
+
+    @pytest.mark.asyncio
+    async def test_is_item_in_queue_redis_error_wrapped_in_queue_service_error(self):
+        """is_item_in_queue should wrap RedisError in QueueServiceError with proper chaining."""
+        from redis.exceptions import ConnectionError
+
+        redis_client = MockRedis()
+        board_service = MockBoardService()
+        event_emitter = MockEventEmitter()
+
+        service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=event_emitter,
+        )
+
+        # Make hexists raise RedisError
+        async def failing_hexists(*args, **kwargs):
+            raise ConnectionError("Redis connection failed")
+
+        redis_client.hexists = failing_hexists
+
+        # Should raise QueueServiceError, not ConnectionError
+        with pytest.raises(QueueServiceError, match="Failed to check queue membership"):
+            await service.is_item_in_queue("item-123")
+
+    @pytest.mark.asyncio
+    async def test_mark_item_active_redis_error_wrapped_in_queue_service_error(self):
+        """mark_item_active should wrap RedisError in QueueServiceError with proper chaining."""
+        from redis.exceptions import ConnectionError
+
+        redis_client = MockRedis()
+        board_service = MockBoardService()
+        event_emitter = MockEventEmitter()
+
+        service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=event_emitter,
+        )
+
+        now = datetime.now(UTC)
+        # Setup: enqueue an item
+        await service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+
+        # Make hget raise RedisError (lookup of reverse index)
+        async def failing_hget(*args, **kwargs):
+            raise ConnectionError("Redis connection failed")
+
+        redis_client.hget = failing_hget
+
+        # Should raise QueueServiceError when trying to look up pipeline
+        with pytest.raises(QueueServiceError, match="Failed to look up pipeline"):
+            await service.mark_item_active("item-1")
+
+    @pytest.mark.asyncio
+    async def test_mark_item_active_redis_error_metadata_fetch_wrapped_in_queue_service_error(self):
+        """mark_item_active should wrap RedisError from metadata fetch in QueueServiceError."""
+        from redis.exceptions import ConnectionError
+
+        redis_client = MockRedis()
+        board_service = MockBoardService()
+        event_emitter = MockEventEmitter()
+
+        service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=event_emitter,
+        )
+
+        now = datetime.now(UTC)
+        # Setup: enqueue an item (this populates reverse index and metadata)
+        await service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+
+        # Make hget fail only on metadata fetch (second call)
+        call_count = {"count": 0}
+        original_hget = redis_client.hget
+
+        async def failing_hget_on_second_call(key, field):
+            call_count["count"] += 1
+            if call_count["count"] == 2:  # Second call is metadata fetch
+                raise ConnectionError("Metadata fetch failed")
+            return await original_hget(key, field)
+
+        redis_client.hget = failing_hget_on_second_call
+
+        # Should raise QueueServiceError when metadata fetch fails
+        with pytest.raises(QueueServiceError, match="Failed to fetch metadata"):
+            await service.mark_item_active("item-1")
+
+    @pytest.mark.asyncio
+    async def test_mark_item_active_redis_error_status_update_wrapped_in_queue_service_error(self):
+        """mark_item_active should wrap RedisError from status hset in QueueServiceError."""
+        from redis.exceptions import ConnectionError
+
+        redis_client = MockRedis()
+        board_service = MockBoardService()
+        event_emitter = MockEventEmitter()
+
+        service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=event_emitter,
+        )
+
+        now = datetime.now(UTC)
+        # Setup: enqueue an item (this populates reverse index and metadata)
+        await service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+
+        # Make hset fail on the mark_item_active status update call
+        # We replace hset AFTER enqueue, so this only affects mark_item_active
+        async def failing_hset(key, field_or_mapping, value=None):
+            # Fail immediately on any hset call (which will be the status update in mark_item_active)
+            raise ConnectionError("Status update failed")
+
+        redis_client.hset = failing_hset
+
+        # Should raise QueueServiceError when status update fails
+        with pytest.raises(QueueServiceError, match="Failed to update status"):
+            await service.mark_item_active("item-1")
+
+    @pytest.mark.asyncio
+    async def test_remove_from_queue_redis_error_wrapped_in_queue_service_error(self):
+        """remove_from_queue should wrap RedisError in QueueServiceError with proper chaining."""
+        from redis.exceptions import ConnectionError
+
+        redis_client = MockRedis()
+        board_service = MockBoardService()
+        event_emitter = MockEventEmitter()
+
+        service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=event_emitter,
+        )
+
+        now = datetime.now(UTC)
+        # Setup: enqueue an item
+        await service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+
+        # Make pipeline.execute() raise RedisError
+        original_pipeline = redis_client.pipeline
+
+        def failing_pipeline(transaction=True):
+            pipe = original_pipeline(transaction=transaction)
+            original_execute = pipe.execute
+
+            async def failing_execute():
+                await original_execute()
+                raise ConnectionError("Pipeline execution failed")
+
+            pipe.execute = failing_execute
+            return pipe
+
+        redis_client.pipeline = failing_pipeline
+
+        # Should raise QueueServiceError
+        with pytest.raises(QueueServiceError, match="Failed to remove item"):
+            await service.remove_from_queue("item-1")
+
+    @pytest.mark.asyncio
+    async def test_get_next_waiting_item_redis_error_wrapped_in_queue_service_error(self):
+        """get_next_waiting_item should wrap RedisError in QueueServiceError with proper chaining."""
+        from redis.exceptions import ConnectionError
+
+        redis_client = MockRedis()
+        board_service = MockBoardService()
+        event_emitter = MockEventEmitter()
+
+        service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=event_emitter,
+        )
+
+        now = datetime.now(UTC)
+        # Setup: enqueue an item
+        await service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+
+        # Make zrange raise RedisError (fetch all items)
+        call_count = 0
+        original_zrange = redis_client.zrange
+
+        async def failing_zrange(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count > 1:  # Second call is the one that should fail
+                raise ConnectionError("Redis connection failed")
+            return await original_zrange(*args, **kwargs)
+
+        redis_client.zrange = failing_zrange
+
+        # Should raise QueueServiceError
+        with pytest.raises(QueueServiceError, match="Failed to fetch queue items"):
+            await service.get_next_waiting_item("proj-1", "board-1")
+
+    @pytest.mark.asyncio
+    async def test_get_queue_entries_redis_error_wrapped_in_queue_service_error(self):
+        """get_queue_entries should wrap RedisError in QueueServiceError with proper chaining."""
+        from redis.exceptions import ConnectionError
+
+        redis_client = MockRedis()
+        board_service = MockBoardService()
+        event_emitter = MockEventEmitter()
+
+        service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=event_emitter,
+        )
+
+        now = datetime.now(UTC)
+        # Setup: enqueue an item
+        await service.enqueue_item("proj-1", "board-1", "item-1", position_in_column=0, timestamp=now)
+
+        # Make zrange raise RedisError
+        async def failing_zrange(*args, **kwargs):
+            raise ConnectionError("Redis connection failed")
+
+        redis_client.zrange = failing_zrange
+
+        # Should raise QueueServiceError
+        with pytest.raises(QueueServiceError, match="Failed to fetch queue items"):
+            await service.get_queue_entries("proj-1", "board-1")
+
+    @pytest.mark.asyncio
+    async def test_queue_service_error_has_proper_chaining(self):
+        """QueueServiceError should chain the original RedisError via __cause__."""
+        from redis.exceptions import ConnectionError
+
+        redis_client = MockRedis()
+        board_service = MockBoardService()
+        event_emitter = MockEventEmitter()
+
+        service = RedisPipelineQueueService(
+            redis_client=redis_client,
+            board_service=board_service,
+            event_emitter=event_emitter,
+        )
+
+        # Make hexists raise RedisError
+        async def failing_hexists(*args, **kwargs):
+            raise ConnectionError("Redis connection failed")
+
+        redis_client.hexists = failing_hexists
+
+        # Verify error chaining
+        try:
+            await service.is_item_in_queue("item-123")
+        except QueueServiceError as e:
+            assert isinstance(e.__cause__, ConnectionError), "Should chain the original RedisError"
+            assert "Redis connection failed" in str(e.__cause__)

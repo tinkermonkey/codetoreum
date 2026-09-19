@@ -233,50 +233,35 @@ async def recover(
 **Purpose**: Manages orchestration of multiple projects concurrently, isolating failures to prevent cascading issues.
 
 **Port Dependencies**:
-- `IProjectRegistry` — List enabled projects
-- `IProjectConfiguration` — Per-project configuration
-
-**Service Dependencies**:
-- `WorkflowOrchestrator` — Per-project orchestration
+- `IProjectManagerService` — Manage project configurations and retrieve enabled projects
 
 **Key Methods**:
 
 ```python
-async def start(self) -> None:
-    """Begin orchestration of all projects."""
-
-async def stop(self) -> None:
-    """Gracefully terminate orchestration."""
-
-async def run_orchestration_cycle(self) -> None:
-    """Execute single cycle across all projects."""
-
-async def get_project_status(self, project_id: str) -> ProjectStatus:
-    """Retrieve project state."""
+async def get_project_status(self, project_name: str) -> ProjectStatus:
+    """Retrieve project state and configuration."""
 
 async def list_enabled_projects(self) -> list[str]:
-    """List active projects."""
+    """List all enabled project names."""
 ```
 
 **Events Emitted**:
-- `OrchestrationCycleCompletedEvent` — One cycle completed
+- None — Query service only, does not emit domain events
 
-**Bootstrap Lifecycle**:
-- Started in **Phase 5e** of `ProductionApplicationBootstrap.setup()` via `asyncio.ensure_future(multi_project_orchestrator.start())` — non-blocking so `setup()` does not stall on the poll loop
-- Placed after Phase 5d so `WorkItemService` is fully wired before the first cycle runs
-- Stopped in `teardown()` via `await multi_project_orchestrator.stop()`
+**Bootstrap Lifecycle** (Admin Query Only):
+- Instantiated during bootstrap for query-service access
+- No polling or orchestration loop — purely a query interface
+- Status retrieval is on-demand; no background tasks
 
-**Orchestration Hierarchy**:
+**Admin Query Service Role**:
 
-MPO is the sole top-level polling entry point. It delegates per-project work to `WorkflowOrchestrator`, which coordinates with `BoardColumnEventHandler` for event-driven dispatch:
+MPO is an **admin-query service** — it provides read-only queries for project status and enabled-project lists. It does not orchestrate workflow execution (INV-13: no application-layer poll loops). Event-driven handlers orchestrate all automation:
 
-```
-MultiProjectOrchestrator  — polls all enabled projects every 30s
-  └── WorkflowOrchestrator  — per-project board scan and stage coordination
-        └── BoardColumnEventHandler  — reacts to column changes in real time
-```
+- `BoardColumnEventHandler` — reacts to column changes via `WorkItemColumnChangedEvent`
+- `WorkflowOrchestrator` — responds to events and coordinates stage progression
+- Board adapter polling (GitHub) — private to the adapter, never crosses the hexagonal boundary (INV-19)
 
-`ConversationalLoopOrchestrator` is a separate concern — it manages multi-turn agent dialogue via comment threads and does not participate in the execution scheduling hierarchy.
+`ConversationalLoopOrchestrator` is a separate concern — it manages multi-turn agent dialogue via comment threads and does not participate in the workflow orchestration.
 
 ---
 

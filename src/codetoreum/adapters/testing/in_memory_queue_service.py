@@ -400,9 +400,20 @@ class InMemoryQueueService(IPipelineQueueService):
                         if any(item_id in col.work_item_ids for item_id in queue_item_ids):
                             await self.sync_queue_with_board(project_id, board_id, col.name)
                             break
-            except Exception:
-                # Continue with current queue if sync fails
-                pass
+            except Exception as e:
+                # Graceful degradation: log error but don't fail
+                # Queue remains in current state until next sync attempt
+                logger.warning(
+                    f"Failed to sync queue with board before selecting next item for {project_id}/{board_id}. "
+                    f"Queue will remain in current state.",
+                    exc_info=True,
+                    extra={
+                        "project_id": project_id,
+                        "board_id": board_id,
+                        "error_type": type(e).__name__,
+                        "error_id": ErrorRegistry.ERR_PIPELINE_LOCK_ERROR,
+                    },
+                )
 
         with self._lock:
             queue_key = f"{project_id}:{board_id}"

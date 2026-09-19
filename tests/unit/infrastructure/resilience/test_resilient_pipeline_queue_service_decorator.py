@@ -7,10 +7,17 @@ import pytest
 
 from codetoreum.infrastructure.error_ids import ErrorRegistry
 from codetoreum.infrastructure.resilience.decorators import ResilientPipelineQueueServiceDecorator
+from codetoreum.infrastructure.resilience.exceptions import CircuitBreakerOpenError
+from codetoreum.infrastructure.resilience.mocks import (
+    MockCircuitBreaker,
+    MockRetryPolicy,
+    MockTimeout,
+)
 from codetoreum.ports.output.failed_event_store import FailureReason
 from codetoreum.ports.output.pipeline_queue_service import (
     IPipelineQueueService,
     PipelineQueueEntry,
+    QueueServiceError,
     QueueValidationError,
 )
 
@@ -316,3 +323,359 @@ class TestResilientPipelineQueueServiceDecorator:
 
         with pytest.raises(QueueValidationError, match="Invalid parameters"):
             await decorator.get_queue_entries("proj-1", "board-1")
+
+
+# ============================================================================
+# Production Path Tests - Resilience Components Active
+# ============================================================================
+
+
+@pytest.mark.asyncio
+class TestResilientPipelineQueueServiceDecoratorWithResilienceComponents:
+    """Tests for decorator with active resilience components."""
+
+    async def test_write_operation_with_circuit_breaker_closed(self):
+        """Test write operation with closed circuit breaker."""
+        mock_adapter = MockQueueService()
+        mock_adapter.enqueue_item.return_value = None
+        mock_adapter.failed_event_store = AsyncMock()
+
+        circuit_breaker = MockCircuitBreaker()
+
+        decorator = ResilientPipelineQueueServiceDecorator(
+            wrapped=mock_adapter,
+            circuit_breaker=circuit_breaker,
+        )
+
+        await decorator.enqueue_item("proj-1", "board-1", "item-1", 0, datetime.now())
+
+        # Circuit breaker should have been called
+        circuit_breaker.assert_called("enqueue_item")
+        mock_adapter.enqueue_item.assert_called_once()
+
+    async def test_write_operation_with_circuit_breaker_open(self):
+        """Test write operation fails when circuit breaker is open."""
+        mock_adapter = MockQueueService()
+        mock_adapter.enqueue_item.return_value = None
+        mock_adapter.failed_event_store = AsyncMock()
+
+        circuit_breaker = MockCircuitBreaker()
+        circuit_breaker.force_open()
+
+        decorator = ResilientPipelineQueueServiceDecorator(
+            wrapped=mock_adapter,
+            circuit_breaker=circuit_breaker,
+        )
+
+        with pytest.raises(CircuitBreakerOpenError):
+            await decorator.enqueue_item("proj-1", "board-1", "item-1", 0, datetime.now())
+
+        # Wrapped adapter should not have been called
+        mock_adapter.enqueue_item.assert_not_called()
+
+    async def test_write_operation_with_retry_policy(self):
+        """Test write operation with retry policy."""
+        mock_adapter = MockQueueService()
+        mock_adapter.enqueue_item.return_value = None
+        mock_adapter.failed_event_store = AsyncMock()
+
+        retry_policy = MockRetryPolicy()
+
+        decorator = ResilientPipelineQueueServiceDecorator(
+            wrapped=mock_adapter,
+            retry_policy=retry_policy,
+        )
+
+        await decorator.enqueue_item("proj-1", "board-1", "item-1", 0, datetime.now())
+
+        # Retry policy should have been exercised
+        assert len(retry_policy.execution_history) > 0
+
+    async def test_write_operation_with_timeout(self):
+        """Test write operation with timeout handler."""
+        mock_adapter = MockQueueService()
+        mock_adapter.enqueue_item.return_value = None
+        mock_adapter.failed_event_store = AsyncMock()
+
+        timeout = MockTimeout()
+
+        decorator = ResilientPipelineQueueServiceDecorator(
+            wrapped=mock_adapter,
+            timeout=timeout,
+        )
+
+        await decorator.enqueue_item("proj-1", "board-1", "item-1", 0, datetime.now())
+
+        # Timeout should have been exercised
+        assert len(timeout.execution_history) > 0
+        assert timeout.execution_history[0]["operation"] == "enqueue_item"
+
+    async def test_write_operation_with_all_resilience_components(self):
+        """Test write operation with all resilience components active."""
+        mock_adapter = MockQueueService()
+        mock_adapter.enqueue_item.return_value = None
+        mock_adapter.failed_event_store = AsyncMock()
+
+        circuit_breaker = MockCircuitBreaker()
+        retry_policy = MockRetryPolicy()
+        timeout = MockTimeout()
+
+        decorator = ResilientPipelineQueueServiceDecorator(
+            wrapped=mock_adapter,
+            circuit_breaker=circuit_breaker,
+            retry_policy=retry_policy,
+            timeout=timeout,
+        )
+
+        await decorator.enqueue_item("proj-1", "board-1", "item-1", 0, datetime.now())
+
+        # All components should have been exercised
+        circuit_breaker.assert_called("enqueue_item")
+        assert len(retry_policy.execution_history) > 0
+        assert len(timeout.execution_history) > 0
+
+    async def test_business_error_bypasses_circuit_breaker_failure_counting(self):
+        """Test that QueueServiceError bypasses circuit breaker failure counting."""
+        mock_adapter = MockQueueService()
+        mock_adapter.failed_event_store = AsyncMock()
+
+        # Create a custom QueueServiceError subclass
+        class CustomQueueServiceError(QueueServiceError):
+            pass
+
+        error = CustomQueueServiceError("Business error")
+        mock_adapter.enqueue_item.side_effect = error
+
+        circuit_breaker = MockCircuitBreaker()
+
+        decorator = ResilientPipelineQueueServiceDecorator(
+            wrapped=mock_adapter,
+            circuit_breaker=circuit_breaker,
+        )
+
+        # Should raise the business error without affecting circuit breaker
+        with pytest.raises(CustomQueueServiceError):
+            await decorator.enqueue_item("proj-1", "board-1", "item-1", 0, datetime.now())
+
+        # Circuit breaker should still be closed (not opened by business error)
+        assert not circuit_breaker.is_open()
+
+    async def test_transient_error_is_routed_through_circuit_breaker(self):
+        """Test that transient errors are routed through circuit breaker."""
+        mock_adapter = MockQueueService()
+        mock_adapter.failed_event_store = AsyncMock()
+
+        error = RuntimeError("Transient error")
+        mock_adapter.enqueue_item.side_effect = error
+
+        circuit_breaker = MockCircuitBreaker()
+
+        decorator = ResilientPipelineQueueServiceDecorator(
+            wrapped=mock_adapter,
+            circuit_breaker=circuit_breaker,
+        )
+
+        # Should raise the transient error
+        with pytest.raises(RuntimeError, match="Transient error"):
+            await decorator.enqueue_item("proj-1", "board-1", "item-1", 0, datetime.now())
+
+        # Circuit breaker should have been called
+        circuit_breaker.assert_called("enqueue_item")
+
+    async def test_mark_item_active_with_circuit_breaker_and_retry(self):
+        """Test mark_item_active with circuit breaker and retry."""
+        mock_adapter = MockQueueService()
+        mock_adapter.mark_item_active.return_value = None
+        mock_adapter.failed_event_store = AsyncMock()
+
+        circuit_breaker = MockCircuitBreaker()
+        retry_policy = MockRetryPolicy()
+
+        decorator = ResilientPipelineQueueServiceDecorator(
+            wrapped=mock_adapter,
+            circuit_breaker=circuit_breaker,
+            retry_policy=retry_policy,
+        )
+
+        await decorator.mark_item_active("item-1")
+
+        # Both should have been exercised
+        circuit_breaker.assert_called("mark_item_active")
+        assert len(retry_policy.execution_history) > 0
+
+    async def test_remove_from_queue_with_all_components_success(self):
+        """Test remove_from_queue with all resilience components succeeding."""
+        mock_adapter = MockQueueService()
+        mock_adapter.remove_from_queue.return_value = True
+        mock_adapter.failed_event_store = AsyncMock()
+
+        circuit_breaker = MockCircuitBreaker()
+        retry_policy = MockRetryPolicy()
+        timeout = MockTimeout()
+
+        decorator = ResilientPipelineQueueServiceDecorator(
+            wrapped=mock_adapter,
+            circuit_breaker=circuit_breaker,
+            retry_policy=retry_policy,
+            timeout=timeout,
+        )
+
+        result = await decorator.remove_from_queue("item-1")
+
+        assert result is True
+        circuit_breaker.assert_called("remove_from_queue")
+        assert len(retry_policy.execution_history) > 0
+        assert len(timeout.execution_history) > 0
+
+    async def test_sync_queue_with_board_with_circuit_breaker_and_timeout(self):
+        """Test sync_queue_with_board with circuit breaker and timeout."""
+        mock_adapter = MockQueueService()
+        mock_adapter.sync_queue_with_board.return_value = None
+        mock_adapter.failed_event_store = AsyncMock()
+
+        circuit_breaker = MockCircuitBreaker()
+        timeout = MockTimeout()
+
+        decorator = ResilientPipelineQueueServiceDecorator(
+            wrapped=mock_adapter,
+            circuit_breaker=circuit_breaker,
+            timeout=timeout,
+        )
+
+        await decorator.sync_queue_with_board("proj-1", "board-1", "In Progress")
+
+        # Both should have been exercised
+        circuit_breaker.assert_called("sync_queue_with_board")
+        assert len(timeout.execution_history) > 0
+        assert timeout.execution_history[0]["operation"] == "sync_queue_with_board"
+
+    async def test_execute_resilient_applies_patterns_in_order(self):
+        """Test that _execute_resilient exercises all resilience patterns.
+
+        Patterns applied (outermost to innermost):
+        1. Circuit breaker (calls _execute_with_timeout_and_retry)
+        2. Retry policy (calls timed_operation)
+        3. Timeout (calls the base operation)
+
+        This test verifies all components are exercised, not their ordering.
+        """
+        mock_adapter = MockQueueService()
+        mock_adapter.enqueue_item.return_value = None
+        mock_adapter.failed_event_store = AsyncMock()
+
+        circuit_breaker = MockCircuitBreaker()
+        retry_policy = MockRetryPolicy()
+        timeout = MockTimeout()
+
+        decorator = ResilientPipelineQueueServiceDecorator(
+            wrapped=mock_adapter,
+            circuit_breaker=circuit_breaker,
+            retry_policy=retry_policy,
+            timeout=timeout,
+        )
+
+        # Execute the operation
+        await decorator.enqueue_item("proj-1", "board-1", "item-1", 0, datetime.now())
+
+        # All components should be in the call chain
+        assert circuit_breaker.get_stats().total_calls == 1
+        assert len(timeout.execution_history) == 1
+        assert len(retry_policy.execution_history) == 1
+
+    async def test_timeout_with_default_seconds(self):
+        """Test timeout uses default_timeout_seconds when not overridden."""
+        mock_adapter = MockQueueService()
+        mock_adapter.enqueue_item.return_value = None
+        mock_adapter.failed_event_store = AsyncMock()
+
+        timeout = MockTimeout()
+        default_timeout = 15.0
+
+        decorator = ResilientPipelineQueueServiceDecorator(
+            wrapped=mock_adapter,
+            timeout=timeout,
+            default_timeout_seconds=default_timeout,
+        )
+
+        await decorator.enqueue_item("proj-1", "board-1", "item-1", 0, datetime.now())
+
+        # Should have used the default timeout
+        assert len(timeout.execution_history) == 1
+        assert timeout.execution_history[0]["timeout_seconds"] == default_timeout
+
+    async def test_sentinel_business_error_marker_prevents_circuit_breaker_trip(self):
+        """Test that sentinel-based business error detection works with circuit breaker.
+
+        This tests the specific production code path where QueueServiceError is caught
+        and wrapped with a sentinel marker to prevent circuit breaker from counting
+        it as a failure.
+        """
+        # Create a custom adapter that will fail with QueueServiceError
+        mock_adapter = MagicMock(spec=IPipelineQueueService)
+
+        async def failing_enqueue(*args, **kwargs):
+            raise QueueServiceError("Custom queue error")
+
+        mock_adapter.enqueue_item = AsyncMock(side_effect=failing_enqueue)
+        mock_adapter.failed_event_store = AsyncMock()
+
+        circuit_breaker = MockCircuitBreaker()
+
+        decorator = ResilientPipelineQueueServiceDecorator(
+            wrapped=mock_adapter,
+            circuit_breaker=circuit_breaker,
+        )
+
+        # Should raise the business error
+        with pytest.raises(QueueServiceError):
+            await decorator.enqueue_item("proj-1", "board-1", "item-1", 0, datetime.now())
+
+        # Circuit breaker should still be closed
+        assert not circuit_breaker.is_open()
+        # But it should still have been invoked (just with wrapped operation)
+        assert circuit_breaker.get_stats().total_calls == 1
+
+    async def test_read_operation_succeeds_regardless_of_circuit_breaker_state(self):
+        """Test read operation succeeds even when circuit breaker is open.
+
+        Read operations bypass the circuit breaker entirely. They attempt the
+        operation directly and return a safe default on failure, independent
+        of circuit breaker state.
+        """
+        mock_adapter = MockQueueService()
+        mock_adapter.is_item_in_queue.return_value = True
+        mock_adapter.failed_event_store = AsyncMock()
+
+        circuit_breaker = MockCircuitBreaker()
+        circuit_breaker.force_open()
+
+        decorator = ResilientPipelineQueueServiceDecorator(
+            wrapped=mock_adapter,
+            circuit_breaker=circuit_breaker,
+        )
+
+        # Read operation should succeed and return the adapter's result
+        result = await decorator.is_item_in_queue("item-1")
+        assert result is True
+        mock_adapter.is_item_in_queue.assert_called_once_with("item-1")
+
+    async def test_execute_with_timeout_and_retry_applies_patterns(self):
+        """Test _execute_with_timeout_and_retry applies both patterns."""
+        mock_adapter = MockQueueService()
+        mock_adapter.enqueue_item.return_value = None
+        mock_adapter.failed_event_store = AsyncMock()
+
+        retry_policy = MockRetryPolicy()
+        timeout = MockTimeout()
+
+        decorator = ResilientPipelineQueueServiceDecorator(
+            wrapped=mock_adapter,
+            retry_policy=retry_policy,
+            timeout=timeout,
+        )
+
+        await decorator.enqueue_item("proj-1", "board-1", "item-1", 0, datetime.now())
+
+        # Both should be exercised
+        assert len(retry_policy.execution_history) > 0
+        assert len(timeout.execution_history) > 0
