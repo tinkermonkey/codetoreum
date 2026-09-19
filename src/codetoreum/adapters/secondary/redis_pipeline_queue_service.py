@@ -181,6 +181,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
         Raises:
             QueueValidationError: Invalid parameters
             DuplicateQueueEntryError: Item already in queue
+            QueueServiceError: Redis operation failed
         """
         # Input validation
         if not project_id:
@@ -260,8 +261,9 @@ class RedisPipelineQueueService(IPipelineQueueService):
             await pipe.hset(meta_key, work_item_id, json.dumps(metadata))
             await pipe.sadd(pipeline_registry_key, pipeline_coords)
             await pipe.execute()
-        except RedisError as pipeline_error:
+        except Exception as pipeline_error:
             # Pipeline failed - remove orphaned reverse index entry to prevent future duplicates
+            # Always run cleanup regardless of exception type
             try:
                 await self._redis.hdel(reverse_index_key, work_item_id)
             except RedisError as cleanup_error:
@@ -277,21 +279,26 @@ class RedisPipelineQueueService(IPipelineQueueService):
                         "error_id": ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE,
                     },
                 )
-            # Wrap and re-raise the original pipeline error
-            msg = f"Failed to enqueue item {work_item_id} in pipeline {project_id}/{board_id}"
-            logger.error(
-                msg,
-                exc_info=True,
-                extra={
-                    "work_item_id": work_item_id,
-                    "project_id": project_id,
-                    "board_id": board_id,
-                    "position": position_in_column,
-                    "error_type": type(pipeline_error).__name__,
-                    "error_id": ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE,
-                },
-            )
-            raise QueueServiceError(msg) from pipeline_error
+
+            # Branch based on exception type: wrap RedisError, propagate others
+            if isinstance(pipeline_error, RedisError):
+                msg = f"Failed to enqueue item {work_item_id} in pipeline {project_id}/{board_id}"
+                logger.error(
+                    msg,
+                    exc_info=True,
+                    extra={
+                        "work_item_id": work_item_id,
+                        "project_id": project_id,
+                        "board_id": board_id,
+                        "position": position_in_column,
+                        "error_type": type(pipeline_error).__name__,
+                        "error_id": ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE,
+                    },
+                )
+                raise QueueServiceError(msg) from pipeline_error
+            else:
+                # Non-Redis exception: propagate unwrapped
+                raise
 
         # Emit event
         await self._emit_event(
