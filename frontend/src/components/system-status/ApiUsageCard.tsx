@@ -25,9 +25,9 @@ function formatTokens(tokens: number): string {
  * Get progress bar color based on usage percentage
  */
 function getQuotaColor(percent: number): string {
-  if (percent >= 90) return 'bg-red-500'
-  if (percent >= 75) return 'bg-yellow-500'
-  return 'bg-green-500'
+  if (percent >= 90) return 'bg-destructive'
+  if (percent >= 75) return 'bg-warning'
+  return 'bg-success'
 }
 
 export function ApiUsageCard() {
@@ -56,11 +56,13 @@ export function ApiUsageCard() {
   if (error) {
     return (
       <StatusCard title="Claude Usage">
-        <div className="flex items-start gap-2 text-sm text-red-600 dark:text-red-400">
-          <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+        <div className="flex items-start gap-2 text-sm text-destructive">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <div>
-            <p className="font-medium">Failed to load API usage</p>
-            <p className="text-xs mt-1">{error instanceof Error ? error.message : 'Unknown error'}</p>
+            <p className="font-medium">Could not load API usage</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {error instanceof Error ? error.message : 'Unknown error'}
+            </p>
           </div>
         </div>
       </StatusCard>

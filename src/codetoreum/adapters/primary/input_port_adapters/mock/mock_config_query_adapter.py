@@ -3,12 +3,13 @@ Mock Configuration Query Adapter
 
 In-memory implementation of IConfigurationQueryPort for development and testing.
 
-Supports optional backing store injection: when an InMemoryConfigStore is provided,
+Supports optional backing store injection: when an IConfigStore is provided,
 reads delegate to it (converting ProjectConfig -> ProjectConfigInfo on the fly).
 When no backing store is provided (unit tests), the adapter uses its own internal
 dictionaries.
 """
 
+import asyncio
 from datetime import UTC, datetime
 from threading import RLock
 from typing import TYPE_CHECKING, Any, Optional
@@ -31,7 +32,7 @@ from codetoreum.ports.input.config_query import (
 )
 
 if TYPE_CHECKING:
-    from codetoreum.adapters.testing.in_memory_config_store import InMemoryConfigStore
+    from codetoreum.ports.output.config_store import IConfigStore
 
 
 class MockConfigQueryAdapter(IConfigurationQueryPort):
@@ -44,7 +45,7 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
     This eliminates the need for dual-writes in simulation seeding.
     """
 
-    def __init__(self, config_store: Optional["InMemoryConfigStore"] = None):
+    def __init__(self, config_store: Optional["IConfigStore"] = None):
         self._config_store = config_store
         self._projects: dict[str, ProjectConfigInfo] = {}
         self._projects_by_name: dict[str, str] = {}  # name -> project_id
@@ -52,6 +53,13 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
         self._pipelines: dict[str, dict[str, PipelineConfigInfo]] = {}  # project_id -> {pipeline_name -> config}
         self._version_history: dict[str, list[ConfigVersionInfo]] = {}  # config_id -> versions
         self._lock = RLock()
+
+    async def _project_ids_from_store(self) -> list[str]:
+        """Resolve project IDs via the IConfigStore port (works for ES and in-memory)."""
+        if self._config_store is None:
+            raise ValueError("_project_ids_from_store requires a configured config_store")
+        projects = await self._config_store.list_projects()
+        return [p.id for p in projects]
 
     # =========================================================================
     # Conversion helpers (storage-layer → port DTO)
@@ -205,10 +213,10 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
             if project_id is not None:
                 agent_cfgs = await self._config_store.list_agents(project_id)
             else:
-                # Gather agents across all projects
-                agent_cfgs = []
-                for pid in list(self._config_store.agents.keys()):
-                    agent_cfgs.extend(await self._config_store.list_agents(pid))
+                # Gather agents across all projects via port methods (not in-memory attrs)
+                project_ids = await self._project_ids_from_store()
+                per_project = await asyncio.gather(*(self._config_store.list_agents(pid) for pid in project_ids))
+                agent_cfgs = [cfg for cfgs in per_project for cfg in cfgs]
             agents = [self._agent_config_to_info(c) for c in agent_cfgs]
             if pagination:
                 agents = agents[pagination.offset : pagination.offset + pagination.limit]
@@ -236,9 +244,9 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
             if project_id is not None:
                 pipe_cfgs = await self._config_store.list_pipelines(project_id)
             else:
-                pipe_cfgs = []
-                for pid in list(self._config_store.pipelines.keys()):
-                    pipe_cfgs.extend(await self._config_store.list_pipelines(pid))
+                project_ids = await self._project_ids_from_store()
+                per_project = await asyncio.gather(*(self._config_store.list_pipelines(pid) for pid in project_ids))
+                pipe_cfgs = [cfg for cfgs in per_project for cfg in cfgs]
             pipelines = [self._pipeline_config_to_info(c) for c in pipe_cfgs]
             if pagination:
                 pipelines = pipelines[pagination.offset : pagination.offset + pagination.limit]
@@ -333,19 +341,32 @@ class MockConfigQueryAdapter(IConfigurationQueryPort):
     async def count_configs(self, config_type: str | None = None, project_id: str | None = None) -> int:
         """Count configurations."""
         if self._config_store:
+            project_ids = None
+            if not project_id and config_type in (None, "agent", "pipeline"):
+                project_ids = await self._project_ids_from_store()
+
             count = 0
             if not config_type or config_type == "project":
-                count += len(self._config_store.projects)
+                if project_ids is not None:
+                    count += len(project_ids)
+                else:
+                    count += len(await self._config_store.list_projects())
             if not config_type or config_type == "agent":
                 if project_id:
-                    count += len(self._config_store.agents.get(project_id, {}))
+                    count += len(await self._config_store.list_agents(project_id))
                 else:
-                    count += sum(len(agents) for agents in self._config_store.agents.values())
+                    per_project = await asyncio.gather(
+                        *(self._config_store.list_agents(pid) for pid in project_ids)
+                    )
+                    count += sum(len(cfgs) for cfgs in per_project)
             if not config_type or config_type == "pipeline":
                 if project_id:
-                    count += len(self._config_store.pipelines.get(project_id, {}))
+                    count += len(await self._config_store.list_pipelines(project_id))
                 else:
-                    count += sum(len(pipes) for pipes in self._config_store.pipelines.values())
+                    per_project = await asyncio.gather(
+                        *(self._config_store.list_pipelines(pid) for pid in project_ids)
+                    )
+                    count += sum(len(cfgs) for cfgs in per_project)
             return count
         with self._lock:
             count = 0

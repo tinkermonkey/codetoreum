@@ -86,9 +86,11 @@ export function useAuth() {
           // - Session hijacking via URL
           window.history.replaceState({}, document.title, window.location.pathname)
 
-          // Store token for WebSocket connections (httpOnly cookies don't work with WebSocket)
+          // Store token for WebSocket query-param auth (cookie is also set by backend)
           setAuthenticated(true, urlToken)
           setLoading(false)
+          authInitializing = false
+          authInitialized = true
           return
         } catch (error) {
           console.error('Failed to authenticate with URL token:', error)
@@ -103,13 +105,16 @@ export function useAuth() {
 
           setError(errorMessage)
           setLoading(false)
+          authInitializing = false
+          authInitialized = true
           return
         }
       }
 
-      // Validate the httpOnly cookie
+      // Validate the httpOnly cookie (WebSocket uses the same cookie when same-origin)
       try {
         await api.get('/auth/token-info')
+        // Keep any sessionStorage token for query-param WS; cookie alone is enough after backend fix
         setAuthenticated(true)
       } catch (error) {
         setAuthenticated(false)

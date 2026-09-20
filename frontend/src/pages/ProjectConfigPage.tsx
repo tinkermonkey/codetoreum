@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from '../components/ui/card'
+import { PageHeader } from '../components/layout/PageHeader'
 import { projectConfigApi } from '../api/client'
 import type { ProjectConfig } from '../types'
 
@@ -25,40 +26,58 @@ export default function ProjectConfigPage() {
   const config = projects[selectedProjectIndex] as ProjectConfig | undefined
 
   if (isLoading) {
-    return <div className="flex justify-center p-8">Loading configuration...</div>
-  }
-
-  if (projects.length === 0) {
     return (
-      <div className="text-muted-foreground p-8 text-center">
-        No projects configured. Create a project to get started.
+      <div className="space-y-6">
+        <PageHeader
+          title="Project"
+          description="Environment variables, commands, and sub-agents for this workspace."
+        />
+        <p className="text-sm text-muted-foreground" role="status">
+          Loading configuration…
+        </p>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="text-destructive p-8">
-        Error loading configuration: {error.message}
+      <div className="space-y-6">
+        <PageHeader title="Project" />
+        <p className="text-sm text-destructive" role="alert">
+          Could not load configuration: {error.message}
+        </p>
+      </div>
+    )
+  }
+
+  if (projects.length === 0) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Project"
+          description="Environment variables, commands, and sub-agents for this workspace."
+        />
+        <div className="surface-panel px-5 py-10 shadow-soft">
+          <p className="text-[15px] font-medium text-foreground">No projects yet</p>
+          <p className="mt-2 max-w-md text-sm text-muted-foreground">
+            Register a project with the bootstrap script, then refresh this page.
+          </p>
+        </div>
       </div>
     )
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-3xl font-bold">Project Configuration</h2>
-          <p className="text-muted-foreground mt-1">
-            Manage environment variables, commands, and sub-agents
-          </p>
-        </div>
-        <div className="flex items-center space-x-2">
-          <span className="text-sm text-muted-foreground">
-            Version: {config?.version || 'N/A'}
+      <PageHeader
+        title="Project"
+        description="Environment variables, commands, and sub-agents for this workspace."
+        actions={
+          <span className="font-mono text-xs text-muted-foreground tabular-nums">
+            Version {config?.version || '—'}
           </span>
-        </div>
-      </div>
+        }
+      />
 
       {config && (
         <>

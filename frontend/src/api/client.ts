@@ -37,7 +37,7 @@ import { createApiError, type ApiError } from '../types/errors'
  */
 class RequestCancellation {
   private controllers = new Map<string, AbortController>()
-  private timeouts = new WeakMap<AbortController, number>()
+  private timeouts = new WeakMap<AbortController, ReturnType<typeof setTimeout>>()
 
   /**
    * Get or create an AbortController for a request
@@ -502,7 +502,7 @@ export const configurationCommandsApi = {
 export const workItemsApi = {
   getAll: async (projectId?: string) => {
     const response = await apiClient.get<{ work_items: WorkItem[]; total_count: number }>('/work-items', {
-      params: projectId ? { projectId } : undefined,
+      params: projectId ? { project_id: projectId } : undefined,
     })
     return response.work_items
   },
@@ -530,7 +530,7 @@ export const workItemsApi = {
 export const executionsApi = {
   getAll: async (workItemId?: string) => {
     const response = await apiClient.get<{ executions: ExecutionSummary[]; total_count: number }>('/executions', {
-      params: workItemId ? { workItemId } : undefined,
+      params: workItemId ? { work_item_id: workItemId } : undefined,
     })
     return response.executions
   },

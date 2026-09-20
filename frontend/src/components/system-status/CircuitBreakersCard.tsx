@@ -18,11 +18,11 @@ import type { CircuitBreakerState } from '../../types/system-status'
 function getStateIcon(state: CircuitBreakerState) {
   switch (state) {
     case 'closed':
-      return <CheckCircle className="w-3 h-3 text-green-500" />
+      return <CheckCircle className="h-3 w-3 text-success" aria-hidden />
     case 'half_open':
-      return <AlertCircle className="w-3 h-3 text-yellow-500" />
+      return <AlertCircle className="h-3 w-3 text-warning" aria-hidden />
     case 'open':
-      return <XCircle className="w-3 h-3 text-red-500" />
+      return <XCircle className="h-3 w-3 text-destructive" aria-hidden />
   }
 }
 
@@ -70,14 +70,14 @@ export function CircuitBreakersCard() {
       title="Circuit Breakers"
       isExpandable={circuitBreakers.length > 0}
       isExpanded={isExpanded}
-      onClick={handleToggle}
+      onClick={circuitBreakers.length > 0 ? handleToggle : undefined}
       headerAction={
         <div className="flex items-center gap-2">
           <Badge variant="secondary">
             {circuitBreakerSummary.total}
           </Badge>
           {circuitBreakers.length > 0 && (
-            isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
+            isExpanded ? <ChevronUp className="h-3 w-3" aria-hidden /> : <ChevronDown className="h-3 w-3" aria-hidden />
           )}
         </div>
       }
@@ -90,18 +90,18 @@ export function CircuitBreakersCard() {
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground">Closed</span>
-                <span className="font-semibold text-green-500">{circuitBreakerSummary.closed}</span>
+                <span className="font-semibold text-success">{circuitBreakerSummary.closed}</span>
               </div>
               {circuitBreakerSummary.halfOpen > 0 && (
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-muted-foreground">Half Open</span>
-                  <span className="font-semibold text-yellow-500">{circuitBreakerSummary.halfOpen}</span>
+                  <span className="font-semibold text-warning">{circuitBreakerSummary.halfOpen}</span>
                 </div>
               )}
               {circuitBreakerSummary.open > 0 && (
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-muted-foreground">Open</span>
-                  <span className="font-semibold text-red-500">{circuitBreakerSummary.open}</span>
+                  <span className="font-semibold text-destructive">{circuitBreakerSummary.open}</span>
                 </div>
               )}
             </div>

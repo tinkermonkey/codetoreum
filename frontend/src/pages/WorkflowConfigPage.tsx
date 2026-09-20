@@ -13,6 +13,7 @@ import {
 import { pipelineConfigApi, agentConfigApi } from '../api/client'
 import { StageCard } from '../components/workflow-editor/StageCard'
 import { StageEditor } from '../components/workflow-editor/StageEditor'
+import { PageHeader } from '../components/layout/PageHeader'
 import type { PipelineConfig, Stage } from '../types'
 import { useToast } from '../components/ui/use-toast'
 
@@ -48,34 +49,49 @@ export default function WorkflowConfigPage() {
   }, [hasUnsavedChanges])
 
   if (isLoading) {
-    return <div className="flex justify-center p-8">Loading pipelines...</div>
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Workflows"
+          description="Pipelines, stages, and how work advances between agents."
+        />
+        <p className="text-sm text-muted-foreground" role="status">
+          Loading pipelines…
+        </p>
+      </div>
+    )
   }
 
   if (error) {
     return (
-      <div className="text-destructive p-8">Error loading pipelines: {error.message}</div>
+      <div className="space-y-6">
+        <PageHeader title="Workflows" />
+        <p className="text-sm text-destructive" role="alert">
+          Could not load pipelines: {error.message}
+        </p>
+      </div>
     )
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-3xl font-bold">Workflow Configuration</h2>
-          <p className="text-muted-foreground mt-1">
-            Configure workflow pipelines, stages, and transitions
-          </p>
-        </div>
-        <CreatePipelineButton
-          queryClient={queryClient}
-          onSuccess={() => toast({ title: 'Pipeline created successfully' })}
-          onError={(error) => toast({
-            title: 'Failed to create pipeline',
-            description: error.message,
-            variant: 'destructive'
-          })}
-        />
-      </div>
+      <PageHeader
+        title="Workflows"
+        description="Pipelines, stages, and how work advances between agents."
+        actions={
+          <CreatePipelineButton
+            queryClient={queryClient}
+            onSuccess={() => toast({ title: 'Pipeline created successfully' })}
+            onError={(error) =>
+              toast({
+                title: 'Failed to create pipeline',
+                description: error.message,
+                variant: 'destructive',
+              })
+            }
+          />
+        }
+      />
 
       <div className="grid grid-cols-3 gap-6">
         {/* Pipeline List */}
@@ -85,13 +101,16 @@ export default function WorkflowConfigPage() {
             <CardDescription>Select a pipeline to configure</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
+            <div className="space-y-2" role="listbox" aria-label="Pipelines">
               {pipelines?.map((pipeline) => (
-                <div
+                <button
+                  type="button"
                   key={pipeline.id}
-                  className={`p-3 border rounded-md cursor-pointer transition-colors ${
+                  role="option"
+                  aria-selected={selectedPipeline === pipeline.id}
+                  className={`w-full rounded-lg border p-3 text-left transition-colors ${
                     selectedPipeline === pipeline.id
-                      ? 'bg-primary/10 border-primary'
+                      ? 'border-primary bg-primary/10'
                       : 'hover:bg-muted'
                   }`}
                   onClick={() => {
@@ -104,24 +123,24 @@ export default function WorkflowConfigPage() {
                 >
                   <div className="font-medium">{pipeline.name}</div>
                   {pipeline.metadata?.description && (
-                    <p className="text-sm text-muted-foreground mt-1">
+                    <p className="mt-1 text-sm text-muted-foreground">
                       {pipeline.metadata.description}
                     </p>
                   )}
-                  <div className="flex items-center justify-between mt-2">
+                  <div className="mt-2 flex items-center justify-between">
                     <span className="text-xs text-muted-foreground">
                       {pipeline.stages.length} stages
                     </span>
                     {pipeline.metadata?.is_default && (
-                      <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded">
+                      <span className="rounded bg-primary/20 px-2 py-0.5 text-xs text-primary">
                         Default
                       </span>
                     )}
                   </div>
-                </div>
+                </button>
               ))}
               {pipelines?.length === 0 && (
-                <p className="text-muted-foreground text-sm text-center py-4">
+                <p className="py-4 text-center text-sm text-muted-foreground">
                   No pipelines configured
                 </p>
               )}

@@ -4,9 +4,8 @@ test.describe('Authentication', () => {
   test('should show auth required page when no token', async ({ page }) => {
     await page.goto('/')
 
-    // Should show authentication required page
-    await expect(page.getByText('Authentication Required')).toBeVisible()
-    await expect(page.getByText('How to get your authentication token')).toBeVisible()
+    await expect(page.getByText('Sign in with your server token')).toBeVisible()
+    await expect(page.getByText(/Start the API with/)).toBeVisible()
   })
 
   test('should extract token from URL and set httpOnly cookie', async ({ page, context }) => {
@@ -64,8 +63,7 @@ test.describe('Authentication', () => {
 
     await page.goto('/')
 
-    // Should eventually show auth required page after 401
-    await expect(page.getByText('Authentication Required')).toBeVisible({
+    await expect(page.getByText('Sign in with your server token')).toBeVisible({
       timeout: 10000,
     })
   })

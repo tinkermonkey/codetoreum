@@ -13,6 +13,7 @@ import { apiClient } from '../api/client'
 import { useSystemStatusStore } from '../store/systemStatusStore'
 import type { AgentExecution } from '../types/system-status'
 import type { Execution } from '../types'
+import type { ApiError } from '../types/errors'
 import { POLLING_CONFIG, RETRY_CONFIG } from '../config/polling'
 
 /**
@@ -40,13 +41,52 @@ function convertExecution(execution: Execution): AgentExecution {
  * Fetch active agent executions from API
  */
 async function fetchActiveAgents(): Promise<AgentExecution[]> {
-  const response = await apiClient.get<{ executions: Execution[]; total_count: number }>('/executions', {
-    params: {
-      status: 'running',
-      limit: 50,
-    },
-  })
-  return response.executions.map(convertExecution)
+  // Prefer dedicated metrics endpoint; fall back to executions list.
+  try {
+    const response = await apiClient.get<{
+      agents: Array<{
+        executionId: string
+        agentName: string
+        workItemId: string
+        project: string
+        issueNumber?: number
+        status: string
+        startedAt: string
+        containerName?: string
+      }>
+      count: number
+    }>('/metrics/active-agents')
+
+    return (response.agents || []).map((agent) => ({
+      id: agent.executionId,
+      agentName: agent.agentName,
+      workItemId: agent.workItemId,
+      status: agent.status === 'failed' ? 'failed' : agent.status === 'completed' ? 'completed' : 'running',
+      startedAt: agent.startedAt,
+      containerName: agent.containerName,
+      project: agent.project || 'unknown',
+      issueNumber: agent.issueNumber,
+    }))
+  } catch (err) {
+    const apiError = err as ApiError
+    console.error('[useActiveAgents] /metrics/active-agents request failed', apiError)
+
+    // Only fall back to the /executions endpoint when the canonical route is
+    // genuinely unavailable (404). Any other failure (auth, server error,
+    // network) is a real problem and must surface to the caller, not be
+    // masked by silently substituting a narrower data source.
+    if (apiError.statusCode !== 404) {
+      throw err
+    }
+
+    const response = await apiClient.get<{ executions: Execution[]; total_count: number }>('/executions', {
+      params: {
+        status: 'running',
+        limit: 50,
+      },
+    })
+    return response.executions.map(convertExecution)
+  }
 }
 
 /**

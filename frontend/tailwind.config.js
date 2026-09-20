@@ -7,8 +7,11 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['var(--font-sans)'],
+        mono: ['var(--font-mono)'],
+      },
       colors: {
-        // Semantic color tokens (shadcn/ui style)
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
@@ -42,34 +45,17 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        // GitHub-style color tokens (for compatibility with legacy UX)
-        'gh-canvas': {
-          DEFAULT: 'var(--gh-canvas)',
-          subtle: 'var(--gh-canvas-subtle)',
-        },
-        'gh-border': {
-          DEFAULT: 'var(--gh-border)',
-          muted: 'var(--gh-border-muted)',
-        },
-        'gh-fg': {
-          DEFAULT: 'var(--gh-fg)',
-          default: 'var(--gh-fg-default)',
-          muted: 'var(--gh-fg-muted)',
-          subtle: 'var(--gh-fg-subtle)',
-        },
-        'gh-accent': {
-          primary: 'var(--gh-accent-primary)',
-          emphasis: 'var(--gh-accent-emphasis)',
-        },
-        'gh-success': 'var(--gh-success)',
-        'gh-danger': 'var(--gh-danger)',
-        'gh-warning': 'var(--gh-warning)',
-        'gh-warning-subtle': 'var(--gh-warning-subtle)',
+        success: "hsl(var(--success))",
+        warning: "hsl(var(--warning))",
+        live: "hsl(var(--live))",
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+      },
+      boxShadow: {
+        soft: '0 1px 2px hsl(220 20% 10% / 0.04), 0 8px 24px hsl(220 20% 10% / 0.04)',
       },
     },
   },

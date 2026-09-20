@@ -1042,6 +1042,7 @@ class WebSocketAdapter:
         auth_manager: Any | None = None,
         redis_pubsub: Any | None = None,
         redis_client: Any | None = None,
+        allowed_origins: list[str] | None = None,
     ):
         """
         Initialize WebSocket adapter.
@@ -1051,9 +1052,14 @@ class WebSocketAdapter:
             auth_manager: Authentication manager for token validation
             redis_pubsub: Redis pub/sub adapter for horizontal scaling (optional)
             redis_client: Redis client for connection persistence (optional)
+            allowed_origins: Same-origin allowlist (as configured for CORS) used
+                to guard the httpOnly-cookie auth fallback against cross-site
+                WebSocket hijacking. None or a list containing "*" disables the
+                check.
         """
         self.manager = ConnectionManager(config, redis_pubsub, redis_client)
         self.auth_manager = auth_manager
+        self.allowed_origins = allowed_origins
         self._connection_counter = 0
         self._heartbeat_task: asyncio.Task | None = None
         self._background_tasks: set[asyncio.Task] = set()
@@ -1084,9 +1090,41 @@ class WebSocketAdapter:
             websocket: WebSocket connection
             token: Authentication token from query parameter
         """
+        # Prefer query-param token (API clients / explicit handshake), then
+        # fall back to the httpOnly cookie set by the dashboard auth flow.
+        # Same-origin Vite-proxied connections send cookies automatically.
+        cookie_token = websocket.cookies.get("codetoreum_token")
+        effective_token = token or cookie_token
+
+        # The cookie is an ambient credential the browser attaches automatically,
+        # even on cross-site requests. Query-param tokens are explicit and don't
+        # need this, but the cookie fallback must be pinned to a known origin or
+        # a malicious site could ride a victim's valid cookie into a session
+        # (cross-site WebSocket hijacking).
+        if (
+            not token
+            and cookie_token
+            and self.allowed_origins
+            and "*" not in self.allowed_origins
+        ):
+            origin = websocket.headers.get("origin")
+            if origin not in self.allowed_origins:
+                logger.warning(
+                    "WebSocket connection rejected: origin not allowed for cookie auth",
+                    extra={"origin": origin},
+                )
+                await websocket.close(code=4001, reason="Unauthorized")
+                return
+
         # Authenticate before accepting connection
-        if self.auth_manager and not self.auth_manager.validate_token(token or ""):
-            logger.warning("WebSocket connection rejected: invalid token")
+        if self.auth_manager and not self.auth_manager.validate_token(effective_token or ""):
+            logger.warning(
+                "WebSocket connection rejected: invalid token",
+                extra={
+                    "query_token_present": bool(token),
+                    "cookie_token_present": bool(cookie_token),
+                },
+            )
             await websocket.close(code=4001, reason="Unauthorized")
             return
 
@@ -1096,7 +1134,7 @@ class WebSocketAdapter:
         session_span = self._session_tracer.start_session(
             connection_id=connection_id,
             client_ip=websocket.client.host if websocket.client else None,
-            token_present=bool(token),
+            token_present=bool(effective_token),
         )
         self._session_spans[connection_id] = session_span
         self._message_tracers[connection_id] = WebSocketMessageTracer(session_span)
