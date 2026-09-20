@@ -126,7 +126,7 @@ Also in Phase 1b: `AdapterFactory` is instantiated (defaults to `PRODUCTION` mod
 | `run_registry` | `InMemoryActiveWorkflowRunRegistry` | none |
 | `branch_tracker` | in-memory impl | none |
 
-> Both the `llm_provider` and `storage` adapter slots retired with the coding-agent port redesign (Phase D5). The coding-agent adapter owns subprocess invocation directly; agent output flows through the event stream rather than a blob store. See DEF-015 in §9.
+> Both the `llm_provider` and `storage` adapter slots retired with the coding-agent port redesign (Phase D5). The coding-agent adapter owns subprocess invocation directly; agent output flows through the event stream rather than a blob store. See DEF-015 in §10.
 
 Phase 2b initializes the event store: `_initialize_event_store()` calls `initialize_event_store()` which ensures Elasticsearch indices exist. If this fails, the server will not start.
 
@@ -135,10 +135,12 @@ Phase 2b initializes the event store: `_initialize_event_store()` calls `initial
 `_validate_no_mocks_on_critical_path()` inspects the concrete class name of each adapter in `CRITICAL_ADAPTER_SLOTS`:
 
 ```python
-CRITICAL_ADAPTER_SLOTS = {"board", "ticket", "coding_agent", "version_control", "container", "code_review"}
+CRITICAL_ADAPTER_SLOTS = {"board", "ticket", "version_control", "container", "code_review", "container_recovery", "queue_service"}
 ```
 
 Any adapter whose class name contains `Mock`, `InMemory`, `Fake`, or `Null` causes a `RuntimeError`. This guard ensures bootstrap always exercises real adapters on the execution-critical path.
+
+**Note**: The `coding_agent` slot is validated separately in Phase 4c because it is constructed after Phase 2's `resolve_all()` completes, so it is not covered by the generic critical-path scan. Explicit validation of the coding-agent adapter happens immediately after construction.
 
 Phase 3b: `_validate_event_emitter_is_production()` ensures the resolved event emitter is not `CapturingMockEventEmitter`.
 
@@ -173,10 +175,12 @@ ExecutionServiceAgentExecutor(execution_service, workspace_router, config_store,
 AgentScheduler(..., agent_executor=execution_service_executor)
 WorkflowOrchestrator(..., dispatch_via_task_queue=False)
 WorkItemService(event_store)
-MultiProjectOrchestrator(project_manager, workflow_orchestrator, board_service, poll_interval_seconds=30)
+MultiProjectOrchestrator(project_manager)
 ```
 
 Note: `ExecutionService` and `WorkspaceRouter` no longer depend on `IContainer` or `IStorage` directly. The container is consumed by `ClaudeCodeAdapter`'s containerized strategy; storage is retired.
+
+`MultiProjectOrchestrator` is a pure admin-query service (`get_project_status`, `list_enabled_projects`) — not an orchestration loop. It provides read-only access to project status. One-time project lifecycle initialization (board reconciliation) is performed by `ProjectLifecycleService` in Phase 5e.
 
 Note: `ExecutionServiceAgentExecutor` receives `WorkItemService` as a constructor argument. The service is instantiated earlier in `_create_services` (immediately after `WorkspaceRouter`) so it is available when the executor is built. The post-hoc `_work_item_service` swap that previously existed in Phase 5d is gone.
 
@@ -186,9 +190,12 @@ Note: `ExecutionServiceAgentExecutor` receives `WorkItemService` as a constructo
 
 **Phase 5c**: `_load_bootstrap_projects()` loads `bootstrap/rounds.json` into `IAgentRepository`, `IWorkflowConfigService`, and `IConfigStore`. Then calls `register_project_repo()` on the raw ticket adapter for each project.
 
-**Phase 5d**: `WorkItemService` is constructor-injected into `ExecutionServiceAgentExecutor` during `_create_services`. The phase label is retained for parity with log-grep checkpoints but the architectural seam (private attribute swap on the executor) is gone.
+**Phase 5d**: `_reconcile_board_structures()` syncs each enabled project's board columns with the external ticket system. Two sub-steps follow under the same label:
 
-**Phase 5e**: `asyncio.ensure_future(self.services.multi_project_orchestrator.start())` launches the MPO poll loop as a background task. MPO is the sole orchestration entry point — it polls all enabled projects every 30 seconds, reconciles boards, and delegates per-project work to `WorkflowOrchestrator`. Starting after Phase 5d ensures `WorkItemService` is fully wired before the first poll cycle.
+- **Phase 5d-1**: a no-op checkpoint. `WorkItemService` is constructor-injected into `ExecutionServiceAgentExecutor` during `_create_services`, so nothing is wired here; the label is retained for parity with log-grep checkpoints, but the architectural seam (private attribute swap on the executor) is gone. See INV-03.
+- **Phase 5d-2**: starts the DLQ retry processor.
+
+**Phase 5e**: `ProjectLifecycleService.initialize_all_projects()` performs one-time initialization of all enabled projects: board reconciliation with the external ticket system. Initialization happens once during bootstrap and is not repeated on subsequent runs or restarts.
 
 ### Phase 6 — Input port creation
 
@@ -403,7 +410,7 @@ The following constraints MUST hold for bootstrap to work correctly. Violating a
 **INV-07**: Simulation-only routes MUST NEVER appear in `ProductionApplicationBootstrap._create_fastapi_app()`. They mount exclusively in `SimulationApplicationBootstrap._create_fastapi_app()`.
 - The two bootstrap classes produce fundamentally different `FastAPI` instances. Merging routes is a production security boundary violation.
 
-**INV-08**: `CRITICAL_ADAPTER_SLOTS = {"board", "ticket", "coding_agent", "version_control", "container", "code_review"}` — no adapter in these slots may be `Mock`, `InMemory`, `Fake`, or `Null`. Phase 3 enforces this with `RuntimeError`.
+**INV-08**: `CRITICAL_ADAPTER_SLOTS = {"board", "ticket", "version_control", "container", "code_review", "container_recovery", "queue_service"}` — no adapter in these slots may be `Mock`, `InMemory`, `Fake`, or `Null`. Phase 3 enforces this with `RuntimeError`. (The `coding_agent` slot is validated separately in Phase 4c.)
 
 ### Port discipline constraints
 
@@ -434,7 +441,7 @@ The following constraints MUST hold for bootstrap to work correctly. Violating a
 
 ### Authority and projection constraints
 
-**INV-19 — Board adapter is authoritative for current column state**: `IBoardService` (and via it, GitHub Projects v2 / Jira / etc.) is the single source of truth for which column a given work item is currently in. Reads of current column state go through `IBoardService.get_item_position()`. Writes go through `IBoardService.move_item_to_column()`, which projects the change to the external system and emits `WorkItemColumnChangedEvent`. Project config remains authoritative for workflow *structure* (which columns exist). `WorkItem.current_column` is being deleted (GitHub issue #904 Work item 3).
+**INV-19 — Board adapter is authoritative for current column state**: `IBoardService` (and via it, GitHub Projects v2 / Jira / etc.) is the single source of truth for which column a given work item is currently in. Reads of current column state go through `IBoardService.get_item_position()`. Writes go through `IBoardService.move_item_to_column()`, which projects the change to the external system and emits `WorkItemColumnChangedEvent`. Project config remains authoritative for workflow *structure* (which columns exist). `WorkItem.current_column` has been deleted from the domain model (GitHub issue #904 Work item 3); the REST DTO retains `current_column` as a backwards-compatible projection of `current_stage`.
 - Violation: silent column drift between internal state and the external board (D-S from the 2026-05-31 bootstrap retrospective).
 - Full discussion: [`documentation/architecture/invariants.md`](../documentation/architecture/invariants.md#inv-19--board-adapter-is-authoritative-for-current-column-state).
 
@@ -501,14 +508,16 @@ Use these log patterns to confirm correct operation at each stage. All patterns 
 | Infra exclusivity verified | `Phase 1c: Verifying infrastructure exclusivity...` + `Phase 1c: Infrastructure exclusivity verified.` | All four exclusivity checks passed (ES, Redis, Docker, GitHub) |
 | Adapters resolved | `Phase 2: Creating 33 adapters (credential validation + resolution)...` | All 33 adapter slots populated |
 | Event store initialized | `Event store initialized successfully` with `event_store_type: ElasticsearchEventStore` | ES indices created/verified |
-| No mocks on critical path | `Critical path validation passed (6 adapters)` | Phase 3 guard passed |
+| No mocks on critical path | `Critical path validation passed (7 adapters)` | Phase 3 guard passed |
 | Resilience applied | `Resilience decorators applied to critical adapters` | Decorators wrapping ticket, LLM, VCS, container, repository |
 | Raw ticket adapter captured | `DEBUG: Applied resilience to ticket system adapter` | `_raw_ticket_adapter` captured before wrapping |
 | Services created | `Created all 11 application services with production adapters` | Full service graph ready |
 | Bootstrap config loaded | `Loaded 1 project bootstrap configuration(s) from .../bootstrap` | `rounds.json` parsed, agents and template registered |
 | Repo registered | `Registered project repo 'rounds' for project 'rounds' with ticket adapter` | `register_project_repo()` called successfully |
-| WorkItemService wired | `Phase 5d: Wiring WorkItemService to executor...` | Executor can now load ES-backed work items |
-| MPO started | `Phase 5e: Multi-project orchestrator poll loop started (background task)` | MPO poll loop running, will reconcile boards every 30s |
+| Board reconciliation | `Phase 5d: Reconciling board structures for all projects...` | Board columns synced with external ticket system |
+| WorkItemService checkpoint | `Phase 5d-1: WorkItemService is constructor-injected into executor (no swap needed)` | Confirms the executor was built with the ES-backed service; no wiring happens here |
+| DLQ retry processor | `Phase 5d-2: Starting DLQ retry processor...` + `Phase 5d-2: DLQ retry processor started` | Dead-letter retry loop running |
+| Project initialization | `Phase 5e: Initializing all projects...` + `Phase 5e: Project initialization completed` | One-time project initialization (board reconciliation) complete |
 | Auth token printed | `Authentication token: <jwt>` | Token available for REST API calls |
 | Server ready | `Production bootstrap completed successfully` | All 7 phases complete, FastAPI app live |
 | Work item created | `Created execution ... for agent claude-code-agent on work item ...` | REST trigger accepted, execution created in ES |
@@ -525,7 +534,79 @@ Use these log patterns to confirm correct operation at each stage. All patterns 
 
 ---
 
-## 8. Known Scope Limitations
+## 8. Event Handler Registration
+
+All event handlers required for bootstrap operation are registered in Phase 7 of `ProductionApplicationBootstrap.setup()`. The following table documents each handler, its event subscriptions, and its role in the bootstrap execution flow.
+
+| Handler | Events subscribed | Phase registered | Role | Dependencies |
+|---------|-------------------|------------------|------|------------|
+| `BoardColumnEventHandler` | `WorkItemColumnChangedEvent`, `AgentExecutionCompletedEvent` | Phase 7 | Drives pipeline auto-progression: reacts to column changes, acquires the board lock, dispatches work items to the executor, and advances stages on completion. | `IBoardService`, `IWorkflowConfigService`, `IAgentExecutor`, `EventBus`, `IWorkItemCommandPort`, `IDistributedLock`, `IPipelineQueueService` |
+| `WorkflowEventHandler` | `WorkItemCreatedEvent`, `ExecutionCompletedEvent`, `ExecutionFailedEvent`, `ReviewCycleApprovedEvent`, `ReviewCycleRejectedEvent`, `ReviewCycleEscalatedToHumanEvent` | Phase 7 | Bridges work-item, execution, and review events to the workflow orchestrator: initiates workflows on work item creation and progresses stages based on execution and review outcomes. | `WorkflowOrchestrator` |
+| `ExecutionEventHandler` | `ExecutionInitializedEvent`, `ExecutionStartedEvent`, `ExecutionCompletedEvent`, `ExecutionFailedEvent`, `ExecutionTimedOutEvent` | Phase 7 | Tracks execution lifecycle: captures execution state changes and updates metrics, logging, and triggers post-completion processing. | `ExecutionService` |
+| `BranchResolutionEventHandler` | `BranchResolvedEvent`, `BranchReusedEvent`, `BranchResolutionCreatedEvent` | Phase 7 | Maintains branch audit trail: logs branch resolution events with structured fields for traceability and metrics tracking. | `EventBus` (for logging/instrumentation) |
+| `RepairCycleEventHandler` | `WorkItemColumnChangedEvent` | Phase 7 | Automates test-fix-validate cycles: detects work items entering the configured repair cycle stage and invokes the repair cycle adapter to coordinate test execution, analysis, and environment repair. | `IWorkflowConfigService`, `ICIPipelineService`, `IRepairCycle` (repair cycle adapter) |
+
+**Wiring in Phase 7**:
+
+All event handlers are registered via dedicated private methods called from `_create_fastapi_app()`:
+
+```python
+def _create_fastapi_app(self) -> FastAPI:
+    # ... create app ...
+    
+    # Register all event handlers via dedicated private methods
+    self._register_board_column_handler(app)
+    self._register_workflow_event_handler()
+    self._register_execution_event_handler()
+    self._register_branch_resolution_event_handler()
+    self._register_repair_cycle_event_handler()
+    
+    return app
+
+def _register_board_column_handler(self, app: FastAPI) -> None:
+    handler = BoardColumnEventHandler(
+        board_service=self.adapters.board,
+        workflow_config=self.services.workflow_config,
+        agent_executor=self.services.agent_executor,
+        event_bus=self.infrastructure.event_bus,
+        work_item_service=self.adapters.work_item_command_port,
+        distributed_lock=self.adapters.distributed_lock,
+        pipeline_queue=self.adapters.pipeline_queue,
+    )
+    self.infrastructure.event_bus.register_handler(handler)
+
+def _register_workflow_event_handler(self) -> None:
+    handler = WorkflowEventHandler(
+        orchestrator=self.services.workflow_orchestrator,
+    )
+    self.infrastructure.event_bus.register_handler(handler)
+
+def _register_execution_event_handler(self) -> None:
+    handler = ExecutionEventHandler(
+        execution_service=self.services.execution_service,
+    )
+    self.infrastructure.event_bus.register_handler(handler)
+
+def _register_branch_resolution_event_handler(self) -> None:
+    handler = BranchResolutionEventHandler()
+    self.infrastructure.event_bus.register_handler(handler)
+
+def _register_repair_cycle_event_handler(self) -> None:
+    handler = RepairCycleEventHandler(
+        workflow_config=self.services.workflow_config,
+        ci_pipeline_service=self.adapters.ci_pipeline,
+        repair_cycle_service=self.adapters.repair_cycle,
+        event_bus=self.infrastructure.event_bus,
+        clock=self.infrastructure.clock,
+    )
+    self.infrastructure.event_bus.register_handler(handler)
+```
+
+**Observability**: Each handler is registered via a dedicated private method. Successful registrations log messages matching the pattern `Registered <HandlerName> with event bus`. Search for these patterns in bootstrap logs to confirm all handlers loaded successfully before the first work item is created.
+
+---
+
+## 9. Known Scope Limitations
 
 These are intentional omissions, not bugs.
 
@@ -539,20 +620,9 @@ These are intentional omissions, not bugs.
 
 **Partial board sync.** The board columns defined in `rounds.json` are loaded into `IWorkflowConfigService` but NOT synced bidirectionally with the GitHub Projects v2 board. The board must be manually configured in GitHub to match the column names in `rounds.json`.
 
-**Unregistered event handlers.** Four `application/event_handlers/` classes are constructed nowhere in `production_bootstrap.py` Phase 7 and therefore receive no events at runtime:
-
-| Handler | Consumes | Bootstrap impact | Wiring decision |
-|---|---|---|---|
-| `ExecutionEventHandler` | `ExecutionInitializedEvent`, `ExecutionStartedEvent`, `ExecutionCompletedEvent`, `ExecutionFailedEvent`, `ExecutionTimedOutEvent` | Drives execution metrics, success/failure rate, and log streaming. No effect on the auto-progression path (which goes through `BoardColumnEventHandler`). | Subscribe — pure observability, low risk. Defer to a follow-up commit to keep this batch survey-only. |
-| `BranchResolutionEventHandler` | `BranchResolutionCreatedEvent`, `BranchResolvedEvent`, `BranchReusedEvent` | Updates `IWorkItemBranchTracker` from branch-resolution outcomes. Today the tracker is mutated directly by `ExecutionServiceAgentExecutor`. Subscribing this handler would create a second writer. | Hold — needs reconciliation with the executor's direct write path before subscribing. |
-| `RepairCycleEventHandler` | Repair cycle events (start/iteration/complete/fail) | Routes repair-cycle outcomes back into the workflow. Repair cycle is not exercised by bootstrap (`rounds.json` has no repair-cycle column). | Hold — wire when repair cycle joins the bootstrap critical path. |
-| `WorkflowEventHandler` | Workflow state transitions | Currently a stub-like handler (`logger.warning` on any unknown event). Real workflow-state mutation goes through `WorkflowOrchestrator`. | Hold — duplicate concern with `WorkflowOrchestrator`; needs design review before subscribing. |
-
-Bootstrap does not require any of these handlers for the happy path. The survey is informational. Subscribing `ExecutionEventHandler` is the only safe candidate today; the other three need design decisions before wiring.
-
 ---
 
-## 9. Deficiency Log
+## 10. Deficiency Log
 
 Running record of architectural gaps found and fixed during bootstrap cycles. Most recent first.
 
@@ -621,27 +691,28 @@ The user's call ("it will never be easier to fix this than it is now") drove a c
 
 ### DEF-019 — Agent-side OTel spans not surfaced to event bus (O3 follow-up)
 
-**Status**: **Fixed** (landed in commit `e3eb365b`, Phase 4 integration test for agent telemetry pipeline).
+**Status**: **Fixed** (landed in commit `4639de96`, in-container OTel sidecar wiring for agent-side spans; design rationale in `2e1162ed`).
 
 **Deficiency**: `CodingAgentOtlpSpanEvent` is defined (D1) but no adapter emits it. The post-DEF-014 architecture forbids agent containers from reaching `otel-collector` directly — agents run on Docker's default `bridge` network for outbound internet only, with no path to `codetoreum_default`-attached services like the collector. Claude Code's internal OTel SDK exports to whatever `OTEL_EXPORTER_OTLP_ENDPOINT` it can reach, which by construction is now nothing useful. Distributed-tracing-based behavioural analysis of agent runs is therefore unavailable across all `ICodingAgent` adapters (Gap 5 of D9 validation).
 
 **Fix (complete)**:
 
-The deficiency is resolved through a phased implementation:
+The deficiency is resolved through an in-container `otelcol` sidecar approach:
 
-1. **Phase 0** (873d420d) — Fixed OTel env var merge-order bug in `DockerContainerAdapter` so agent container receives correctly-ordered telemetry environment variables.
+1. **Design & rationale** — Documented in `documentation/architecture/infrastructure/otel-routing.md` (commit `2e1162ed`) explaining why Approach A (in-container sidecar with file export) was selected over direct-to-collector options, and why agent containers cannot reach external collectors.
 
-2. **Phase 1** (9b8a6cb7) — Bundled static `otelcol` binary into `Dockerfile.agent` at `/usr/local/bin/otelcol` with configuration at `/etc/otelcol/config.yaml`. Configured OTLP receiver on `127.0.0.1:4318` and file exporter writing OTLP/JSON to `/var/otel/spans.jsonl`.
+2. **Deficiency tracking** — Recorded in commit `46d5832d` with placeholder implementation status pending sidecar integration.
 
-3. **Phase 2** (7f46b4f6) — Updated `scripts/agent-entrypoint.sh` to launch `otelcol` sidecar in the background with health checks, wait for receiver readiness, then `exec` the agent command.
-
-4. **Phase 3** — Updated `ContainerizedClaudeStrategy` to carve per-execution telemetry mount at `/var/otel`, call `parse_spans_file(...)` after agent process exits (before container removal), and publish each `CodingAgentOtlpSpanEvent` to the event bus.
-
-5. **Phase 4** (e3eb365b) — Comprehensive end-to-end integration tests that verify the complete sidecar-to-Elasticsearch telemetry pipeline:
-   - `test_real_agent_image_produces_otel_spans` validates agent container with otelcol sidecar correctly produces `spans.jsonl` with OTLP/JSON content
-   - `test_parse_and_create_otel_span_events` verifies parsing of `spans.jsonl` into `CodingAgentOtlpSpanEvent` instances with proper trace_id, span_id, name, and attributes
-   - `test_publish_events_to_elasticsearch` tests complete pipeline: generate synthetic OTLP spans inside container, parse `spans.jsonl` after container exits, publish events to Elasticsearch, query and verify events land under `coding-agent-<execution_id>` stream
-   - `test_expected_span_values_match` validates trace_id, span_id, and name values match expected synthetic span data
+3. **Implementation** (commit `4639de96`) — Complete end-to-end integration:
+   - Fixed OTel env var merge-order bug in `DockerContainerAdapter` so agent container receives correctly-ordered telemetry environment variables
+   - Bundled static `otelcol` binary into `Dockerfile.agent` at `/usr/local/bin/otelcol` with configuration at `/etc/otelcol/config.yaml`. Configured OTLP receiver on `127.0.0.1:4318` and file exporter writing OTLP/JSON to `/var/otel/spans.jsonl`.
+   - Updated `scripts/agent-entrypoint.sh` to launch `otelcol` sidecar in the background with health checks, wait for receiver readiness, then `exec` the agent command.
+   - Updated `ContainerizedClaudeStrategy` to carve per-execution telemetry mount at `/var/otel`, call `parse_spans_file(...)` after agent process exits (before container removal), and publish each `CodingAgentOtlpSpanEvent` to the event bus.
+   - Comprehensive end-to-end integration tests that verify the complete sidecar-to-Elasticsearch telemetry pipeline:
+     - `test_real_agent_image_produces_otel_spans` validates agent container with otelcol sidecar correctly produces `spans.jsonl` with OTLP/JSON content
+     - `test_parse_and_create_otel_span_events` verifies parsing of `spans.jsonl` into `CodingAgentOtlpSpanEvent` instances with proper trace_id, span_id, name, and attributes
+     - `test_publish_events_to_elasticsearch` tests complete pipeline: generate synthetic OTLP spans inside container, parse `spans.jsonl` after container exits, publish events to Elasticsearch, query and verify events land under `coding-agent-<execution_id>` stream
+     - `test_expected_span_values_match` validates trace_id, span_id, and name values match expected synthetic span data
 
 **Implementation components**:
 
@@ -915,9 +986,9 @@ The misleading docstring on `WorkspaceRouter.prepare_container_environment` ("CL
 
 **Deficiency**: `_create_services()` instantiated `MultiProjectOrchestrator` but `setup()` never called `start()` on it. The MPO poll loop was dormant — it existed as an object but its `while True` loop never ran. The `teardown()` method already called `stop()` correctly (it was wired for cleanup), but the start was missing. This meant MPO's board reconciliation and project polling never fired in production.
 
-**Fix**: Added Phase 5e to `setup()` in `production_bootstrap.py`: `asyncio.ensure_future(self.services.multi_project_orchestrator.start())` launches the poll loop as a background task after Phase 5d (so `WorkItemService` is fully wired before the first cycle). The `teardown()` call to `stop()` was already correct and needed no change.
+**Fix**: Added Phase 5e to `setup()` in `production_bootstrap.py`: `asyncio.ensure_future(self.services.multi_project_orchestrator.start())` launches the poll loop as a background task after Phase 5d (so `WorkItemService` is fully wired before the first cycle). The `teardown()` call to `stop()` was already correct and needed no change. **Note**: This fix has since been superseded. MPO's role was re-characterized as a pure admin-query service (`get_project_status`, `list_enabled_projects`) — not an orchestration loop. The `start()` call was removed, and project lifecycle initialization (board reconciliation) is now performed by `ProjectLifecycleService` in Phase 5e instead.
 
-**Relationship clarification**: `BoardColumnEventHandler` remains the event-driven dispatch path for real-time column change reactions. MPO is the polling-based orchestration entry point for initial pickup and board reconciliation. These are complementary, not competing. `WorkflowOrchestrator` is MPO's per-project delegate (`dispatch_via_task_queue=False` ensures BEH owns event-driven dispatch). No changes to `BoardColumnEventHandler` were needed.
+**Relationship clarification**: `BoardColumnEventHandler` remains the event-driven dispatch path for real-time column change reactions. `MultiProjectOrchestrator` is a pure admin-query service (`get_project_status`, `list_enabled_projects`) — not an orchestration loop. Project lifecycle initialization (board reconciliation) is performed once at bootstrap by `ProjectLifecycleService` in Phase 5e, not by MPO. `WorkflowOrchestrator` owns per-project workflow dispatch (`dispatch_via_task_queue=False` ensures event-driven dispatch). No changes to `BoardColumnEventHandler` were needed.
 
 **Files changed**: `src/codetoreum/infrastructure/bootstrap/production_bootstrap.py` (Phase 5e in `setup()`, docstring update)
 

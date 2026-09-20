@@ -19,6 +19,7 @@ import logging
 from datetime import UTC, datetime
 
 import redis.asyncio as aioredis
+from redis.exceptions import RedisError
 
 from codetoreum.domain.events.queue_events import (
     QueueItemAddedEvent,
@@ -132,14 +133,28 @@ class RedisPipelineQueueService(IPipelineQueueService):
 
         Raises:
             QueueValidationError: Invalid work_item_id
+            QueueServiceError: Redis operation failed
         """
         if not work_item_id:
             msg = "work_item_id cannot be empty"
             raise QueueValidationError(msg)
 
         reverse_index_key = self._reverse_index_key()
-        exists = await self._redis.hexists(reverse_index_key, work_item_id)
-        return bool(exists)
+        try:
+            exists = await self._redis.hexists(reverse_index_key, work_item_id)
+            return bool(exists)
+        except RedisError as e:
+            msg = f"Failed to check queue membership for {work_item_id}"
+            logger.error(
+                msg,
+                exc_info=True,
+                extra={
+                    "work_item_id": work_item_id,
+                    "error_type": type(e).__name__,
+                    "error_id": ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE,
+                },
+            )
+            raise QueueServiceError(msg) from e
 
     async def enqueue_item(
         self,
@@ -166,6 +181,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
         Raises:
             QueueValidationError: Invalid parameters
             DuplicateQueueEntryError: Item already in queue
+            QueueServiceError: Redis operation failed
         """
         # Input validation
         if not project_id:
@@ -216,7 +232,22 @@ class RedisPipelineQueueService(IPipelineQueueService):
 
         # Atomically check duplicate using HSETNX on reverse index
         # HSETNX returns 1 if field was set, 0 if field already existed
-        dup_check = await self._redis.hsetnx(reverse_index_key, work_item_id, pipeline_coords)
+        try:
+            dup_check = await self._redis.hsetnx(reverse_index_key, work_item_id, pipeline_coords)
+        except RedisError as e:
+            msg = f"Failed to check duplicate entry for {work_item_id}"
+            logger.error(
+                msg,
+                exc_info=True,
+                extra={
+                    "work_item_id": work_item_id,
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "error_type": type(e).__name__,
+                    "error_id": ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE,
+                },
+            )
+            raise QueueServiceError(msg) from e
 
         if not dup_check:
             # Field already exists - this is a duplicate
@@ -232,6 +263,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
             await pipe.execute()
         except Exception as pipeline_error:
             # Pipeline failed - remove orphaned reverse index entry to prevent future duplicates
+            # Always run cleanup regardless of exception type
             try:
                 await self._redis.hdel(reverse_index_key, work_item_id)
             except Exception as cleanup_error:
@@ -247,7 +279,24 @@ class RedisPipelineQueueService(IPipelineQueueService):
                         "error_id": ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE,
                     },
                 )
-            # Re-raise the original pipeline error (not the cleanup error)
+
+            # Branch based on exception type: wrap RedisError, propagate others
+            if isinstance(pipeline_error, RedisError):
+                msg = f"Failed to enqueue item {work_item_id} in pipeline {project_id}/{board_id}"
+                logger.error(
+                    msg,
+                    exc_info=True,
+                    extra={
+                        "work_item_id": work_item_id,
+                        "project_id": project_id,
+                        "board_id": board_id,
+                        "position": position_in_column,
+                        "error_type": type(pipeline_error).__name__,
+                        "error_id": ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE,
+                    },
+                )
+                raise QueueServiceError(msg) from pipeline_error
+            # Non-Redis exception: propagate unwrapped
             raise
 
         # Emit event
@@ -276,6 +325,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
             QueueValidationError: Invalid work_item_id
             QueueItemNotFoundError: Item not in queue
             InvalidQueueStateError: Item already marked active or metadata corrupted
+            QueueServiceError: Redis operation failed
         """
         if not work_item_id:
             msg = "work_item_id cannot be empty"
@@ -283,7 +333,20 @@ class RedisPipelineQueueService(IPipelineQueueService):
 
         # Look up pipeline via reverse index
         reverse_index_key = self._reverse_index_key()
-        pipeline_coords = await self._redis.hget(reverse_index_key, work_item_id)
+        try:
+            pipeline_coords = await self._redis.hget(reverse_index_key, work_item_id)
+        except RedisError as e:
+            msg = f"Failed to look up pipeline for {work_item_id}"
+            logger.error(
+                msg,
+                exc_info=True,
+                extra={
+                    "work_item_id": work_item_id,
+                    "error_type": type(e).__name__,
+                    "error_id": ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE,
+                },
+            )
+            raise QueueServiceError(msg) from e
 
         if not pipeline_coords:
             msg = f"Work item {work_item_id} not found in any queue"
@@ -303,7 +366,23 @@ class RedisPipelineQueueService(IPipelineQueueService):
         meta_key = self._metadata_key(project_id, board_id)
 
         # Get current metadata
-        raw_meta = await self._redis.hget(meta_key, work_item_id)
+        try:
+            raw_meta = await self._redis.hget(meta_key, work_item_id)
+        except RedisError as e:
+            msg = f"Failed to fetch metadata for {work_item_id}"
+            logger.error(
+                msg,
+                exc_info=True,
+                extra={
+                    "work_item_id": work_item_id,
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "error_type": type(e).__name__,
+                    "error_id": ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE,
+                },
+            )
+            raise QueueServiceError(msg) from e
+
         if not raw_meta:
             msg = f"Work item {work_item_id} metadata not found"
             raise QueueItemNotFoundError(msg)
@@ -365,7 +444,22 @@ class RedisPipelineQueueService(IPipelineQueueService):
 
         # Update status to ACTIVE
         metadata["status"] = QueueStatus.ACTIVE.value
-        await self._redis.hset(meta_key, work_item_id, json.dumps(metadata))
+        try:
+            await self._redis.hset(meta_key, work_item_id, json.dumps(metadata))
+        except RedisError as e:
+            msg = f"Failed to update status for {work_item_id}"
+            logger.error(
+                msg,
+                exc_info=True,
+                extra={
+                    "work_item_id": work_item_id,
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "error_type": type(e).__name__,
+                    "error_id": ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE,
+                },
+            )
+            raise QueueServiceError(msg) from e
 
     async def remove_from_queue(self, work_item_id: str) -> bool:
         """Remove a work item from the queue.
@@ -378,6 +472,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
 
         Raises:
             QueueValidationError: Invalid work_item_id
+            QueueServiceError: Redis operation failed
         """
         if not work_item_id:
             msg = "work_item_id cannot be empty"
@@ -385,7 +480,20 @@ class RedisPipelineQueueService(IPipelineQueueService):
 
         # Look up pipeline via reverse index
         reverse_index_key = self._reverse_index_key()
-        pipeline_coords = await self._redis.hget(reverse_index_key, work_item_id)
+        try:
+            pipeline_coords = await self._redis.hget(reverse_index_key, work_item_id)
+        except RedisError as e:
+            msg = f"Failed to look up pipeline for {work_item_id}"
+            logger.error(
+                msg,
+                exc_info=True,
+                extra={
+                    "work_item_id": work_item_id,
+                    "error_type": type(e).__name__,
+                    "error_id": ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE,
+                },
+            )
+            raise QueueServiceError(msg) from e
 
         if not pipeline_coords:
             return False
@@ -405,7 +513,18 @@ class RedisPipelineQueueService(IPipelineQueueService):
                     "error_id": ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE,
                 },
             )
-            await self._redis.hdel(reverse_index_key, work_item_id)
+            try:
+                await self._redis.hdel(reverse_index_key, work_item_id)
+            except RedisError as e:
+                logger.error(
+                    f"Failed to clean up corrupt reverse index entry for {work_item_id}",
+                    exc_info=True,
+                    extra={
+                        "work_item_id": work_item_id,
+                        "error_type": type(e).__name__,
+                        "error_id": ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE,
+                    },
+                )
             return False
         project_id, board_id = parts
 
@@ -413,12 +532,27 @@ class RedisPipelineQueueService(IPipelineQueueService):
         meta_key = self._metadata_key(project_id, board_id)
 
         # Atomically remove from sorted set, metadata, and reverse index
-        pipe = self._redis.pipeline(transaction=True)
-        pipe.zrem(queue_key, work_item_id)
-        pipe.hdel(meta_key, work_item_id)
-        pipe.hdel(reverse_index_key, work_item_id)
-        results = await pipe.execute()
-        removed = results[0]
+        try:
+            pipe = self._redis.pipeline(transaction=True)
+            pipe.zrem(queue_key, work_item_id)
+            pipe.hdel(meta_key, work_item_id)
+            pipe.hdel(reverse_index_key, work_item_id)
+            results = await pipe.execute()
+            removed = results[0]
+        except RedisError as pipeline_error:
+            msg = f"Failed to remove item {work_item_id} from queue {project_id}/{board_id}"
+            logger.error(
+                msg,
+                exc_info=True,
+                extra={
+                    "work_item_id": work_item_id,
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "error_type": type(pipeline_error).__name__,
+                    "error_id": ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE,
+                },
+            )
+            raise QueueServiceError(msg) from pipeline_error
 
         if removed:
 
@@ -465,6 +599,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
 
         Raises:
             QueueValidationError: Invalid parameters
+            QueueServiceError: Redis operation failed
         """
         if not project_id:
             msg = "project_id cannot be empty"
@@ -518,7 +653,21 @@ class RedisPipelineQueueService(IPipelineQueueService):
             # Continue with current queue state if board fetch fails
 
         # Get all items from sorted set (lowest score first)
-        items = await self._redis.zrange(queue_key, 0, -1, withscores=True)
+        try:
+            items = await self._redis.zrange(queue_key, 0, -1, withscores=True)
+        except RedisError as e:
+            msg = f"Failed to fetch queue items from {project_id}/{board_id}"
+            logger.error(
+                msg,
+                exc_info=True,
+                extra={
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "error_type": type(e).__name__,
+                    "error_id": ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE,
+                },
+            )
+            raise QueueServiceError(msg) from e
 
         for work_item_id, score in items:
             # Decode if bytes
@@ -526,7 +675,22 @@ class RedisPipelineQueueService(IPipelineQueueService):
                 work_item_id = work_item_id.decode("utf-8")
 
             # Get metadata
-            raw_meta = await self._redis.hget(meta_key, work_item_id)
+            try:
+                raw_meta = await self._redis.hget(meta_key, work_item_id)
+            except RedisError as e:
+                logger.error(
+                    f"Failed to fetch metadata for {work_item_id} in queue {project_id}/{board_id}",
+                    exc_info=True,
+                    extra={
+                        "work_item_id": work_item_id,
+                        "project_id": project_id,
+                        "board_id": board_id,
+                        "error_type": type(e).__name__,
+                        "error_id": ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE,
+                    },
+                )
+                raise QueueServiceError(f"Failed to fetch metadata for {work_item_id}") from e
+
             if not raw_meta:
                 # Metadata missing - emit corruption event and skip (don't return)
                 await self._emit_event(
@@ -628,6 +792,7 @@ class RedisPipelineQueueService(IPipelineQueueService):
 
         Raises:
             QueueValidationError: Invalid parameters
+            QueueServiceError: Redis operation failed
         """
         if not project_id:
             msg = "project_id cannot be empty"
@@ -640,7 +805,21 @@ class RedisPipelineQueueService(IPipelineQueueService):
         meta_key = self._metadata_key(project_id, board_id)
 
         # Get all items from sorted set
-        items = await self._redis.zrange(queue_key, 0, -1, withscores=True)
+        try:
+            items = await self._redis.zrange(queue_key, 0, -1, withscores=True)
+        except RedisError as e:
+            msg = f"Failed to fetch queue items from {project_id}/{board_id}"
+            logger.error(
+                msg,
+                exc_info=True,
+                extra={
+                    "project_id": project_id,
+                    "board_id": board_id,
+                    "error_type": type(e).__name__,
+                    "error_id": ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE,
+                },
+            )
+            raise QueueServiceError(msg) from e
 
         entries = []
         for work_item_id, score in items:
@@ -649,7 +828,21 @@ class RedisPipelineQueueService(IPipelineQueueService):
                 work_item_id = work_item_id.decode("utf-8")
 
             # Get metadata
-            raw_meta = await self._redis.hget(meta_key, work_item_id)
+            try:
+                raw_meta = await self._redis.hget(meta_key, work_item_id)
+            except RedisError as e:
+                logger.error(
+                    f"Failed to fetch metadata for {work_item_id} in queue {project_id}/{board_id}",
+                    exc_info=True,
+                    extra={
+                        "work_item_id": work_item_id,
+                        "project_id": project_id,
+                        "board_id": board_id,
+                        "error_type": type(e).__name__,
+                        "error_id": ErrorRegistry.ERR_QUEUE_OPERATION_FAILURE,
+                    },
+                )
+                raise QueueServiceError(f"Failed to fetch metadata for {work_item_id}") from e
 
             if not raw_meta:
                 # Metadata missing - emit corruption event and skip (don't include)

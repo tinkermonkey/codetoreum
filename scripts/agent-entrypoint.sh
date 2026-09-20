@@ -190,7 +190,7 @@ OTELCOL_PID=""
 if [ -f /usr/local/bin/otelcol ]; then
     # Collector binary exists — attempt to start it
     echo "[agent-entrypoint] Starting OpenTelemetry Collector..." >&2
-    /usr/local/bin/otelcol --config /etc/otelcol/config.yaml >/dev/null 2>&1 &
+    /usr/local/bin/otelcol --config /etc/otelcol/config.yaml >>/tmp/otelcol.log 2>&1 &
     OTELCOL_PID=$!
 
     # Register a cleanup handler so the collector flushes its buffer on exit

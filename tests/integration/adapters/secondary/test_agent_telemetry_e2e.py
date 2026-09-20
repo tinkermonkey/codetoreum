@@ -30,6 +30,7 @@ from codetoreum.adapters.secondary.elasticsearch_event_store import (
     ElasticsearchEventStore,
 )
 from codetoreum.domain.events.coding_agent_events import CodingAgentOtlpSpanEvent
+from codetoreum.infrastructure.event_serialization import auto_register_event_types
 from tests.conftest import ModernElasticsearchContainer, docker_available, wait_for_elasticsearch_indexing
 
 logger = logging.getLogger(__name__)
@@ -197,7 +198,17 @@ async def es_client(es_container):
 
 @pytest.fixture(scope="function")
 async def event_store_with_es(es_client):
-    """Create and initialize an ElasticsearchEventStore for testing."""
+    """Create and initialize an ElasticsearchEventStore for testing.
+
+    Registers the domain event types first. Deserialisation resolves an event's
+    class through EventSerializer's registry, which production populates via
+    auto_register_event_types() during bootstrap (production_bootstrap.py Phase
+    0). A test that builds the store directly has to do the same, or reading the
+    events back fails with "Unknown event class: 'CodingAgentOtlpSpanEvent'" --
+    appends succeed, so the gap only surfaces on read. Same pattern as
+    tests/integration/test_dlq_recovery.py.
+    """
+    auto_register_event_types()
     event_store = ElasticsearchEventStore(
         es_client=es_client,
         index_prefix="events",
@@ -245,7 +256,17 @@ def agent_container_with_real_image():
                 "-c",
                 _generate_synthetic_otlp_spans(),
             ],
-            volumes={temp_otel: {"bind": "/var/otel", "mode": "rw"}},
+            # NOTE: deliberately no bind mount over /var/otel. This suite runs
+            # inside a container that talks to the HOST daemon through a mounted
+            # docker.sock (docker-out-of-docker), so a source path from
+            # tempfile.mkdtemp() is resolved by the daemon on the HOST, where it
+            # does not exist. Docker then creates it as an empty root-owned
+            # directory and mounts it over /var/otel, shadowing the
+            # orchestrator-owned /var/otel that Dockerfile.agent creates -- so the
+            # otelcol sidecar (running as orchestrator) cannot write spans.jsonl
+            # and the docker cp below fails with "Could not find the file".
+            # The image already provides a writable /var/otel, and spans.jsonl is
+            # extracted with docker cp, so no mount is needed at all.
             name=container_name,
             detach=True,
             remove=False,
@@ -357,7 +378,13 @@ class TestAgentTelemetryE2E:
                 "bool": {
                     "must": [
                         {"term": {"aggregate_id": stream_id}},  # Stream ID: coding-agent-<execution_id>
-                        {"term": {"event_type": "coding_agent.otlp_span"}},
+                        # The indexed "event_type" field is the event CLASS name
+                        # (EventSerializer.to_dict stores event.event_type), not the
+                        # domain semantic type carried in event.type
+                        # ("coding_agent.otlp_span"), which is asserted on the
+                        # deserialised events above. Querying the semantic value here
+                        # matched nothing and the assertion below could never pass.
+                        {"term": {"event_type": "CodingAgentOtlpSpanEvent"}},
                     ]
                 }
             },

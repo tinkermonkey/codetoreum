@@ -61,9 +61,18 @@ docs/_build/
 # Node.js
 node_modules/
 
-# Legacy UX (vendored frontend)
-legacy_ux/node_modules/
-legacy_ux/dist/
+# Frontend / Legacy UX (not needed in agent image)
+frontend/
+legacy_ux/
+
+# Coverage artifacts
+coverage.xml
+coverage_report.txt
+
+# Documentation (not needed in agent image)
+documentation/
+documentation-robotics/
+scenarios/
 
 # Environment files (may contain secrets)
 .env
